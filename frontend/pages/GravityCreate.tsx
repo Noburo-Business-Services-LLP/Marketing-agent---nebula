@@ -33,7 +33,7 @@ const getToken = () =>
 // Wires the primary CTA to apiService.createCampaign, then routes to
 // /drafts (Approve) so the user sees what got produced.
 
-type CreateMode = 'campaign' | 'single' | 'carousel';
+type CreateMode = 'campaign' | 'single' | 'carousel' | 'linkedin';
 
 const DURATIONS = ['1 week', '2 weeks', '3 weeks', '4 weeks'];
 const CADENCES = ['2 posts / week', '3 posts / week', '5 posts / week', 'Daily'];
@@ -61,16 +61,16 @@ const MetaBox: React.FC<{
 }> = ({ label, value, Icon, onClick }) => (
   <button
     onClick={onClick}
-    className="group relative flex items-center gap-4 h-[68px] px-5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all text-left w-full"
+    className="group relative flex items-center gap-4 h-[68px] px-5 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)] hover:border-[var(--gv-border-default)] transition-all text-left w-full"
   >
-    <span className="w-9 h-9 rounded-md bg-[#F5A623]/10 border border-[#F5A623]/20 flex items-center justify-center flex-shrink-0">
-      <Icon className="w-4 h-4 text-[#F5A623]" />
+    <span className="w-9 h-9 rounded-md bg-[var(--gv-accent-fill)] border border-[rgb(var(--gv-accent-rgb)/0.20)] flex items-center justify-center flex-shrink-0">
+      <Icon className="w-4 h-4 text-[var(--gv-accent)]" />
     </span>
     <div className="flex-1 min-w-0">
       <div className="gravity-label mb-0.5">{label}</div>
-      <div className="text-[14px] font-semibold text-[#F5F4F1] truncate">{value}</div>
+      <div className="text-[14px] font-semibold text-[var(--gv-text-primary)] truncate">{value}</div>
     </div>
-    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35 group-hover:text-[#F5A623]">
+    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]">
       Edit
     </span>
   </button>
@@ -86,12 +86,12 @@ const OptionPopover: React.FC<{
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-white/[0.10] bg-[#151515] shadow-2xl z-50 overflow-hidden">
+      <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] shadow-2xl z-50 overflow-hidden">
         {options.map((o) => (
           <button
             key={o}
             onClick={() => { onPick(o); onClose(); }}
-            className="w-full text-left px-4 py-2.5 text-[13px] text-[#F5F4F1] hover:bg-white/[0.06] transition-colors"
+            className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] transition-colors"
           >
             {o}
           </button>
@@ -116,13 +116,13 @@ const IconAction: React.FC<{
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className={`p-1.5 rounded-md text-white/40 hover:bg-white/[0.06] disabled:opacity-30 transition-colors ${
-        danger ? 'hover:text-red-400' : 'hover:text-[#F5A623]'
+      className={`p-1.5 rounded-md text-[var(--gv-text-muted)] hover:bg-[var(--gv-surface-2)] disabled:opacity-30 transition-colors ${
+        danger ? 'hover:text-red-400' : 'hover:text-[var(--gv-accent-text)]'
       }`}
     >
       {children}
     </button>
-    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-md bg-[#151515] border border-white/[0.10] text-[11px] text-[#F5F4F1] whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity z-30 shadow-xl">
+    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded-md bg-[var(--gv-panel)] border border-[var(--gv-border-default)] text-[11px] text-[var(--gv-text-primary)] whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity z-30 shadow-xl">
       {label}
     </span>
   </div>
@@ -142,14 +142,14 @@ const PendingSlot: React.FC<{ position: number; active: boolean; etaSeconds: num
   const fmt = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`);
   return (
     <div className={`rounded-2xl border overflow-hidden flex flex-col ${
-      active ? 'border-[#F5A623]/30 bg-[#F5A623]/[0.03]' : 'border-white/[0.06] bg-white/[0.02]'
+      active ? 'border-[rgb(var(--gv-accent-rgb)/0.30)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]'
     }`}>
       <div className="aspect-[4/5] flex flex-col items-center justify-center gap-3 px-6 text-center">
         {active ? (
           <>
-            <Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" />
-            <div className="gravity-label text-[#F5A623]">Generating</div>
-            <div className="text-[12px] text-white/45 tabular-nums">
+            <Loader2 className="w-6 h-6 animate-spin text-[var(--gv-accent)]" />
+            <div className="gravity-label text-[var(--gv-accent-text)]">Generating</div>
+            <div className="text-[12px] text-[var(--gv-text-tertiary)] tabular-nums">
               {remaining != null
                 ? `about ${fmt(remaining)} left`
                 : `${fmt(elapsed)} elapsed`}
@@ -157,9 +157,9 @@ const PendingSlot: React.FC<{ position: number; active: boolean; etaSeconds: num
           </>
         ) : (
           <>
-            <Clock className="w-5 h-5 text-white/25" />
-            <div className="gravity-label text-white/35">Queued</div>
-            <div className="text-[12px] text-white/30">Post {position}</div>
+            <Clock className="w-5 h-5 text-[var(--gv-text-muted)]" />
+            <div className="gravity-label text-[var(--gv-text-muted)]">Queued</div>
+            <div className="text-[12px] text-[var(--gv-text-muted)]">Post {position}</div>
           </>
         )}
       </div>
@@ -329,7 +329,7 @@ const GravityCreate: React.FC = () => {
       await draftsAPI.publishDraft(d._id, selectedPlatforms);
       setActioned((prev) => ({ ...prev, [d._id]: 'approved' }));
     } catch (e: any) {
-      setError(e?.message || 'Could not publish this post');
+      setError(e?.message || 'This post could not be published.');
     } finally {
       setActionBusy('');
     }
@@ -345,11 +345,11 @@ const GravityCreate: React.FC = () => {
     try {
       const res: any = await apiService.generateCaptionFromImage(img, selectedPlatforms[0] || 'instagram');
       const next = res?.caption || res?.data?.caption || '';
-      if (!next) throw new Error('No caption came back');
+      if (!next) throw new Error('No caption was returned. Please try again.');
       await draftsAPI.updateDraft(d._id, { caption: next });
       setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, caption: next } : x));
     } catch (e: any) {
-      setError(e?.message || 'Could not write a caption');
+      setError(e?.message || 'A caption could not be written.');
     } finally {
       setCaptionBusy('');
     }
@@ -362,7 +362,7 @@ const GravityCreate: React.FC = () => {
       setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, caption: captionDraft } : x));
       setEditingCaption('');
     } catch (e: any) {
-      setError(e?.message || 'Could not save the caption');
+      setError(e?.message || 'The caption could not be saved.');
     } finally {
       setCaptionBusy('');
     }
@@ -398,10 +398,13 @@ const GravityCreate: React.FC = () => {
   const regenerateCostFor = (d: Draft) => (d.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0));
   const confirmRegenerate = (d: Draft) => {
     const cost = regenerateCostFor(d);
+    const hasImage = !!((d as any)?.imageUrl || (d as any)?.creative?.imageUrls?.[0]);
     const msg = cost > 0
-      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and replaces the current image.`
-      : 'This replaces the current image.';
-    return confirmDialog(msg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' });
+      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
+      : hasImage ? 'This replaces the current image.' : 'This adds an image to this post.';
+    const title = hasImage ? 'Regenerate this image?' : 'Add an image?';
+    const confirmLabel = hasImage ? 'Regenerate' : 'Add';
+    return confirmDialog(msg, { title, confirmLabel });
   };
 
   const regenerateWithPrompt = async (d: Draft) => {
@@ -417,7 +420,7 @@ const GravityCreate: React.FC = () => {
         x._id === d._id ? { ...x, status: 'processing', imageUrl: '', imagePromptResolved: promptDraft } : x));
       setPromptOpenFor('');
     } catch (e: any) {
-      setError(e?.message || 'Could not regenerate');
+      setError(e?.message || 'The image could not be regenerated.');
     } finally {
       setActionBusy('');
     }
@@ -431,7 +434,7 @@ const GravityCreate: React.FC = () => {
       await draftsAPI.retryImageGeneration(d._id);
       setResults((prev) => prev.map((x: any) => x._id === d._id ? { ...x, status: 'processing', imageUrl: '' } : x));
     } catch (e: any) {
-      setError(e?.message || 'Could not regenerate');
+      setError(e?.message || 'The image could not be regenerated.');
     } finally {
       setActionBusy('');
     }
@@ -458,7 +461,7 @@ const GravityCreate: React.FC = () => {
       setEditImageFor('');
       setEditImageInstruction('');
     } catch (e: any) {
-      setError(e?.message || 'Could not apply that edit');
+      setError(e?.message || 'That edit could not be applied.');
     } finally {
       setEditImageBusy('');
     }
@@ -488,12 +491,12 @@ const GravityCreate: React.FC = () => {
     }
     setActioned((prev) => ({ ...prev, ...done }));
     const failed = pending.length - Object.keys(done).length;
-    if (failed > 0) setError(`${failed} of ${pending.length} could not be sent.`);
+    if (failed > 0) setError(`${failed} of ${pending.length} posts could not be published.`);
     setActionBusy('');
   };
 
   const scheduleNow = async (d: Draft) => {
-    if (!scheduleFor) { setError('Pick a date and time first'); return; }
+    if (!scheduleFor) { setError('Choose a date and time first.'); return; }
     setActionBusy(d._id);
     setError(null);
     try {
@@ -504,7 +507,7 @@ const GravityCreate: React.FC = () => {
       setSchedulingId('');
       setScheduleFor('');
     } catch (e: any) {
-      setError(e?.message || 'Could not schedule this post');
+      setError(e?.message || 'This post could not be scheduled.');
     } finally {
       setActionBusy('');
     }
@@ -561,7 +564,7 @@ const GravityCreate: React.FC = () => {
   // The result is then polled and shown on THIS page — keeping, approving
   // and scheduling all happen here rather than over in /drafts.
   const handleDraftSinglePost = async () => {
-    setProgressMsg('Queuing the poster…');
+    setProgressMsg('Starting image generation…');
     const res: any = await draftsAPI.generateImageBg({
       type: 'post',
       title: name.trim() || 'Untitled post',
@@ -592,6 +595,44 @@ const GravityCreate: React.FC = () => {
     setProgressMsg('');
   };
 
+  // LinkedIn mode — long-form text post. No image call at generation time;
+  // the caption/hashtags come back immediately and an image, if wanted, is
+  // generated afterwards via the "Add image" button on the result card.
+  const handleDraftLinkedInPost = async () => {
+    setProgressMsg('Writing your LinkedIn post…');
+    const res = await draftsAPI.generateLinkedInPost({
+      idea: description.trim() || name.trim(),
+      contentPillar: ideaContext.contentPillar,
+      objective: ideaContext.objective,
+      tone,
+      language: languageValueFromLabel(language)
+    });
+    if (!res.success) {
+      throw new Error(res.message || 'The LinkedIn post could not be generated.');
+    }
+    // The post is already generated and already charged for by this point —
+    // if saving it fails, the text must not just vanish. Surface it in the
+    // error so the user can copy it before retrying.
+    try {
+      const saved = await draftsAPI.saveDraft({
+        title: name.trim() || 'Untitled LinkedIn post',
+        caption: res.caption,
+        hashtags: res.hashtags,
+        platforms: ['linkedin'],
+        sourceType: 'post',
+        contentType: 'post',
+        imageUrl: '',
+        imagePrompt: res.imageDescription || ''
+      });
+      setResults([saved.draft]);
+      setPostsGenerated(1);
+    } catch (saveErr: any) {
+      throw new Error(
+        `The post was generated but could not be saved. Copy it before you try again: ${res.caption}`
+      );
+    }
+  };
+
   // Carousel mode — one post told across several slides.
   //
   // The backend plans the whole arc first, then renders slides one at a time
@@ -604,7 +645,7 @@ const GravityCreate: React.FC = () => {
     runStartRef.current = Date.now();
     setRunStartedAt(Date.now());
     setPostDurations([]);
-    setProgressMsg('Planning the story…');
+    setProgressMsg('Planning the carousel…');
 
     const response = await fetch(`${API_BASE}/carousels/generate-stream`, {
       method: 'POST',
@@ -625,8 +666,8 @@ const GravityCreate: React.FC = () => {
         objective: ideaContext.objective,
       }),
     });
-    if (!response.ok) throw new Error(`Server responded ${response.status}`);
-    if (!response.body) throw new Error('No response body from server.');
+    if (!response.ok) throw new Error(`The server returned an error (${response.status}).`);
+    if (!response.body) throw new Error('The server did not send a response.');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -654,7 +695,7 @@ const GravityCreate: React.FC = () => {
           try {
             const data = JSON.parse(line.slice(6));
             if (currentEvent === 'status' || currentEvent === 'generating') {
-              setProgressMsg(data.message || 'Rendering…');
+              setProgressMsg(data.message || 'Generating the images…');
             } else if (currentEvent === 'slide') {
               landed += 1;
               setPostDurations((prev) => {
@@ -682,7 +723,7 @@ const GravityCreate: React.FC = () => {
             } else if (currentEvent === 'complete') {
               complete = true;
             } else if (currentEvent === 'error') {
-              serverError = data?.message || 'Generation failed';
+              serverError = data?.message || 'Generation failed. Please try again.';
             }
           } catch (parseErr) {
             // Ignore malformed lines
@@ -692,7 +733,7 @@ const GravityCreate: React.FC = () => {
     }
 
     if (serverError) throw new Error(serverError);
-    if (!complete && landed === 0) throw new Error('Generation ended without any slides.');
+    if (!complete && landed === 0) throw new Error('Generation finished without creating any slides.');
     setProgressMsg('');
   };
 
@@ -740,7 +781,7 @@ const GravityCreate: React.FC = () => {
     runStartRef.current = Date.now();
     setRunStartedAt(Date.now());
     setPostDurations([]);
-    setProgressMsg('Warming up the studio…');
+    setProgressMsg('Starting campaign generation…');
     const response = await fetch(`${API_BASE}/campaigns/generate-campaign-stream`, {
       method: 'POST',
       headers: {
@@ -749,8 +790,8 @@ const GravityCreate: React.FC = () => {
       },
       body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(`Server responded ${response.status}`);
-    if (!response.body) throw new Error('No response body from server.');
+    if (!response.ok) throw new Error(`The server returned an error (${response.status}).`);
+    if (!response.body) throw new Error('The server did not send a response.');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -775,7 +816,7 @@ const GravityCreate: React.FC = () => {
           try {
             const data = JSON.parse(line.slice(6));
             if (currentEvent === 'status' || currentEvent === 'generating') {
-              setProgressMsg(data.message || 'Drafting…');
+              setProgressMsg(data.message || 'Generating the posts…');
             } else if (currentEvent === 'post') {
               postCount += 1;
               // How long this one took, for estimating the next.
@@ -786,7 +827,7 @@ const GravityCreate: React.FC = () => {
                 return [...prev, thisOne];
               });
               setPostsGenerated(postCount);
-              setProgressMsg(`Drafted ${postCount} post${postCount > 1 ? 's' : ''}…`);
+              setProgressMsg(`${postCount} post${postCount > 1 ? 's' : ''} created so far…`);
               // Render each post the moment it lands. The payload already
               // carries the finished image; this used to be counted and
               // thrown away, so nothing appeared until the whole run ended.
@@ -812,7 +853,7 @@ const GravityCreate: React.FC = () => {
             } else if (currentEvent === 'complete') {
               complete = true;
             } else if (currentEvent === 'error') {
-              serverError = data?.message || 'Generation failed';
+              serverError = data?.message || 'Generation failed. Please try again.';
             }
           } catch (parseErr) {
             // Ignore malformed lines
@@ -822,13 +863,13 @@ const GravityCreate: React.FC = () => {
     }
     if (serverError) throw new Error(serverError);
     if (!complete && postCount === 0) {
-      throw new Error('Generation ended without any posts.');
+      throw new Error('Generation finished without creating any posts.');
     }
 
     // Same as single-post mode: show what was produced here rather than
     // sending the user off to /drafts. Pull the freshly-created drafts so
     // each one can be kept, approved or scheduled inline.
-    setProgressMsg('Loading what was drafted…');
+    setProgressMsg('Loading your new posts…');
     try {
       const res = await draftsAPI.getDrafts();
       const fresh = (res?.drafts || [])
@@ -845,8 +886,11 @@ const GravityCreate: React.FC = () => {
   };
 
   const handleDraft = async () => {
-    if (!name.trim()) { setError('Give it a name first.'); return; }
-    if (selectedPlatforms.length === 0) { setError('Pick at least one platform.'); return; }
+    if (!name.trim()) { setError('Enter a name first.'); return; }
+    // LinkedIn mode hides the platform picker entirely — platform is
+    // implicit — so this check would otherwise leave the user stuck with no
+    // way to fix it on this tab if selectedPlatforms happened to be empty.
+    if (mode !== 'linkedin' && selectedPlatforms.length === 0) { setError('Choose at least one platform.'); return; }
     setError(null);
     setSubmitting(true);
     setPostsGenerated(0);
@@ -860,11 +904,13 @@ const GravityCreate: React.FC = () => {
         await handleDraftCarousel();
       } else if (mode === 'single') {
         await handleDraftSinglePost();
+      } else if (mode === 'linkedin') {
+        await handleDraftLinkedInPost();
       } else {
         await handleDraftCampaign();
       }
     } catch (e: any) {
-      setError(e?.message || 'Failed to draft. Try again.');
+      setError(e?.message || 'The content could not be created. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -895,7 +941,7 @@ const GravityCreate: React.FC = () => {
   const productImageUrls = pickedProducts.map((p) => p.imageUrl).filter(Boolean);
 
   // How many cards this run will produce, whichever mode is active.
-  const expectedCount = mode === 'campaign' ? estimate.total : mode === 'carousel' ? slideCount : 1;
+  const expectedCount = mode === 'campaign' ? estimate.total : mode === 'carousel' ? slideCount : mode === 'linkedin' ? 1 : 1;
 
   const pendingCards = submitting && results.length === 0
     ? Array.from({ length: Math.min(expectedCount, 4) })
@@ -928,11 +974,11 @@ const GravityCreate: React.FC = () => {
     <div className="max-w-[900px] mx-auto pb-24">
       {/* Mode toggle */}
       <div className="flex items-center justify-center mb-14 mt-4">
-        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
+        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--gv-surface-1)] border border-[var(--gv-border-subtle)]">
           <button
             onClick={() => setMode('campaign')}
             className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              mode === 'campaign' ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+              mode === 'campaign' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -941,7 +987,7 @@ const GravityCreate: React.FC = () => {
           <button
             onClick={() => setMode('single')}
             className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              mode === 'single' ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+              mode === 'single' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -950,11 +996,20 @@ const GravityCreate: React.FC = () => {
           <button
             onClick={() => setMode('carousel')}
             className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              mode === 'carousel' ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+              mode === 'carousel' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
             }`}
           >
             <GalleryHorizontalEnd className="w-3.5 h-3.5" />
             Carousel
+          </button>
+          <button
+            onClick={() => setMode('linkedin')}
+            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+              mode === 'linkedin' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
+            }`}
+          >
+            <Linkedin className="w-3.5 h-3.5" />
+            LinkedIn
           </button>
         </div>
       </div>
@@ -966,23 +1021,23 @@ const GravityCreate: React.FC = () => {
             ? 'Plan a campaign · ' + duration
             : mode === 'carousel'
               ? `Build a carousel · ${slideCount} slides`
-              : 'Draft a post · one shot'
+              : 'Create a single post'
         }
         headline={
           mode === 'campaign' ? (
-            <>What are we <GravityEmphasis>working on</GravityEmphasis>?</>
+            <>Describe your <GravityEmphasis>campaign</GravityEmphasis></>
           ) : mode === 'carousel' ? (
-            <>What's the <GravityEmphasis>story</GravityEmphasis>?</>
+            <>Describe your <GravityEmphasis>carousel</GravityEmphasis></>
           ) : (
-            <>What's on your <GravityEmphasis>mind</GravityEmphasis>?</>
+            <>Describe your <GravityEmphasis>post</GravityEmphasis></>
           )
         }
         subcopy={
           mode === 'campaign'
-            ? 'Describe the campaign once. Gravity drafts the full run — across platforms, spaced out, in your voice.'
+            ? 'Describe the campaign once. Nebulaa creates the full set of posts for the platforms you choose, spaced out over the duration you set, in your brand voice.'
             : mode === 'carousel'
-              ? 'One idea, told across slides. Gravity plans the arc, then renders every slide in the same look.'
-              : 'One sentence is enough. Gravity turns it into a scroll-stopping post.'
+              ? 'Describe one idea. Nebulaa plans how it unfolds across the slides, then generates every slide with the same look.'
+              : 'One sentence is enough. Nebulaa turns it into a finished post.'
         }
       />
 
@@ -992,30 +1047,30 @@ const GravityCreate: React.FC = () => {
       <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
         <button
           onClick={() => setIdeaPickerOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-all"
         >
-          <CalendarIcon className="w-4 h-4 text-[#F5A623]" />
-          Pull an idea from your calendar
+          <CalendarIcon className="w-4 h-4 text-[var(--gv-accent)]" />
+          Choose an idea from your calendar
         </button>
         <button
           onClick={() => setPromptStudioOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-all"
         >
-          <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
+          <SlidersHorizontal className="w-4 h-4 text-[var(--gv-accent)]" />
           Edit the prompts
         </button>
         <button
           onClick={() => setAssetPickerOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-all"
         >
-          <Package className="w-4 h-4 text-[#F5A623]" />
+          <Package className="w-4 h-4 text-[var(--gv-accent)]" />
           {pickedProducts.length === 0
             ? 'Feature a product or service'
             : `${pickedProducts.length} product${pickedProducts.length > 1 ? 's' : ''} selected`}
         </button>
         {pickedIdea && (
-          <span className="text-[12px] text-white/45">
-            Loaded: <span className="text-[#F5A623]">{pickedIdea}</span>
+          <span className="text-[12px] text-[var(--gv-text-tertiary)]">
+            Loaded: <span className="text-[var(--gv-accent-text)]">{pickedIdea}</span>
           </span>
         )}
       </div>
@@ -1038,7 +1093,7 @@ const GravityCreate: React.FC = () => {
       <PromptStudio
         open={promptStudioOpen}
         onClose={() => setPromptStudioOpen(false)}
-        focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : 'single.content'}
+        focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : mode === 'linkedin' ? 'linkedin.content' : 'single.content'}
       />
 
       {/* Name + Description card, wrapped in a travelling border beam.
@@ -1072,30 +1127,32 @@ const GravityCreate: React.FC = () => {
       <div
         className="relative rounded-2xl p-5 overflow-hidden"
         style={{
-          background: 'linear-gradient(180deg, rgba(255,214,150,0.055) 0%, rgba(255,255,255,0.012) 45%, rgba(255,196,84,0.028) 100%), #0f0d0a',
-          boxShadow: 'inset 0 1px 0 0 rgba(255,214,150,0.16), inset 0 -1px 0 0 rgba(0,0,0,0.6), inset 0 0 70px rgba(245,166,35,0.05)'
+          background: 'linear-gradient(180deg, rgb(var(--gv-ink-rgb) / 0.05) 0%, rgb(var(--gv-ink-rgb) / 0.01) 45%, rgb(var(--gv-ink-rgb) / 0.03) 100%), var(--gv-panel)',
+          boxShadow: 'inset 0 1px 0 0 rgb(var(--gv-ink-rgb) / 0.10), inset 0 -1px 0 0 rgba(0,0,0,0.12), inset 0 0 70px rgba(245,166,35,0.05)'
         }}
       >
         {/* Ambient interior glow, warm to match the travelling beam. */}
         <div className="pointer-events-none absolute inset-0 -z-0" style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(245,166,35,0.09) 0%, transparent 60%)' }} />
         <div className="relative">
           <div className="flex items-baseline gap-4 mb-3">
-            <span className="gravity-label text-[#F5A623]">{mode === 'campaign' ? 'Campaign' : 'Post'}</span>
+            <span className="gravity-label text-[var(--gv-accent-text)]">{mode === 'campaign' ? 'Campaign' : mode === 'linkedin' ? 'LinkedIn post' : 'Post'}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={mode === 'campaign' ? 'Monsoon menu launch' : 'Sunday pour-over ritual'}
-              className="gravity-bare flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[#F5F4F1] placeholder:text-white/25"
+              placeholder={mode === 'campaign' ? 'Monsoon menu launch' : mode === 'linkedin' ? '500 customers milestone' : 'Sunday pour-over ritual'}
+              className="gravity-bare flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)]"
             />
           </div>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={mode === 'campaign'
-              ? 'e.g. Launch our monsoon menu over two weeks — tease, reveal, drive footfall to the Saturday launch event.'
-              : 'e.g. Slow Sunday. Filter coffee, one hand pouring, room quiet — invite people to spend the morning with us.'}
-            rows={4}
-            className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-white/60 leading-relaxed resize-none placeholder:text-white/25"
+              ? 'For example: Launch our monsoon menu over two weeks. Introduce the dishes first, then reveal the menu, then invite customers to the Saturday launch event.'
+              : mode === 'linkedin'
+                ? 'For example: We have reached 500 customers. Here is what it took to get there.'
+                : 'For example: A quiet Sunday morning with filter coffee. Invite people to spend the morning with us.'}
+            rows={mode === 'linkedin' ? 8 : 4}
+            className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-[var(--gv-text-tertiary)] leading-relaxed resize-none placeholder:text-[var(--gv-text-muted)]"
           />
         </div>
       </div>
@@ -1106,15 +1163,15 @@ const GravityCreate: React.FC = () => {
           so it is picked before the brief is sent, not afterwards. */}
       {mode === 'carousel' && (
         <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-          <span className="gravity-label text-white/35 mr-1">Slides</span>
+          <span className="gravity-label text-[var(--gv-text-muted)] mr-1">Slides</span>
           {[3, 4, 5, 6, 7, 8, 10].map((n) => (
             <button
               key={n}
               onClick={() => setSlideCount(n)}
               className={`h-9 w-9 rounded-full text-[13px] font-semibold transition-colors ${
                 slideCount === n
-                  ? 'bg-[#F5A623] text-[#1A1208]'
-                  : 'text-white/55 border border-white/[0.12] hover:text-[#F5F4F1] hover:bg-white/[0.05]'
+                  ? 'bg-[var(--gv-accent)] text-[#1A1208]'
+                  : 'text-[var(--gv-text-tertiary)] border border-[var(--gv-border-default)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]'
               }`}
             >
               {n}
@@ -1139,7 +1196,7 @@ const GravityCreate: React.FC = () => {
             <OptionPopover open={openPopover === 'tone'} options={TONES} onPick={setTone} onClose={() => setOpenPopover(null)} />
           </div>
           <div className="relative">
-            <MetaBox label="Visual Style" value={visualStyle} Icon={ImageIcon} onClick={() => setOpenPopover(openPopover === 'style' ? null : 'style')} />
+            <MetaBox label="Visual style" value={visualStyle} Icon={ImageIcon} onClick={() => setOpenPopover(openPopover === 'style' ? null : 'style')} />
             <OptionPopover open={openPopover === 'style'} options={VISUAL_STYLES} onPick={setVisualStyle} onClose={() => setOpenPopover(null)} />
           </div>
         </div>
@@ -1155,7 +1212,9 @@ const GravityCreate: React.FC = () => {
         </div>
       </div>
 
-      {/* Platforms */}
+      {/* Platforms — not shown in LinkedIn mode, where the platform is
+          implicit and there is no image-generation step to target. */}
+      {mode !== 'linkedin' && (
       <div className="flex items-center justify-center gap-4 py-4 mb-2">
         <span className="gravity-label">Platforms</span>
         <div className="flex items-center gap-2">
@@ -1168,8 +1227,8 @@ const GravityCreate: React.FC = () => {
                 title={label}
                 className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
                   active
-                    ? 'bg-white/[0.10] text-[#F5F4F1] border border-white/[0.14]'
-                    : 'bg-transparent text-white/35 border border-white/[0.06] hover:text-white/70'
+                    ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)] border border-[var(--gv-border-strong)]'
+                    : 'bg-transparent text-[var(--gv-text-muted)] border border-[var(--gv-border-subtle)] hover:text-[var(--gv-text-secondary)]'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -1178,17 +1237,18 @@ const GravityCreate: React.FC = () => {
           })}
         </div>
         {mode === 'campaign' && (
-          <div className="ml-2 text-[12px] text-white/50">
-            <span className="tabular-nums font-semibold text-[#F5F4F1]">~{estimate.total} posts</span>
-            <span className="mx-1.5 text-white/25">·</span>
+          <div className="ml-2 text-[12px] text-[var(--gv-text-tertiary)]">
+            <span className="tabular-nums font-semibold text-[var(--gv-text-primary)]">~{estimate.total} posts</span>
+            <span className="mx-1.5 text-[var(--gv-text-muted)]">·</span>
             <span>{estimate.perWeek} per week</span>
           </div>
         )}
       </div>
+      )}
 
-      {/* Aspect + logo — shown for BOTH modes. These used to be campaign-only
-          (aspect) or missing entirely (logo), so single posts silently
-          rendered 4:5 with no branding. */}
+      {/* Aspect + logo — shown for campaign/single/carousel. Not shown in
+          LinkedIn mode, which has no image step at generation time. */}
+      {mode !== 'linkedin' && (
       <div className="max-w-2xl mx-auto mt-8 grid gap-4 sm:grid-cols-2">
         <div>
           <div className="gravity-label mb-2">Aspect ratio</div>
@@ -1202,8 +1262,8 @@ const GravityCreate: React.FC = () => {
                   title={a.hint}
                   className={`flex-1 rounded-lg border px-2 py-2 text-[12px] font-semibold transition-colors ${
                     active
-                      ? 'border-[#F5A623] bg-[#F5A623]/12 text-[#F5A623]'
-                      : 'border-white/[0.10] bg-white/[0.02] text-white/55 hover:text-white/85'
+                      ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
+                      : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'
                   }`}
                 >
                   {a.label}
@@ -1215,15 +1275,15 @@ const GravityCreate: React.FC = () => {
 
         <div>
           <div className="gravity-label mb-2">
-            Logo {logos.length === 0 && <span className="text-white/30 normal-case">· none in Brand Assets</span>}
+            Logo {logos.length === 0 && <span className="text-[var(--gv-text-muted)] normal-case">· none in Brand assets</span>}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               onClick={() => setSelectedLogo('')}
               className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-colors ${
                 !selectedLogo
-                  ? 'border-[#F5A623] bg-[#F5A623]/12 text-[#F5A623]'
-                  : 'border-white/[0.10] bg-white/[0.02] text-white/55 hover:text-white/85'
+                  ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
+                  : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'
               }`}
             >
               No logo
@@ -1233,8 +1293,8 @@ const GravityCreate: React.FC = () => {
                 key={l.id}
                 onClick={() => { setSelectedLogo(l.url); setLogoPosition(l.defaultPosition); }}
                 title={l.name}
-                className={`w-11 h-11 rounded-lg border overflow-hidden bg-white/[0.04] transition-colors ${
-                  selectedLogo === l.url ? 'border-[#F5A623]' : 'border-white/[0.10] hover:border-white/30'
+                className={`w-11 h-11 rounded-lg border overflow-hidden bg-[var(--gv-surface-2)] transition-colors ${
+                  selectedLogo === l.url ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'
                 }`}
               >
                 <img src={l.url} alt={l.name} className="w-full h-full object-contain p-1" />
@@ -1243,7 +1303,7 @@ const GravityCreate: React.FC = () => {
             {logos.length === 0 && (
               <button
                 onClick={() => navigate('/brand-assets')}
-                className="text-[11.5px] text-white/40 hover:text-[#F5A623] underline underline-offset-2"
+                className="text-[11.5px] text-[var(--gv-text-muted)] hover:text-[var(--gv-accent-text)] underline underline-offset-2"
               >
                 Add one
               </button>
@@ -1255,7 +1315,7 @@ const GravityCreate: React.FC = () => {
               here for just this run. */}
           {selectedLogo && (
             <div className="mt-3">
-              <div className="gravity-label mb-1.5 text-white/35">Logo position</div>
+              <div className="gravity-label mb-1.5 text-[var(--gv-text-muted)]">Logo position</div>
               <div className="grid grid-cols-3 gap-1.5 max-w-[220px]">
                 {LOGO_GRID.map((pos) => (
                   <button
@@ -1264,11 +1324,11 @@ const GravityCreate: React.FC = () => {
                     title={LOGO_GRID_LABELS[pos]}
                     className={`aspect-[4/3] rounded-md border flex items-center justify-center transition-colors ${
                       logoPosition === pos
-                        ? 'border-[#F5A623] bg-[#F5A623]/12'
-                        : 'border-white/[0.10] bg-white/[0.02] hover:border-white/30'
+                        ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]'
+                        : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:border-[var(--gv-border-strong)]'
                     }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-sm ${logoPosition === pos ? 'bg-[#F5A623]' : 'bg-white/30'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-sm ${logoPosition === pos ? 'bg-[var(--gv-accent)]' : 'bg-[var(--gv-surface-3)]'}`} />
                   </button>
                 ))}
               </div>
@@ -1276,6 +1336,7 @@ const GravityCreate: React.FC = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -1288,17 +1349,17 @@ const GravityCreate: React.FC = () => {
           <button
             onClick={handleDraft}
             disabled={submitting}
-            className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[14.5px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.30)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[14.5px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.30)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Drafting…
+                Creating…
               </>
             ) : (
               <>
                 <Zap className="w-4 h-4" strokeWidth={2.5} />
-                {mode === 'campaign' ? 'Draft my campaign' : mode === 'carousel' ? 'Build my carousel' : 'Draft this post'}
+                {mode === 'campaign' ? 'Create campaign' : mode === 'carousel' ? 'Create carousel' : 'Create post'}
                 {currentActionCost > 0 && (
                   <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-black/15 text-[11.5px] font-semibold tabular-nums">
                     {currentActionTotal}
@@ -1309,11 +1370,11 @@ const GravityCreate: React.FC = () => {
           </button>
         </div>
         {submitting && progressMsg && (
-          <div className="text-[12.5px] text-white/60 mt-1 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F5A623] animate-pulse" />
+          <div className="text-[12.5px] text-[var(--gv-text-tertiary)] mt-1 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)] animate-pulse" />
             {progressMsg}
             {postsGenerated > 0 && (
-              <span className="text-white/40">· {postsGenerated} draft{postsGenerated !== 1 ? 's' : ''} so far</span>
+              <span className="text-[var(--gv-text-muted)]">· {postsGenerated} draft{postsGenerated !== 1 ? 's' : ''} so far</span>
             )}
           </div>
         )}
@@ -1324,23 +1385,23 @@ const GravityCreate: React.FC = () => {
       {pendingCards.length > 0 && (
         <div className="max-w-5xl mx-auto mt-14">
           <div className="text-center mb-10">
-            <div className="gravity-label text-[#F5A623] mb-3">
-              {mode === 'campaign' ? 'Building your campaign' : mode === 'carousel' ? 'Building your carousel' : 'Drafting your post'}
+            <div className="gravity-label text-[var(--gv-accent-text)] mb-3">
+              {mode === 'campaign' ? 'Building your campaign' : mode === 'carousel' ? 'Building your carousel' : 'Creating your post'}
             </div>
-            <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
-              Making something <em className="italic font-normal text-[#F5A623]">good</em>.
+            <h2 className="text-[42px] leading-[1.1] font-semibold text-[var(--gv-text-primary)] tracking-[-0.02em]">
+              Your content is being <em className="italic font-normal text-[var(--gv-accent-display)]">created</em>.
             </h2>
-            {progressMsg && <p className="text-[13.5px] text-white/45 mt-3">{progressMsg}</p>}
+            {progressMsg && <p className="text-[13.5px] text-[var(--gv-text-tertiary)] mt-3">{progressMsg}</p>}
           </div>
           <div className={`grid gap-4 ${pendingCards.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
             {pendingCards.map((_, i) => (
-              <div key={i} className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+              <div key={i} className="rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] overflow-hidden">
                 <div className="relative bg-black" style={{ aspectRatio: backendAspect.replace(':', ' / ') }}>
                   <GeneratingFill prompt={description.trim() || name.trim()} resolution={backendAspect} />
                 </div>
                 <div className="p-3.5">
-                  <div className="h-3 w-2/3 rounded bg-white/[0.07] animate-pulse" />
-                  <div className="h-2.5 w-1/3 rounded bg-white/[0.05] animate-pulse mt-2.5" />
+                  <div className="h-3 w-2/3 rounded bg-[var(--gv-surface-2)] animate-pulse" />
+                  <div className="h-2.5 w-1/3 rounded bg-[var(--gv-surface-2)] animate-pulse mt-2.5" />
                 </div>
               </div>
             ))}
@@ -1354,7 +1415,7 @@ const GravityCreate: React.FC = () => {
           <div className="relative text-center mb-10">
             <button
               onClick={() => { setResults([]); setActioned({}); setSchedulingId(''); }}
-              className="absolute right-0 top-0 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.12] px-3 py-2 text-[12px] text-white/60 hover:text-white hover:border-white/25 transition-colors"
+              className="absolute right-0 top-0 inline-flex items-center gap-1.5 rounded-lg border border-[var(--gv-border-default)] px-3 py-2 text-[12px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:border-[var(--gv-border-default)] transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Start over
@@ -1362,29 +1423,29 @@ const GravityCreate: React.FC = () => {
 
             {/* These are a series of posts in one campaign, not variations of
                 the same idea — there is nothing to pick between. */}
-            <div className="gravity-label text-[#F5A623] mb-3">
+            <div className="gravity-label text-[var(--gv-accent-text)] mb-3">
               {submitting
-                ? `${results.length} of ${expectedCount} ready…`
+                ? `${results.length} of ${expectedCount} created`
                 : mode === 'campaign'
-                  ? `${results.length} post${results.length !== 1 ? 's' : ''} · your campaign`
+                  ? `${results.length} post${results.length !== 1 ? 's' : ''} in your campaign`
                   : mode === 'carousel'
-                    ? `${results.length} slide${results.length !== 1 ? 's' : ''} · swipe in order`
+                    ? `${results.length} slide${results.length !== 1 ? 's' : ''}, in swipe order`
                     : 'Your post'}
             </div>
-            <h2 className="text-[42px] leading-[1.1] font-semibold text-[#F5F4F1] tracking-[-0.02em]">
+            <h2 className="text-[42px] leading-[1.1] font-semibold text-[var(--gv-text-primary)] tracking-[-0.02em]">
               {submitting ? (
-                <>Making something <em className="italic font-normal text-[#F5A623]">good</em>.</>
+                <>Your content is being <em className="italic font-normal text-[var(--gv-accent-display)]">created</em>.</>
               ) : mode === 'campaign' ? (
-                <>Your campaign is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
+                <>Your campaign is <em className="italic font-normal text-[var(--gv-accent-display)]">ready</em>.</>
               ) : mode === 'carousel' ? (
-                <>Your carousel is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
+                <>Your carousel is <em className="italic font-normal text-[var(--gv-accent-display)]">ready</em>.</>
               ) : (
-                <>Your post is <em className="italic font-normal text-[#F5A623]">ready</em>.</>
+                <>Your post is <em className="italic font-normal text-[var(--gv-accent-display)]">ready</em>.</>
               )}
             </h2>
             {stillRendering && (
-              <p className="text-[13.5px] text-white/45 mt-3">
-                Still rendering — this updates on its own.
+              <p className="text-[13.5px] text-[var(--gv-text-tertiary)] mt-3">
+                Some images are still being generated. This page updates automatically.
               </p>
             )}
           </div>
@@ -1398,14 +1459,30 @@ const GravityCreate: React.FC = () => {
               const busy = actionBusy === d._id;
 
               return (
-                <div key={d._id} className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+                <div key={d._id} className="rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] overflow-hidden">
                   <div className="relative bg-black/40" style={{ aspectRatio: backendAspect.replace(':', ' / ') }}>
                     {img ? (
                       <img src={img} alt={d.title || 'Draft'} className="w-full h-full object-contain" />
                     ) : failed ? (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                         <AlertCircle className="w-6 h-6 text-red-400" />
-                        <span className="text-[11px] text-red-300">Image failed</span>
+                        <span className="text-[11px] text-red-300">Image generation failed</span>
+                      </div>
+                    ) : (d.platforms || []).includes('linkedin') && !processing ? (
+                      // LinkedIn posts generate text-only — no image was
+                      // requested, so there is nothing "generating." Offer
+                      // to add one instead of showing a fill that implies
+                      // work already in flight.
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5">
+                        <ImageIcon className="w-6 h-6 text-[var(--gv-text-muted)]" />
+                        <span className="text-[11.5px] text-[var(--gv-text-muted)]">No image yet</span>
+                        <button
+                          onClick={() => regenerateImage(d)}
+                          disabled={busy}
+                          className="h-8 px-3.5 rounded-full bg-[var(--gv-surface-3)] text-[12px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-50 transition-colors"
+                        >
+                          Add image
+                        </button>
                       </div>
                     ) : (
                       <GeneratingFill prompt={d.imagePrompt || d.title || ''} resolution={backendAspect} />
@@ -1419,19 +1496,19 @@ const GravityCreate: React.FC = () => {
                           value={captionDraft}
                           onChange={(e) => setCaptionDraft(e.target.value)}
                           rows={3}
-                          className="w-full rounded-lg bg-black/40 border border-white/[0.12] px-2.5 py-2 text-[12.5px] text-[#F5F4F1] resize-none"
+                          className="w-full rounded-lg bg-[var(--gv-surface-3)] border border-[var(--gv-border-default)] px-2.5 py-2 text-[12.5px] text-[var(--gv-text-primary)] resize-none"
                         />
                         <div className="flex gap-2">
                           <button
                             onClick={() => saveCaption(d)}
                             disabled={captionBusy === d._id}
-                            className="flex-1 rounded-lg bg-[#F5A623] text-black text-[11.5px] font-semibold py-1.5 disabled:opacity-50"
+                            className="flex-1 rounded-lg bg-[var(--gv-accent)] text-black text-[11.5px] font-semibold py-1.5 disabled:opacity-50"
                           >
                             {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Save'}
                           </button>
                           <button
                             onClick={() => setEditingCaption('')}
-                            className="px-3 rounded-lg border border-white/[0.12] text-[11.5px] text-white/60"
+                            className="px-3 rounded-lg border border-[var(--gv-border-default)] text-[11.5px] text-[var(--gv-text-tertiary)]"
                           >
                             Cancel
                           </button>
@@ -1439,11 +1516,11 @@ const GravityCreate: React.FC = () => {
                       </div>
                     ) : (
                       <>
-                        <p className="text-[12.5px] leading-snug text-[#F5F4F1]/90">
-                          {d.caption || <span className="text-white/30 italic">No caption yet</span>}
+                        <p className="text-[12.5px] leading-snug whitespace-pre-line text-[rgb(var(--gv-ink-rgb)/0.90)]">
+                          {d.caption || <span className="text-[var(--gv-text-muted)] italic">No caption yet</span>}
                         </p>
                         <div className="flex items-center justify-between mt-2.5">
-                          <div className="gravity-label text-white/35">
+                          <div className="gravity-label text-[var(--gv-text-muted)]">
                             {backendAspect} · {d.slideLabel || (mode === 'campaign' ? 'Campaign' : 'Editorial')}
                           </div>
                           <div className="flex items-center gap-1">
@@ -1458,7 +1535,7 @@ const GravityCreate: React.FC = () => {
                                 <IconAction label="Edit caption" onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}>
                                   <Pencil className="w-3.5 h-3.5" />
                                 </IconAction>
-                                <IconAction label="See the prompt" onClick={() => openPrompt(d)}>
+                                <IconAction label="View the prompt" onClick={() => openPrompt(d)}>
                                   <Code2 className="w-3.5 h-3.5" />
                                 </IconAction>
                                 <IconAction label="Regenerate" onClick={() => regenerateImage(d)} disabled={busy || processing}>
@@ -1479,12 +1556,12 @@ const GravityCreate: React.FC = () => {
                             and regenerating is the fastest way to find out why a
                             result was weak. */}
                         {promptOpenFor === d._id && (
-                          <div className="mt-3 rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-4">
+                          <div className="mt-3 rounded-xl border border-[rgb(var(--gv-accent-rgb)/0.20)] bg-[var(--gv-accent-fill)] p-4">
                             <div className="flex items-center justify-between gap-3 mb-2">
-                              <div className="gravity-label text-[#F5A623]">Prompt sent to the image model</div>
+                              <div className="gravity-label text-[var(--gv-accent-text)]">Prompt sent to the image model</div>
                               <button
                                 onClick={() => setPromptOpenFor('')}
-                                className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
+                                className="p-1 rounded-md text-[var(--gv-text-muted)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
                                 title="Close"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -1492,7 +1569,7 @@ const GravityCreate: React.FC = () => {
                             </div>
 
                             {!(d.imagePromptResolved || d.imagePrompt) ? (
-                              <p className="text-[12px] text-white/45">
+                              <p className="text-[12px] text-[var(--gv-text-tertiary)]">
                                 No prompt was recorded for this image. Images generated from now on will show theirs here.
                               </p>
                             ) : (
@@ -1501,12 +1578,12 @@ const GravityCreate: React.FC = () => {
                                   value={promptDraft}
                                   onChange={(e) => setPromptDraft(e.target.value)}
                                   rows={10}
-                                  className="gravity-bare w-full bg-black/30 border border-white/[0.08] rounded-lg p-3 text-[12px] leading-relaxed text-white/75 font-mono resize-y"
+                                  className="gravity-bare w-full bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] rounded-lg p-3 text-[12px] leading-relaxed text-[var(--gv-text-secondary)] font-mono resize-y"
                                 />
                                 <div className="flex flex-wrap items-center gap-2 mt-3">
                                   <button
                                     onClick={copyPrompt}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05]"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
                                   >
                                     <Copy className="w-3.5 h-3.5" />
                                     {promptCopied ? 'Copied' : 'Copy'}
@@ -1514,18 +1591,18 @@ const GravityCreate: React.FC = () => {
                                   <button
                                     onClick={() => regenerateWithPrompt(d)}
                                     disabled={busy || processing || !promptDraft.trim()}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[var(--gv-accent)] text-[#1A1208] hover:bg-[var(--gv-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                                   >
                                     <RotateCcw className="w-3.5 h-3.5" />
                                     Regenerate with this
                                   </button>
                                   <button
                                     onClick={() => resetPrompt(d)}
-                                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white/50 hover:text-[#F5F4F1] hover:bg-white/[0.05]"
+                                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
                                   >
                                     Reset
                                   </button>
-                                  <span className="text-[11px] text-white/35 ml-auto">Regenerating costs credits.</span>
+                                  <span className="text-[11px] text-[var(--gv-text-muted)] ml-auto">Regenerating costs Quarks.</span>
                                 </div>
                               </>
                             )}
@@ -1537,12 +1614,12 @@ const GravityCreate: React.FC = () => {
                             Separate from "See the prompt" above, which
                             redraws the whole image from a full prompt. */}
                         {editImageFor === d._id && (
-                          <div className="mt-3 rounded-xl border border-[#F5A623]/20 bg-[#F5A623]/[0.03] p-4">
+                          <div className="mt-3 rounded-xl border border-[rgb(var(--gv-accent-rgb)/0.20)] bg-[var(--gv-accent-fill)] p-4">
                             <div className="flex items-center justify-between gap-3 mb-2">
-                              <div className="gravity-label text-[#F5A623]">Describe the change</div>
+                              <div className="gravity-label text-[var(--gv-accent-text)]">Describe the change</div>
                               <button
                                 onClick={() => setEditImageFor('')}
-                                className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/[0.06]"
+                                className="p-1 rounded-md text-[var(--gv-text-muted)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]"
                                 title="Close"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -1551,16 +1628,16 @@ const GravityCreate: React.FC = () => {
                             <textarea
                               value={editImageInstruction}
                               onChange={(e) => setEditImageInstruction(e.target.value)}
-                              placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                              placeholder="For example: fix the spelling in the headline, make the sky darker, or remove the coffee cup."
                               rows={2}
-                              className="gravity-bare w-full bg-black/30 border border-white/[0.08] rounded-lg p-3 text-[12px] leading-relaxed text-white/75 resize-y"
+                              className="gravity-bare w-full bg-[var(--gv-surface-2)] border border-[var(--gv-border-default)] rounded-lg p-3 text-[12px] leading-relaxed text-[var(--gv-text-secondary)] resize-y"
                             />
                             <div className="flex items-center justify-between mt-3">
-                              <span className="text-[11px] text-white/35">Keeps the rest of the image as-is.</span>
+                              <span className="text-[11px] text-[var(--gv-text-muted)]">The rest of the image stays the same.</span>
                               <button
                                 onClick={() => applyImageEdit(d)}
                                 disabled={editImageBusy === d._id || !editImageInstruction.trim()}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[#F5A623] text-[#1A1208] hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[var(--gv-accent)] text-[#1A1208] hover:bg-[var(--gv-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
                               >
                                 {editImageBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
                                 Apply edit
@@ -1582,19 +1659,19 @@ const GravityCreate: React.FC = () => {
                           type="datetime-local"
                           value={scheduleFor}
                           onChange={(e) => setScheduleFor(e.target.value)}
-                          className="w-full rounded-lg bg-black/40 border border-white/[0.12] px-2.5 py-1.5 text-[12px] text-[#F5F4F1]"
+                          className="w-full rounded-lg bg-[var(--gv-surface-3)] border border-[var(--gv-border-default)] px-2.5 py-1.5 text-[12px] text-[var(--gv-text-primary)]"
                         />
                         <div className="flex gap-2">
                           <button
                             onClick={() => scheduleNow(d)}
                             disabled={busy || !scheduleFor}
-                            className="flex-1 rounded-lg bg-[#F5A623] text-black text-[11.5px] font-semibold py-1.5 disabled:opacity-50"
+                            className="flex-1 rounded-lg bg-[var(--gv-accent)] text-black text-[11.5px] font-semibold py-1.5 disabled:opacity-50"
                           >
                             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Confirm'}
                           </button>
                           <button
                             onClick={() => { setSchedulingId(''); setScheduleFor(''); }}
-                            className="px-3 rounded-lg border border-white/[0.12] text-[11.5px] text-white/60"
+                            className="px-3 rounded-lg border border-[var(--gv-border-default)] text-[11.5px] text-[var(--gv-text-tertiary)]"
                           >
                             Cancel
                           </button>
@@ -1605,22 +1682,22 @@ const GravityCreate: React.FC = () => {
                         <button
                           onClick={() => keepAsDraft(d)}
                           disabled={busy}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/[0.12] text-[11.5px] text-white/70 hover:bg-white/[0.05] disabled:opacity-50"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--gv-border-default)] text-[11.5px] text-[var(--gv-text-secondary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-50"
                         >
-                          <Save className="w-3 h-3" /> Draft
+                          <Save className="w-3 h-3" /> Save as draft
                         </button>
                         <button
                           onClick={() => approveNow(d)}
-                          disabled={busy || processing || !img}
-                          title={processing ? 'Wait for the artwork' : 'Publish now'}
+                          disabled={busy || processing || (!img && mode !== 'linkedin')}
+                          title={processing ? 'Wait until the image is ready' : 'Publish now'}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11.5px] font-semibold disabled:opacity-40"
                         >
                           {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Approve
                         </button>
                         <button
                           onClick={() => { setSchedulingId(d._id); setScheduleFor(''); }}
-                          disabled={busy || processing || !img}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#F5A623]/15 text-[#F5A623] text-[11.5px] font-semibold disabled:opacity-40"
+                          disabled={busy || processing || (!img && mode !== 'linkedin')}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)] text-[11.5px] font-semibold disabled:opacity-40"
                         >
                           <Clock className="w-3 h-3" /> Schedule
                         </button>
@@ -1651,7 +1728,7 @@ const GravityCreate: React.FC = () => {
             <button
               onClick={handleDraft}
               disabled={submitting || stillRendering}
-              className="inline-flex items-center gap-2 h-11 px-5 rounded-xl border border-white/[0.14] text-[13px] font-semibold text-white/75 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40"
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-xl border border-[var(--gv-border-strong)] text-[13px] font-semibold text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:border-[var(--gv-border-strong)] transition-colors disabled:opacity-40"
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
               Generate {results.length || 4} more
@@ -1659,7 +1736,7 @@ const GravityCreate: React.FC = () => {
             <button
               onClick={sendAllToApproval}
               disabled={actionBusy === 'all' || stillRendering || results.every((d: any) => actioned[d._id])}
-              className="inline-flex items-center gap-2 h-11 px-6 rounded-xl bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[13px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.25)] transition-colors disabled:opacity-40"
+              className="inline-flex items-center gap-2 h-11 px-6 rounded-xl bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[13px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.25)] transition-colors disabled:opacity-40"
             >
               {actionBusy === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" strokeWidth={2.5} />}
               Send all to approval

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
 
 // Import Ayrshare for social media management
 const { 
@@ -19,6 +20,7 @@ const {
 } = require('../services/socialMediaAPI');
 const { publishSocialPostWithSafetyWrapper } = require('../services/instagram-fix');
 const SocialInboxConversation = require('../models/SocialInboxConversation');
+const { requireOwnProfileKey } = require('../services/ayrshareGuard');
 const {
   normalizePlatform,
   analyzeEngagement,
@@ -235,7 +237,7 @@ function getConnectedInboxPlatforms(user) {
  * Returns social inbox readiness, connected platform count, unread count,
  * sync health, webhook registration state, and AI engagement capabilities.
  */
-router.get('/inbox/summary', protect, async (req, res) => {
+router.get('/inbox/summary', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -288,7 +290,7 @@ router.get('/inbox/summary', protect, async (req, res) => {
   }
 });
 
-router.get('/inbox/conversations', protect, async (req, res) => {
+router.get('/inbox/conversations', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const {
       status = '',
@@ -326,7 +328,7 @@ router.get('/inbox/conversations', protect, async (req, res) => {
   }
 });
 
-router.get('/inbox/conversations/:id/messages', protect, async (req, res) => {
+router.get('/inbox/conversations/:id/messages', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const conversation = await SocialInboxConversation.findOne({
       _id: req.params.id,
@@ -351,7 +353,7 @@ router.get('/inbox/conversations/:id/messages', protect, async (req, res) => {
   }
 });
 
-router.post('/inbox/conversations/:id/reply', protect, async (req, res) => {
+router.post('/inbox/conversations/:id/reply', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const body = String(req.body?.body || '').trim();
     if (!body) {
@@ -379,7 +381,7 @@ router.post('/inbox/conversations/:id/reply', protect, async (req, res) => {
   }
 });
 
-router.patch('/inbox/conversations/:id/status', protect, async (req, res) => {
+router.patch('/inbox/conversations/:id/status', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const status = String(req.body?.status || '');
     if (!['unread', 'read', 'replied', 'closed'].includes(status)) {
@@ -397,7 +399,7 @@ router.patch('/inbox/conversations/:id/status', protect, async (req, res) => {
   }
 });
 
-router.patch('/inbox/conversations/:id/meta', protect, async (req, res) => {
+router.patch('/inbox/conversations/:id/meta', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const tags = Array.isArray(req.body?.tags) ? req.body.tags.map(tag => String(tag).trim()).filter(Boolean).slice(0, 12) : [];
     const priority = ['low', 'normal', 'high', 'urgent'].includes(req.body?.priority)
@@ -415,7 +417,7 @@ router.patch('/inbox/conversations/:id/meta', protect, async (req, res) => {
   }
 });
 
-router.post('/inbox/sync/:platform', protect, async (req, res) => {
+router.post('/inbox/sync/:platform', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const platform = normalizePlatform(req.params.platform);
     await SocialInboxConversation.updateMany(
@@ -452,7 +454,7 @@ router.post('/inbox/webhooks/:platform', async (req, res) => {
   }
 });
 
-router.post('/inbox/webhooks/register', protect, async (req, res) => {
+router.post('/inbox/webhooks/register', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user || !user.ayrshare?.profileKey) {
@@ -483,7 +485,7 @@ router.post('/inbox/webhooks/register', protect, async (req, res) => {
  * Uses Ayrshare JWT/SSO for social account linking (Business Plan)
  * If user doesn't have an Ayrshare profile yet, creates one first
  */
-router.get('/:platform/auth', protect, async (req, res) => {
+router.get('/:platform/auth', protect, requireFeature('social_connect'), async (req, res) => {
   const { platform } = req.params;
   const platformLower = platform.toLowerCase();
   
@@ -695,7 +697,7 @@ function getSetupInstructions(platform) {
 // ============================================
 
 // Initiate YouTube OAuth - returns the authorization URL
-router.get('/youtube/auth', protect, (req, res) => {
+router.get('/youtube/auth', protect, requireFeature('social_connect'), (req, res) => {
   try {
     // Generate a random state token for security
     const state = Buffer.from(JSON.stringify({
@@ -1530,9 +1532,15 @@ router.get('/status', protect, async (req, res) => {
  * POST /api/social/post
  * Post content to multiple social media platforms via Ayrshare
  */
-router.post('/post', protect, async (req, res) => {
+router.post('/post', protect, requireFeature('publish'), async (req, res) => {
   try {
     const { platforms, content, mediaUrls, scheduledDate } = req.body;
+
+    try {
+      requireOwnProfileKey(req.user);
+    } catch (guardErr) {
+      return res.status(403).json({ success: false, message: guardErr.message });
+    }
 
     if (!platforms || !content) {
       return res.status(400).json({
@@ -1736,7 +1744,7 @@ router.get('/ayrshare/profiles', protect, async (req, res) => {
  * GET /api/social/connect/:platform
  * Get connection URL for a platform
  */
-router.get('/connect/:platform', protect, async (req, res) => {
+router.get('/connect/:platform', protect, requireFeature('social_connect'), async (req, res) => {
   try {
     const { platform } = req.params;
     const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/#/connect-socials`;
@@ -1798,7 +1806,7 @@ router.get('/connect/:platform', protect, async (req, res) => {
  * POST /api/social/connect/:platform
  * Save a connected social account (after OAuth callback)
  */
-router.post('/connect/:platform', protect, async (req, res) => {
+router.post('/connect/:platform', protect, requireFeature('social_connect'), async (req, res) => {
   try {
     const { platform } = req.params;
     const { username, accessToken, refreshToken, profileData } = req.body;
@@ -1934,7 +1942,7 @@ router.get('/ayrshare/profile', protect, async (req, res) => {
  * GET /api/social/ayrshare/connect-url/:platform
  * Get the Ayrshare OAuth URL to connect a specific platform
  */
-router.get('/ayrshare/connect-url/:platform', protect, async (req, res) => {
+router.get('/ayrshare/connect-url/:platform', protect, requireFeature('social_connect'), async (req, res) => {
   try {
     const { platform } = req.params;
     const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/#/connect-socials`;

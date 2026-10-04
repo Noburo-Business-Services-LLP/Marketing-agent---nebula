@@ -309,6 +309,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-6xl my-6 rounded-[22px] overflow-hidden flex flex-col max-h-[92vh]"
+        data-nb-surface="dark"
         style={{
           background: 'linear-gradient(180deg, #131316 0%, #0b0b0e 42%)',
           boxShadow: '0 40px 120px rgba(0,0,0,0.75), inset 0 1px 0 0 rgba(255,255,255,0.07)',
@@ -322,7 +323,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
               <span className={`text-[10px] font-semibold uppercase tracking-[0.14em] px-2.5 py-1 rounded-full border ${statusTone(draft.status)}`}>
                 {draft.status}
               </span>
-              <span className="gravity-label">{String(draft.sourceType || 'post')}</span>
+              <span className="gravity-label text-[rgba(245,244,241,0.55)]">{String(draft.sourceType || 'post')}</span>
             </div>
             <h2 className="font-serif-display text-[30px] leading-[1.1] tracking-[-0.02em] text-[#F5F4F1] truncate">
               {title || <span className="italic text-[#F5A623]">Untitled</span>}
@@ -382,7 +383,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
                 back to the Creative Director for a fresh concept. */}
             {draft.status !== 'processing' && (
               <div className="mt-3">
-                <label className="gravity-label block mb-1.5">Prompt</label>
+                <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-1.5">Prompt</label>
                 <textarea
                   value={promptDraft}
                   onChange={(e) => setPromptDraft(e.target.value)}
@@ -458,7 +459,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
           {/* Controls */}
           <div className="flex flex-col gap-6">
             <div>
-              <label className="gravity-label block mb-2">Title</label>
+              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Title</label>
               <input
                 type="text"
                 value={title}
@@ -469,7 +470,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             </div>
 
             <div>
-              <label className="gravity-label block mb-2">Caption</label>
+              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Caption</label>
               <textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
@@ -480,7 +481,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             </div>
 
             <div>
-              <label className="gravity-label block mb-2">Hashtags</label>
+              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Hashtags</label>
               <form onSubmit={handleAddHashtag} className="flex gap-2">
                 <input
                   type="text"
@@ -518,7 +519,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             </div>
 
             <div>
-              <label className="gravity-label block mb-2">Call to action</label>
+              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Call to action</label>
               <input
                 type="text"
                 value={cta}
@@ -529,7 +530,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             </div>
 
             <div>
-              <label className="gravity-label block mb-2">Posting to</label>
+              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Posting to</label>
               <div className="flex flex-wrap gap-2">
                 {availablePlatforms.map((platform) => {
                   const active = platforms.includes(platform);

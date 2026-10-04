@@ -25,7 +25,7 @@ async function sendSupportEmail({ name, email, message }) {
   const smtpEmail = process.env.SMTP_EMAIL;
 
   await transporter.sendMail({
-    from: `Nebulaa Gravity <${smtpEmail}>`,
+    from: `Nebulaa <${smtpEmail}>`,
     to: 'support@nebulaa.ai',
     replyTo: email || undefined,
     subject: 'New Support Query from Nebulaa Dashboard',

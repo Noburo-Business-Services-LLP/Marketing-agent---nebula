@@ -794,7 +794,7 @@ async function createDraftsForItem(calendar, item, { publish = false } = {}) {
       frequency: 'once'
     },
     scheduledFor: publish ? scheduledFor : null,
-    notes: `Generated from Gravity Smart Calendar day ${item.day}. ${item.cta || ''}`.trim()
+    notes: `Generated from Nebulaa Smart Calendar day ${item.day}. ${item.cta || ''}`.trim()
   });
 
   item.generatedDraftId = draft._id;

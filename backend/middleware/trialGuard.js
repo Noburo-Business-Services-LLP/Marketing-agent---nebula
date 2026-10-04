@@ -10,10 +10,11 @@ const User = require('../models/User');
 // apiCosts.js and these move with it; do not hardcode numbers back into here.
 const { QUARK_COSTS: CREDIT_COSTS, ACTION_UNITS } = require('../config/apiCosts');
 
+const NO_QUARKS_MESSAGE = 'You do not have enough Quarks for this. Please upgrade your plan, or buy an add-on pack or Quarks.';
 
 /**
- * Middleware: Check if trial is still active
- * Returns 403 with trialExpired: true if expired
+ * Middleware: stop the request when the Quarks are used up.
+ * There is no time limit: an account keeps working until its Quarks reach zero.
  */
 const checkTrial = async (req, res, next) => {
   try {
@@ -28,7 +29,9 @@ const checkTrial = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: 'You\'ve used all your credits. Subscribe to continue using Nebulaa Gravity.',
+        upgradeRequired: true,
+        reason: 'quarks',
+        message: NO_QUARKS_MESSAGE,
         creditsRemaining: 0
       });
     }
@@ -79,7 +82,7 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
         success: false,
         creditsRemaining: currentBalance,
         creditsDeducted: 0,
-        error: `Insufficient credits. Need ${totalCost}, have ${currentBalance}.`
+        error: `Insufficient Quarks. Need ${totalCost}, have ${currentBalance}. Please upgrade your plan, or buy an add-on pack or Quarks.`
       };
     }
 
@@ -142,7 +145,9 @@ const requireCredits = (action, countOrFn = 1) => {
         return res.status(403).json({
           success: false,
           creditsExhausted: true,
-          message: `This action requires ${totalCost} credits but you only have ${currentBalance}.`,
+          upgradeRequired: true,
+          reason: 'quarks',
+          message: `This needs ${totalCost} Quarks but you have ${currentBalance}. Please upgrade your plan, or buy an add-on pack or Quarks.`,
           creditsRequired: totalCost,
           creditsRemaining: currentBalance
         });

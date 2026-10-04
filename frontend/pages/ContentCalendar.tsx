@@ -380,7 +380,7 @@ const ContentCalendar: React.FC = () => {
         
         {history.length === 0 && !loading && (
           <div className="p-8 text-center border rounded-xl border-slate-800 bg-slate-900/50 text-slate-400">
-            No plans found. Generate your first plan!
+            No plans were found. Generate your first plan to see it here.
           </div>
         )}
         
@@ -480,7 +480,7 @@ const ContentCalendar: React.FC = () => {
                   {(cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT) > AUTO_GENERATE_DEFAULT && (
                     <p className="mt-2 text-[11.5px] text-[#F5A623]/90 leading-relaxed">
                       Above a week's worth. Each post generates an image, so this
-                      will use credits faster.
+                      will use Quarks faster.
                     </p>
                   )}
                 </div>
@@ -578,13 +578,12 @@ const ContentCalendar: React.FC = () => {
                     </div>
                   ) : item.status === 'failed' ? (
                     <div className="flex flex-col items-center gap-1.5 text-red-400 text-xs">
-                      <span className="text-xl">⚠️</span>
-                      <span>Generation Failed</span>
+                                            <span>Generation failed</span>
                     </div>
                   ) : item.imageUrl ? (
                     <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="text-3xl text-slate-700">🖼️</div>
+                    <div className="text-xs text-slate-500">No image available</div>
                   )}
                 </div>
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">

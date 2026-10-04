@@ -86,6 +86,8 @@ const paymentRoutes = require('./routes/payment');
 
 // Trial guard middleware
 const { checkTrial } = require('./middleware/trialGuard');
+const { protect } = require('./middleware/auth');
+const { requireFeature } = require('./middleware/requireFeature');
 
 // Content routes
 const contentRoutes = require('./routes/content');
@@ -97,6 +99,8 @@ const productRoutes = require('./routes/products');
 const promptRoutes = require('./routes/prompts');
 const carouselRoutes = require('./routes/carousels');
 const videoGenerationRoutes = require('./routes/videoGeneration');
+const heroVideoRoutes = require('./routes/heroVideo');
+const blueprintRoutes = require('./routes/blueprint');
 const aiMemoryRoutes = require('./routes/aiMemory');
 const influencerRoutes = require('./routes/influencerRoutes');
 const collaborationRoutes = require('./routes/collaborationRoutes');
@@ -375,6 +379,7 @@ const FEATURE_ROUTE_MAP = [
   { method: 'POST', pattern: /^\/api\/chat/,                       feature: 'chat_used',               module: 'chat' },
   { method: 'PUT',  pattern: /^\/api\/brand/,                      feature: 'brand_profile_updated',   module: 'brand' },
   { method: 'GET',  pattern: /^\/api\/campaigns/,                  feature: 'campaigns_viewed',        module: 'campaigns' },
+  { method: 'POST', pattern: /^\/api\/blueprint$/,                 feature: 'blueprint_started',       module: 'blueprint' },
 ];
 
 app.use((req, res, next) => {
@@ -444,7 +449,11 @@ app.use('/api/products', productRoutes);
 app.use('/api/prompts', promptRoutes);
 app.use('/api/carousels', carouselRoutes);
 // Video generation has its own per-route limiters (job polling must not trip AI limiter).
+// Scheduling a video post calls an outside service; gated here so the Kling route file stays untouched.
+app.post('/api/video-generation/schedulePost', protect, requireFeature('schedule'));
 app.use('/api/video-generation', videoGenerationRoutes);
+app.use('/api/hero-video', heroVideoRoutes);
+app.use('/api/blueprint', blueprintRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);

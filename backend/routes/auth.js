@@ -8,6 +8,7 @@ const { lookupInstagramHandle } = require('../services/serperLookup');
 const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
 const axios = require('axios');
 const otpService = require('../services/otpService');
+const { newAccountPlan } = require('../config/entitlements');
 const { determineBrandColors } = require('../services/brandIntelligenceService');
 const { scrapeWebsite } = require('../services/scraper');
 
@@ -585,7 +586,8 @@ router.post('/signup', [
           brandColors: []
         }
       },
-      isVerified: false
+      isVerified: false,
+      plan: newAccountPlan()
     });
 
     // Generate and send OTP
@@ -799,7 +801,7 @@ router.post('/verify-otp', [
 
     res.status(200).json({
       success: true,
-      message: 'Email verified successfully! Welcome to Gravity.',
+      message: 'Email verified successfully! Welcome to Nebulaa.',
       token,
       user: user.toPublicJSON()
     });
@@ -1316,7 +1318,7 @@ router.put('/complete-onboarding', protect, async (req, res) => {
           : 'leads',
         // Handle brandVoice as array or string
         brandTone: Array.isArray(businessProfile?.brandVoice) 
-          ? businessProfile.brandVoice 
+          ? (businessProfile.brandVoice.length ? businessProfile.brandVoice : ['professional'])
           : businessProfile?.brandVoice 
             ? [businessProfile.brandVoice] 
             : ['professional'],

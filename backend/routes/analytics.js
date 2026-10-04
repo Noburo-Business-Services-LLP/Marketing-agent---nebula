@@ -13,13 +13,24 @@ const { analyzeMetrics, generateWithLLM } = require('../services/llmRouter');
 const { getPostAnalytics, getSocialAnalyticsDetailed, getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
 const { trackCampaignPerformanceFromAnalytics } = require('../services/aiPerformanceTracker');
 const { resolveOrganizationId } = require('../services/aiMemoryService');
+const { requireOwnProfileKey } = require('../services/ayrshareGuard');
 
 /**
  * Helper: Get user's Ayrshare profile key
  */
 async function getProfileKey(userId) {
   const user = await User.findById(userId);
-  return user?.ayrshare?.profileKey || null;
+  // Throws (403) for a non-managed account with no profile of its own, so no call can
+  // fall back to the master Ayrshare profile. Managed accounts keep today's behaviour.
+  return requireOwnProfileKey(user);
+}
+
+function noProfileResponse(res, error) {
+  if (error && error.code === 'NO_PROFILE_KEY') {
+    res.status(403).json({ success: false, error: error.message, message: error.message });
+    return true;
+  }
+  return false;
 }
 
 // ============================================
@@ -66,6 +77,7 @@ router.post('/post-analytics', protect, async (req, res) => {
     });
     res.json({ success: true, analytics: result.data });
   } catch (error) {
+    if (noProfileResponse(res, error)) return;
     console.error('Post analytics error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
@@ -137,6 +149,7 @@ router.post('/daily-analytics', protect, async (req, res) => {
 
     res.json({ success: true, analytics: result.data });
   } catch (error) {
+    if (noProfileResponse(res, error)) return;
     console.error('Daily analytics error:', error);
     // Don't 500 for optional daily data - return empty
     res.json({ success: true, analytics: {} });

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, ReactNode } from 'react';
+import { forceLightTheme } from '../utils/theme';
 
 interface ThemeContextType {
   isDarkMode: boolean;
@@ -20,43 +21,17 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedTheme = localStorage.getItem('nebulaa-theme');
-    if (savedTheme === 'dark') return true;
-    if (savedTheme === 'light') return false;
-
-    // Check if class 'dark' exists on html or system preference
-    return document.documentElement.classList.contains('dark') || 
-           window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  const theme: 'dark' | 'light' = isDarkMode ? 'dark' : 'light';
+  // Nebulaa is light only: the stored preference and system dark mode are ignored.
+  const isDarkMode = false;
+  const theme: 'dark' | 'light' = 'light';
 
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('nebulaa-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('nebulaa-theme', 'light');
-    }
-  }, [isDarkMode]);
+    forceLightTheme(document, window.localStorage);
+  }, []);
 
-  const toggleTheme = () => {
-    setIsDarkMode(prev => !prev);
-  };
+  const toggleTheme = () => { /* light only: nothing to toggle */ };
 
-  const colors = isDarkMode ? {
-    bg: '#070A12',
-    bgSecondary: '#0d1117',
-    bgCard: '#0f1419',
-    text: '#ededed',
-    textSecondary: 'rgba(237, 237, 237, 0.7)',
-    accent: '#ffcc29',
-    accentHover: '#e6b825',
-    border: 'rgba(237, 237, 237, 0.1)',
-    borderAccent: '#ffcc29',
-  } : {
+  const colors = {
     bg: '#f5f5f5',
     bgSecondary: '#ffffff',
     bgCard: '#ffffff',

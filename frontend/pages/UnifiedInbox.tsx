@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { AutoReplySettings, inboxAPI, InboxConversation, InboxMessage } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 type Platform = 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
 
@@ -64,6 +66,7 @@ const UnifiedInbox: React.FC = () => {
   const [autoReplySettings, setAutoReplySettings] = useState<AutoReplySettings | null>(null);
   const [autoReplySaving, setAutoReplySaving] = useState(false);
   const [error, setError] = useState('');
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
   const [threadError, setThreadError] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -99,7 +102,9 @@ const UnifiedInbox: React.FC = () => {
       setConversations(list);
       setSelectedId(current => list.some(item => item.id === current) ? current : list[0]?.id || '');
       setError('');
+      setUpgrade(null);
     } catch (err: any) {
+      setUpgrade(upgradeInfoOf(err));
       setConversations([]);
       setSelectedId('');
       setMessages([]);
@@ -361,6 +366,8 @@ const UnifiedInbox: React.FC = () => {
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" /></div>
+            ) : upgrade ? (
+              <div className="p-4"><UpgradePrompt reason={upgrade.reason} feature={upgrade.feature} /></div>
             ) : error ? (
               <div className="h-full flex items-center justify-center p-6 text-center">
                 <div>

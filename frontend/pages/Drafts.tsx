@@ -6,6 +6,8 @@ import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import { useConfirm } from '../context/ConfirmContext';
 import { DraftProcessingAnimation } from '../components/DraftProcessingAnimation';
 import { Link, useNavigate } from 'react-router-dom';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 export const Drafts: React.FC = () => {
   const confirm = useConfirm();
@@ -23,6 +25,7 @@ export const Drafts: React.FC = () => {
   // Loading & Error States
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
   
   // Selected draft for editing/preview
   const [selectedDraft, setSelectedDraft] = useState<Draft | null>(null);
@@ -128,7 +131,8 @@ export const Drafts: React.FC = () => {
       setBulkTime('');
       await fetchDrafts();
     } catch (err: any) {
-      setError('Failed to schedule some drafts.');
+      const u = upgradeInfoOf(err);
+      if (u) setUpgrade(u); else setError('Failed to schedule some drafts.');
     } finally {
       setIsBulkScheduling(false);
     }
@@ -289,6 +293,7 @@ export const Drafts: React.FC = () => {
         )}
 
         {/* Error Alert */}
+        {upgrade && <UpgradePrompt className="mb-4" reason={upgrade.reason} feature={upgrade.feature} />}
         {error && (
           <div className="p-4 bg-red-950/20 border border-red-900/30 text-red-400 rounded-xl flex items-start gap-3">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -378,7 +383,7 @@ export const Drafts: React.FC = () => {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
-                      <div className="text-3xl text-slate-700">🖼️</div>
+                      <div className="text-xs text-slate-500">No image available</div>
                     )}
                     
                     {/* Status Overlay */}

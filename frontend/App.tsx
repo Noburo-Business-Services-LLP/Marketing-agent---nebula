@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import ChatBot from './components/ChatBot';
 import CampaignReminderPopup from './components/CampaignReminderPopup';
@@ -20,6 +20,7 @@ import ContentCalendar from './pages/ContentCalendar';
 import CalendarHome from './pages/CalendarHome';
 import IdeaInbox from './pages/IdeaInbox';
 import ReelGenerator from './pages/ReelGenerator';
+import HeroVideo from './pages/HeroVideo';
 import AdCampaigns from './pages/AdCampaigns';
 import Competitors from './pages/Competitors';
 import ConnectSocials from './pages/ConnectSocials';
@@ -41,11 +42,32 @@ import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import BlueprintRoutes from './pages/BlueprintRoutes';
+import { postAuthTarget, BLUEPRINT_SIGNUP_PATH } from './utils/blueprint';
 import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { apiService } from './services/api';
 import { User } from './types';
 import { Loader2 } from 'lucide-react';
+
+// Calls onChange after every route change (not on first render). Must sit inside the Router.
+const RouteChangeWatcher: React.FC<{ onChange: () => void }> = ({ onChange }) => {
+  const { pathname } = useLocation();
+  const cb = useRef(onChange);
+  cb.current = onChange;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    cb.current();
+  }, [pathname]);
+  return null;
+};
+
+// A signed-in visitor who opens the sign-up link from the ad goes to the Blueprint form, not the dashboard.
+const LoginRedirect: React.FC = () => {
+  const [params] = useSearchParams();
+  return <Navigate to={postAuthTarget(params.toString())} replace />;
+};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -75,15 +97,56 @@ const App: React.FC = () => {
     checkAuth();
   }, []);
 
+  // The paywall replaces EVERY route, so for credits it must only stand while the balance is
+  // really empty (the same rule checkAuth applies on load). A 403 `creditsExhausted` also comes
+  // back when one action costs more than the balance (a Hero clip, a long reel); that is a
+  // per-action refusal the page reports itself. Treating it as "account empty" used to lock the
+  // whole app on the plans page until a reload, because nothing ever cleared this state.
+  const balanceIsEmpty = useCallback(async (): Promise<boolean> => {
+    const res = await apiService.getCredits();
+    const balance = res?.success ? res.credits?.balance : undefined;
+    // Unknown balance (network error): keep the old behaviour and show the paywall.
+    return !(typeof balance === 'number' && balance > 0);
+  }, []);
+
+  const clearCreditsPaywall = useCallback(() => {
+    setTrialExpired((t) => (t.expired && t.reason === 'credits' ? { expired: false, reason: 'time' } : t));
+  }, []);
+
+  const trialExpiredRef = useRef(trialExpired);
+  trialExpiredRef.current = trialExpired;
+
+  // On navigation, a credits paywall is re-checked and lifted when the balance is no longer empty.
+  const recheckPaywallOnNavigate = useCallback(() => {
+    const t = trialExpiredRef.current;
+    if (!t.expired || t.reason !== 'credits') return;
+    balanceIsEmpty().then((empty) => { if (!empty) clearCreditsPaywall(); });
+  }, [balanceIsEmpty, clearCreditsPaywall]);
+
   // Listen for trial-expired events from API interceptor
   useEffect(() => {
     const handleTrialExpired = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      setTrialExpired({ expired: true, reason: detail?.reason || 'time' });
+      const reason: 'time' | 'credits' = detail?.reason === 'credits' ? 'credits' : 'time';
+      if (reason !== 'credits') {
+        setTrialExpired({ expired: true, reason });
+        return;
+      }
+      if (typeof detail?.creditsRemaining === 'number' && detail.creditsRemaining > 0) return;
+      balanceIsEmpty().then((empty) => { if (empty) setTrialExpired({ expired: true, reason: 'credits' }); });
+    };
+    // A top-up or any response that reports a positive balance lifts a credits paywall.
+    const handleCreditsUpdated = (e: Event) => {
+      const left = (e as CustomEvent).detail?.creditsRemaining;
+      if (typeof left === 'number' && left > 0) clearCreditsPaywall();
     };
     window.addEventListener('trial-expired', handleTrialExpired);
-    return () => window.removeEventListener('trial-expired', handleTrialExpired);
-  }, []);
+    window.addEventListener('credits-updated', handleCreditsUpdated);
+    return () => {
+      window.removeEventListener('trial-expired', handleTrialExpired);
+      window.removeEventListener('credits-updated', handleCreditsUpdated);
+    };
+  }, [balanceIsEmpty, clearCreditsPaywall]);
 
   const handleLoginSuccess = (userData: User) => {
     setUser(userData);
@@ -108,8 +171,8 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#070A12]">
-            <Loader2 className="w-8 h-8 animate-spin text-[#ffcc29]" />
+        <div className="min-h-screen flex items-center justify-center bg-[var(--gv-bg)]">
+            <Loader2 className="w-8 h-8 animate-spin text-[var(--gv-accent)]" />
         </div>
     );
   }
@@ -118,6 +181,7 @@ const App: React.FC = () => {
     <ThemeProvider>
     <ConfirmProvider>
     <Router>
+      <RouteChangeWatcher onChange={recheckPaywallOnNavigate} />
       <Routes>
         {/* Landing Page - shown when not logged in */}
         <Route 
@@ -127,16 +191,25 @@ const App: React.FC = () => {
         
         <Route 
           path="/login" 
-          element={!user ? <Auth onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/dashboard" replace />} 
+          element={!user ? <Auth onLoginSuccess={handleLoginSuccess} /> : <LoginRedirect />} 
         />
         
         {/* Public legal pages */}
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
+        {/* Brand Growth Blueprint: outside the onboarding gate and the Quark paywall on purpose. */}
+        <Route
+          path="/blueprint/*"
+          element={user ? <BlueprintRoutes user={user} onLogout={handleLogout} /> : <Navigate to={BLUEPRINT_SIGNUP_PATH} replace />}
+        />
+
         {/* Admin routes — completely separate from user auth */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminDashboard />} />
+
+        {/* Development only: look at the sign-up steps without an account. Not part of a production build. */}
+        {(import.meta as any).env?.DEV && <Route path="/__onboarding-preview" element={<Onboarding onComplete={() => {}} />} />}
 
         {/* Onboarding Route - Protected but outside main Layout if needed, or redirect check */}
         <Route 
@@ -200,6 +273,7 @@ const App: React.FC = () => {
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove />} />
                     <Route path="/reels" element={<ReelGenerator />} />
+                    <Route path="/reels/hero" element={<HeroVideo />} />
                     <Route path="/upload" element={<UploadAndSchedule />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />

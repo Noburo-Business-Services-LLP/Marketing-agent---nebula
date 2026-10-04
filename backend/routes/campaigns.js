@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { requireFeature, requireFeatureWhen, wantsScheduling } = require('../middleware/requireFeature');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const Campaign = require('../models/Campaign');
 const Influencer = require('../models/Influencer');
@@ -17,10 +18,12 @@ const crypto = require('crypto');
 const { parseGeminiJSON, generateICPAndStrategy, generateCampaignImageNanoBanana } = require('../services/geminiAI');
 const { callTextLLM } = require('../services/openAI');
 const { buildPrompt } = require('../services/promptRegistry');
+const { getPlatformRules } = require('../services/platformContentRules');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
 const { normalizeLanguage } = require('../services/contentCalendarService');
 const { planCampaignVisuals, renderCampaignSlotImage, assetsToImageOptions } = require('../services/creativeDirector');
 // Import Ayrshare for social media posting
+const { requireOwnProfileKey } = require('../services/ayrshareGuard');
 const { getPostStatus, retryPost: retryAyrsharePost, deletePost: deleteAyrsharePost } = require('../services/socialMediaAPI');
 const {
   classifyInstagramPublishFailure,
@@ -932,9 +935,11 @@ router.get('/', protect, async (req, res) => {
       
       // Get the user's Ayrshare profile key for API calls
       const user = await User.findById(userId);
-      const profileKey = user?.ayrshare?.profileKey;
+      let profileKey;
+      try { profileKey = requireOwnProfileKey(user) || undefined; } catch (_) { profileKey = null; }
       
-      for (const campaign of scheduledPastDue) {
+      // An account with no profile of its own must never query the master profile.
+      for (const campaign of (profileKey === null ? [] : scheduledPastDue)) {
         try {
           const statusResult = await getPostStatus(campaign.socialPostId, { profileKey });
           
@@ -1695,6 +1700,13 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       platform: String(platforms[i % platforms.length] || 'instagram').trim().toLowerCase()
     }));
 
+    const platformAssignmentsBlock = scheduleDates
+      .map((slot, i) => {
+        const rules = getPlatformRules(slot.platform);
+        return `Post ${i + 1} — ${rules.platform.toUpperCase()}:\n${rules.promptBlock}`;
+      })
+      .join('\n\n');
+
     // Step 1: Generate all captions via Gemini. Everything conditional is
     // resolved here, so the template the user edits contains prose and
     // {{placeholders}} only -- no JS for an edit to break.
@@ -1718,7 +1730,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         : '',
       keyMessagesBlock: keyMessages
         ? `MANDATORY CONTENT STRUCTURES (STRICTLY FOLLOW THESE):\n${keyMessages}`
-        : ''
+        : '',
+      platformAssignmentsBlock
     };
 
     const captionPrompt = await buildPrompt(req.user.id, 'campaign.content', captionVars);
@@ -1784,19 +1797,19 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
 
     // Helper to validate captions against template structure markers
     const validateCaptionsSchema = (posts, keyMessages) => {
-      if (!keyMessages) return { isValid: true };
-      
       const pTemplates = {};
-      const blocks = keyMessages.split(/\n\n---\n\n/);
-      blocks.forEach(block => {
-        const match = block.match(/\[([A-Z]+) CONTENT FORMAT\]\n([\s\S]*)/);
-        if (match) {
-          const platform = match[1].toLowerCase();
-          const templateText = normalizeTemplateText(match[2] || '');
-          const mkrs = templateMarkersFromText(templateText);
-          pTemplates[platform] = { mkrs, templateText };
-        }
-      });
+      if (keyMessages) {
+        const blocks = keyMessages.split(/\n\n---\n\n/);
+        blocks.forEach(block => {
+          const match = block.match(/\[([A-Z]+) CONTENT FORMAT\]\n([\s\S]*)/);
+          if (match) {
+            const platform = match[1].toLowerCase();
+            const templateText = normalizeTemplateText(match[2] || '');
+            const mkrs = templateMarkersFromText(templateText);
+            pTemplates[platform] = { mkrs, templateText };
+          }
+        });
+      }
 
       const errs = [];
       posts.forEach((post, i) => {
@@ -1845,6 +1858,13 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
             errs.push(`Post ${i + 1} (${post.platform}) still contains unfilled placeholders: ${realPlaceholders.join(', ')}`);
           }
         }
+
+        if (platform === 'linkedin') {
+          const wordCount = normalizedCaption.split(/\s+/).filter(Boolean).length;
+          if (wordCount < 100) {
+            errs.push(`Post ${i + 1} (${post.platform}) is only ${wordCount} words — LinkedIn posts should be 150-300+ words`);
+          }
+        }
       });
 
       return { isValid: errs.length === 0, errorDetails: errs.join('; ') };
@@ -1857,14 +1877,22 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     let parsed = null;
     const currentPrompt = captionPrompt;
 
+    // LinkedIn posts are 150-300+ words vs. Instagram's ~150-300 chars, and
+    // this single JSON call writes every post in the campaign — a
+    // LinkedIn-heavy campaign risks running out of output tokens and
+    // silently truncating. Scale the budget up with how many of the
+    // requested slots are LinkedIn, capped well under the model's limit.
+    const linkedinSlotCount = scheduleDates.filter((s) => s.platform === 'linkedin').length;
+    const captionMaxTokens = Math.min(8000 + 600 * linkedinSlotCount, 16000);
+
     while (attempts < maxAttempts) {
       // if (aborted) return res.end(); // Removed to allow background generation
       attempts++;
-      
+
       console.log(` [CAMPAIGN_CONTENT] ${campaignContentGenerationId} call #${attempts}`, { userId, totalPosts });
       const textRes = await callTextLLM(currentPrompt, {
         jsonMode: true,
-        maxTokens: 8000,
+        maxTokens: captionMaxTokens,
         temperature: 0.85,
         skipCache: true
       });
@@ -2579,7 +2607,7 @@ router.post('/upload-audio', protect, async (req, res) => {
  * POST /api/campaigns
  * Create a new campaign
  */
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, requireFeatureWhen('schedule', wantsScheduling), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
 
@@ -2791,7 +2819,7 @@ router.patch('/:id/post-ids', protect, async (req, res) => {
  * PUT /api/campaigns/:id
  * Update an existing campaign
  */
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', protect, requireFeatureWhen('schedule', wantsScheduling), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
 
@@ -2926,9 +2954,12 @@ router.delete('/:id', protect, async (req, res) => {
 
     if (attemptedPostIds.length > 0) {
       const user = await User.findById(userId);
-      const profileKey = user?.ayrshare?.profileKey;
+      let profileKey;
+      let ownKeyMissing = false;
+      try { profileKey = requireOwnProfileKey(user) || undefined; } catch (_) { ownKeyMissing = true; }
 
-      for (const postId of attemptedPostIds) {
+      // No profile of its own: nothing of this account's can exist on Ayrshare, so never touch the master profile.
+      for (const postId of (ownKeyMissing ? [] : attemptedPostIds)) {
         console.log(` Deleting post ${postId} from Ayrshare (campaign: ${campaign.name})`);
         const deleteResult = await deleteAyrsharePost(postId, { profileKey });
 
@@ -2963,7 +2994,7 @@ router.delete('/:id', protect, async (req, res) => {
  * Actually publish a campaign to social media using Ayrshare
  * Accepts optional platforms array in request body to override campaign platforms
  */
-router.post('/:id/publish', protect, async (req, res) => {
+router.post('/:id/publish', protect, requireFeature('publish'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const campaign = await Campaign.findOne({ _id: req.params.id, userId });

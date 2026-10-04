@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Bot, Loader2, Plus, Save, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
 import { AutoReplySettings, inboxAPI } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 const defaultSettings: AutoReplySettings = {
   enabled: false,
@@ -27,6 +29,7 @@ const AutoReplySettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -34,6 +37,8 @@ const AutoReplySettingsPage: React.FC = () => {
       try {
         const res = await inboxAPI.getSettings();
         setSettings({ ...defaultSettings, ...(res.settings || {}) });
+      } catch (e: any) {
+        setUpgrade(upgradeInfoOf(e));
       } finally {
         setLoading(false);
       }
@@ -59,6 +64,8 @@ const AutoReplySettingsPage: React.FC = () => {
       setSettings({ ...defaultSettings, ...(res.settings || {}) });
       setSaved(true);
       window.setTimeout(() => setSaved(false), 1600);
+    } catch (e: any) {
+      setUpgrade(upgradeInfoOf(e));
     } finally {
       setSaving(false);
     }
@@ -98,6 +105,8 @@ const AutoReplySettingsPage: React.FC = () => {
   if (loading) {
     return <div className={`rounded-lg border p-8 ${theme.bgCard} ${theme.border}`}><Loader2 className="h-6 w-6 animate-spin text-[#ffcc29]" /></div>;
   }
+
+  if (upgrade) return <UpgradePrompt reason={upgrade.reason} feature={upgrade.feature} />;
 
   const inputClass = `w-full rounded-lg border px-3 py-2 text-sm outline-none ${theme.input}`;
 

@@ -1,0 +1,9383 @@
+{
+ "generatedAt": "2026-10-03T17:08:42.982Z",
+ "widths": [
+  1280,
+  375
+ ],
+ "gate": "FAIL",
+ "totals": {
+  "375": {
+   "expected": 51,
+   "ok": 51,
+   "missing": 0,
+   "blank": 0,
+   "error": 0,
+   "redirect": 0,
+   "tabNotFound": 0,
+   "checked": 1589,
+   "failures": 462,
+   "routesWithFailures": 47,
+   "unknown": 2,
+   "unknownUnsigned": 2,
+   "unparsed": 0,
+   "unparsedUnsigned": 0,
+   "gradientText": 3,
+   "gradientTextUnsigned": 3,
+   "svgFailures": 13,
+   "positionedFailures": 19,
+   "imageFailures": 11
+  },
+  "1280": {
+   "expected": 51,
+   "ok": 51,
+   "missing": 0,
+   "blank": 0,
+   "error": 0,
+   "redirect": 0,
+   "tabNotFound": 0,
+   "checked": 2735,
+   "failures": 553,
+   "routesWithFailures": 50,
+   "unknown": 5,
+   "unknownUnsigned": 5,
+   "unparsed": 0,
+   "unparsedUnsigned": 0,
+   "gradientText": 3,
+   "gradientTextUnsigned": 3,
+   "svgFailures": 13,
+   "positionedFailures": 28,
+   "imageFailures": 16
+  }
+ },
+ "routes": {
+  "dashboard": {
+   "path": "/dashboard",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 25,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "your eye",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1 post · 2 platform s",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "draft",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "vs. last 7d",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 56,
+     "failures": 10,
+     "unknown": 3,
+     "unknownUnsigned": 3,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "image-underlying": 5,
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 1.46,
+     "top": [
+      [
+       "IN · MON",
+       1.46,
+       "#f5f4f1",
+       "#ceccc8",
+       "text-white/80",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "IN · TUE",
+       2,
+       "#f5f4f1",
+       "#b0afab",
+       "text-white/80",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "3 / 4",
+       2.13,
+       "#f5f4f1",
+       "#aaa9a6",
+       "text-white/60",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "IN · WED",
+       2.32,
+       "#f5f4f1",
+       "#a3a29f",
+       "text-white/80",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "4 / 4",
+       2.83,
+       "#f5f4f1",
+       "#93928f",
+       "text-white/60",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "your eye",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1 post · 2 platform s",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "draft",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "vs. last 7d",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "dashboard-classic": {
+   "path": "/dashboard-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 64,
+     "failures": 21,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 21
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Sat",
+       1,
+       "#f5a623",
+       "#f5a623",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Content Strategist",
+       1.74,
+       "#f5a623",
+       "#feebd2",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Diwali sweets box",
+       1.95,
+       "#f5f4f1",
+       "#f59e0b",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "09:00 • instagram",
+       1.95,
+       "#f5f4f1",
+       "#f59e0b",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "week",
+       2.03,
+       "#f5a623",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "National",
+       2.55,
+       "#f5f4f1",
+       "#f97316",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Festival",
+       3.21,
+       "#f5f4f1",
+       "#ec4899",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "International",
+       3.34,
+       "#f5f4f1",
+       "#3b82f6",
+       "text-white/80",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 123,
+     "failures": 53,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 53
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Sat",
+       1,
+       "#f5a623",
+       "#f5a623",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Content Strategist",
+       1.67,
+       "#f5a623",
+       "#fee5d1",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "i",
+       1.72,
+       "#f5a623",
+       "#e5ecff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Diwali sweets box",
+       1.95,
+       "#f5f4f1",
+       "#f59e0b",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "09:00 • instagram",
+       1.95,
+       "#f5f4f1",
+       "#f59e0b",
+       "text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "week",
+       2.03,
+       "#f5a623",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Gandhi Jayanti",
+       2.55,
+       "#f5f4f1",
+       "#f97316",
+       "text-white",
+       "contrast",
+       "text"
+      ],
+      [
+       "National",
+       2.55,
+       "#f5f4f1",
+       "#f97316",
+       "text-white/80",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-plan": {
+   "path": "/content-calendar",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 10,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 10
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Plan",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Schedule",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "My default language",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "10",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1] group-hover:text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "english",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "0 Weeks",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Off",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40",
+       "contrast",
+       "text"
+      ],
+      [
+       "Anything specific to focus on this month",
+       1.03,
+       "#fcf8f0",
+       "#fbf5ea",
+       "text-[#F5F4F1] placeholder:text-white/30",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "planned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 11,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 11
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Plan",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Schedule",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "My default language",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "10",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1] group-hover:text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "english",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "0 Weeks",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Off",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40",
+       "contrast",
+       "text"
+      ],
+      [
+       "Anything specific to focus on this month",
+       1.03,
+       "#fcf8f0",
+       "#fbf5ea",
+       "text-[#F5F4F1] placeholder:text-white/30",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "planned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-schedule": {
+   "path": "/content-calendar",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 60,
+     "failures": 15,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 15
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Schedule",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "28",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "29",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "30",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2026",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "MON",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "TUE",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 89,
+     "failures": 16,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 16
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Schedule",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "28",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "29",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "30",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2026",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "MON",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "TUE",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-grid": {
+   "path": "/content-calendar-grid",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 58,
+     "failures": 13,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 13
+     },
+     "svgFailures": 0,
+     "worst": 1.5,
+     "top": [
+      [
+       "28",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "29",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "30",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2026",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "MON",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "TUE",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "WED",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "THU",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 87,
+     "failures": 14,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 14
+     },
+     "svgFailures": 0,
+     "worst": 1.5,
+     "top": [
+      [
+       "28",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "29",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "30",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "1",
+       1.5,
+       "#d0c7b8",
+       "#f8f2e8",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2026",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "MON",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "TUE",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "WED",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "THU",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "content-calendar-classic": {
+   "path": "/content-calendar-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 8,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 8
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "My default language",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "10",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1] group-hover:text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "english",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "0 Weeks",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Off",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40",
+       "contrast",
+       "text"
+      ],
+      [
+       "Anything specific to focus on this month",
+       1.03,
+       "#fcf8f0",
+       "#fbf5ea",
+       "text-[#F5F4F1] placeholder:text-white/30",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "planned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 9,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 9
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "My default language",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "10",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1] group-hover:text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Plan",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "english",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "0 Weeks",
+       1.02,
+       "#f5f4f1",
+       "#fbf6eb",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Off",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40",
+       "contrast",
+       "text"
+      ],
+      [
+       "Anything specific to focus on this month",
+       1.03,
+       "#fcf8f0",
+       "#fbf5ea",
+       "text-[#F5F4F1] placeholder:text-white/30",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "planned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "idea-inbox": {
+   "path": "/idea-inbox",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 23,
+     "failures": 14,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 14
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Saw a great ad about founder burnout — w",
+       1.02,
+       "#fcf8f1",
+       "#fbf5eb",
+       "text-[#F5F4F1] placeholder-white/30",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Attach image",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70",
+       "contrast",
+       "text"
+      ],
+      [
+       "Link (optional)",
+       1.02,
+       "#fcf8f1",
+       "#fbf5eb",
+       "text-white/80 placeholder-white/30",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Have a list already?",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Paste rows, or upload a spreadsheet — on",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Upload file",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70",
+       "contrast",
+       "text"
+      ],
+      [
+       "Paste a list",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70",
+       "contrast",
+       "text"
+      ],
+      [
+       "Show the 5am bake in a reel",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Dismiss",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Customer birthday cake gallery",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 15,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 15
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Saw a great ad about founder burnout — w",
+       1.02,
+       "#fcf8f1",
+       "#fbf5eb",
+       "text-[#F5F4F1] placeholder-white/30",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Attach image",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70",
+       "contrast",
+       "text"
+      ],
+      [
+       "Link (optional)",
+       1.02,
+       "#fcf8f1",
+       "#fbf5eb",
+       "text-white/80 placeholder-white/30",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Have a list already?",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Paste rows, or upload a spreadsheet — on",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Upload file",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70",
+       "contrast",
+       "text"
+      ],
+      [
+       "Paste a list",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/70",
+       "contrast",
+       "text"
+      ],
+      [
+       "Show the 5am bake in a reel",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Dismiss",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Customer birthday cake gallery",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "campaigns": {
+   "path": "/campaigns",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 44,
+     "failures": 10,
+     "unknown": 1,
+     "unknownUnsigned": 1,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 8,
+      "image-underlying": 2
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "working on",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Monsoon menu launch",
+       3.24,
+       "#8f836e",
+       "#f7eedf",
+       "text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)]",
+       "image-underlying",
+       "placeholder"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "e.g. Launch our monsoon menu over two we",
+       3.35,
+       "#8f836e",
+       "#fbf2e2",
+       "text-[var(--gv-text-tertiary)] placeholder:text-[var(--gv-text-muted)]",
+       "image-underlying",
+       "placeholder"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Logo position",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 69,
+     "failures": 12,
+     "unknown": 1,
+     "unknownUnsigned": 1,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 10,
+      "image-underlying": 2
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "working on",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Monsoon menu launch",
+       3.24,
+       "#8f836e",
+       "#f7eedf",
+       "text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)]",
+       "image-underlying",
+       "placeholder"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Edit",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "e.g. Launch our monsoon menu over two we",
+       3.35,
+       "#8f836e",
+       "#fbf2e2",
+       "text-[var(--gv-text-tertiary)] placeholder:text-[var(--gv-text-muted)]",
+       "image-underlying",
+       "placeholder"
+      ],
+      [
+       "/",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "·",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "campaigns-classic": {
+   "path": "/campaigns-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1.87,
+     "top": [
+      [
+       "Create",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "All Campaigns",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Drafts",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Scheduled",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Template-Based",
+       3.19,
+       "#d97706",
+       "#ffffff",
+       "text-amber-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Direct Upload",
+       3.3,
+       "#16a34a",
+       "#ffffff",
+       "text-green-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 10,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 10
+     },
+     "svgFailures": 0,
+     "worst": 1.87,
+     "top": [
+      [
+       "Create",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "All Campaigns",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Drafts",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Scheduled",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Posted",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Archived",
+       1.87,
+       "#f5a623",
+       "#fbf5ea",
+       "text-[#070A12] hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Template-Based",
+       3.19,
+       "#d97706",
+       "#ffffff",
+       "text-amber-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Direct Upload",
+       3.3,
+       "#16a34a",
+       "#ffffff",
+       "text-green-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "/",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "drafts-review": {
+   "path": "/drafts",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 34,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "once-over",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Empty — Regenerate will ask the Creative",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "No resolved prompt was recorded for this",
+       3.44,
+       "#8f836e",
+       "#fbf5eb",
+       "text-[var(--gv-text-secondary)] placeholder:text-[var(--gv-text-muted)]",
+       "contrast",
+       "placeholder"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 57,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "once-over",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Empty — Regenerate will ask the Creative",
+       3.43,
+       "#8f836e",
+       "#fbf5ea",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "No resolved prompt was recorded for this",
+       3.44,
+       "#8f836e",
+       "#fbf5eb",
+       "text-[var(--gv-text-secondary)] placeholder:text-[var(--gv-text-muted)]",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "drafts-all": {
+   "path": "/drafts",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 28,
+     "failures": 11,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 11
+     },
+     "svgFailures": 0,
+     "worst": 1.34,
+     "top": [
+      [
+       "scheduled",
+       1.34,
+       "#93c5fd",
+       "#d8dee7",
+       "text-blue-300",
+       "contrast",
+       "text"
+      ],
+      [
+       "published",
+       1.47,
+       "#34d399",
+       "#d2e7d6",
+       "text-emerald-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "once-over",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Tomorrow · 22:34",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Mon 5 Oct · 22:34",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Tue 6 Oct · 22:34",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 51,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.34,
+     "top": [
+      [
+       "scheduled",
+       1.34,
+       "#93c5fd",
+       "#d8dee7",
+       "text-blue-300",
+       "contrast",
+       "text"
+      ],
+      [
+       "published",
+       1.47,
+       "#34d399",
+       "#d2e7d6",
+       "text-emerald-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "once-over",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Tomorrow · 22:31",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Mon 5 Oct · 22:31",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Tue 6 Oct · 22:31",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Fresh out of the oven at 7am. Come early",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "reels": {
+   "path": "/reels",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 7,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 7
+     },
+     "svgFailures": 0,
+     "worst": 1.05,
+     "top": [
+      [
+       "Edit the prompts",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Create",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Drafts",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Created",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Scheduled",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Posted",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "All AI Videos",
+       1.06,
+       "#f5f4f1",
+       "#f9fbfc",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 8,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 8
+     },
+     "svgFailures": 0,
+     "worst": 1.05,
+     "top": [
+      [
+       "Edit the prompts",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Create",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Drafts",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Created",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Scheduled",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Posted",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "All AI Videos",
+       1.06,
+       "#f5f4f1",
+       "#f9fbfc",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "reels-hero": {
+   "path": "/reels/hero",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 7,
+     "failures": 1,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 1
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "Reels",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 2,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 2
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "Reels",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "upload": {
+   "path": "/upload",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Drop a file, or click to choose",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Images and video · up to 120MB",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40",
+       "contrast",
+       "text"
+      ],
+      [
+       "something",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Drop a file, or click to choose",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Images and video · up to 120MB",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40",
+       "contrast",
+       "text"
+      ],
+      [
+       "something",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "ad-campaigns": {
+   "path": "/ad-campaigns",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 5,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 28,
+     "failures": 1,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 1
+     },
+     "svgFailures": 0,
+     "worst": 3.8,
+     "top": [
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "competitors": {
+   "path": "/competitors",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 14,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Complete onboarding with your business l",
+       1.02,
+       "#f5f4f1",
+       "#fbf1e0",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Competitor Activity Feed",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Competitors ( 0 )",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Filter by keyword...",
+       2.54,
+       "#9ca3af",
+       "#ffffff",
+       "text-[#070A12]",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Add a competitor by name...",
+       2.54,
+       "#9ca3af",
+       "#ffffff",
+       "text-[#070A12]",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "room",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 37,
+     "failures": 7,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 7
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Complete onboarding with your business l",
+       1.02,
+       "#f5f4f1",
+       "#fbf1e0",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Competitor Activity Feed",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Competitors ( 0 )",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Filter by keyword...",
+       2.54,
+       "#9ca3af",
+       "#ffffff",
+       "text-[#070A12]",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Add a competitor by name...",
+       2.54,
+       "#9ca3af",
+       "#ffffff",
+       "text-[#070A12]",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "room",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials": {
+   "path": "/connect-socials",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 47,
+     "failures": 19,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 19
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Unlink",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-400 hover:text-red-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "instagram",
+       1.02,
+       "#f5f4f1",
+       "#f2f3e6",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "sunrisebakery",
+       1.02,
+       "#f5f4f1",
+       "#f2f3e6",
+       "text-white/55",
+       "contrast",
+       "text"
+      ],
+      [
+       "facebook",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 70,
+     "failures": 20,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 20
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Unlink",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-400 hover:text-red-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "instagram",
+       1.02,
+       "#f5f4f1",
+       "#f2f3e6",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "sunrisebakery",
+       1.02,
+       "#f5f4f1",
+       "#f2f3e6",
+       "text-white/55",
+       "contrast",
+       "text"
+      ],
+      [
+       "facebook",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-permissions": {
+   "path": "/connect-socials?tab=permissions",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 23,
+     "failures": 8,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 8
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 9,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 9
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-sync": {
+   "path": "/connect-socials?tab=sync",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 25,
+     "failures": 8,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 8
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 48,
+     "failures": 9,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 9
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "publish",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-auto-reply": {
+   "path": "/connect-socials?tab=auto-reply",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "3",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "value"
+      ],
+      [
+       "Suggested replies only",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "Professional",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "Friendly",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 65,
+     "failures": 13,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 13
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "3",
+       1.05,
+       "#f5f4f1",
+       "#f8fafc",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "value"
+      ],
+      [
+       "Suggested replies only",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "Professional",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "Friendly",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "connect-socials-inbox": {
+   "path": "/connect-socials/inbox",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 27,
+     "failures": 17,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 17
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "0 unread conversations",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Live",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "New comments, DMs, mentions, and replies",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Connect social accounts and webhooks to ",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Unified Social Inbox",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Unified Inbox",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 52,
+     "failures": 20,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 20
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "0 unread conversations",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Live",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "New comments, DMs, mentions, and replies",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Connect social accounts and webhooks to ",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Secure OAuth 2.0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/60",
+       "contrast",
+       "text"
+      ],
+      [
+       "Accounts",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Permissions",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Sync Status",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Social Inbox",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "AI Auto Reply",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "brand-assets": {
+   "path": "/brand-assets",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 46,
+     "failures": 17,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 17
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Brand Logos",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "PNG recommended, max 10MB",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Position: Bottom right",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500 hover:text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Brand Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Select brand font",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "Strict (always follow brand)",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 69,
+     "failures": 18,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 18
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Brand Logos",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "PNG recommended, max 10MB",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Position: Bottom right",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500 hover:text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Brand Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Select brand font",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "Strict (always follow brand)",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "brand-assets-products": {
+   "path": "/brand-assets?tab=products",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 20,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 20
+     },
+     "svgFailures": 0,
+     "worst": 1.01,
+     "top": [
+      [
+       "Products & Services",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "What the business offers, with images an",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 64,
+     "failures": 21,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 21
+     },
+     "svgFailures": 0,
+     "worst": 1.01,
+     "top": [
+      [
+       "Products & Services",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "What the business offers, with images an",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "brand-assets-environment": {
+   "path": "/brand-assets?tab=environment",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 9,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 9
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Your space",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Photos of your shop, showroom, workshop ",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "1 saved",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55",
+       "contrast",
+       "text"
+      ],
+      [
+       "Add photos",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40 hover:text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "look",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 10,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 10
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Your space",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Photos of your shop, showroom, workshop ",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "1 saved",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55",
+       "contrast",
+       "text"
+      ],
+      [
+       "Add photos",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/40 hover:text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "look",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "brand-assets-voice": {
+   "path": "/brand-assets?tab=voice",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 29,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Teach Nebulaa your voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Paste captions from posts you have alrea",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "instagram",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "No signals yet",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "No hashtags yet",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Add past posts to teach your preferred m",
+       1.04,
+       "#fdfaf4",
+       "#fbf5ea",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 52,
+     "failures": 13,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 13
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Teach Nebulaa your voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Paste captions from posts you have alrea",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "instagram",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "No signals yet",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "No hashtags yet",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Add past posts to teach your preferred m",
+       1.04,
+       "#fdfaf4",
+       "#fbf5ea",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "inventory-redirect": {
+   "path": "/inventory",
+   "group": "shell",
+   "scope": "duplicate",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 41,
+     "failures": 20,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 20
+     },
+     "svgFailures": 0,
+     "worst": 1.01,
+     "top": [
+      [
+       "Products & Services",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "What the business offers, with images an",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 64,
+     "failures": 21,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 21
+     },
+     "svgFailures": 0,
+     "worst": 1.01,
+     "top": [
+      [
+       "Products & Services",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "What the business offers, with images an",
+       1.01,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-white/45",
+       "contrast",
+       "text"
+      ],
+      [
+       "Brand",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Products & Services",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Environment",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Voice",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "0",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "2",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "analytics": {
+   "path": "/analytics",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 5,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 1.52,
+     "top": [
+      [
+       "+3%",
+       1.52,
+       "#4ade80",
+       "#f4efe5",
+       "text-[#4ADE80]",
+       "contrast",
+       "text"
+      ],
+      [
+       "0",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "awaiting data",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "No reach data yet.",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "No posts yet. Once you publish, your bes",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 45,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1.52,
+     "top": [
+      [
+       "+3%",
+       1.52,
+       "#4ade80",
+       "#f4efe5",
+       "text-[#4ADE80]",
+       "contrast",
+       "text"
+      ],
+      [
+       "0",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "awaiting data",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "No reach data yet.",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "No posts yet. Once you publish, your bes",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "analytics-classic": {
+   "path": "/analytics-classic",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 43,
+     "failures": 26,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 26
+     },
+     "svgFailures": 13,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Reach",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Impressions",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Engagement %",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Posts",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Likes",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Snapshot",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "7 d",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "90 d",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Followers",
+       1.37,
+       "#f5f4f1",
+       "#ffcc29",
+       "text-white",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 70,
+     "failures": 30,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 30
+     },
+     "svgFailures": 13,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Reach",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Impressions",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Engagement %",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Posts",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Likes",
+       1.02,
+       "#fcfcfd",
+       "#f9fafb",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Post Analytics",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500 hover:text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Boosted Ads",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500 hover:text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Ad History",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500 hover:text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Snapshot",
+       1.04,
+       "#f8f9fa",
+       "#f3f4f6",
+       "text-gray-500",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "seo": {
+   "path": "/seo",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 26,
+     "failures": 11,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 11
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "SEO Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Content Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Hashtag Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Competitor Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Run an SEO tool to generate recommendati",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "SEO Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Content Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Hashtag Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Competitor Score",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "/100",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Run an SEO tool to generate recommendati",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "seo-keywords": {
+   "path": "/seo/keywords",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business, product, campaign, or topic",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Enter a topic to generate primary, relat",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business, product, campaign, or topic",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Enter a topic to generate primary, relat",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "seo-metadata": {
+   "path": "/seo/metadata",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 5,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Landing page",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "Website page, blog, product, or campaign",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Optional focus keyword",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Generate titles, descriptions, focus key",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Landing page",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "Website page, blog, product, or campaign",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Optional focus keyword",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Generate titles, descriptions, focus key",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "seo-hashtags": {
+   "path": "/seo/hashtags",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 18,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Paste post content or describe your camp",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Generate platform-specific hashtags for ",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 43,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Paste post content or describe your camp",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Generate platform-specific hashtags for ",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "seo-competitor": {
+   "path": "/seo/competitor",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "https://competitor.com",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Analyze a competitor URL to identify key",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 38,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Refresh",
+       1,
+       "#070a12",
+       "#0a0a0a",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "https://competitor.com",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12] placeholder-[#070A12]/50",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Analyze a competitor URL to identify key",
+       3.72,
+       "#838589",
+       "#ffffff",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-portal": {
+   "path": "/influencer-portal",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 5,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Unified multi-platform creator collabora",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Total Influencers",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Pending Approvals",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Active Collaborations",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Platform Analytics",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Unified multi-platform creator collabora",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Total Influencers",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Pending Approvals",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Active Collaborations",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Platform Analytics",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-list": {
+   "path": "/influencer-portal/list",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 15,
+     "failures": 2,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 2
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Create and manage multi-platform influen",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "No influencers yet. Add your first creat",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Create and manage multi-platform influen",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "No influencers yet. Add your first creat",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-collaborations": {
+   "path": "/influencer-portal/collaborations",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 5,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Manage multi-platform influencer partner",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "No collaborations yet. Click Create Coll",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Total Collaborations",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Influencers",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Campaigns",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 47,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Manage multi-platform influencer partner",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "No collaborations yet. Click Create Coll",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Total Collaborations",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Influencers",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "Campaigns",
+       1.02,
+       "#fbfcfd",
+       "#f8fafc",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-submissions": {
+   "path": "/influencer-portal/submissions",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 6,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 1,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 1
+     },
+     "svgFailures": 0,
+     "worst": 3.8,
+     "top": [
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-analytics": {
+   "path": "/influencer-portal/analytics",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 36,
+     "failures": 1,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 1
+     },
+     "svgFailures": 0,
+     "worst": 3.8,
+     "top": [
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "influencer-profile": {
+   "path": "/influencer-portal/profile",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 7,
+     "failures": 1,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 1
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Profile detail view scaffold for multi-p",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 32,
+     "failures": 2,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 2
+     },
+     "svgFailures": 0,
+     "worst": 1,
+     "top": [
+      [
+       "Profile detail view scaffold for multi-p",
+       1,
+       "#ffffff",
+       "#ffffff",
+       "text-slate-500",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "ai-memory": {
+   "path": "/ai-memory",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 13,
+     "failures": 2,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 2
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "learned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Based on 0 tracked post s",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 36,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 2.99,
+     "top": [
+      [
+       "learned",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Based on 0 tracked post s",
+       3.24,
+       "#8f836e",
+       "#f4efe5",
+       "text-[var(--gv-text-muted)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "ai-history": {
+   "path": "/ai-history",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 1.1,
+     "top": [
+      [
+       "All platforms",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Review prompts, captions, generated asse",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "No AI history yet. Generate a campaign o",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 31,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1.1,
+     "top": [
+      [
+       "All platforms",
+       1.1,
+       "#f5f4f1",
+       "#ffffff",
+       "text-[#070A12]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Review prompts, captions, generated asse",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "No AI history yet. Generate a campaign o",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "ai-performance": {
+   "path": "/ai-performance",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 6,
+     "failures": 3,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 3
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "All platforms",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "See what Nebulaa learned from engagement",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "No performance records yet. Open post an",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 29,
+     "failures": 4,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 4
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "All platforms",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "See what Nebulaa learned from engagement",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "No performance records yet. Open post an",
+       3.65,
+       "#81807e",
+       "#fbf5ea",
+       "text-[#070A12]/50",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-profile": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 26,
+     "failures": 18,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 18
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Profile Settings",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Asha",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ],
+      [
+       "Kumar",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ],
+      [
+       "Sunrise Bakery",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ],
+      [
+       "Food & Beverage",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 49,
+     "failures": 19,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 19
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Profile Settings",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Asha",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ],
+      [
+       "Kumar",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ],
+      [
+       "Sunrise Bakery",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ],
+      [
+       "Food & Beverage",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-business": {
+   "path": "/settings?tab=business",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 63,
+     "failures": 22,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 22
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Food & Beverage",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "B2C",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "4",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ],
+      [
+       "Growing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 86,
+     "failures": 23,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 23
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Food & Beverage",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "B2C",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "4",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "value"
+      ],
+      [
+       "Growing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-slate-900",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-notifications": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 12,
+     "failures": 7,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 7
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Advanced notification settings coming so",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "rules",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 35,
+     "failures": 8,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 8
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Advanced notification settings coming so",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "rules",
+       2.99,
+       "#d07a00",
+       "#fbf5ea",
+       "text-[var(--gv-accent-display)]",
+       "contrast",
+       "text"
+      ],
+      [
+       "⌘N",
+       3.8,
+       "#4f360e",
+       "#c9881e",
+       "text-[#1A1208]/70",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-security": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 17,
+     "failures": 11,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 11
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Change Password",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Current Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "New Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Must be at least 8 characters",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Confirm New Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 40,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Change Password",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Current Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "New Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Must be at least 8 characters",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Confirm New Password",
+       1.05,
+       "#fdfbf6",
+       "#fbf5ea",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "settings-billing": {
+   "path": "/settings",
+   "group": "shell",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 25,
+     "failures": 13,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 13
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing & Invoices",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Current Plan",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Quarks",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Quark Costs",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "No payments yet.",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 48,
+     "failures": 14,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 14
+     },
+     "svgFailures": 0,
+     "worst": 1.02,
+     "top": [
+      [
+       "Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business Profile",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Notifications",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Security",
+       1.02,
+       "#f5f4f1",
+       "#fbf5eb",
+       "text-white/55 hover:text-white/80",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing",
+       1.02,
+       "#f5f4f1",
+       "#fcf6ed",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Billing & Invoices",
+       1.02,
+       "#f5f4f1",
+       "#fbf5ea",
+       "text-[#F5F4F1]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Current Plan",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Quarks",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Quark Costs",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "No payments yet.",
+       1.03,
+       "#fcfdfe",
+       "#f8fafc",
+       "text-slate-400",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "trial-expired": {
+   "path": "/trial-expired",
+   "group": "public",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 9,
+     "unknown": 1,
+     "unknownUnsigned": 1,
+     "unparsed": 0,
+     "gradientText": 3,
+     "kinds": {
+      "image-underlying": 9
+     },
+     "svgFailures": 0,
+     "worst": 1.93,
+     "top": [
+      [
+       "Secured by Razorpay · UPI, Cards, Net Ba",
+       1.93,
+       "#3e3f41",
+       "#030507",
+       "text-[#ededed]/25",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Log out",
+       1.93,
+       "#3e3f41",
+       "#030507",
+       "text-[#ededed]/25 hover:text-[#ededed]/50",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.88,
+       "#595b60",
+       "#090d14",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.88,
+       "#595b60",
+       "#090d14",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.9,
+       "#5b5d63",
+       "#0c1018",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "All plans include AI campaign generation",
+       3.92,
+       "#7a7b84",
+       "#1b1f2e",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.01,
+       "#76787b",
+       "#14181e",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.03,
+       "#73767a",
+       "#0f141b",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.03,
+       "#72757a",
+       "#0e131c",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 30,
+     "failures": 9,
+     "unknown": 1,
+     "unknownUnsigned": 1,
+     "unparsed": 0,
+     "gradientText": 3,
+     "kinds": {
+      "image-underlying": 9
+     },
+     "svgFailures": 0,
+     "worst": 1.93,
+     "top": [
+      [
+       "Secured by Razorpay · UPI, Cards, Net Ba",
+       1.93,
+       "#3e3f41",
+       "#030507",
+       "text-[#ededed]/25",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Log out",
+       1.93,
+       "#3e3f41",
+       "#030507",
+       "text-[#ededed]/25 hover:text-[#ededed]/50",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.88,
+       "#595b60",
+       "#090d14",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.88,
+       "#595b60",
+       "#090d14",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "per month · Auto-renews · Cancel anytime",
+       2.9,
+       "#5b5d63",
+       "#0c1018",
+       "text-[#ededed]/35",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "All plans include AI campaign generation",
+       3.96,
+       "#6c6d6f",
+       "#030507",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.01,
+       "#76787b",
+       "#14181e",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.03,
+       "#72757a",
+       "#0e131c",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ],
+      [
+       "Audit placeholder plan.",
+       4.03,
+       "#73757a",
+       "#0f141b",
+       "text-[#ededed]/45",
+       "image-underlying",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "terms": {
+   "path": "/terms",
+   "group": "public",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 188,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "https://www.nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Terms & Conditions of Service",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "legal@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 188,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "https://www.nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Terms & Conditions of Service",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "legal@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "privacy-policy": {
+   "path": "/privacy-policy",
+   "group": "public",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 187,
+     "failures": 10,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 10
+     },
+     "svgFailures": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Terms & Conditions",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "|",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "nebulaa.ai",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 187,
+     "failures": 10,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 10
+     },
+     "svgFailures": 0,
+     "worst": 1.44,
+     "top": [
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "support@nebulaa.ai",
+       1.44,
+       "#ffcc29",
+       "#f9fafb",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Privacy Policy",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "privacy@nebulaa.ai",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "© 2024 Noburo Business Services LLP. All",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "Terms & Conditions",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "|",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-400",
+       "contrast",
+       "text"
+      ],
+      [
+       "nebulaa.ai",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "hover:text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "admin-login": {
+   "path": "/admin/login",
+   "group": "admin",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 8,
+     "failures": 0,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {},
+     "svgFailures": 0,
+     "worst": null,
+     "top": []
+    }
+   }
+  },
+  "admin": {
+   "path": "/admin",
+   "group": "admin",
+   "scope": "in",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 29,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 29
+     },
+     "svgFailures": 0,
+     "worst": 1.8,
+     "top": [
+      [
+       "No users found",
+       1.8,
+       "#3c3d44",
+       "#0b0d15",
+       "text-white/20",
+       "contrast",
+       "text"
+      ],
+      [
+       "Search by email or company...",
+       1.88,
+       "#44454b",
+       "#15171e",
+       "text-white placeholder-white/20",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "demo.nebulaa.ai",
+       2.57,
+       "#515258",
+       "#060810",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "User",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Credits",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Activity",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Trial",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Last Login",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Status",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Active today",
+       2.66,
+       "#56575d",
+       "#0d0f17",
+       "text-white/30",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 42,
+     "failures": 29,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 29
+     },
+     "svgFailures": 0,
+     "worst": 1.8,
+     "top": [
+      [
+       "No users found",
+       1.8,
+       "#3c3d44",
+       "#0b0d15",
+       "text-white/20",
+       "contrast",
+       "text"
+      ],
+      [
+       "Search by email or company...",
+       1.88,
+       "#44454b",
+       "#15171e",
+       "text-white placeholder-white/20",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "demo.nebulaa.ai",
+       2.57,
+       "#515258",
+       "#060810",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "User",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Credits",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Activity",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Trial",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Last Login",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Status",
+       2.63,
+       "#54565b",
+       "#0b0d15",
+       "text-white/30",
+       "contrast",
+       "text"
+      ],
+      [
+       "Active today",
+       2.66,
+       "#56575d",
+       "#0d0f17",
+       "text-white/30",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  }
+ },
+ "otherSession": {
+  "landing": {
+   "path": "/",
+   "group": "public",
+   "scope": "other",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 57,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 1,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1.24,
+     "top": [
+      [
+       "01",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "02",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "03",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "2.4M",
+       1.36,
+       "#ffda64",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "18.2%",
+       1.44,
+       "#ffd243",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "24",
+       1.44,
+       "#ffd243",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 60,
+     "failures": 6,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 1,
+     "kinds": {
+      "contrast": 6
+     },
+     "svgFailures": 0,
+     "worst": 1.24,
+     "top": [
+      [
+       "01",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "02",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "03",
+       1.24,
+       "#e5e7eb",
+       "#ffffff",
+       "text-gray-200",
+       "contrast",
+       "text"
+      ],
+      [
+       "2.4M",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "18.2%",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ],
+      [
+       "24",
+       1.51,
+       "#ffcc29",
+       "#ffffff",
+       "text-[#ffcc29]",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "login": {
+   "path": "/login",
+   "group": "auth",
+   "scope": "other",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 5,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 2.43,
+     "top": [
+      [
+       "you@company.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "••••••••",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Email Address",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Password",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Don't have an account?",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 11,
+     "failures": 5,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 5
+     },
+     "svgFailures": 0,
+     "worst": 2.43,
+     "top": [
+      [
+       "you@company.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "••••••••",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Email Address",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Password",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Don't have an account?",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "signup": {
+   "path": "/login?mode=signup",
+   "group": "auth",
+   "scope": "other",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.94,
+     "top": [
+      [
+       "Password Requirements:",
+       1.94,
+       "#f5a623",
+       "#f9fafb",
+       "text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Jane",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Acme Inc.",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "acme.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "you@company.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "••••••••",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "First Name",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Name",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Website",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Email Address",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 22,
+     "failures": 12,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 12
+     },
+     "svgFailures": 0,
+     "worst": 1.94,
+     "top": [
+      [
+       "Password Requirements:",
+       1.94,
+       "#f5a623",
+       "#f9fafb",
+       "text-[#F5A623]",
+       "contrast",
+       "text"
+      ],
+      [
+       "Jane",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "Acme Inc.",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "acme.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "you@company.com",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "••••••••",
+       2.43,
+       "#9ca3af",
+       "#f9fafb",
+       "text-gray-900 placeholder-gray-400",
+       "contrast",
+       "placeholder"
+      ],
+      [
+       "First Name",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Name",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Website",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Email Address",
+       2.5,
+       "#4b5563",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  },
+  "onboarding": {
+   "path": "/onboarding",
+   "group": "onboarding",
+   "scope": "other",
+   "widths": {
+    "375": {
+     "status": "ok",
+     "checked": 61,
+     "failures": 41,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 41
+     },
+     "svgFailures": 0,
+     "worst": 1.06,
+     "top": [
+      [
+       "Business Essentials",
+       1.06,
+       "#111827",
+       "#111111",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business to Business",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business to Consumer",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "B2B & B2C",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Well known locally",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Building our name",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Name",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Mobile Number",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Website",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Niche",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ]
+     ]
+    },
+    "1280": {
+     "status": "ok",
+     "checked": 61,
+     "failures": 41,
+     "unknown": 0,
+     "unknownUnsigned": 0,
+     "unparsed": 0,
+     "gradientText": 0,
+     "kinds": {
+      "contrast": 41
+     },
+     "svgFailures": 0,
+     "worst": 1.06,
+     "top": [
+      [
+       "Business Essentials",
+       1.06,
+       "#111827",
+       "#111111",
+       "text-gray-900",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business to Business",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Business to Consumer",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "B2B & B2C",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Well known locally",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Building our name",
+       1.82,
+       "#3a414a",
+       "#111111",
+       "text-gray-600",
+       "contrast",
+       "text"
+      ],
+      [
+       "Company Name",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Mobile Number",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Website",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ],
+      [
+       "Niche",
+       1.83,
+       "#374151",
+       "#111111",
+       "text-gray-700",
+       "contrast",
+       "text"
+      ]
+     ]
+    }
+   }
+  }
+ }
+}

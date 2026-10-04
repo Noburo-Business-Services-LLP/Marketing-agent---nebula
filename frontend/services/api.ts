@@ -1,4 +1,6 @@
 import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft } from '../types';
+import { apiErrorFrom } from '../utils/plans';
+import type { BlueprintView } from '../utils/blueprint';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -130,7 +132,7 @@ async function apiCall<T>(
           creditsRemaining: data.creditsRemaining
         }
       }));
-      throw new Error(data.message || 'Trial expired or credits exhausted');
+      throw new Error(data.message || 'You have used all of your Quarks.');
     }
 
     if (!response.ok) {
@@ -296,6 +298,15 @@ const generateContextAwareCaption = (topic: string, business?: BusinessProfile) 
 // API SERVICE EXPORTS
 // ============================================
 
+// GET /api/payment/plans: every amount is integer paise or whole rupees from the server config.
+export interface PlanPrice { inr: number; gstPaise: number; chargePaise: number }
+export interface PlansResponse {
+  success: boolean;
+  plans: Array<PlanPrice & { id: 'starter' | 'professional'; name: string; description: string; quarks: number; features: string[] }>;
+  topups: Array<PlanPrice & { quarks: number }>;
+  addons: Array<PlanPrice & { id: 'publish' | 'competitors' | 'inbox' | 'bundle'; label: string; requires: string[]; includes: string[] }>;
+}
+
 export const apiService = {
   // ============================================
   // REAL AUTHENTICATION ENDPOINTS
@@ -415,20 +426,42 @@ export const apiService = {
     }
   },
 
+  // Brand Growth Blueprint. Errors are thrown with .status and .data (see apiCall).
+  blueprintStart: async (body: Record<string, any>): Promise<{ success: boolean; id: string; status: string }> => {
+    return apiCall('/blueprint', { method: 'POST', body: JSON.stringify(body) }, true);
+  },
+  blueprintGet: async (id: string): Promise<BlueprintView> => {
+    return apiCall(`/blueprint/${encodeURIComponent(id)}`, { method: 'GET' }, true);
+  },
+  blueprintList: async (): Promise<{ success: boolean; blueprints: Array<{ id: string; businessName: string; status: string; createdAt: string }> }> => {
+    return apiCall('/blueprint', { method: 'GET' }, true);
+  },
+  /** Used by the Blueprint page: builds this month's calendar from the plan's pillars (the existing endpoint and its `focus` argument). */
+  regenerateCalendar: async (data: { focus: string; month?: string; language?: string }): Promise<{ success: boolean; calendar: any }> => {
+    return apiCall('/content-calendar/regenerate', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+  blueprintContinue: async (id: string, body: { directionId?: number } = {}): Promise<{ success: boolean; id: string; status: string }> => {
+    return apiCall(`/blueprint/${encodeURIComponent(id)}/continue`, { method: 'POST', body: JSON.stringify(body) }, true);
+  },
+
   // Payment / Razorpay
-  createPaymentOrder: async (amount: number): Promise<any> => {
-    return apiCall('/payment/create-order', { method: 'POST', body: JSON.stringify({ amount }) }, true);
+  createPaymentOrder: async (packInr: number): Promise<any> => {
+    return apiCall('/payment/create-order', { method: 'POST', body: JSON.stringify({ packInr }) }, true);
   },
 
   verifyPayment: async (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<any> => {
     return apiCall('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
-  createSubscription: async (planId: string, couponCode?: string): Promise<any> => {
+  createSubscription: async (planId: 'starter' | 'professional', couponCode?: string): Promise<any> => {
     return apiCall('/payment/create-subscription', { method: 'POST', body: JSON.stringify({ planId, couponCode: couponCode || '' }) }, true);
   },
 
-  getPlans: async (): Promise<any> => {
+  createAddonSubscription: async (addon: 'publish' | 'competitors' | 'inbox' | 'bundle'): Promise<any> => {
+    return apiCall('/payment/create-addon-subscription', { method: 'POST', body: JSON.stringify({ addon }) }, true);
+  },
+
+  getPlans: async (): Promise<PlansResponse> => {
     return apiCall('/payment/plans', { method: 'GET' }, false);
   },
 
@@ -654,7 +687,7 @@ export const apiService = {
       return { ...response.data, cached: response.cached };
     } catch (error: any) {
       // Propagate credit errors instead of swallowing them
-      if (error?.message?.includes('Insufficient credits') || error?.message?.includes('credits') || error?.status === 403) {
+      if (error?.message?.includes('Quarks') || error?.message?.includes('credits') || error?.status === 403) {
         // Insufficient credits for campaign suggestions
         return { campaigns: [], insufficientCredits: true, creditsRemaining: error?.creditsRemaining || 0, required: error?.required || 0 };
       }
@@ -3742,6 +3775,121 @@ export const videoGenerationAPI = {
   }
 };
 
+// Gravity Hero video (/api/hero-video): Hero Studio builds one premium 15s clip from the
+// wizard's story, cast, place and the client's brand (brand is loaded server-side).
+export type HeroAspectRatio = '9:16' | '16:9' | '1:1';
+export type HeroAudioMode = 'native' | 'sfx_only';
+
+export interface HeroBriefCastMember {
+  id: string; name?: string; age?: string; gender?: string; role?: string; appearance?: string;
+  clothing?: string; hairStyle?: string; hairColor?: string; personality?: string; portraitUrl?: string;
+}
+export interface HeroBriefScene {
+  sceneId: string; title?: string; script?: string; visual?: string; durationSeconds?: number;
+  charactersRequired?: string[]; imageUrl?: string;
+}
+export interface HeroBrief {
+  concept: { title?: string; storySummary?: string; coreEmotion?: string; visualStyle?: string };
+  aspectRatio: HeroAspectRatio;
+  language?: string;
+  cast: HeroBriefCastMember[];
+  castSheetUrl?: string;
+  environment: { enabled: boolean; notes?: string; images: Array<{ url?: string; dataUrl?: string; alt?: string }> };
+  scenes: HeroBriefScene[];
+}
+export interface HeroReference {
+  tag: string;
+  kind: 'cast' | 'environment' | 'brand' | 'keyframe' | string;
+  label: string;
+  url: string;
+  source?: string;
+}
+export interface HeroBrandSummary { name: string; website: string; logoUrl: string; colors: string[]; heroProduct: string }
+export interface HeroPlan {
+  story: { hook: string; tension: string; turn: string; payoff: string; cta: string };
+  heroCut: Array<{ sceneId: string; keep: boolean; reason: string; time: string }>;
+  shotList: Array<{ time: string; shot: string; lens: string; purpose: string }>;
+  prompt: string;
+  beatSheet: Array<{ time: string; beat: string; emotion?: string }>;
+  dialogue: string;
+  voice?: string;
+  qaChecklist: string[];
+  assumptions: string[];
+}
+export interface HeroFinishOptions {
+  realism?: boolean;
+  brandMark?: boolean;
+  fades?: boolean;
+  endCard?: { enabled?: boolean; ctaText?: string; website?: string; tagline?: string };
+  captions?: boolean;
+  loudnorm?: boolean;
+}
+export type HeroJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export interface HeroJobSummary {
+  jobId: string;
+  status: HeroJobStatus;
+  createdAt: string;
+  videoUrl?: string;
+  rawVideoUrl?: string;
+  finishError?: string;
+  prompt?: string;
+}
+
+export interface HeroStyleOption { slug: string; label: string; group: string; blurb: string; coverUrl: string }
+
+export const heroVideoAPI = {
+  styles: async (): Promise<{ success: boolean; styles: HeroStyleOption[] }> => {
+    return apiCall('/hero-video/styles', { method: 'GET' }, true);
+  },
+
+  quota: async (): Promise<{ success: boolean; used: number; limit: number; resetsOn: string }> => {
+    return apiCall('/hero-video/quota', { method: 'GET' }, true);
+  },
+
+  // Validates the wizard brief, loads the brand and stages the reference images. No charge.
+  brief: async (brief: HeroBrief): Promise<{
+    success: boolean; brief?: HeroBrief; brand?: HeroBrandSummary; references?: HeroReference[];
+    dropped?: Array<{ label?: string; reason?: string }>; message?: string;
+  }> => {
+    return apiCall('/hero-video/brief', { method: 'POST', body: JSON.stringify({ brief }) }, true);
+  },
+
+  plan: async (payload: {
+    brief: HeroBrief;
+    style?: string;
+    audioMode?: HeroAudioMode;
+    ctaText?: string;
+    references?: string[];
+    keptSceneIds?: string[];
+  }): Promise<{ success: boolean; plan?: HeroPlan; references?: HeroReference[]; message?: string }> => {
+    return apiCall('/hero-video/plan', { method: 'POST', body: JSON.stringify(payload) }, true);
+  },
+
+  // 403 quotaExhausted / creditsExhausted come back as thrown errors from apiCall;
+  // callers read err.data (see apiCall) or err.message.
+  generate: async (payload: {
+    prompt: string;
+    aspectRatio: HeroAspectRatio;
+    refImageUrls?: string[];
+    references?: HeroReference[];
+    finish?: HeroFinishOptions;
+    beatSheet?: HeroPlan['beatSheet'];
+    dialogue?: string;
+  }): Promise<{ success: boolean; jobId?: string; quotaExhausted?: boolean; creditsExhausted?: boolean; used?: number; limit?: number; message?: string }> => {
+    return apiCall('/hero-video/generate', { method: 'POST', body: JSON.stringify(payload) }, true);
+  },
+
+  job: async (jobId: string): Promise<{
+    success: boolean; status: HeroJobStatus; videoUrl?: string; rawVideoUrl?: string; finishError?: string; error?: string;
+  }> => {
+    return apiCall(`/hero-video/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' }, true);
+  },
+
+  list: async (): Promise<{ success: boolean; jobs: HeroJobSummary[] }> => {
+    return apiCall('/hero-video/jobs', { method: 'GET' }, true);
+  }
+};
+
 // ============================================
 // ICP & CHANNEL STRATEGY API
 // ============================================
@@ -3885,8 +4033,8 @@ export const contentCalendarAPI = {
 // ============================================
 
 export const paymentService = {
-  createOrder: async (): Promise<any> => {
-    return apiCall<any>('/payment/create-order', { method: 'POST' }, true);
+  createOrder: async (packInr: number): Promise<any> => {
+    return apiCall<any>('/payment/create-order', { method: 'POST', body: JSON.stringify({ packInr }) }, true);
   },
 
   verify: async (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<any> => {
@@ -4118,7 +4266,7 @@ async function inboxCall<T>(endpoint: string, options: RequestInit = {}): Promis
   });
   const data = await safeReadJson(response);
   if (!response.ok) {
-    throw new Error(data.message || data.error || 'Inbox request failed');
+    throw apiErrorFrom(data, response.status, 'Inbox request failed');
   }
   return data as T;
 }
@@ -4394,6 +4542,18 @@ export const draftsAPI = {
     return apiCall(`/drafts/${encodeURIComponent(id)}/edit-image`, {
       method: 'POST',
       body: JSON.stringify({ instruction })
+    }, true);
+  },
+
+  // LinkedIn long-form post — text-only generation, no image. The caption
+  // and hashtags come back immediately; an image is only generated later,
+  // opt-in, via retryImageGeneration.
+  generateLinkedInPost: async (params: {
+    idea: string; contentPillar?: string; objective?: string; tone?: string; language?: string;
+  }): Promise<{ success: boolean; caption: string; hashtags: string[]; imageDescription: string; creditsRemaining?: number; message?: string }> => {
+    return apiCall('/drafts/generate-linkedin-post', {
+      method: 'POST',
+      body: JSON.stringify(params)
     }, true);
   }
 };

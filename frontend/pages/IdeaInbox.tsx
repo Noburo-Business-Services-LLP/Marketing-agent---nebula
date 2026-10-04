@@ -36,7 +36,7 @@ const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.onerror = () => reject(new Error('The file could not be read.'));
     reader.readAsDataURL(file);
   });
 
@@ -69,7 +69,7 @@ const IdeaInbox: React.FC = () => {
       const res = await ideasAPI.getAll();
       setIdeas(Array.isArray(res?.ideas) ? res.ideas : []);
     } catch (err: any) {
-      setError(err?.message || 'Failed to load ideas');
+      setError(err?.message || 'The ideas could not be loaded.');
     } finally {
       setLoading(false);
     }
@@ -89,13 +89,13 @@ const IdeaInbox: React.FC = () => {
     try {
       setImagePreview(await fileToBase64(file));
     } catch (err: any) {
-      setError(err?.message || 'Could not read image');
+      setError(err?.message || 'The image could not be read.');
     }
   };
 
   const addIdea = async () => {
     if (!text.trim()) {
-      setError('Write the idea first');
+      setError('Enter an idea before you add it.');
       return;
     }
     setAdding(true);
@@ -107,15 +107,15 @@ const IdeaInbox: React.FC = () => {
         sourceUrl: sourceUrl.trim() || undefined,
         targetDate: targetDate || undefined
       });
-      if (!res?.success) throw new Error(res?.message || 'Failed to save idea');
+      if (!res?.success) throw new Error(res?.message || 'The idea could not be saved.');
       setText('');
       setSourceUrl('');
       setTargetDate('');
       setImagePreview(null);
-      setSuccess('Idea added');
+      setSuccess('The idea was added.');
       await loadIdeas();
     } catch (err: any) {
-      setError(err?.message || 'Failed to save idea');
+      setError(err?.message || 'The idea could not be saved.');
     } finally {
       setAdding(false);
     }
@@ -133,13 +133,13 @@ const IdeaInbox: React.FC = () => {
     setError('');
     try {
       const res = await ideasAPI.bulkCreate(items, 'bulk_paste');
-      if (!res?.success) throw new Error(res?.message || 'Import failed');
+      if (!res?.success) throw new Error(res?.message || 'The import failed.');
       setBulkText('');
       setBulkOpen(false);
-      setSuccess(`Added ${res.count} idea${res.count === 1 ? '' : 's'}`);
+      setSuccess(`${res.count} idea${res.count === 1 ? ' was' : 's were'} added.`);
       await loadIdeas();
     } catch (err: any) {
-      setError(err?.message || 'Import failed');
+      setError(err?.message || 'The import failed.');
     } finally {
       setBulkBusy(false);
     }
@@ -167,16 +167,16 @@ const IdeaInbox: React.FC = () => {
         .filter(Boolean);
 
       if (items.length === 0) {
-        setError('No text found in the first column of that file');
+        setError('No text was found in the first column of that file.');
         return;
       }
 
       const res = await ideasAPI.bulkCreate(items, 'bulk_file');
-      if (!res?.success) throw new Error(res?.message || 'Import failed');
-      setSuccess(`Added ${res.count} idea${res.count === 1 ? '' : 's'} from ${file.name}`);
+      if (!res?.success) throw new Error(res?.message || 'The import failed.');
+      setSuccess(`${res.count} idea${res.count === 1 ? '' : 's'} from ${file.name} ${res.count === 1 ? 'was' : 'were'} added.`);
       await loadIdeas();
     } catch (err: any) {
-      setError(err?.message || 'Could not read that file');
+      setError(err?.message || 'That file could not be read.');
     } finally {
       setBulkBusy(false);
       e.target.value = '';
@@ -188,17 +188,17 @@ const IdeaInbox: React.FC = () => {
       await ideasAPI.update(idea._id, { status: 'dismissed' });
       setIdeas((prev) => prev.filter((i) => i._id !== idea._id));
     } catch (err: any) {
-      setError(err?.message || 'Failed to dismiss');
+      setError(err?.message || 'The idea could not be dismissed.');
     }
   };
 
   const deleteIdea = async (idea: Idea) => {
-    if (!(await confirm("This can't be undone.", { title: 'Delete this idea?', confirmLabel: 'Delete', danger: true }))) return;
+    if (!(await confirm("This idea will be deleted permanently. This cannot be undone.", { title: 'Delete this idea?', confirmLabel: 'Delete', danger: true }))) return;
     try {
       await ideasAPI.remove(idea._id);
       setIdeas((prev) => prev.filter((i) => i._id !== idea._id));
     } catch (err: any) {
-      setError(err?.message || 'Failed to delete');
+      setError(err?.message || 'The idea could not be deleted.');
     }
   };
 
@@ -219,13 +219,13 @@ const IdeaInbox: React.FC = () => {
         aspectRatio: '1:1',
         campaignContext: idea.text
       });
-      if (!res?.success || !res?.draftId) throw new Error(res?.message || 'Failed to start generation');
+      if (!res?.success || !res?.draftId) throw new Error(res?.message || 'Post generation could not be started.');
 
       await ideasAPI.update(idea._id, { status: 'expanded', draftId: res.draftId });
       setIdeas((prev) => prev.filter((i) => i._id !== idea._id));
-      setSuccess('Turned into a post — check Approve once it\'s ready');
+      setSuccess('The idea is now a post. It will appear in Review and approve when it is ready.');
     } catch (err: any) {
-      setError(err?.message || 'Failed to turn this into a post');
+      setError(err?.message || 'This idea could not be turned into a post.');
     } finally {
       setExpandingId(null);
     }
@@ -234,9 +234,9 @@ const IdeaInbox: React.FC = () => {
   return (
     <div className="max-w-[1100px] mx-auto pb-16">
       <GravityHero
-        eyebrow="Idea Inbox"
-        headline={<>Ideas that didn't come from <GravityEmphasis>Gravity</GravityEmphasis></>}
-        subcopy="Drop a thought, a link, an ad you liked — or paste a whole list. Turn any of them into a real post whenever you're ready."
+        eyebrow="Content ideas"
+        headline={<>Save ideas for <GravityEmphasis>future posts</GravityEmphasis></>}
+        subcopy="Add a thought, a link or an ad you liked, or paste a list of ideas. You can turn any idea into a post when you are ready."
         align="left"
       />
 
@@ -257,7 +257,7 @@ const IdeaInbox: React.FC = () => {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Saw a great ad about founder burnout — want something like that but for our onboarding flow..."
+          placeholder="For example: Create a post like the ad I saw about founder burnout, but for our onboarding flow."
           rows={3}
           className="w-full bg-transparent text-[14px] text-[#F5F4F1] placeholder-white/30 outline-none resize-none"
         />
@@ -299,8 +299,8 @@ const IdeaInbox: React.FC = () => {
       <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 mb-8">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[13.5px] font-semibold text-[#F5F4F1]">Have a list already?</div>
-            <div className="text-[12px] text-white/45">Paste rows, or upload a spreadsheet — one idea per row, first column.</div>
+            <div className="text-[13.5px] font-semibold text-[#F5F4F1]">Import a list of ideas</div>
+            <div className="text-[12px] text-white/45">Paste rows or upload a spreadsheet. Use one idea per row, in the first column.</div>
           </div>
           <div className="flex items-center gap-2">
             <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-semibold border border-white/[0.10] text-white/70 hover:bg-white/[0.04] cursor-pointer">
@@ -322,7 +322,7 @@ const IdeaInbox: React.FC = () => {
             <textarea
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}
-              placeholder={'One idea per line —\nBehind-the-scenes of our office\nCustomer testimonial: the Sharma account\nCompare us to spreadsheets, funny angle'}
+              placeholder={'Enter one idea per line, for example:\nBehind-the-scenes of our office\nCustomer testimonial: the Sharma account\nA comparison of our service with spreadsheets'}
               rows={5}
               className="w-full px-3 py-2.5 rounded-lg text-[13px] bg-white/[0.03] border border-white/[0.08] text-white/85 placeholder-white/25 outline-none focus:border-[#F5A623]/40 resize-none"
             />
@@ -351,8 +351,8 @@ const IdeaInbox: React.FC = () => {
         </div>
       ) : ideas.length === 0 ? (
         <div className="text-center py-16 rounded-xl border border-dashed border-white/[0.08]">
-          <div className="text-[13.5px] text-white/50">Nothing in the inbox yet.</div>
-          <div className="text-[12px] text-white/30 mt-1">Ideas you drop above will sit here until you turn them into a post.</div>
+          <div className="text-[13.5px] text-white/50">No ideas have been added yet.</div>
+          <div className="text-[12px] text-white/30 mt-1">Ideas you add above will appear here until you turn them into posts.</div>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -389,7 +389,7 @@ const IdeaInbox: React.FC = () => {
                   </button>
                   <button
                     onClick={() => dismissIdea(idea)}
-                    title="Dismiss — keeps it, just out of the way"
+                    title="Dismiss this idea. It is kept but removed from this list."
                     className="px-2.5 py-2 rounded-lg text-[12px] font-semibold border border-white/[0.10] text-white/60 hover:bg-white/[0.04]"
                   >
                     Dismiss

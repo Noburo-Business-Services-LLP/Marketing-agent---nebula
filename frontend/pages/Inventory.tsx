@@ -360,17 +360,17 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         {embedded ? (
           <div>
-            <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Products &amp; Services</h2>
+            <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Products and services</h2>
             <p className="text-[12.5px] text-white/45 mt-1 max-w-[560px]">
-              What the business offers, with images and details Gravity draws on when it creates campaigns.
+              What the business offers, with images and details Nebulaa draws on when it creates campaigns.
             </p>
           </div>
         ) : (
           <GravityHero
             align="left"
-            eyebrow="Products & Services"
+            eyebrow="Products and services"
             headline={<>Everything you <GravityEmphasis>offer</GravityEmphasis></>}
-            subcopy="Your products and services, with images and details Gravity draws on when it creates campaigns, images and videos."
+            subcopy="Your products and services, with images and details Nebulaa draws on when it creates campaigns, images and videos."
             className="!mb-0"
           />
         )}
@@ -479,7 +479,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
           </div>
           <h2 className={`text-xl font-bold ${theme.text}`}>Nothing here yet</h2>
           <p className={`text-sm mt-2 max-w-sm mx-auto ${theme.textSecondary}`}>
-            Add a product or service so Gravity has real images and details to build campaigns from.
+            Add a product or service so Nebulaa has real images and details to build campaigns from.
           </p>
           <button 
             onClick={handleOpenAdd}
@@ -614,7 +614,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                 </div>
                 <div>
                   <h3 className={`text-xl font-black ${theme.text}`}>{editingProduct ? 'Edit Entry' : (formData.type === 'service' ? 'Add New Service' : 'Add New Product')}</h3>
-                  <p className={`text-xs font-medium ${theme.textSecondary}`}>Details Gravity will draw on when generating campaigns.</p>
+                  <p className={`text-xs font-medium ${theme.textSecondary}`}>Details Nebulaa will draw on when generating campaigns.</p>
                 </div>
               </div>
               <button 
@@ -798,7 +798,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                       onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
                     />
                     <p className="text-[11px] text-white/35 mt-1.5">
-                      Fetched fresh each time something is generated. If the link is slow, private or dead, the image is skipped silently — uploading is more reliable.
+                      Fetched fresh each time something is generated. If the link is slow, private or dead, the image is skipped without a warning. Uploading the image is more reliable.
                     </p>
                   </details>
                 </div>
@@ -849,7 +849,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                     Bulk Import Products
                   </h3>
                   <p className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Upload a CSV or Excel file — up to 500 products at once
+                    Upload a CSV or Excel file with up to 500 products at once.
                   </p>
                 </div>
               </div>
@@ -875,7 +875,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                   <p className="font-bold mb-1">Required columns in your file:</p>
                   <p className="font-mono text-xs leading-relaxed">
                     <span className="font-bold">name</span>, <span className="font-bold">price</span>
-                    {' '}— Optional: description, currency, stockQuantity, category, tags, imageUrl
+                    {' '}Optional columns: description, currency, stockQuantity, category, tags, imageUrl
                   </p>
                   <a
                     href="data:text/csv;charset=utf-8,name%2Cdescription%2Cprice%2Ccurrency%2CstockQuantity%2Ccategory%2Ctags%2CimageUrl%0AExample%20Product%2CA%20sample%20product%2C99.99%2CINR%2C50%2CElectronics%2Cnew%2Cfeatured%2Chttps%3A%2F%2Fexample.com%2Fimg.jpg"
@@ -937,7 +937,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                           {isDragging ? 'Drop your file here' : 'Drag & drop or click to browse'}
                         </p>
                         <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                          Accepts .csv, .xls, .xlsx — max 5 MB
+                          Accepted file types: .csv, .xls and .xlsx. Maximum size: 5 MB.
                         </p>
                       </div>
                     </>
@@ -1025,7 +1025,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                         isDarkMode ? 'bg-red-900/15 text-red-400' : 'bg-red-50 text-red-600'
                       }`}>
                         <XCircle className="w-4 h-4" />
-                        {importResult.failures.length} row{importResult.failures.length !== 1 ? 's' : ''} failed — click to review
+                        {importResult.failures.length} row{importResult.failures.length !== 1 ? 's' : ''} failed. Select to review.
                       </summary>
                       <div className={`max-h-48 overflow-y-auto divide-y text-xs ${
                         isDarkMode ? 'divide-slate-800 bg-red-950/10' : 'divide-red-100 bg-white'
@@ -1250,9 +1250,9 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                       <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
                         <ImagePlus className={`w-10 h-10 ${theme.textMuted}`} />
                       </div>
-                      <h4 className={`text-xl font-black mb-3 ${theme.text}`}>Ready to Launch?</h4>
+                      <h4 className={`text-xl font-black mb-3 ${theme.text}`}>Ready to generate</h4>
                       <p className={`text-xs leading-relaxed max-w-xs ${theme.textSecondary}`}>
-                        Click generate to create an agency-grade marketing image for <span className="font-bold text-[#F5A623]">{selectedAdProduct.name}</span>.
+                        Select Generate to create a professional marketing image for <span className="font-bold text-[#F5A623]">{selectedAdProduct.name}</span>.
                       </p>
                     </div>
                   )}

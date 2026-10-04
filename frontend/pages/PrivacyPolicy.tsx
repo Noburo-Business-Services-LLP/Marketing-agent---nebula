@@ -32,7 +32,7 @@ const PrivacyPolicy: React.FC = () => {
           {/* Title */}
           <div className="mb-10">
             <h1 className={`text-4xl font-bold mb-1 ${text}`}>NEBULAA</h1>
-            <h2 className="text-2xl font-bold text-[#ffcc29] mb-2">Privacy Policy</h2>
+            <h2 className="text-2xl font-bold text-[var(--gv-accent-text)] mb-2">Privacy Policy</h2>
             <p className={`text-sm italic ${textSec}`}>Effective Date: 10 March 2025 | Version 1.0</p>
             <p className={`text-sm italic ${textSec}`}>Governing Entity: Noburo Business Services LLP, India</p>
           </div>
@@ -51,7 +51,7 @@ const PrivacyPolicy: React.FC = () => {
                 <p><strong className={text}>Noburo Business Services LLP</strong></p>
                 <p>Platform: Nebulaa — www.nebulaa.ai</p>
                 <p>Registered in India under the Limited Liability Partnership Act, 2008</p>
-                <p>Email for support & grievance: <a href="mailto:support@nebulaa.ai" className="text-[#ffcc29] hover:underline">support@nebulaa.ai</a></p>
+                <p>Email for support & grievance: <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a></p>
               </div>
             </section>
 
@@ -94,7 +94,7 @@ const PrivacyPolicy: React.FC = () => {
               <ul className="list-disc pl-6 space-y-2 mb-4">
                 <li><strong className={text}>Account Creation & Authentication:</strong> To register, verify, and maintain your account on the Platform.</li>
                 <li><strong className={text}>Service Delivery:</strong> To provide you with the features, tools, and AI-powered functionalities of the Platform, including decision tracking, action planning, and outcome analysis.</li>
-                <li><strong className={text}>Trial Management:</strong> To manage your free trial period, track eligibility, and communicate about trial expiry and upgrade options.</li>
+                <li><strong className={text}>Account and plan management:</strong> To manage your Quarks balance and plan, and to communicate about upgrade options, add-ons and billing.</li>
                 <li><strong className={text}>Billing & Payments:</strong> To process your Subscription payments, generate invoices, manage renewals, and comply with GST and financial record-keeping obligations.</li>
                 <li><strong className={text}>Customer Support:</strong> To respond to your queries, troubleshoot issues, and provide assistance.</li>
                 <li><strong className={text}>Platform Improvement:</strong> To analyse usage patterns, identify bugs, improve AI model performance, and develop new features.</li>
@@ -160,7 +160,7 @@ const PrivacyPolicy: React.FC = () => {
               <p className="mb-4">We retain your personal data for as long as your account is active, as necessary to provide you with the Services, or as required by applicable laws and regulations.</p>
               <ul className="list-disc pl-6 space-y-2 mb-4">
                 <li><strong className={text}>Active account data:</strong> Retained for the duration of your Subscription plus 2 years post-termination for legal and audit purposes;</li>
-                <li><strong className={text}>Trial data:</strong> Retained for 90 days post-trial expiry if you do not convert to a paid plan, after which it is deleted or anonymised;</li>
+                <li><strong className={text}>Free Account data:</strong> Retained while your account is active. If you ask us to close your account, or the account is inactive for 12 months, it is deleted or anonymised;</li>
                 <li><strong className={text}>Financial and billing records:</strong> Retained for 7 years as required under Indian tax and accounting laws;</li>
                 <li><strong className={text}>Usage logs and analytics:</strong> Retained for up to 24 months, after which they are anonymised;</li>
                 <li><strong className={text}>Support communications:</strong> Retained for 3 years from the date of last communication.</li>
@@ -204,7 +204,7 @@ const PrivacyPolicy: React.FC = () => {
                 <li><strong className={text}>Right to Restrict Processing:</strong> Request that we limit how we use your data in certain circumstances;</li>
                 <li><strong className={text}>Right to Grievance Redressal:</strong> Lodge a complaint with our Grievance Officer (see Section 12).</li>
               </ul>
-              <p>To exercise any of these rights, please contact us at <a href="mailto:privacy@nebulaa.ai" className="text-[#ffcc29] hover:underline">privacy@nebulaa.ai</a>. We will respond within 30 days. We may need to verify your identity before processing your request.</p>
+              <p>To exercise any of these rights, please contact us at <a href="mailto:privacy@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">privacy@nebulaa.ai</a>. We will respond within 30 days. We may need to verify your identity before processing your request.</p>
             </section>
 
             {/* 10 */}
@@ -226,7 +226,7 @@ const PrivacyPolicy: React.FC = () => {
             <section>
               <h2 className={`text-xl font-bold mb-4 ${text}`}>11. Children's Privacy</h2>
               <p className="mb-4">The Nebulaa Platform is intended for business users and is not directed at individuals under the age of 18. We do not knowingly collect personal data from minors.</p>
-              <p>If you believe we have inadvertently collected data from a minor, please contact us immediately at <a href="mailto:privacy@nebulaa.ai" className="text-[#ffcc29] hover:underline">privacy@nebulaa.ai</a> and we will promptly delete such data.</p>
+              <p>If you believe we have inadvertently collected data from a minor, please contact us immediately at <a href="mailto:privacy@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">privacy@nebulaa.ai</a> and we will promptly delete such data.</p>
             </section>
 
             {/* 12 */}
@@ -236,7 +236,7 @@ const PrivacyPolicy: React.FC = () => {
               <div className={`rounded-lg p-5 space-y-1 ${infoBox}`}>
                 <p><strong className={text}>Grievance Officer:</strong> Navaneetha Krishnan</p>
                 <p><strong className={text}>Organisation:</strong> Noburo Business Services LLP (Nebulaa)</p>
-                <p><strong className={text}>Email:</strong> <a href="mailto:support@nebulaa.ai" className="text-[#ffcc29] hover:underline">support@nebulaa.ai</a></p>
+                <p><strong className={text}>Email:</strong> <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a></p>
                 <p><strong className={text}>Response Time:</strong> We will acknowledge your grievance within 48 hours and resolve it within 30 days.</p>
               </div>
             </section>
@@ -267,7 +267,7 @@ const PrivacyPolicy: React.FC = () => {
               <div className={`rounded-lg p-5 space-y-1 ${infoBox}`}>
                 <p><strong className={text}>Noburo Business Services LLP</strong></p>
                 <p>Platform: Nebulaa — www.nebulaa.ai</p>
-                <p>Support Email: <a href="mailto:support@nebulaa.ai" className="text-[#ffcc29] hover:underline">support@nebulaa.ai</a></p>
+                <p>Support Email: <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a></p>
               </div>
               <div className={`mt-6 border-l-4 border-[#ffcc29] pl-4 italic ${textSec}`}>
                 Your privacy is important to us. We are committed to handling your personal data with transparency, integrity, and care.
@@ -279,13 +279,13 @@ const PrivacyPolicy: React.FC = () => {
 
         {/* Footer */}
         <div className="text-center mt-10 pb-10">
-          <p className={`text-sm ${isDark ? 'text-[#ededed]/50' : 'text-gray-400'}`}>
+          <p className={`text-sm ${isDark ? 'text-[#ededed]/50' : 'text-[var(--gv-text-tertiary)]'}`}>
             &copy; 2024 Noburo Business Services LLP. All rights reserved.
           </p>
-          <div className={`mt-3 flex items-center justify-center gap-4 text-sm ${isDark ? 'text-[#ededed]/50' : 'text-gray-400'}`}>
-            <a href="/#/terms" className="hover:text-[#ffcc29] transition-colors">Terms & Conditions</a>
+          <div className={`mt-3 flex items-center justify-center gap-4 text-sm ${isDark ? 'text-[#ededed]/50' : 'text-[var(--gv-text-tertiary)]'}`}>
+            <a href="/#/terms" className="hover:text-[var(--gv-accent-text)] transition-colors">Terms & Conditions</a>
             <span>|</span>
-            <a href="https://nebulaa.ai" target="_blank" rel="noopener noreferrer" className="hover:text-[#ffcc29] transition-colors">nebulaa.ai</a>
+            <a href="https://nebulaa.ai" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--gv-accent-text)] transition-colors">nebulaa.ai</a>
           </div>
         </div>
       </div>

@@ -79,12 +79,13 @@ const GravityInsights: React.FC = () => {
     const total = approved + drafts;
     const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
 
-    const reachChangePct = reachPrev > 0
+    // null means the previous 7 days had no data, so no percentage can be stated.
+    const reachChangePct: number | null = reachPrev > 0
       ? Math.round(((reach7d - reachPrev) / reachPrev) * 100)
-      : (reach7d > 0 ? 100 : 0);
-    const engChangePct = engagementPrev > 0
+      : null;
+    const engChangePct: number | null = engagementPrev > 0
       ? Math.round(((engagement - engagementPrev) / engagementPrev) * 100)
-      : (engagement > 0 ? 100 : 0);
+      : null;
 
     // Build a 14-day reach series (day-by-day)
     const series: { date: Date; reach: number }[] = [];
@@ -112,6 +113,23 @@ const GravityInsights: React.FC = () => {
   }, [campaigns]);
 
   const hasAnyReach = stats.reach7d > 0;
+  const changePct = stats.reachChangePct;
+  const reachSentence = changePct === null
+    ? 'This is the first week with reach data, so there is no earlier week to compare it with.'
+    : changePct > 0
+      ? `Reach is up ${changePct}% compared with the previous 7 days.`
+      : changePct < 0
+        ? `Reach is down ${Math.abs(changePct)}% compared with the previous 7 days.`
+        : 'Reach is unchanged compared with the previous 7 days.';
+  const trendLabel = !hasAnyReach
+    ? 'Waiting for data'
+    : changePct === null
+      ? 'First week with data'
+      : changePct > 0
+        ? 'Reach is rising'
+        : changePct < 0
+          ? 'Reach is falling'
+          : 'Reach is steady';
 
   // Sparkline path
   const chartPath = useMemo(() => {
@@ -132,9 +150,9 @@ const GravityInsights: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-white/50">
+      <div className="flex items-center justify-center py-20 text-[var(--gv-text-tertiary)]">
         <Loader2 className="w-5 h-5 animate-spin mr-2" />
-        Loading insights…
+        Loading performance data…
       </div>
     );
   }
@@ -143,11 +161,11 @@ const GravityInsights: React.FC = () => {
     <div className="max-w-[1240px] mx-auto pb-16">
       {/* Header row (right-side actions) */}
       <div className="flex items-center justify-end gap-2 mb-6">
-        <button className="flex items-center gap-2 h-9 px-4 rounded-lg border border-white/[0.10] text-white/70 text-[13px] font-medium hover:text-[#F5F4F1] hover:bg-white/[0.04]">
+        <button className="flex items-center gap-2 h-9 px-4 rounded-lg border border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] text-[13px] font-medium hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]">
           <Filter className="w-3.5 h-3.5" />
           Filter
         </button>
-        <button className="flex items-center gap-2 h-9 px-4 rounded-lg border border-white/[0.10] text-white/70 text-[13px] font-medium hover:text-[#F5F4F1] hover:bg-white/[0.04]">
+        <button className="flex items-center gap-2 h-9 px-4 rounded-lg border border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] text-[13px] font-medium hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]">
           <Download className="w-3.5 h-3.5" />
           Export
         </button>
@@ -157,45 +175,48 @@ const GravityInsights: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-end mb-14">
         <div>
           <div className="flex items-center gap-2 mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F5A623]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)]" />
             <span className="gravity-label">Last 7 days</span>
           </div>
-          <h1 className="font-serif-display text-[52px] leading-[1.05] tracking-[-0.02em] text-[#F5F4F1] mb-4">
-            You reached <span className="italic text-[#F5A623] tabular-nums">{wordsForNumber(stats.reach7d)}</span> people<br />
-            without lifting a finger.
+          <h1 className="font-serif-display text-[52px] leading-[1.05] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-4">
+            {hasAnyReach ? (
+              <>In the last 7 days your posts reached <span className="italic text-[var(--gv-accent-display)] tabular-nums">{wordsForNumber(stats.reach7d)}</span> people.</>
+            ) : (
+              <>No reach has been recorded yet.</>
+            )}
           </h1>
-          <p className="text-[14px] text-white/55 max-w-[540px]">
+          <p className="text-[14px] text-[var(--gv-text-secondary)] max-w-[540px]">
             {hasAnyReach
-              ? `${stats.reachChangePct >= 0 ? 'Up' : 'Down'} ${Math.abs(stats.reachChangePct)}% week-over-week. Keep the cadence Gravity set for you.`
-              : `Once your posts go live, this is where you'll see how many people saw them — no dashboards to build, no spreadsheets to open.`}
+              ? `${reachSentence} Keep publishing on the schedule Nebulaa set for you.`
+              : `After your posts are published, this page shows how many people saw them. You do not need to build a dashboard or open a spreadsheet.`}
           </p>
         </div>
 
-        {hasAnyReach && (
+        {hasAnyReach && stats.reachChangePct !== null && (
           <div className="text-right">
-            <div className="font-serif-display text-[68px] leading-none tabular-nums text-[#F5F4F1]">
+            <div className="font-serif-display text-[68px] leading-none tabular-nums text-[var(--gv-text-primary)]">
               {stats.reachChangePct >= 0 ? '+' : ''}{stats.reachChangePct}%
             </div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4ADE80] mt-2">vs. last 7 days</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4ADE80] mt-2">Compared with the previous 7 days</div>
           </div>
         )}
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <StatCard label="Reach (7d)" value={hasAnyReach ? compactK(stats.reach7d) : '—'} delta={hasAnyReach ? `${stats.reachChangePct >= 0 ? '+' : ''}${stats.reachChangePct}%` : null} />
-        <StatCard label="Engagement" value={stats.engagement > 0 ? compactK(stats.engagement) : '—'} delta={stats.engagement > 0 ? `${stats.engChangePct >= 0 ? '+' : ''}${stats.engChangePct}%` : null} />
-        <StatCard label="New Followers" value={stats.newFollowers > 0 ? `${stats.newFollowers}` : '—'} delta={stats.newFollowers > 0 ? '+12%' : null} />
-        <StatCard label="Approval Rate" value={`${stats.approvalRate}%`} delta={stats.approvalRate > 0 ? '+3%' : null} />
+        <StatCard label="Reach (7 days)" value={hasAnyReach ? compactK(stats.reach7d) : '—'} delta={hasAnyReach && stats.reachChangePct !== null ? `${stats.reachChangePct >= 0 ? '+' : ''}${stats.reachChangePct}%` : null} />
+        <StatCard label="Engagement" value={stats.engagement > 0 ? compactK(stats.engagement) : '—'} delta={stats.engagement > 0 && stats.engChangePct !== null ? `${stats.engChangePct >= 0 ? '+' : ''}${stats.engChangePct}%` : null} />
+        <StatCard label="New followers" value={stats.newFollowers > 0 ? `${stats.newFollowers}` : '—'} delta={null} />
+        <StatCard label="Approval rate" value={`${stats.approvalRate}%`} delta={null} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6">
         {/* CHART */}
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+        <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6">
           <div className="flex items-center justify-between mb-6">
-            <div className="gravity-label">Reach · Last 14 Days</div>
-            <div className="text-[11px] text-white/40">
-              {hasAnyReach ? '↑ trending' : 'awaiting data'}
+            <div className="gravity-label">Reach in the last 14 days</div>
+            <div className="text-[11px] text-[var(--gv-text-muted)]">
+              {trendLabel}
             </div>
           </div>
           {hasAnyReach ? (
@@ -210,44 +231,44 @@ const GravityInsights: React.FC = () => {
                 <path d={chartFillPath} fill="url(#gravityChartFill)" />
                 <path d={chartPath} fill="none" stroke="#F5A623" strokeWidth="1" vectorEffect="non-scaling-stroke" />
               </svg>
-              <div className="absolute inset-x-0 -bottom-6 flex justify-between text-[10px] text-white/35">
+              <div className="absolute inset-x-0 -bottom-6 flex justify-between text-[10px] text-[var(--gv-text-muted)]">
                 <span>{stats.series[0]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                 <span>{stats.series[stats.series.length - 1]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
               </div>
             </div>
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-white/40 text-[13px]">
+            <div className="h-[220px] flex items-center justify-center text-[var(--gv-text-muted)] text-[13px]">
               No reach data yet.
             </div>
           )}
         </div>
 
         {/* TOP POSTS */}
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
-          <div className="gravity-label mb-4">Top Posts</div>
+        <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6">
+          <div className="gravity-label mb-4">Top posts</div>
           {stats.topPosts.length === 0 ? (
-            <div className="text-white/40 text-[13px] py-6 text-center">
-              No posts yet. Once you publish, your best-performing posts will show up here.
+            <div className="text-[var(--gv-text-muted)] text-[13px] py-6 text-center">
+              No posts have been published yet. Your best-performing posts will appear here after you publish.
             </div>
           ) : (
-            <div className="divide-y divide-white/[0.06]">
+            <div className="divide-y divide-[var(--gv-border-subtle)]">
               {stats.topPosts.map((p, i) => (
                 <div key={p.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                  <span className="text-[11px] font-serif-display text-white/40 tabular-nums w-6">
+                  <span className="text-[11px] font-serif-display text-[var(--gv-text-muted)] tabular-nums w-6">
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <div className="w-10 h-10 rounded-md bg-white/[0.04] border border-white/[0.06] overflow-hidden flex-shrink-0">
+                  <div className="w-10 h-10 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-subtle)] overflow-hidden flex-shrink-0">
                     {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-semibold text-[#F5F4F1] truncate leading-tight">{p.title}</div>
-                    <div className="text-[10.5px] text-white/45 mt-0.5">
+                    <div className="text-[13px] font-semibold text-[var(--gv-text-primary)] truncate leading-tight">{p.title}</div>
+                    <div className="text-[10.5px] text-[var(--gv-text-tertiary)] mt-0.5">
                       {p.platform} · {p.likes} likes
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="font-serif-display text-[16px] text-[#F5F4F1] tabular-nums leading-none">{compactK(p.reach)}</div>
-                    <div className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/40 mt-1">reach</div>
+                    <div className="font-serif-display text-[16px] text-[var(--gv-text-primary)] tabular-nums leading-none">{compactK(p.reach)}</div>
+                    <div className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-[var(--gv-text-muted)] mt-1">reach</div>
                   </div>
                 </div>
               ))}
@@ -260,10 +281,10 @@ const GravityInsights: React.FC = () => {
 };
 
 const StatCard: React.FC<{ label: string; value: string; delta: string | null }> = ({ label, value, delta }) => (
-  <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+  <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-5">
     <div className="gravity-label mb-3">{label}</div>
     <div className="flex items-baseline gap-2">
-      <span className="font-serif-display text-[32px] leading-none text-[#F5F4F1] tabular-nums">{value}</span>
+      <span className="font-serif-display text-[32px] leading-none text-[var(--gv-text-primary)] tabular-nums">{value}</span>
     </div>
     {delta && (
       <div className={`text-[11px] font-semibold mt-2 ${delta.startsWith('+') ? 'text-[#4ADE80]' : 'text-red-400'}`}>

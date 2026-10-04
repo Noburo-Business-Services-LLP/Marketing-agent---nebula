@@ -100,8 +100,8 @@ const EnvironmentAssets: React.FC = () => {
             Your space
           </h2>
           <p className="text-[12.5px] text-white/45 mt-1 max-w-[600px]">
-            Photos of your shop, showroom, workshop or storefront. Gravity renders scenes inside
-            your real space instead of inventing one — pick these in the Videos Environment step.
+            Photos of your shop, showroom, workshop or storefront. Nebulaa renders scenes inside
+            your real space instead of creating an imaginary one. You can choose these photos in the Environment step of the Videos wizard.
           </p>
         </div>
         <span className="text-[11px] px-2.5 py-1 rounded-full border border-white/[0.10] bg-white/[0.03] text-white/55">
@@ -161,7 +161,7 @@ const EnvironmentAssets: React.FC = () => {
 
       {!loading && assets.length === 0 && (
         <p className="text-[12.5px] text-white/40 mt-4">
-          A wide shot of the space plus a detail or two works best — shot in the light you want your videos to feel like.
+          A wide shot of the space and one or two detail shots work best. Take them in the lighting you want your videos to have.
         </p>
       )}
     </section>

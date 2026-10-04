@@ -60,8 +60,19 @@ const PROVIDER_RATES = {
   elevenlabs_music_per_30s: 0.12,
 
   // Serper / scraping for competitor intel — per lookup.
-  serper_per_search: 0.001
+  serper_per_search: 0.001,
+
+  // fal.ai bytedance/seedance-2.0 (text-to-video and reference-to-video) —
+  // billed per output second at 720p, so a clip's cost scales with its
+  // length. LIST PRICE: verify against the first fal.ai invoice, because
+  // 1080p and audio-on are billed differently and we only generate 720p.
+  seedance_720p_per_sec: 0.3034
 };
+
+// Length of one hero clip. Seedance bills by the second, so this is what turns
+// the per-second rate into a per-clip price; heroVideoService also uses it as
+// the cap on a requested duration, so price and output cannot drift apart.
+const HERO_CLIP_SECONDS = 15;
 
 // ---------------------------------------------------------------------------
 // 1b. Infrastructure we pay for whether or not a model is involved
@@ -104,7 +115,8 @@ const TOKENS = {
   caption_only:      { in: 1500, out: 700 },
   chat_turn:         { in: 1200, out: 400 },
   scene_script:      { in: 2000, out: 800 },  // per scene, video pipeline
-  story_skeleton:    { in: 3000, out: 1600 }  // once per video: story + shot list
+  story_skeleton:    { in: 3000, out: 1600 }, // once per video: story + shot list
+  blueprint_plan:    { in: 5000, out: 4500 }  // one planner call per Brand Growth Blueprint
 };
 
 const gpt4o = (shape) =>
@@ -207,7 +219,19 @@ const ACTION_USD = {
   strategic_post: gpt4o(TOKENS.creative_director) + gpt4o(TOKENS.art_director) + image + gpt4o(TOKENS.caption_only) + assetCost(INFRA.mb_per_image),
   event_post: gpt4o(TOKENS.creative_director) + gpt4o(TOKENS.art_director) + image + gpt4o(TOKENS.caption_only) + assetCost(INFRA.mb_per_image),
 
-  competitor_scrape: PROVIDER_RATES.serper_per_search
+  competitor_scrape: PROVIDER_RATES.serper_per_search,
+
+  // Brand Growth Blueprint: one planner call. The guided-mode directions call (about $0.02) is absorbed.
+  // Page fetches are not metered and no image model is used.
+  blueprint: gpt4o(TOKENS.blueprint_plan),
+
+  // --- hero video ----------------------------------------------------------
+  // One Seedance clip of HERO_CLIP_SECONDS, plus storing and serving it once
+  // as a scene-sized clip. No image, narration or merge step: the model returns
+  // a finished clip.
+  hero_video_clip:
+    (PROVIDER_RATES.seedance_720p_per_sec * HERO_CLIP_SECONDS) +
+    assetCost(INFRA.mb_per_scene_clip)
 };
 
 // ---------------------------------------------------------------------------
@@ -223,11 +247,13 @@ const ACTION_USD = {
 //
 // Video carries more because its failure profile is worse in both directions:
 // a Kling clip fails or comes back unusable far more often than an image does,
-// and each miss costs several times what an image miss costs. The old model
+// and each miss costs several times what an image miss costs. hero_video_clip
+// takes the same 3.2x: it is a single 15s generation at ~$4.5, so a clip that
+// comes back unusable costs several times an image miss and gets re-rolled. The old model
 // (see the original ai_feature_costs sheet) used a flat 2.2x across the board,
 // but that sheet had no video in it at all — every line was an image or a
 // text call.
-const MARGIN = { default: 2.5, video_base: 3.2, video_generated: 3.2 };
+const MARGIN = { default: 2.5, video_base: 3.2, video_generated: 3.2, hero_video_clip: 3.2 };
 const marginFor = (action) => MARGIN[action] || MARGIN.default;
 
 // What one Quark is worth.
@@ -292,7 +318,9 @@ const ACTION_UNITS = {
   rival_post: 'per post',
   strategic_post: 'per post',
   event_post: 'per post',
-  competitor_scrape: 'free'
+  hero_video_clip: 'per clip',
+  competitor_scrape: 'free',
+  blueprint: 'per blueprint'
 };
 
 // ---------------------------------------------------------------------------
@@ -401,7 +429,10 @@ function videoWallClockSeconds(scenes = 5, clipConcurrency = PIPELINE_SECONDS.sc
 // in the database to measure, so this is judgement: scene re-rolls are more
 // common than image retries because a clip can be technically fine and still
 // not cut together. It is the largest remaining invented number in this file.
-const RETRY_FACTOR = { image: 1.2, carousel: 1.2, video_scene: 1.5 };
+//
+// hero: 1.5 — ALSO A GUESS. No measured re-roll rate for hero clips yet; this
+// assumes one re-roll in two. Used only for sizing plan allowances.
+const RETRY_FACTOR = { image: 1.2, carousel: 1.2, video_scene: 1.5, hero: 1.5 };
 
 // Separately from retries: 20% of campaign_full generations were REFUNDED in
 // the same dataset (30 of 151), against 0% for image_generated. That is a
@@ -460,8 +491,33 @@ const PLANS = {
     // `quarks` is DERIVED below, never written here. It used to be a literal,
     // and when USD_PER_QUARK moved from $0.08 to $0.02 the literal stayed put
     // and silently became a quarter of the allowance it was meant to be.
+  },
+
+  // Customer plans (prices are GST-exclusive; GST is added at checkout).
+  // `quarks` for these is a chosen literal, guarded against the expected burn.
+  starter: {
+    inr: 999,
+    label: 'Starter',
+    commits: { image_generated: 30, hero: 1 },
+    grant: 2100
+  },
+  professional: {
+    inr: 1999,
+    label: 'Professional',
+    commits: { image_generated: 30, hero: 2, captions: 150 },
+    grant: 3500
   }
 };
+
+// Throws if a plan grants fewer Quarks than its expected burn.
+function assertPlanAllowance(plan, name = '') {
+  if (plan.quarks < plan.expectedQuarks) {
+    throw new Error(
+      `Plan "${name}" grants ${plan.quarks} Quarks against an expected burn of ` +
+      `${plan.expectedQuarks}. Raise the grant or cut the commitments.`
+    );
+  }
+}
 
 for (const [name, plan] of Object.entries(PLANS)) {
   const c = plan.commits;
@@ -482,26 +538,53 @@ for (const [name, plan] of Object.entries(PLANS)) {
     (c.reels || 0) * (
       QUARK_COSTS.video_base +
       (c.scenesPerReel || 0) * QUARK_COSTS.video_generated * RETRY_FACTOR.video_scene
-    )
+    ) +
+    (c.hero || 0) * QUARK_COSTS.hero_video_clip * RETRY_FACTOR.hero +
+    (c.captions || 0) * QUARK_COSTS.campaign_text
   );
 
   // A round number, chosen rather than derived — 5,000 is what a paid account
   // gets. The derived figure (expectedQuarks x safety) is kept alongside it so
   // the check below still bites if costs ever rise past what 5,000 covers.
   plan.derivedQuarks = Math.round((plan.expectedQuarks * ALLOWANCE_SAFETY) / 100) * 100;
-  plan.quarks = 5000;
+  plan.quarks = plan.grant !== undefined ? plan.grant : 5000;
+  delete plan.grant;
 
-  if (plan.quarks < plan.expectedQuarks) {
-    throw new Error(
-      `Plan "${name}" grants ${plan.quarks} Quarks against an expected burn of ` +
-      `${plan.expectedQuarks}. Raise the grant or cut the commitments.`
-    );
-  }
+  assertPlanAllowance(plan, name);
 }
 
+// ---------------------------------------------------------------------------
+// 4b. Top-ups, GST and add-ons (all editable here)
+// ---------------------------------------------------------------------------
+// Top-up Quarks are sold at INR 2.00 each, GST-exclusive.
+const TOPUP_PACKS = [999, 1999, 4999].map((inr) => ({ inr, quarks: inr / 2 }))
+  .map((p) => ({ inr: p.inr, quarks: Math.round(p.quarks) }));
+
+const GST_RATE = 0.18;
+const GST_PERCENT = 18;
+
+// Integer paise throughout, so there is no float drift. GST is rounded to the
+// nearest paisa, halves up: floor((x * 2 + 100) / 200) == round-half-up(x / 100)
+// where x = paise * percent.
+const toPaise = (inrAmount) => Math.round(inrAmount * 100);
+function gstPaise(inrAmount) {
+  return Math.floor((toPaise(inrAmount) * GST_PERCENT * 2 + 100) / 200);
+}
+function chargePaise(inrAmount) {
+  return toPaise(inrAmount) + gstPaise(inrAmount);
+}
+
+const ADDONS = {
+  publish: { label: 'Publish and schedule', inr: 1000, requires: [] },
+  competitors: { label: 'Competitor insights', inr: 500, requires: [] },
+  inbox: { label: 'Inbox and automatic replies', inr: 500, requires: ['publish'] },
+  bundle: { label: 'Publish, competitors and inbox bundle', inr: 1800, includes: ['publish', 'competitors', 'inbox'] }
+};
+
 module.exports = {
-  PROVIDER_RATES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
+  PROVIDER_RATES, HERO_CLIP_SECONDS, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
+  assertPlanAllowance, TOPUP_PACKS, GST_RATE, gstPaise, chargePaise, ADDONS,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,
   PIPELINE_SECONDS, videoWallClockSeconds
 };

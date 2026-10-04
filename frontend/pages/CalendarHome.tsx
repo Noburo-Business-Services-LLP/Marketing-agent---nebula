@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import ContentCalendar from './ContentCalendar';
 import GravityCalendar from './GravityCalendar';
 
@@ -43,6 +44,23 @@ const CalendarHome: React.FC = () => {
           internal state (which month card is expanded, which detail tab)
           would otherwise reset every time someone flips back from Schedule. */}
       <div className={tab === 'plan' ? '' : 'hidden'}>
+        <div
+          className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl p-5"
+          style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)' }}
+        >
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[16px] font-semibold" style={{ color: 'var(--gv-text-primary)' }}>Brand Growth Blueprint</h2>
+            <p className="mt-1 text-[13.5px] leading-relaxed" style={{ color: 'var(--gv-text-secondary)' }}>
+              Build a 90-day plan from your website and Instagram page, then use it to plan your calendar.
+            </p>
+          </div>
+          <Link
+            to="/blueprint/new"
+            className="shrink-0 inline-flex items-center justify-center px-5 py-2.5 rounded-lg text-[13px] font-semibold bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)]"
+          >
+            Create a Blueprint
+          </Link>
+        </div>
         <ContentCalendar />
       </div>
       <div className={tab === 'schedule' ? '' : 'hidden'}>

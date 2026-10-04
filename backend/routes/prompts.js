@@ -38,7 +38,7 @@ router.get('/', protect, async (req, res) => {
 router.put('/:id', protect, async (req, res) => {
   try {
     const prompt = getPrompt(req.params.id);
-    if (!prompt) {
+    if (!prompt || prompt.locked) {
       return res.status(404).json({ success: false, message: 'No such prompt.' });
     }
 
@@ -74,7 +74,7 @@ router.put('/:id', protect, async (req, res) => {
 router.delete('/:id', protect, async (req, res) => {
   try {
     const prompt = getPrompt(req.params.id);
-    if (!prompt) {
+    if (!prompt || prompt.locked) {
       return res.status(404).json({ success: false, message: 'No such prompt.' });
     }
     await PromptOverride.deleteOne({ user: req.user.id, promptId: req.params.id });

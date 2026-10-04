@@ -6,6 +6,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { requireFeature } = require('../middleware/requireFeature');
+const { canUse } = require('../config/entitlements');
 const { deductCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
@@ -306,6 +308,9 @@ router.get('/overview', protect, async (req, res) => {
     const totalEngagement = allCampaigns.reduce((sum, c) => sum + (c.performance?.engagement || 0), 0);
     const avgCTR = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(2) : 0;
     
+    // Competitor discovery and scraping call outside services: only for plans that include them.
+    const competitorsAllowed = canUse(user, 'competitors').allowed;
+
     // Get competitor data - already fetched in parallel above
     let competitorList = [...competitors]; // Use from parallel query
     let competitorPosts = [];
@@ -314,7 +319,7 @@ router.get('/overview', protect, async (req, res) => {
     const onboardingCompetitors = user.businessProfile?.competitors || [];
     
     // If no Competitor documents exist but we have names from onboarding, create them (background task)
-    if (competitorList.length === 0 && onboardingCompetitors.length > 0) {
+    if (competitorsAllowed && competitorList.length === 0 && onboardingCompetitors.length > 0) {
       console.log('Syncing competitors from onboarding:', onboardingCompetitors);
       
       // Create Competitor documents from onboarding data (don't await - do in background)
@@ -345,7 +350,7 @@ router.get('/overview', protect, async (req, res) => {
     }
     
     // If still no competitors, skip auto-discovery for speed (do in background later)
-    if (competitorList.length === 0) {
+    if (competitorsAllowed && competitorList.length === 0) {
       console.log('⚠️ No competitors found - will auto-discover in background');
       
       // Start background auto-discovery (don't wait)
@@ -380,7 +385,7 @@ router.get('/overview', protect, async (req, res) => {
     
     if (competitorNames.length > 0) {
       // PRIORITY 1: Try to fetch REAL posts using Apify
-      if (!hasRecentPostsInDB && socialMediaAPI?.fetchRealCompetitorPosts) {
+      if (competitorsAllowed && !hasRecentPostsInDB && socialMediaAPI?.fetchRealCompetitorPosts) {
         try {
           console.log('Fetching REAL competitor posts using Apify...');
           
@@ -797,7 +802,7 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
       if (user.credits.balance < creditCost) {
         return res.status(403).json({
           success: false,
-          message: 'Insufficient credits',
+          message: 'Insufficient Quarks',
           creditsRemaining: user.credits.balance,
           required: creditCost
         });
@@ -950,7 +955,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
       await ensureCreditCycle(user);
       const creditCostStream = count * CREDIT_COSTS.campaign_full;
       if (user.credits.balance < creditCostStream) {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
         res.end();
         return;
       }
@@ -1097,7 +1102,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
  * POST /api/dashboard/refresh-competitor-posts
  * Manually trigger real competitor post scraping using Apify
  */
-router.post('/refresh-competitor-posts', protect, async (req, res) => {
+router.post('/refresh-competitor-posts', protect, requireFeature('competitors'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);
@@ -1230,7 +1235,7 @@ router.post('/generate-rival-post', protect, async (req, res) => {
     // Credit check
     await ensureCreditCycle(user);
     if (user.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 7 });
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 7 });
     }
 
     const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo, aspectRatio } = req.body;
@@ -1592,7 +1597,7 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(user);
     if (user.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 7 });
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 7 });
     }
     
     // Get user's business context
@@ -1640,7 +1645,7 @@ router.post('/strategic-advisor/refine-image', protect, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(user);
     if (user.credits.balance < 3) {
-      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 3 });
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 3 });
     }
     
     const result = await refineImageWithPrompt(originalPrompt, refinementPrompt, style, currentImageUrl);
@@ -1678,7 +1683,7 @@ router.post('/generate-event-post', protect, async (req, res) => {
     if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(creditUser);
     if (creditUser.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: creditUser.credits.balance, required: 7 });
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: creditUser.credits.balance, required: 7 });
     }
     
     // Get user's business context

@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import { UploadCloud, Loader2, Sparkles, Calendar, Send, X, Instagram, Facebook, Linkedin, Twitter, Check } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 const PLATFORMS = [
   { key: 'instagram', label: 'Instagram', Icon: Instagram },
@@ -33,6 +35,7 @@ const UploadAndSchedule: React.FC = () => {
   const [mediaUrl, setMediaUrl] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
   const [done, setDone] = useState('');
   const [dragging, setDragging] = useState(false);
 
@@ -45,8 +48,8 @@ const UploadAndSchedule: React.FC = () => {
 
   const take = (f?: File | null) => {
     if (!f) return;
-    if (!/^(image|video)\//i.test(f.type)) { setError('Pick an image or a video.'); return; }
-    if (f.size > 120 * 1024 * 1024) { setError('That file is over 120MB.'); return; }
+    if (!/^(image|video)\//i.test(f.type)) { setError('Choose an image or a video.'); return; }
+    if (f.size > 120 * 1024 * 1024) { setError('That file is larger than 120MB. Choose a smaller file.'); return; }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setError(''); setDone(''); setDraftId(''); setMediaUrl('');
     setFile(f);
@@ -58,17 +61,17 @@ const UploadAndSchedule: React.FC = () => {
   // Uploads once, then reuses the same draft for every later action.
   const ensureDraft = async (): Promise<string> => {
     if (draftId) return draftId;
-    if (!file) throw new Error('Choose a file first');
+    if (!file) throw new Error('Choose a file first.');
     const res = await draftsAPI.uploadMedia(file, { title, caption, platforms });
-    if (!res?.draft?._id) throw new Error('Upload did not return a draft');
+    if (!res?.draft?._id) throw new Error('The upload did not create a draft.');
     setDraftId(res.draft._id);
     setMediaUrl(res.mediaUrl);
     return res.draft._id;
   };
 
   const run = async (key: string, fn: () => Promise<void>) => {
-    setBusy(key); setError(''); setDone('');
-    try { await fn(); } catch (e: any) { setError(e?.message || 'That did not work'); }
+    setBusy(key); setError(''); setDone(''); setUpgrade(null);
+    try { await fn(); } catch (e: any) { const u = upgradeInfoOf(e); if (u) setUpgrade(u); else setError(e?.message || 'Something went wrong. Please try again.'); }
     finally { setBusy(''); }
   };
 
@@ -79,37 +82,37 @@ const UploadAndSchedule: React.FC = () => {
       // No vision pass for video — write from the title instead.
       const r: any = await apiService.generateCaption(title || 'social post');
       const next = r?.caption || '';
-      if (!next) throw new Error('No caption came back');
+      if (!next) throw new Error('No caption was returned. Please try again.');
       setCaption(next);
     } else {
       const r: any = await apiService.generateCaptionFromImage(url, platforms[0] || 'instagram');
       const next = r?.caption || r?.data?.caption || '';
-      if (!next) throw new Error('No caption came back');
+      if (!next) throw new Error('No caption was returned. Please try again.');
       setCaption(next);
     }
-    setDone('Caption written.');
+    setDone('The caption was written.');
   });
 
   const saveDraft = () => run('save', async () => {
     const id = await ensureDraft();
     await draftsAPI.updateDraft(id, { title, caption, platforms });
-    setDone('Saved to Drafts.');
+    setDone('The post was saved to your drafts.');
   });
 
   const schedule = () => run('schedule', async () => {
-    if (!when) throw new Error('Pick a date and time');
+    if (!when) throw new Error('Choose a date and time.');
     const id = await ensureDraft();
     await draftsAPI.updateDraft(id, { title, caption, platforms });
     await draftsAPI.scheduleDraft(id, new Date(when).toISOString());
-    setDone('Scheduled.');
+    setDone('The post was scheduled.');
   });
 
   const publish = () => run('publish', async () => {
-    if (platforms.length === 0) throw new Error('Pick at least one platform');
+    if (platforms.length === 0) throw new Error('Choose at least one platform.');
     const id = await ensureDraft();
     await draftsAPI.updateDraft(id, { title, caption, platforms });
     await draftsAPI.publishDraft(id, platforms);
-    setDone('Published.');
+    setDone('The post was published.');
   });
 
   const togglePlatform = (k: string) =>
@@ -118,9 +121,9 @@ const UploadAndSchedule: React.FC = () => {
   return (
     <div className="max-w-[900px] mx-auto pb-24">
       <GravityHero
-        eyebrow="Upload · your own media"
-        headline={<>Already have <GravityEmphasis>something</GravityEmphasis>?</>}
-        subcopy="Drop in a photo or a video. Gravity writes the caption and puts it out."
+        eyebrow="Upload and schedule"
+        headline={<>Upload your own <GravityEmphasis>photo or video</GravityEmphasis></>}
+        subcopy="Upload a photo or a video. Nebulaa can write the caption, and you can publish the post now or schedule it for later."
       />
 
       {!file ? (
@@ -134,8 +137,8 @@ const UploadAndSchedule: React.FC = () => {
           }`}
         >
           <UploadCloud className={`w-10 h-10 mx-auto mb-4 ${dragging ? 'text-[#F5A623]' : 'text-white/35'}`} />
-          <p className="text-[15px] font-semibold text-[#F5F4F1]">Drop a file, or click to choose</p>
-          <p className="text-[12.5px] text-white/40 mt-1.5">Images and video · up to 120MB</p>
+          <p className="text-[15px] font-semibold text-[#F5F4F1]">Drag a file here, or click to choose one</p>
+          <p className="text-[12.5px] text-white/40 mt-1.5">Images and videos up to 120MB</p>
         </div>
       ) : (
         <div className="grid lg:grid-cols-[1fr_1fr] gap-7">
@@ -166,7 +169,7 @@ const UploadAndSchedule: React.FC = () => {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full px-0 py-2 bg-transparent border-0 border-b border-white/[0.12] text-[18px] font-semibold text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623] transition-colors"
-                placeholder="Give it a name…"
+                placeholder="Enter a title"
               />
             </div>
 
@@ -176,7 +179,7 @@ const UploadAndSchedule: React.FC = () => {
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 rows={5}
-                placeholder="Write it, or let Gravity."
+                placeholder="Write a caption, or use the button below to have Nebulaa write one."
                 className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/[0.09] text-[14px] leading-relaxed text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623]/60 transition-colors resize-none"
               />
               <button
@@ -222,6 +225,7 @@ const UploadAndSchedule: React.FC = () => {
               />
             </div>
 
+            {upgrade && <UpgradePrompt reason={upgrade.reason} feature={upgrade.feature} />}
             {error && <p className="text-[12.5px] text-red-300 bg-red-500/[0.08] border border-red-400/20 px-3.5 py-2.5 rounded-xl">{error}</p>}
             {done && (
               <p className="text-[12.5px] text-emerald-300 bg-emerald-500/[0.08] border border-emerald-400/20 px-3.5 py-2.5 rounded-xl flex items-center gap-2">

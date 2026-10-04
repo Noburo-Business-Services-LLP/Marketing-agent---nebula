@@ -176,13 +176,16 @@ async function getOrCreateContact(customerInfo) {
  */
 async function createInvoice(params) {
   const { email, firstName, lastName, companyName, amount, credits, razorpayPaymentId } = params;
+  // Newer purchases pass an item name and a GST rate: GST is its own line and the
+  // contact is not tax-exempt. Without them the original behaviour is unchanged.
+  const gstPercent = params.gstPercent || 0;
+  const paidAmount = params.totalAmount || amount;
 
   // Step 1: Get or create contact
   const contactId = await getOrCreateContact({ email, firstName, lastName, companyName });
 
-  // Step 1b: Update contact to have tax exemption
-  // Step 1b: Update contact with tax exemption
-  try {
+  // Step 1b: Update contact with tax exemption (original invoices only)
+  if (!gstPercent) try {
     await zohoRequest('PUT', `/contacts/${contactId}`, {
       gst_treatment: 'consumer',
       tax_exemption_id: '3659166000000048005',
@@ -196,6 +199,12 @@ async function createInvoice(params) {
   // Step 2: Create invoice
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
+  let lineItem = {
+    name: `Nebulaa - ${credits} Quarks`,
+    description: `${credits} AI marketing Quarks for Nebulaa platform`,
+    rate: amount,
+    quantity: 1
+  };
   const invoiceData = {
     customer_id: contactId,
     date: today,
@@ -203,15 +212,18 @@ async function createInvoice(params) {
     gst_treatment: 'consumer',
     tax_exemption_id: '3659166000000048005',
     place_of_supply: 'TN',
-    line_items: [{
-      name: `Nebulaa Gravity - ${credits} Credits`,
-      description: `${credits} AI marketing credits for Nebulaa Gravity platform`,
-      rate: amount,
-      quantity: 1
-    }],
+    line_items: [lineItem],
     notes: `Payment via Razorpay (${razorpayPaymentId})`,
     reference_number: razorpayPaymentId
   };
+  if (gstPercent) {
+    const taxId = await getGST18TaxId();
+    if (!taxId) throw new Error('18% GST tax is not set up in Zoho Books');
+    lineItem.name = params.itemName;
+    lineItem.description = params.description || params.itemName;
+    lineItem.tax_id = taxId;
+    delete invoiceData.tax_exemption_id;
+  }
 
   const invoiceResult = await zohoRequest('POST', '/invoices', invoiceData);
   const invoice = invoiceResult.invoice;
@@ -221,12 +233,12 @@ async function createInvoice(params) {
     const paymentData = {
       customer_id: contactId,
       payment_mode: 'Razorpay',
-      amount,
+      amount: paidAmount,
       date: today,
       reference_number: razorpayPaymentId,
       invoices: [{
         invoice_id: invoice.invoice_id,
-        amount_applied: amount
+        amount_applied: paidAmount
       }]
     };
 

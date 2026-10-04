@@ -12,6 +12,8 @@ import {
 } from '../components/gravity';
 import UnifiedInbox from './UnifiedInbox';
 import AutoReplySettingsPage from './AutoReplySettingsPage';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -56,6 +58,7 @@ const ConnectSocials: React.FC = () => {
   const [inboxSummary, setInboxSummary] = useState<InboxSummary | null>(null);
   const [inboxSummaryLoading, setInboxSummaryLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
   
   // Connection State
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
@@ -113,7 +116,7 @@ const ConnectSocials: React.FC = () => {
         );
 
         if (targetPlatform && targetPlatform.connected) {
-          console.log(`[Auth Monitor] Detected ${platform} is connected in backend! Forcing popup close.`);
+          console.log(`[Auth Monitor] Detected ${platform} is connected in backend. Forcing popup close.`);
           popup.close();
           clearAuthPopupMonitor();
           authPopupRef.current = null;
@@ -123,7 +126,7 @@ const ConnectSocials: React.FC = () => {
           
           setNotification({
             type: 'success',
-            message: `${platform} connected successfully!`
+            message: `${platform} was connected successfully.`
           });
           
           setSocials(connections);
@@ -143,7 +146,7 @@ const ConnectSocials: React.FC = () => {
           <body style="margin:0;font-family:sans-serif;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;">
             <div style="text-align:center;max-width:420px;padding:24px;">
               <div style="font-size:18px;font-weight:700;margin-bottom:12px;">Preparing ${platform} connection...</div>
-              <div style="font-size:14px;color:#94a3b8;">This window will redirect to the secure auth flow in a moment.</div>
+              <div style="font-size:14px;color:#94a3b8;">This window will redirect to the secure authorization page shortly.</div>
             </div>
           </body>
         </html>
@@ -163,7 +166,7 @@ const ConnectSocials: React.FC = () => {
       setManualAuthUrl(authUrl);
       setNotification({
         type: 'error',
-        message: `Your browser blocked the ${platform} auth window. Click "Open Auth Page" to launch it in a new tab.`
+        message: `Your browser blocked the ${platform} authorization window. Select "Open authorization page" to open it in a new tab.`
       });
       return false;
     }
@@ -183,7 +186,7 @@ const ConnectSocials: React.FC = () => {
       setManualAuthUrl(authUrl);
       setNotification({
         type: 'error',
-        message: `Could not open the ${platform} auth window automatically. Click "Open Auth Page" to continue.`
+        message: `The ${platform} authorization window could not be opened automatically. Select "Open authorization page" to continue.`
       });
       return false;
     }
@@ -216,12 +219,11 @@ const ConnectSocials: React.FC = () => {
           } catch (_) {}
 
           // Show a brief success page then close
-          document.title = `${displayName} Connected ✅`;
+          document.title = `${displayName} connected`;
           document.body.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#0f172a;color:#fff;gap:16px;">
-              <div style="font-size:48px;">✅</div>
-              <h2 style="margin:0;font-size:22px;">${displayName} Connected Successfully!</h2>
-              <p style="margin:0;color:#94a3b8;">Closing this window...</p>
+              <h2 style="margin:0;font-size:22px;">${displayName} was connected successfully.</h2>
+              <p style="margin:0;color:#94a3b8;">This window will close automatically.</p>
             </div>
           `;
           setTimeout(() => window.close(), 1500);
@@ -230,7 +232,7 @@ const ConnectSocials: React.FC = () => {
         
         setNotification({
           type: 'success',
-          message: `${displayName}${account ? ` (${decodeURIComponent(account)})` : ''} connected successfully!`
+          message: `${displayName}${account ? ` (${decodeURIComponent(account)})` : ''} was connected successfully.`
         });
         window.history.replaceState({}, '', window.location.pathname);
         setTimeout(() => {
@@ -251,24 +253,24 @@ const ConnectSocials: React.FC = () => {
     if (youtubeStatus === 'connected' && channelName) {
       setNotification({
         type: 'success',
-        message: `YouTube channel "${decodeURIComponent(channelName)}" connected successfully!`
+        message: `YouTube channel "${decodeURIComponent(channelName)}" was connected successfully.`
       });
       window.history.replaceState({}, '', window.location.pathname);
       setTimeout(() => loadSocials(), 500);
     } else if (error) {
-      let errorMessage = 'Failed to connect account.';
+      let errorMessage = 'The account could not be connected.';
       switch (error) {
         case 'access_denied':
-          errorMessage = 'You denied access to your account.';
+          errorMessage = 'Access to your account was denied.';
           break;
         case 'no_channel':
-          errorMessage = 'No YouTube channel found for this Google account.';
+          errorMessage = 'No YouTube channel was found for this Google account.';
           break;
         case 'token_exchange_failed':
-          errorMessage = 'Failed to authenticate. Please try again.';
+          errorMessage = 'Authentication failed. Please try again.';
           break;
         case 'invalid_state':
-          errorMessage = 'Authentication session expired. Please try again.';
+          errorMessage = 'The authentication session expired. Please try again.';
           break;
       }
       setNotification({ type: 'error', message: errorMessage });
@@ -304,7 +306,7 @@ const ConnectSocials: React.FC = () => {
       setManualAuthUrl(null);
       setNotification({
         type: 'success',
-        message: `${displayName}${accountName} connected successfully!`
+        message: `${displayName}${accountName} was connected successfully.`
       });
       
       // Optimistic update
@@ -346,7 +348,7 @@ const ConnectSocials: React.FC = () => {
       loadInboxSummary(res.connections || []);
     } catch (e) {
       console.error(e);
-      setNotification({ type: "error", message: "Could not load social connection status. Please try again in a moment." });
+      setNotification({ type: "error", message: "The connection status could not be loaded. Please try again in a moment." });
     } finally {
       setLoading(false);
     }
@@ -377,6 +379,7 @@ const ConnectSocials: React.FC = () => {
 
   const initiateConnection = async (platform: string) => {
     setManualAuthUrl(null);
+    setUpgrade(null);
     setLoadingPlatform(platform);
     setConnectingPlatform(platform);
     const popupName = `nebula-social-${platform.toLowerCase()}`;
@@ -408,7 +411,7 @@ const ConnectSocials: React.FC = () => {
         }
         setNotification({
           type: 'error',
-          message: response.message || `Failed to initiate ${platform} connection.`
+          message: response.message || `The ${platform} connection could not be started.`
         });
         setLoadingPlatform(null);
         setConnectingPlatform(null);
@@ -418,9 +421,11 @@ const ConnectSocials: React.FC = () => {
         pendingPopup.close();
       }
       console.error('OAuth connect error:', error);
+      const needsUpgrade = upgradeInfoOf(error);
+      if (needsUpgrade) { setUpgrade(needsUpgrade); setLoadingPlatform(null); setConnectingPlatform(null); return; }
       setNotification({
         type: 'error',
-        message: error.message || `Failed to connect to ${platform}.`
+        message: error.message || `Nebulaa could not connect to ${platform}.`
       });
       setLoadingPlatform(null);
       setConnectingPlatform(null);
@@ -452,7 +457,7 @@ const ConnectSocials: React.FC = () => {
     try {
       const result = await apiService.disconnectPlatform(platform);
       if (result.success) {
-        setNotification({ type: 'success', message: `${platform} disconnected successfully.` });
+        setNotification({ type: 'success', message: `${platform} was disconnected.` });
         
         // Optimistic UI update
         setSocials(prev => prev.map(s => 
@@ -471,7 +476,7 @@ const ConnectSocials: React.FC = () => {
         throw new Error('Disconnect failed');
       }
     } catch (error: any) {
-      setNotification({ type: 'error', message: error.message || `Failed to disconnect ${platform}.` });
+      setNotification({ type: 'error', message: error.message || `${platform} could not be disconnected.` });
     }
   };
 
@@ -518,9 +523,9 @@ const ConnectSocials: React.FC = () => {
   const tabs = [
     { id: 'accounts', label: 'Accounts', icon: ShieldCheck, path: '/connect-socials' },
     { id: 'permissions', label: 'Permissions', icon: KeyRound, path: '/connect-socials?tab=permissions' },
-    { id: 'sync', label: 'Sync Status', icon: Activity, path: '/connect-socials?tab=sync' },
-    { id: 'inbox', label: 'Social Inbox', icon: Inbox, path: '/connect-socials/inbox' },
-    { id: 'auto-reply', label: 'AI Auto Reply', icon: Sparkles, path: '/connect-socials?tab=auto-reply' },
+    { id: 'sync', label: 'Sync status', icon: Activity, path: '/connect-socials?tab=sync' },
+    { id: 'inbox', label: 'Social inbox', icon: Inbox, path: '/connect-socials/inbox' },
+    { id: 'auto-reply', label: 'Automatic replies', icon: Sparkles, path: '/connect-socials?tab=auto-reply' },
   ];
   const activeTab = isInboxRoute ? 'inbox' : new URLSearchParams(location.search).get('tab') || 'accounts';
 
@@ -535,6 +540,7 @@ const ConnectSocials: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto relative">
+      {upgrade && <UpgradePrompt className="mb-6" reason={upgrade.reason} feature={upgrade.feature} />}
       {/* Notification Toast */}
       {notification && (
         <div className={`fixed top-4 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg border animate-in slide-in-from-top-2 duration-300 flex items-start gap-3 ${
@@ -558,14 +564,14 @@ const ConnectSocials: React.FC = () => {
 
       {manualAuthUrl && (
         <div className="fixed top-20 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg border bg-yellow-50 border-yellow-200 text-yellow-900 animate-in slide-in-from-top-2 duration-300">
-          <p className="text-sm mb-2">Your browser blocked the automatic redirect to Ayrshare.</p>
+          <p className="text-sm mb-2">Your browser blocked the automatic redirect to the authorization page.</p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => manualAuthUrl && openAuthPopup(manualAuthUrl, connectingPlatform || 'social')}
               className="flex-1 text-center bg-yellow-400 text-black font-bold rounded px-3 py-2 hover:bg-yellow-300"
             >
-              Open Auth Page
+              Open authorization page
             </button>
             <button
               onClick={() => setManualAuthUrl(null)}
@@ -580,15 +586,15 @@ const ConnectSocials: React.FC = () => {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
         <GravityHero
           align="left"
-          eyebrow="Connect Socials"
-          headline={<>Where should Gravity <GravityEmphasis>publish</GravityEmphasis>?</>}
-          subcopy="Securely connect your platforms to enable auto-posting and analytics."
+          eyebrow="Connected accounts"
+          headline={<>Connect your <GravityEmphasis>social accounts</GravityEmphasis></>}
+          subcopy="Connect your social media accounts securely so that Nebulaa can publish posts for you and report how they perform."
           className="!mb-0"
         />
         <div className="flex items-center gap-3 flex-shrink-0">
           <GravityButton variant="ghost" onClick={() => loadSocials()} disabled={loading}>
             <RefreshCw className={`w-4 h-4 text-[#F5A623] ${loading ? 'animate-spin' : ''}`} />
-            Refresh Status
+            Refresh status
           </GravityButton>
           <div className="rounded-full px-3.5 py-1.5 flex items-center gap-2 text-[11px] font-semibold border border-white/[0.10] bg-white/[0.03] text-white/60">
             <ShieldCheck className="w-3.5 h-3.5 text-[#F5A623]" /> Secure OAuth 2.0
@@ -638,7 +644,7 @@ const ConnectSocials: React.FC = () => {
                   {/* Real OAuth badge for YouTube */}
                   {social.platform === 'YouTube' && !social.connected && (
                       <div className="absolute top-0 left-0 bg-white/[0.08] text-white/70 text-[9px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-br-lg flex items-center gap-1">
-                          <ExternalLink className="w-2.5 h-2.5" /> Real OAuth
+                          <ExternalLink className="w-2.5 h-2.5" /> OAuth sign-in
                       </div>
                   )}
 
@@ -699,7 +705,7 @@ const ConnectSocials: React.FC = () => {
                                     : 'bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200'
                                 }`}
                              >
-                                Unlink
+                                Disconnect
                              </button>
                            </>
                       ) : (
@@ -730,7 +736,7 @@ const ConnectSocials: React.FC = () => {
                 <Inbox className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Social Inbox</h2>
+                <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Social inbox</h2>
                 <p className={`mt-1 text-sm max-w-2xl ${theme.textSecondary}`}>
                   Manage messages, comments, mentions, and replies from all connected social platforms in one place.
                 </p>
@@ -743,7 +749,7 @@ const ConnectSocials: React.FC = () => {
               className="px-5 py-3 rounded-lg bg-[#F5A623] text-[#070A12] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {inboxEnabled ? <Inbox className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              Open Unified Social Inbox
+              Open social inbox
             </button>
           </div>
         </div>
@@ -752,17 +758,17 @@ const ConnectSocials: React.FC = () => {
           <div className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Inbox Status</p>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Inbox status</p>
                 <p className={`mt-2 text-lg font-bold capitalize ${inboxEnabled ? 'text-green-400' : 'text-slate-400'}`}>
                   {inboxSummaryLoading ? 'Checking...' : inboxEnabled ? (inboxSummary?.inboxStatus || 'Active') : 'Disabled'}
                 </p>
               </div>
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Connected Platforms</p>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Connected platforms</p>
                 <p className={`mt-2 text-lg font-bold ${theme.text}`}>{connectedPlatformCount}</p>
               </div>
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Unread Messages</p>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Unread messages</p>
                 <p className={`mt-2 text-lg font-bold ${unreadMessageCount > 0 ? 'text-[#F5A623]' : theme.text}`}>{unreadMessageCount}</p>
               </div>
             </div>
@@ -779,7 +785,7 @@ const ConnectSocials: React.FC = () => {
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <Sparkles className="w-4 h-4 text-[#F5A623]" /> AI reply suggestions
                 </div>
-                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Draft fast, on-brand responses for conversations.</p>
+                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Nebulaa drafts on-brand replies for your conversations.</p>
               </div>
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold">
@@ -789,15 +795,15 @@ const ConnectSocials: React.FC = () => {
               </div>
               <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Bell className="w-4 h-4 text-[#F5A623]" /> Unread alerts
+                  <Bell className="w-4 h-4 text-[#F5A623]" /> Unread count
                 </div>
-                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Never miss engagement that needs a response.</p>
+                <p className={`mt-1 text-xs ${theme.textSecondary}`}>This page shows how many messages in your connected accounts are still unread.</p>
               </div>
             </div>
           </div>
 
           <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-            <p className={`text-xs font-semibold uppercase tracking-wide mb-3 ${theme.textSecondary}`}>Platform Indicators</p>
+            <p className={`text-xs font-semibold uppercase tracking-wide mb-3 ${theme.textSecondary}`}>Platform status</p>
             <div className="space-y-2">
               {INBOX_PLATFORMS.map(platform => {
                 const connected = isPlatformConnected(platform);
@@ -828,10 +834,10 @@ const ConnectSocials: React.FC = () => {
           <p className={`mt-1 text-sm ${theme.textSecondary}`}>Nebulaa requests only the scopes needed for publishing, analytics, comments, mentions, webhooks, and inbox replies.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
             {[
-              ['OAuth Authentication', 'Secure account linking through provider-approved OAuth flows.'],
-              ['Webhook Registration', 'Incoming messages, comments, mentions, and replies are delivered to Nebulaa in real time.'],
-              ['Reply Access', 'Replies are sent back through the original connected platform API.'],
-              ['Analytics Read Access', 'Used to show performance, follower, and sync health signals.'],
+              ['OAuth authentication', 'Secure account linking through provider-approved OAuth flows.'],
+              ['Webhook registration', 'Incoming messages, comments, mentions, and replies are delivered to Nebulaa in real time.'],
+              ['Reply access', 'Replies are sent back through the original connected platform API.'],
+              ['Analytics read access', 'Used to show performance, follower, and sync health signals.'],
             ].map(([title, description]) => (
               <div key={title} className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-start gap-3">
@@ -851,7 +857,7 @@ const ConnectSocials: React.FC = () => {
         <div className={`rounded-2xl border p-6 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Sync Status</h2>
+              <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Sync status</h2>
               <p className={`mt-1 text-sm ${theme.textSecondary}`}>Track social account syncs, webhook health, and inbox readiness.</p>
             </div>
             <button onClick={() => { loadSocials(); loadInboxSummary(); }} className="px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] text-sm font-bold flex items-center gap-2">
@@ -873,7 +879,7 @@ const ConnectSocials: React.FC = () => {
             </div>
             <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
               <Clock3 className="w-5 h-5 text-[#F5A623]" />
-              <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Next Sync</p>
+              <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Next sync</p>
               <p className={`mt-1 text-lg font-bold ${theme.text}`}>{inboxSummary?.syncStatus?.nextSyncAt ? new Date(inboxSummary.syncStatus.nextSyncAt).toLocaleTimeString() : 'On demand'}</p>
               <p className={`text-xs mt-1 ${theme.textSecondary}`}>Background queue runs for connected platforms.</p>
             </div>
@@ -886,7 +892,7 @@ const ConnectSocials: React.FC = () => {
           <div className="space-y-4">
             <div className={`rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
               <div>
-                <h2 className="font-serif-display text-[20px] text-[#F5F4F1]">Unified Social Inbox</h2>
+                <h2 className="font-serif-display text-[20px] text-[#F5F4F1]">Social inbox</h2>
                 <p className={`text-sm ${theme.textSecondary}`}>Real comments, DMs, mentions, and replies from connected social accounts.</p>
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-green-400">
@@ -898,10 +904,10 @@ const ConnectSocials: React.FC = () => {
         ) : (
           <div className={`rounded-2xl border p-8 text-center ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
             <Lock className="w-10 h-10 mx-auto text-slate-400" />
-            <h2 className="mt-3 font-serif-display text-[22px] text-[#F5F4F1]">Social Inbox is disabled</h2>
+            <h2 className="mt-3 font-serif-display text-[22px] text-[#F5F4F1]">Social inbox is disabled</h2>
             <p className={`mt-1 text-sm ${theme.textSecondary}`}>Connect social accounts to enable inbox management.</p>
             <button onClick={() => navigate('/connect-socials')} className="mt-5 px-5 py-3 rounded-lg bg-[#F5A623] text-[#070A12] font-bold inline-flex items-center gap-2">
-              Connect Accounts <ArrowRight className="w-4 h-4" />
+              Connect accounts <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         )
@@ -953,9 +959,9 @@ const ConnectSocials: React.FC = () => {
                                   {getCustomIcon(connectingPlatform || '')}
                               </div>
                               <div>
-                                  <h3 className="font-serif-display text-[20px] text-[#F5F4F1]">Authorize Nebulaa Gravity</h3>
+                                  <h3 className="font-serif-display text-[20px] text-[#F5F4F1]">Authorize Nebulaa</h3>
                                   <p className={`text-sm mt-2 ${theme.textSecondary}`}>
-                                      Nebulaa Gravity is requesting access to your {connectingPlatform} account to publish posts and view analytics.
+                                      Nebulaa is requesting access to your {connectingPlatform} account to publish posts and view analytics.
                                   </p>
                               </div>
 
@@ -969,7 +975,7 @@ const ConnectSocials: React.FC = () => {
                                     className={`w-full p-2 border rounded focus:ring-2 focus:ring-[#F5A623] outline-none ${
                                       isDarkMode ? 'bg-[#0f1419] border-slate-700/50 text-white' : 'bg-white border-slate-300 text-slate-900'
                                     }`}
-                                    placeholder="e.g. gravity_official"
+                                    placeholder="e.g. nebulaa_official"
                                     value={usernameInput}
                                     onChange={(e) => setUsernameInput(e.target.value)}
                                   />
@@ -1004,7 +1010,7 @@ const ConnectSocials: React.FC = () => {
                                   <Check className="w-10 h-10" />
                               </div>
                               <div>
-                                <h3 className="font-serif-display text-[20px] text-[#F5F4F1]">Successfully Connected!</h3>
+                                <h3 className="font-serif-display text-[20px] text-[#F5F4F1]">Connected successfully.</h3>
                                 <p className={`mt-1 ${theme.textSecondary}`}>Redirecting you back to the dashboard...</p>
                               </div>
                           </div>

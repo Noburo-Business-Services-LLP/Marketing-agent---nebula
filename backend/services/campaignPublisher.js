@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { checkPublishAllowed } = require('./ayrshareGuard');
 const { publishSocialPostWithSafetyWrapper } = require('./instagram-fix');
 const { composeImageToVideoWithAudio } = require('./mediaComposer');
 const { ensurePublicAudioUrl } = require('./imageUploader');
@@ -455,6 +456,11 @@ async function publishCampaignToSocial(campaign) {
   const normalizedPlatforms = Array.isArray(platforms)
     ? platforms.map((platform) => String(platform || '').trim().toLowerCase()).filter(Boolean)
     : [];
+  // Defence in depth: never post for a plan without publishing, or through the master profile.
+  const publishCheck = checkPublishAllowed(user);
+  if (!publishCheck.allowed) {
+    return { success: false, error: publishCheck.error, data: null };
+  }
   const profileKey = user?.ayrshare?.profileKey || undefined;
 
   if (hasInstagramAudioAttachment(campaign, normalizedPlatforms)) {

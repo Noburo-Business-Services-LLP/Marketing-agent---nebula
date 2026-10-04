@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nebulaa AI - Marketing Agent</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Nebulaa - Your marketing, done for you</title>
     <!-- Tailwind CSS via Play CDN - more reliable -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Noto+Sans+Tamil:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
       // Configure tailwind when it loads
       function configureTailwind() {
@@ -40,7 +42,7 @@
                 },
                 fontFamily: {
                   serif: ['"Playfair Display"', 'Georgia', 'serif'],
-                  sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                  sans: ['"Plus Jakarta Sans"', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
                 }
               }
             }
@@ -62,13 +64,15 @@
     </script>
     <style>
       body {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
       }
-      /* Gravity redesign — applied when body has .gravity-shell class */
-      body.gravity-shell,
-      html.dark body.gravity-shell {
-        background-color: #0A0A0A !important;
-        color: #F5F4F1 !important;
+      /* Gravity redesign — applied when body has .gravity-shell class.
+         Uses the token pair above so this now actually varies by theme —
+         previously hardcoded dark regardless of .dark, which is why light
+         mode had no visible effect on Gravity pages at all. */
+      body.gravity-shell {
+        background-color: var(--gv-bg) !important;
+        color: var(--gv-text-primary) !important;
       }
       /* Ambient gold radial glow for the Gravity shell — subtle, top-right */
       body.gravity-shell::before {
@@ -87,145 +91,1153 @@
          Auto-restyles common Tailwind patterns on ALL pages when the
          Gravity shell is active — buttons, cards, inputs, borders,
          old yellow #ffcc29 becomes gold #F5A623, etc. Non-breaking.
+         Light only: the dark-era classes (text-white, bg-slate-900,
+         bg-white/5, ...) are mapped onto the cream --gv-* palette so
+         text, boxes and borders keep WCAG AA contrast; text on a
+         saturated/gradient fill or an intentionally dark surface keeps
+         its light colour (see LIGHT SEMANTICS below).
+         The LIGHT SEMANTICS block is GENERATED: edit the lists in
+         frontend/scripts/visual-audit/gen-layer-lists.mjs and run
+         `node scripts/visual-audit/gen-layer-lists.mjs` (a unit test
+         fails while the block is out of date). New code should not rely
+         on this layer: use the --gv-* tokens directly. An intentionally
+         dark panel that no class identifies can carry
+         data-nb-surface="dark".
+         Known trade-off: high-alpha saturated fills (bg-red-500/90,
+         /80) count as light tints, so their text is ink (4.8:1 on
+         red-500/90) rather than white (3.7:1).
+         Fills: the text colour on every coloured background the source
+         uses (named Tailwind hues, arbitrary hex, brand colours,
+         gradients by their worst stop, quoted inline hex) is the one with
+         the HIGHER contrast, white or dark ink; white only when it also
+         reaches 4.5:1. Fills where neither reaches 4.5:1 are listed in
+         scripts/visual-audit/layer-needs-fix.json (page fix, Task 8).
+         A hover:bg-* fill that fails both ways is darkened one shade
+         when that makes white pass (danger buttons: red-500 -> red-600).
+         Limit of the inline-style guard: an inline background colour
+         that is NOT a quoted literal in the source (computed at runtime)
+         forces light text via [style*="background-color: rgb("]. Known
+         runtime inline backgrounds: Layout status dots (dotColor),
+         GravityCalendar platform dots (PLATFORM_DOT), HeroVideo colour
+         swatches, Analytics legend lines and `${color}20` tints (rgba,
+         treated as light), Dashboard platform tiles (platform.bgColor)
+         - all text-free leaves or tints except the Dashboard tiles.
          ============================================================ */
       body.gravity-shell {
         --grav-gold: #F5A623;
         --grav-gold-hover: #ffb833;
-        --grav-bg: #0A0A0A;
-        --grav-surface: #151515;
-        --grav-surface-2: #1A1A1A;
-        --grav-border: rgba(255,255,255,0.06);
-        --grav-border-strong: rgba(255,255,255,0.12);
-        --grav-text: #F5F4F1;
-        --grav-text-muted: rgba(255,255,255,0.55);
+        /* Light semantics: the layer follows the cream palette (was the dark theme). */
+        --grav-bg: var(--gv-bg);
+        --grav-surface: var(--gv-panel);
+        --grav-surface-2: var(--gv-panel-2);
+        --grav-border: var(--gv-border-subtle);
+        --grav-border-strong: var(--gv-border-default);
+        --grav-text: var(--gv-text-primary);
+        --grav-text-muted: var(--gv-text-tertiary);
       }
-      /* Backgrounds — legacy dark tones become Gravity black */
-      body.gravity-shell [class*="bg-[#070A12]"],
-      body.gravity-shell [class*="bg-[#0d1117]"],
-      body.gravity-shell [class*="bg-[#0f1419]"],
-      body.gravity-shell [class*="bg-slate-900"],
-      body.gravity-shell [class*="bg-slate-950"] {
-        background-color: var(--grav-bg) !important;
+      /* ============================================================
+         NEBULAA LIGHT PALETTE (warm cream)
+         Values taken from nebulaa-ai-website/app/globals.css. The app is
+         light only; the dark tokens below are kept unused.
+         ============================================================ */
+      :root {
+        --gv-bg: #FBF5EA;
+        --gv-panel: #FFFDF8;
+        --gv-panel-2: #F3E8D4;
+        --gv-ink-rgb: 20 32 58;
+        --gv-text-primary: #14203A;
+        --gv-text-secondary: #33405C;
+        --gv-text-tertiary: #6D6250;
+        --gv-text-muted: #8F836E;
+        --gv-surface-1: rgb(var(--gv-ink-rgb) / 0.03);
+        --gv-surface-2: rgb(var(--gv-ink-rgb) / 0.05);
+        --gv-surface-3: rgb(var(--gv-ink-rgb) / 0.08);
+        --gv-surface-4: rgb(var(--gv-ink-rgb) / 0.12);
+        /* Borders: website rule colours (#E5D8BF / #D4C4A4), strong a step darker */
+        --gv-border-subtle: #E5D8BF;
+        --gv-border-default: #D4C4A4;
+        --gv-border-strong: #BFAC85;
+        --gv-accent: #F5A623;
+        --gv-accent-text: #9A5A00;
+        --gv-accent-display: #D07A00;
+        /* Nebulaa accent family */
+        --gv-coral: #EE6330;
+        --gv-coral-text: #C4471A;
+        --gv-peach: #FFE3D0;
+        --gv-mint: #DDF2E6;
+        --gv-sky: #DCEBFA;
+        --gv-lav: #ECE6FB;
+        --gv-shadow-card: 0 1px 2px rgba(20,32,58,.05), 0 12px 32px rgba(20,32,58,.07);
+        --gv-accent-hover: #D68C0F;
+        --gv-accent-fill: rgba(245,166,35,0.10);
+        --gv-accent-ink: #1A1208;
+        /* Raw channels so Tailwind's own /NN opacity-modifier syntax can be
+           applied to the accent — a bare var(--gv-accent)/NN silently
+           resolves to transparent, since Tailwind cannot inject an alpha
+           channel into an opaque var() reference. Use
+           rgb(var(--gv-accent-rgb)/0.NN) everywhere a translucent accent is
+           needed. Verified live before this plan was dispatched. Identical
+           in both themes (the accent hue itself does not change), so this
+           is declared once here and not repeated under .dark. */
+        --gv-accent-rgb: 245 166 35;
       }
-      body.gravity-shell [class*="bg-[#151515]"],
-      body.gravity-shell [class*="bg-slate-800"],
-      body.gravity-shell [class*="bg-gray-800"] {
-        background-color: var(--grav-surface) !important;
+      /* INTENTIONALLY UNUSED: Nebulaa is light only (ThemeContext never adds
+         the `dark` class). Kept so a dark theme can return later. */
+      .dark {
+        --gv-bg: #0A0A0A;
+        --gv-panel: #151515;
+        --gv-panel-2: #1A1A1A;
+        --gv-ink-rgb: 245 244 241;
+        --gv-text-primary: #F5F4F1;
+        --gv-text-secondary: #C9C6BE;
+        --gv-text-tertiary: #8A8780;
+        --gv-text-muted: #6E6B65;
+        --gv-surface-2: rgb(var(--gv-ink-rgb) / 0.06);
+        --gv-surface-3: rgb(var(--gv-ink-rgb) / 0.10);
+        --gv-surface-4: rgb(var(--gv-ink-rgb) / 0.14);
+        --gv-border-subtle: rgb(var(--gv-ink-rgb) / 0.06);
+        --gv-border-default: rgb(var(--gv-ink-rgb) / 0.10);
+        --gv-border-strong: rgb(var(--gv-ink-rgb) / 0.14);
+        --gv-accent-text: #F5A623;
+        --gv-accent-display: #F5A623;
+        --gv-accent-hover: #ffb833;
+        --gv-accent-fill: rgba(245,166,35,0.06);
       }
-      /* Legacy yellow → Gravity gold */
-      body.gravity-shell [class*="bg-[#ffcc29]"]:not(aside) {
-        background-color: var(--grav-gold) !important;
-        color: #1A1208 !important;
+      /* ---- begin LIGHT SEMANTICS (generated by scripts/visual-audit/gen-layer-lists.mjs; do not edit by hand) ---- */
+      /* 1. Surface context. Dark-era text classes read their colour from these variables, inherited,
+         so the nearest surface wins: ink on the page and light panels; light on saturated fills and
+         intentionally dark surfaces; dark ink on gold. All four rules have equal specificity (:where),
+         so source order decides (tints after fills, light panels after dark surfaces). */
+      body.gravity-shell {
+        --nb-t1: var(--gv-text-primary);
+        --nb-t2: var(--gv-text-secondary);
+        --nb-t3: var(--gv-text-tertiary);
+        --nb-acc: var(--gv-accent-text);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
       }
-      body.gravity-shell [class*="text-[#ffcc29]"],
-      body.gravity-shell [class*="text-[#d4a800]"],
-      body.gravity-shell [class*="text-[#e6b800]"],
-      body.gravity-shell [class*="text-[#e6b825]"] {
-        color: var(--grav-gold) !important;
+      body.gravity-shell :where([class^="bg-[#070a12]"],[class*=" bg-[#070a12]"],[class^="bg-[#070b12]"],
+        [class*=" bg-[#070b12]"],[class^="bg-[#080b12]"],[class*=" bg-[#080b12]"],[class^="bg-[#0A66C2]"],
+        [class*=" bg-[#0A66C2]"],[class^="bg-[#0B0F1A]"],[class*=" bg-[#0B0F1A]"],[class^="bg-[#0a0a0a]"],
+        [class*=" bg-[#0a0a0a]"],[class^="bg-[#0b0f17]"],[class*=" bg-[#0b0f17]"],[class^="bg-[#0b0f18]"],
+        [class*=" bg-[#0b0f18]"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],[class^="bg-[#14203A]"],
+        [class*=" bg-[#14203A]"],[class^="bg-[#BD081C]"],[class*=" bg-[#BD081C]"],[class^="bg-[#E1306C]"],
+        [class*=" bg-[#E1306C]"],[class^="bg-[#E60023]"],[class*=" bg-[#E60023]"],[class^="bg-blue-600"],
+        [class*=" bg-blue-600"],[class^="bg-gray-500"],[class*=" bg-gray-500"],[class^="bg-indigo-500"],
+        [class*=" bg-indigo-500"],[class^="bg-orange-700"],[class*=" bg-orange-700"],[class^="bg-pink-600"],
+        [class*=" bg-pink-600"],[class^="bg-purple-600"],[class*=" bg-purple-600"],[class^="bg-red-600"],
+        [class*=" bg-red-600"],[class^="bg-slate-500"],[class*=" bg-slate-500"],[class^="bg-slate-600"],
+        [class*=" bg-slate-600"],[style*="background-color: rgb("],[style*="background: rgb("],
+        [style*="background-color: #"],[style*="background-color:#"],[style*="background: #"],[style*="background:#"],
+        [data-nb-surface="dark"],[class~="bg-black"],.absolute:is([class^="bg-black/"],[class*=" bg-black/"]),
+        .fixed:is([class^="bg-black/85"],[class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),
+        :is([class^="bg-black/5"],[class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],
+        [class^="bg-black/7"],[class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],
+        [class^="bg-black/9"],[class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),
+        [class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],.igCanvas) {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
       }
-      body.gravity-shell [class*="border-[#ffcc29]"] {
-        border-color: var(--grav-gold) !important;
+      body.gravity-shell :where([class~="bg-white"],[class~="bg-[#f5f5f5]"],[class~="bg-[#E5D8BF]"],
+        [class~="bg-[#FFCB2E]"],[class~="bg-[#FFF7EA]"],[class~="bg-[#FFFDF8]"],[class~="bg-[#ededed]"],
+        [class~="bg-[#f5f5f5]"],[class~="bg-[#fffbeb]"],[class~="bg-amber-100"],[class~="bg-amber-50"],
+        [class~="bg-blue-100"],[class~="bg-blue-50"],[class~="bg-cyan-100"],[class~="bg-emerald-100"],
+        [class~="bg-emerald-50"],[class~="bg-gray-100"],[class~="bg-gray-200"],[class~="bg-gray-300"],
+        [class~="bg-gray-50"],[class~="bg-green-100"],[class~="bg-green-50"],[class~="bg-indigo-50"],
+        [class~="bg-orange-100"],[class~="bg-pink-100"],[class~="bg-pink-50"],[class~="bg-purple-100"],
+        [class~="bg-purple-50"],[class~="bg-red-100"],[class~="bg-red-50"],[class~="bg-sky-100"],[class~="bg-sky-50"],
+        [class~="bg-slate-100"],[class~="bg-slate-200"],[class~="bg-slate-300"],[class~="bg-slate-50"],
+        [class~="bg-yellow-400"],[class~="bg-yellow-50"],[class^="bg-[var(--gv-panel)]"],
+        [class*=" bg-[var(--gv-panel)]"],[class^="bg-[var(--gv-bg)]"],[class*=" bg-[var(--gv-bg)]"],
+        [style*="var(--gv-panel)"],[style*="background-color: rgb(255, 255, 255)"],
+        [style*="background: rgb(255, 255, 255)"],[style*="background-color: rgba("],[style*="background: rgba("],
+        [style*="background-color: #fff;"],[style*="background: #fff;"],
+        [style*="background-color: #fff""],[style*="background: #fff""],[style*="background-color: #ffffff"],
+        [style*="background: #ffffff"],[style*="background-color: #FFF;"],[style*="background: #FFF;"],
+        [style*="background-color: #FFFFFF"],[style*="background: #FFFFFF"],[style*="background-color: white"],
+        [style*="background: white"],:is([class^="bg-[#070A12]"],[class*=" bg-[#070A12]"],[class^="bg-[#0A0A0A]"],
+        [class*=" bg-[#0A0A0A]"],[class^="bg-slate-950"],[class*=" bg-slate-950"],[class^="bg-[#060810]"],
+        [class*=" bg-[#060810]"],[class^="bg-[#0d1117]"],[class*=" bg-[#0d1117]"],[class^="bg-[#0D1117]"],
+        [class*=" bg-[#0D1117]"],[class^="bg-[#0f1419]"],[class*=" bg-[#0f1419]"],[class^="bg-[#151515]"],
+        [class*=" bg-[#151515]"],[class^="bg-[#161b22]"],[class*=" bg-[#161b22]"],[class^="bg-[#111111]"],
+        [class*=" bg-[#111111]"],[class^="bg-[#111827]"],[class*=" bg-[#111827]"],[class^="bg-slate-900"],
+        [class*=" bg-slate-900"],[class^="bg-gray-900"],[class*=" bg-gray-900"],[class^="bg-slate-800"],
+        [class*=" bg-slate-800"],[class^="bg-[#1f2937]"],[class*=" bg-[#1f2937]"],[class^="bg-[#131920]"],
+        [class*=" bg-[#131920]"],[class^="bg-[#21262d]"],[class*=" bg-[#21262d]"],[class^="bg-slate-700"],
+        [class*=" bg-slate-700"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"])) {
+        --nb-t1: var(--gv-text-primary);
+        --nb-t2: var(--gv-text-secondary);
+        --nb-t3: var(--gv-text-tertiary);
+        --nb-acc: var(--gv-accent-text);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
       }
-      body.gravity-shell [class*="hover:text-[#ffcc29]"]:hover {
-        color: var(--grav-gold) !important;
+      body.gravity-shell :where([class^="bg-[#1877F2]"],[class*=" bg-[#1877F2]"],[class^="bg-[#1DA1F2]"],
+        [class*=" bg-[#1DA1F2]"],[class^="bg-[#25D366]"],[class*=" bg-[#25D366]"],[class^="bg-[#4ADE80]"],
+        [class*=" bg-[#4ADE80]"],[class^="bg-[#60A5FA]"],[class*=" bg-[#60A5FA]"],[class^="bg-[#FF0000]"],
+        [class*=" bg-[#FF0000]"],[class^="bg-[#FF4500]"],[class*=" bg-[#FF4500]"],[class^="bg-amber-500"],
+        [class*=" bg-amber-500"],[class^="bg-blue-500"],[class*=" bg-blue-500"],[class^="bg-cyan-500"],
+        [class*=" bg-cyan-500"],[class^="bg-emerald-400"],[class*=" bg-emerald-400"],[class^="bg-emerald-500"],
+        [class*=" bg-emerald-500"],[class^="bg-gray-400"],[class*=" bg-gray-400"],[class^="bg-green-400"],
+        [class*=" bg-green-400"],[class^="bg-green-500"],[class*=" bg-green-500"],[class^="bg-green-600"],
+        [class*=" bg-green-600"],[class^="bg-orange-400"],[class*=" bg-orange-400"],[class^="bg-orange-500"],
+        [class*=" bg-orange-500"],[class^="bg-pink-500"],[class*=" bg-pink-500"],[class^="bg-red-400"],
+        [class*=" bg-red-400"],[class^="bg-red-500"],[class*=" bg-red-500"],[class^="bg-slate-400"],
+        [class*=" bg-slate-400"],[class^="bg-violet-500"],[class*=" bg-violet-500"],[class^="bg-yellow-500"],
+        [class*=" bg-yellow-500"],[class^="bg-[#ffcc29]"],[class*=" bg-[#ffcc29]"],[class^="bg-[#F5A623]"],
+        [class*=" bg-[#F5A623]"],[class^="bg-[#e6b825]"],[class*=" bg-[#e6b825]"],[class^="bg-[#ffb833]"],
+        [class*=" bg-[#ffb833]"],[class^="bg-[#ffd84f]"],[class*=" bg-[#ffd84f]"],[class^="bg-[#ebd038]"],
+        [class*=" bg-[#ebd038]"],[class^="bg-[#e6b800]"],[class*=" bg-[#e6b800]"],[class^="bg-[#f5c200]"],
+        [class*=" bg-[#f5c200]"],[class^="bg-[var(--gv-accent)]"],[class*=" bg-[var(--gv-accent)]"],
+        [style*="background-color: rgb(229, 231, 235)"],[style*="background: rgb(229, 231, 235)"],
+        [style*="background-color: #e5e7eb" i],[style*="background: #e5e7eb" i],
+        [style*="background-color: rgb(239, 68, 68)"],[style*="background: rgb(239, 68, 68)"],
+        [style*="background-color: #ef4444" i],[style*="background: #ef4444" i],
+        [style*="background-color: rgb(74, 222, 128)"],[style*="background: rgb(74, 222, 128)"],
+        [style*="background-color: #4ade80" i],[style*="background: #4ade80" i],
+        [style*="background-color: rgb(255, 255, 255)"],[style*="background: rgb(255, 255, 255)"],
+        [style*="background-color: #ffffff" i],[style*="background: #ffffff" i],
+        [style*="background-color: rgb(255, 203, 46)"],[style*="background: rgb(255, 203, 46)"],
+        [style*="background-color: #ffcb2e" i],[style*="background: #ffcb2e" i],
+        [style*="background-color: rgb(245, 245, 245)"],[style*="background: rgb(245, 245, 245)"],
+        [style*="background-color: #f5f5f5" i],[style*="background: #f5f5f5" i],
+        [style*="background-color: rgb(255, 204, 41)"],[style*="background: rgb(255, 204, 41)"],
+        [style*="background-color: #ffcc29" i],[style*="background: #ffcc29" i],
+        [style*="background-color: rgb(230, 184, 37)"],[style*="background: rgb(230, 184, 37)"],
+        [style*="background-color: #e6b825" i],[style*="background: #e6b825" i],
+        [style*="background-color: rgb(24, 119, 242)"],[style*="background: rgb(24, 119, 242)"],
+        [style*="background-color: #1877f2" i],[style*="background: #1877f2" i],
+        [style*="background-color: rgb(29, 161, 242)"],[style*="background: rgb(29, 161, 242)"],
+        [style*="background-color: #1da1f2" i],[style*="background: #1da1f2" i],
+        [style*="background-color: rgb(16, 185, 129)"],[style*="background: rgb(16, 185, 129)"],
+        [style*="background-color: #10b981" i],[style*="background: #10b981" i],
+        [style*="background-color: rgb(244, 63, 94)"],[style*="background: rgb(244, 63, 94)"],
+        [style*="background-color: #f43f5e" i],[style*="background: #f43f5e" i],
+        [style*="background-color: rgb(245, 158, 11)"],[style*="background: rgb(245, 158, 11)"],
+        [style*="background-color: #f59e0b" i],[style*="background: #f59e0b" i],
+        [style*="background-color: rgb(236, 72, 153)"],[style*="background: rgb(236, 72, 153)"],
+        [style*="background-color: #ec4899" i],[style*="background: #ec4899" i],
+        [style*="background-color: rgb(226, 232, 240)"],[style*="background: rgb(226, 232, 240)"],
+        [style*="background-color: #e2e8f0" i],[style*="background: #e2e8f0" i],
+        [style*="background-color: rgb(148, 163, 184)"],[style*="background: rgb(148, 163, 184)"],
+        [style*="background-color: #94a3b8" i],[style*="background: #94a3b8" i],[style*="background-color: #fff" i],
+        [style*="background: #fff" i],[style*="background-color: rgb(139, 92, 246)"],
+        [style*="background: rgb(139, 92, 246)"],[style*="background-color: #8b5cf6" i],
+        [style*="background: #8b5cf6" i],[style*="background-color: rgb(59, 130, 246)"],
+        [style*="background: rgb(59, 130, 246)"],[style*="background-color: #3b82f6" i],
+        [style*="background: #3b82f6" i],[style*="background-color: rgb(249, 115, 22)"],
+        [style*="background: rgb(249, 115, 22)"],[style*="background-color: #f97316" i],
+        [style*="background: #f97316" i],[style*="background-color: rgb(20, 184, 166)"],
+        [style*="background: rgb(20, 184, 166)"],[style*="background-color: #14b8a6" i],
+        [style*="background: #14b8a6" i],[style*="background-color: rgb(245, 166, 35)"],
+        [style*="background: rgb(245, 166, 35)"],[style*="background-color: #f5a623" i],
+        [style*="background: #f5a623" i],[style*="background-color: rgb(255, 184, 51)"],
+        [style*="background: rgb(255, 184, 51)"],[style*="background-color: #ffb833" i],
+        [style*="background: #ffb833" i],[style*="background-color: rgb(245, 244, 241)"],
+        [style*="background: rgb(245, 244, 241)"],[style*="background-color: #f5f4f1" i],
+        [style*="background: #f5f4f1" i],[style*="background-color: rgb(255, 0, 0)"],
+        [style*="background: rgb(255, 0, 0)"],[style*="background-color: #ff0000" i],[style*="background: #ff0000" i],
+        [style*="background-color: rgb(251, 245, 234)"],[style*="background: rgb(251, 245, 234)"],
+        [style*="background-color: #fbf5ea" i],[style*="background: #fbf5ea" i],
+        [style*="background-color: rgb(255, 253, 248)"],[style*="background: rgb(255, 253, 248)"],
+        [style*="background-color: #fffdf8" i],[style*="background: #fffdf8" i],
+        [style*="background-color: rgb(243, 232, 212)"],[style*="background: rgb(243, 232, 212)"],
+        [style*="background-color: #f3e8d4" i],[style*="background: #f3e8d4" i],
+        [style*="background-color: rgb(229, 216, 191)"],[style*="background: rgb(229, 216, 191)"],
+        [style*="background-color: #e5d8bf" i],[style*="background: #e5d8bf" i],
+        [style*="background-color: rgb(238, 99, 48)"],[style*="background: rgb(238, 99, 48)"],
+        [style*="background-color: #ee6330" i],[style*="background: #ee6330" i],
+        [style*="background-color: rgb(208, 122, 0)"],[style*="background: rgb(208, 122, 0)"],
+        [style*="background-color: #d07a00" i],[style*="background: #d07a00" i],
+        [style*="background-color: rgb(255, 227, 208)"],[style*="background: rgb(255, 227, 208)"],
+        [style*="background-color: #ffe3d0" i],[style*="background: #ffe3d0" i],
+        [style*="background-color: rgb(220, 235, 250)"],[style*="background: rgb(220, 235, 250)"],
+        [style*="background-color: #dcebfa" i],[style*="background: #dcebfa" i],
+        [style*="background-color: rgb(236, 230, 251)"],[style*="background: rgb(236, 230, 251)"],
+        [style*="background-color: #ece6fb" i],[style*="background: #ece6fb" i],
+        [style*="background-color: rgb(221, 242, 230)"],[style*="background: rgb(221, 242, 230)"],
+        [style*="background-color: #ddf2e6" i],[style*="background: #ddf2e6" i],
+        [style*="background-color: rgb(31, 168, 85)"],[style*="background: rgb(31, 168, 85)"],
+        [style*="background-color: #1fa855" i],[style*="background: #1fa855" i],
+        [style*="background-color: rgb(248, 250, 252)"],[style*="background: rgb(248, 250, 252)"],
+        [style*="background-color: #f8fafc" i],[style*="background: #f8fafc" i],
+        [style*="background-color: rgb(237, 242, 247)"],[style*="background: rgb(237, 242, 247)"],
+        [style*="background-color: #edf2f7" i],[style*="background: #edf2f7" i],
+        [style*="background-color: rgb(255, 215, 0)"],[style*="background: rgb(255, 215, 0)"],
+        [style*="background-color: #ffd700" i],[style*="background: #ffd700" i],
+        [style*="background-color: rgb(160, 174, 192)"],[style*="background: rgb(160, 174, 192)"],
+        [style*="background-color: #a0aec0" i],[style*="background: #a0aec0" i],
+        [style*="background-color: rgb(205, 127, 50)"],[style*="background: rgb(205, 127, 50)"],
+        [style*="background-color: #cd7f32" i],[style*="background: #cd7f32" i]) {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
       }
-      /* Borders — soften harsh dark borders */
-      body.gravity-shell [class*="border-slate-700"],
-      body.gravity-shell [class*="border-slate-800"],
-      body.gravity-shell [class*="border-gray-700"],
-      body.gravity-shell [class*="border-gray-800"] {
-        border-color: var(--grav-border) !important;
+      body.gravity-shell :where([style*="background-color: rgb(30, 41, 59)"],[style*="background: rgb(30, 41, 59)"],
+        [style*="background-color: #1e293b" i],[style*="background: #1e293b" i],
+        [style*="background-color: rgb(10, 10, 10)"],[style*="background: rgb(10, 10, 10)"],
+        [style*="background-color: #0a0a0a" i],[style*="background: #0a0a0a" i],
+        [style*="background-color: rgb(20, 32, 58)"],[style*="background: rgb(20, 32, 58)"],
+        [style*="background-color: #14203a" i],[style*="background: #14203a" i],
+        [style*="background-color: rgb(7, 10, 18)"],[style*="background: rgb(7, 10, 18)"],
+        [style*="background-color: #070a12" i],[style*="background: #070a12" i],
+        [style*="background-color: rgb(225, 48, 108)"],[style*="background: rgb(225, 48, 108)"],
+        [style*="background-color: #e1306c" i],[style*="background: #e1306c" i],
+        [style*="background-color: rgb(10, 102, 194)"],[style*="background: rgb(10, 102, 194)"],
+        [style*="background-color: #0a66c2" i],[style*="background: #0a66c2" i],
+        [style*="background-color: rgb(124, 58, 237)"],[style*="background: rgb(124, 58, 237)"],
+        [style*="background-color: #7c3aed" i],[style*="background: #7c3aed" i],
+        [style*="background-color: rgb(99, 102, 241)"],[style*="background: rgb(99, 102, 241)"],
+        [style*="background-color: #6366f1" i],[style*="background: #6366f1" i],
+        [style*="background-color: rgb(17, 17, 17)"],[style*="background: rgb(17, 17, 17)"],
+        [style*="background-color: #111111" i],[style*="background: #111111" i],
+        [style*="background-color: rgb(51, 64, 92)"],[style*="background: rgb(51, 64, 92)"],
+        [style*="background-color: #33405c" i],[style*="background: #33405c" i],
+        [style*="background-color: rgb(109, 98, 80)"],[style*="background: rgb(109, 98, 80)"],
+        [style*="background-color: #6d6250" i],[style*="background: #6d6250" i],
+        [style*="background-color: rgb(196, 71, 26)"],[style*="background: rgb(196, 71, 26)"],
+        [style*="background-color: #c4471a" i],[style*="background: #c4471a" i],
+        [style*="background-color: rgb(154, 91, 0)"],[style*="background: rgb(154, 91, 0)"],
+        [style*="background-color: #9a5b00" i],[style*="background: #9a5b00" i],
+        [style*="background-color: rgb(51, 51, 51)"],[style*="background: rgb(51, 51, 51)"],
+        [style*="background-color: #333" i],[style*="background: #333" i],[style*="background-color: rgb(26, 26, 46)"],
+        [style*="background: rgb(26, 26, 46)"],[style*="background-color: #1a1a2e" i],[style*="background: #1a1a2e" i],
+        [style*="background-color: rgb(74, 85, 104)"],[style*="background: rgb(74, 85, 104)"],
+        [style*="background-color: #4a5568" i],[style*="background: #4a5568" i],
+        [style*="background-color: rgb(187, 34, 187)"],[style*="background: rgb(187, 34, 187)"],
+        [style*="background-color: #b2b" i],[style*="background: #b2b" i],:is([class^="from-pink-500"],
+        [class*=" from-pink-500"]):is([class^="to-purple-600"],[class*=" to-purple-600"]),:is([class^="from-blue-500"],
+        [class*=" from-blue-500"]):is([class^="to-blue-700"],[class*=" to-blue-700"]),:is([class^="from-blue-600"],
+        [class*=" from-blue-600"]):is([class^="to-blue-800"],[class*=" to-blue-800"]),:is([class^="from-[#070A12]"],
+        [class*=" from-[#070A12]"]):is([class^="via-[#0d1117]"],[class*=" via-[#0d1117]"]):is([class^="to-[#070A12]"],
+        [class*=" to-[#070A12]"]),:is([class^="from-blue-500"],[class*=" from-blue-500"]):is([class^="to-indigo-600"],
+        [class*=" to-indigo-600"]),:is([class^="from-red-500"],[class*=" from-red-500"]):is([class^="to-red-700"],
+        [class*=" to-red-700"]),:is([class^="from-slate-500"],[class*=" from-slate-500"]):is([class^="to-slate-700"],
+        [class*=" to-slate-700"]),:is([class^="from-[#0d1117]"],[class*=" from-[#0d1117]"]):is([class^="to-[#161b22]"],
+        [class*=" to-[#161b22]"]),:is([class^="from-blue-600"],[class*=" from-blue-600"]):is([class^="to-blue-700"],
+        [class*=" to-blue-700"]),:is([class^="from-slate-800"],[class*=" from-slate-800"]):is([class^="to-slate-900"],
+        [class*=" to-slate-900"]),:is([class^="from-black"],[class*=" from-black"]):is([class^="to-pink-500"],
+        [class*=" to-pink-500"]),:is([class^="from-[#0f1520]"],[class*=" from-[#0f1520]"]):is([class^="via-[#0a0e18]"],
+        [class*=" via-[#0a0e18]"]):is([class^="to-[#060910]"],[class*=" to-[#060910]"]),:is([class^="from-[#0d1219]"],
+        [class*=" from-[#0d1219]"]):is([class^="via-[#080c14]"],[class*=" via-[#080c14]"]):is([class^="to-[#060910]"],
+        [class*=" to-[#060910]"])) {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
       }
-      body.gravity-shell [class*="divide-slate-700"] > *,
-      body.gravity-shell [class*="divide-slate-800"] > *,
-      body.gravity-shell [class*="divide-gray-700"] > * {
-        border-color: var(--grav-border) !important;
+      body.gravity-shell :where(:is([class^="from-red-500"],[class*=" from-red-500"]):is([class^="to-orange-500"],
+        [class*=" to-orange-500"]),:is([class^="from-[#ffcc29]"],
+        [class*=" from-[#ffcc29]"]):is([class^="to-orange-400"],[class*=" to-orange-400"]),
+        :is([class^="from-emerald-500"],[class*=" from-emerald-500"]):is([class^="to-[#ffcc29]"],
+        [class*=" to-[#ffcc29]"]),:is([class^="from-sky-400"],[class*=" from-sky-400"]):is([class^="to-sky-600"],
+        [class*=" to-sky-600"]),:is([class^="from-yellow-400"],[class*=" from-yellow-400"]):is([class^="via-pink-500"],
+        [class*=" via-pink-500"]):is([class^="to-purple-600"],[class*=" to-purple-600"]),:is([class^="from-blue-400"],
+        [class*=" from-blue-400"]):is([class^="to-blue-600"],[class*=" to-blue-600"]),:is([class^="from-[#ffcc29]"],
+        [class*=" from-[#ffcc29]"]):is([class^="to-[#e6b825]"],[class*=" to-[#e6b825]"]),:is([class^="from-[#F5A623]"],
+        [class*=" from-[#F5A623]"]):is([class^="to-[#ffb833]"],[class*=" to-[#ffb833]"]),:is([class^="from-[#ffcc29]"],
+        [class*=" from-[#ffcc29]"]):is([class^="to-[#ffa500]"],[class*=" to-[#ffa500]"]),
+        :is([class^="from-purple-500"],[class*=" from-purple-500"]):is([class^="to-pink-500"],[class*=" to-pink-500"]),
+        :is([class^="from-blue-500"],[class*=" from-blue-500"]):is([class^="to-cyan-500"],[class*=" to-cyan-500"]),
+        :is([class^="from-green-500"],[class*=" from-green-500"]):is([class^="to-emerald-600"],
+        [class*=" to-emerald-600"]),:is([class^="from-[#F5A623]"],
+        [class*=" from-[#F5A623]"]):is([class^="to-[#ffa500]"],[class*=" to-[#ffa500]"]),
+        :is([class^="from-yellow-400"],[class*=" from-yellow-400"]):is([class^="to-yellow-600"],
+        [class*=" to-yellow-600"]),:is([class^="from-yellow-400"],
+        [class*=" from-yellow-400"]):is([class^="to-yellow-500"],[class*=" to-yellow-500"]),
+        :is([class^="from-yellow-400"],[class*=" from-yellow-400"]):is([class^="via-red-500"],
+        [class*=" via-red-500"]):is([class^="to-purple-600"],[class*=" to-purple-600"]),:is([class^="from-[#ffcc29]"],
+        [class*=" from-[#ffcc29]"]):is([class^="to-orange-500"],[class*=" to-orange-500"]),
+        :is([class^="from-pink-500"],[class*=" from-pink-500"]):is([class^="to-purple-500"],[class*=" to-purple-500"]),
+        :is([class^="from-red-500"],[class*=" from-red-500"]):is([class^="to-red-600"],[class*=" to-red-600"]),
+        :is([class^="from-blue-400"],[class*=" from-blue-400"]):is([class^="to-blue-500"],[class*=" to-blue-500"])) {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
       }
-      /* Text — muted grays become warm off-white shades */
-      body.gravity-shell [class*="text-slate-500"],
-      body.gravity-shell [class*="text-gray-500"] { color: rgba(255,255,255,0.45) !important; }
-      body.gravity-shell [class*="text-slate-400"],
-      body.gravity-shell [class*="text-gray-400"] { color: rgba(255,255,255,0.55) !important; }
-      body.gravity-shell [class*="text-slate-300"],
-      body.gravity-shell [class*="text-gray-300"] { color: rgba(255,255,255,0.70) !important; }
-      body.gravity-shell [class*="text-slate-200"],
-      body.gravity-shell [class*="text-gray-200"] { color: rgba(255,255,255,0.85) !important; }
-      body.gravity-shell [class*="text-white"] { color: var(--grav-text) !important; }
-      /* Card / panel wrappers — soften and warm */
-      body.gravity-shell [class*="rounded-xl"][class*="border"][class*="bg-"],
-      body.gravity-shell [class*="rounded-2xl"][class*="border"][class*="bg-"] {
-        border-color: var(--grav-border) !important;
+      body.gravity-shell :where([class^="bg-[#F5A623]/"],[class*=" bg-[#F5A623]/"],[class^="bg-[#ffcc29]/"],
+        [class*=" bg-[#ffcc29]/"],[class^="bg-gray-50/"],[class*=" bg-gray-50/"],[class^="bg-[#f5f5f5]/"],
+        [class*=" bg-[#f5f5f5]/"],[class^="bg-blue-500/"],[class*=" bg-blue-500/"],[class^="bg-red-500/"],
+        [class*=" bg-red-500/"],[class^="bg-red-400/"],[class*=" bg-red-400/"],[class^="bg-green-500/"],
+        [class*=" bg-green-500/"],[class^="bg-slate-50/"],[class*=" bg-slate-50/"],[class^="bg-slate-200/"],
+        [class*=" bg-slate-200/"],[class^="bg-amber-50/"],[class*=" bg-amber-50/"],[class^="bg-green-600/"],
+        [class*=" bg-green-600/"],[class^="bg-[#ededed]/"],[class*=" bg-[#ededed]/"],[class^="bg-slate-100/"],
+        [class*=" bg-slate-100/"],[class^="bg-emerald-50/"],[class*=" bg-emerald-50/"],[class^="bg-emerald-500/"],
+        [class*=" bg-emerald-500/"],[class^="bg-orange-500/"],[class*=" bg-orange-500/"],[class^="bg-pink-500/"],
+        [class*=" bg-pink-500/"],[class^="bg-yellow-500/"],[class*=" bg-yellow-500/"],[class^="bg-yellow-50/"],
+        [class*=" bg-yellow-50/"],[class^="bg-blue-50/"],[class*=" bg-blue-50/"],[class^="bg-[#1877F2]/"],
+        [class*=" bg-[#1877F2]/"],[class^="bg-slate-500/"],[class*=" bg-slate-500/"],[class^="bg-amber-500/"],
+        [class*=" bg-amber-500/"],[class^="bg-slate-600/"],[class*=" bg-slate-600/"],[class^="bg-orange-400/"],
+        [class*=" bg-orange-400/"],[class^="bg-[#4ADE80]/"],[class*=" bg-[#4ADE80]/"],[class^="bg-indigo-500/"],
+        [class*=" bg-indigo-500/"],[class^="from-red-500/"],[class*=" from-red-500/"],[class^="to-orange-500/"],
+        [class*=" to-orange-500/"],[class^="from-[#ffcc29]/"],[class*=" from-[#ffcc29]/"],[class^="from-emerald-500/"],
+        [class*=" from-emerald-500/"],[class^="to-[#ffcc29]/"],[class*=" to-[#ffcc29]/"],[class^="from-blue-500/"],
+        [class*=" from-blue-500/"],[class^="via-white/"],[class*=" via-white/"],[class^="from-[#F5A623]/"],
+        [class*=" from-[#F5A623]/"],[class^="to-[#ffa500]/"],[class*=" to-[#ffa500]/"],[class^="from-purple-500/"],
+        [class*=" from-purple-500/"],[class^="to-pink-500/"],[class*=" to-pink-500/"],[class^="from-white/"],
+        [class*=" from-white/"]) {
+        --nb-t1: var(--gv-text-primary);
+        --nb-t2: var(--gv-text-secondary);
+        --nb-t3: var(--gv-text-tertiary);
+        --nb-acc: var(--gv-accent-text);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
       }
-      /* Inputs — dark neutral bg with subtle border */
-      body.gravity-shell input[type="text"],
-      body.gravity-shell input[type="email"],
-      body.gravity-shell input[type="password"],
-      body.gravity-shell input[type="url"],
-      body.gravity-shell input[type="search"],
-      body.gravity-shell input[type="number"],
-      body.gravity-shell input[type="date"],
-      body.gravity-shell input[type="time"],
-      body.gravity-shell textarea,
-      body.gravity-shell select {
-        background-color: rgba(255,255,255,0.03) !important;
-        border-color: var(--grav-border) !important;
-        color: var(--grav-text) !important;
+      body.gravity-shell :is([class^="hover:bg-red-500"],[class*=" hover:bg-red-500"]):hover {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
       }
-      body.gravity-shell input:focus,
-      body.gravity-shell textarea:focus,
-      body.gravity-shell select:focus {
-        border-color: rgba(245,166,35,0.5) !important;
+      body.gravity-shell :is([class^="hover:bg-green-700"],[class*=" hover:bg-green-700"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-blue-700"],[class*=" hover:bg-blue-700"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-gray-500"],[class*=" hover:bg-gray-500"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-slate-600"],[class*=" hover:bg-slate-600"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-red-600"],[class*=" hover:bg-red-600"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-slate-400"],[class*=" hover:bg-slate-400"]):hover {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :is([class^="hover:bg-red-700"],[class*=" hover:bg-red-700"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-indigo-600"],[class*=" hover:bg-indigo-600"]):hover {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      body.gravity-shell :is([class^="hover:bg-emerald-600"],[class*=" hover:bg-emerald-600"]):hover {
+        --nb-t1: var(--gv-accent-ink);
+        --nb-t2: rgb(26 18 8 / 0.88);
+        --nb-t3: rgb(26 18 8 / 0.80);
+        --nb-acc: var(--gv-accent-ink);
+        --nb-green: #166534;
+        --nb-emerald: #065F46;
+        --nb-teal: #115E59;
+        --nb-cyan: #155E75;
+        --nb-sky: #075985;
+        --nb-blue: #1D4ED8;
+        --nb-indigo: #4338CA;
+        --nb-violet: #6D28D9;
+        --nb-purple: #7E22CE;
+        --nb-fuchsia: #A21CAF;
+        --nb-pink: #BE185D;
+        --nb-rose: #BE123C;
+        --nb-red: #B91C1C;
+        --nb-orange: #9A3412;
+        --nb-lime: #3F6212;
+      }
+      body.gravity-shell :where([data-nb-surface="dark"]) {
+        --nb-t1: #FFFFFF;
+        --nb-t2: rgb(255 255 255 / 0.88);
+        --nb-t3: rgb(255 255 255 / 0.78);
+        --nb-acc: #F5A623;
+        --nb-green: #86EFAC;
+        --nb-emerald: #6EE7B7;
+        --nb-teal: #5EEAD4;
+        --nb-cyan: #67E8F9;
+        --nb-sky: #7DD3FC;
+        --nb-blue: #93C5FD;
+        --nb-indigo: #A5B4FC;
+        --nb-violet: #C4B5FD;
+        --nb-purple: #D8B4FE;
+        --nb-fuchsia: #F0ABFC;
+        --nb-pink: #F9A8D4;
+        --nb-rose: #FDA4AF;
+        --nb-red: #FCA5A5;
+        --nb-orange: #FDBA74;
+        --nb-lime: #BEF264;
+      }
+      /* 2. Text tiers: /80 and up -> primary, /60-/75 and slate/gray-300 -> secondary, the rest -> tertiary. */
+      body.gravity-shell :is([class^="text-white"],[class*=" text-white"],[class^="text-[#ededed]"],
+        [class*=" text-[#ededed]"],[class^="text-[#F5F4F1]"],[class*=" text-[#F5F4F1]"],[class^="text-slate-100"],
+        [class*=" text-slate-100"],[class^="text-slate-200"],[class*=" text-slate-200"],[class^="text-gray-200"],
+        [class*=" text-gray-200"],[class^="text-[rgba(245,244,241"],[class*=" text-[rgba(245,244,241"]) {
+        color: var(--nb-t1) !important;
+      }
+      body.gravity-shell :is([class^="text-white/60"],[class*=" text-white/60"],[class^="text-white/70"],
+        [class*=" text-white/70"],[class^="text-white/75"],[class*=" text-white/75"],[class^="text-[#ededed]/60"],
+        [class*=" text-[#ededed]/60"],[class^="text-[#ededed]/70"],[class*=" text-[#ededed]/70"],
+        [class^="text-[#ededed]/75"],[class*=" text-[#ededed]/75"],[class^="text-slate-300"],
+        [class*=" text-slate-300"],[class^="text-gray-300"],[class*=" text-gray-300"]) {
+        color: var(--nb-t2) !important;
+      }
+      body.gravity-shell :is([class^="text-white/5"],[class*=" text-white/5"],[class^="text-white/4"],
+        [class*=" text-white/4"],[class^="text-white/3"],[class*=" text-white/3"],[class^="text-white/2"],
+        [class*=" text-white/2"],[class^="text-white/1"],[class*=" text-white/1"],[class^="text-[#ededed]/5"],
+        [class*=" text-[#ededed]/5"],[class^="text-[#ededed]/4"],[class*=" text-[#ededed]/4"],
+        [class^="text-slate-400"],[class*=" text-slate-400"],[class^="text-slate-500"],[class*=" text-slate-500"],
+        [class^="text-slate-600"],[class*=" text-slate-600"],[class^="text-gray-400"],[class*=" text-gray-400"],
+        [class^="text-gray-500"],[class*=" text-gray-500"],[class^="text-gray-600"],[class*=" text-gray-600"],
+        [class^="text-[rgba(245,244,241,0.5"],[class*=" text-[rgba(245,244,241,0.5"]) {
+        color: var(--nb-t3) !important;
+      }
+      body.gravity-shell :is([class^="hover:text-white"],[class*=" hover:text-white"],
+        [class^="hover:text-[#F5F4F1]"],[class*=" hover:text-[#F5F4F1]"],[class^="hover:text-[#ededed]"],
+        [class*=" hover:text-[#ededed]"]):hover {
+        color: var(--nb-t1) !important;
+      }
+      /* 3. Legacy dark backgrounds become the light page / panel tokens, except on or inside an
+         intentionally dark surface (a dark panel in a lightbox stays dark, with its light text). */
+      body.gravity-shell :is([class^="bg-[#070A12]"],[class*=" bg-[#070A12]"],[class^="bg-[#0A0A0A]"],
+        [class*=" bg-[#0A0A0A]"],[class^="bg-slate-950"],[class*=" bg-slate-950"],[class^="bg-[#060810]"],
+        [class*=" bg-[#060810]"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]) {
+        background-color: var(--gv-bg) !important;
+      }
+      body.gravity-shell :is([class^="bg-[#0d1117]"],[class*=" bg-[#0d1117]"],[class^="bg-[#0D1117]"],
+        [class*=" bg-[#0D1117]"],[class^="bg-[#0f1419]"],[class*=" bg-[#0f1419]"],[class^="bg-[#151515]"],
+        [class*=" bg-[#151515]"],[class^="bg-[#161b22]"],[class*=" bg-[#161b22]"],[class^="bg-[#111111]"],
+        [class*=" bg-[#111111]"],[class^="bg-[#111827]"],[class*=" bg-[#111827]"],[class^="bg-slate-900"],
+        [class*=" bg-slate-900"],[class^="bg-gray-900"],[class*=" bg-gray-900"],[class^="bg-slate-800"],
+        [class*=" bg-slate-800"],[class^="bg-[#1f2937]"],[class*=" bg-[#1f2937]"],[class^="bg-[#131920]"],
+        [class*=" bg-[#131920]"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]) {
+        background-color: var(--gv-panel) !important;
+      }
+      body.gravity-shell :is([class^="bg-[#21262d]"],[class*=" bg-[#21262d]"],[class^="bg-slate-700"],
+        [class*=" bg-slate-700"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]) {
+        background-color: var(--gv-panel-2) !important;
+      }
+      /* Translucent black boxes become an ink tint; scrims (positioned, lightboxes, /50+ under white text) stay dark. */
+      body.gravity-shell :is([class^="bg-black/"],
+        [class*=" bg-black/"]):not(.absolute):not(.fixed):not(:is([class^="bg-black/5"],[class*=" bg-black/5"],
+        [class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],[class*=" bg-black/7"],
+        [class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"])):not(:is([data-nb-surface="dark"],
+        [class~="bg-black"],.absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]) {
+        background-color: var(--gv-surface-2) !important;
+      }
+      /* 4. White-alpha surfaces and borders become ink tints and cream rules (not on dark surfaces,
+         not on form fields). hover:/focus: variants too, so the feedback is visible on cream. */
+      body.gravity-shell :is([class^="bg-white/"],[class*=" bg-white/"]):not(:is([data-nb-surface="dark"],
+        [class~="bg-black"],.absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]):not(input):not(textarea):not(select) {
+        background-color: var(--gv-surface-2) !important;
+      }
+      body.gravity-shell :is([class^="bg-white/[0.0"],[class*=" bg-white/[0.0"],[class^="bg-white/5"],
+        [class*=" bg-white/5"],[class^="bg-white/[0.02"],[class*=" bg-white/[0.02"],[class^="bg-white/[0.03"],
+        [class*=" bg-white/[0.03"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]):not(input):not(textarea):not(select) {
+        background-color: var(--gv-surface-1) !important;
+      }
+      body.gravity-shell :is([class^="bg-white/10"],[class*=" bg-white/10"],[class^="bg-white/[0.1"],
+        [class*=" bg-white/[0.1"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]):not(input):not(textarea):not(select) {
+        background-color: var(--gv-surface-3) !important;
+      }
+      body.gravity-shell :is([class^="bg-white/2"],[class*=" bg-white/2"],[class^="bg-white/3"],
+        [class*=" bg-white/3"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],.absolute:is([class^="bg-black/"],
+        [class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],[class*=" bg-black/85"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]),:is([class^="bg-black/5"],[class*=" bg-black/5"],[class^="bg-black/6"],
+        [class*=" bg-black/6"],[class^="bg-black/7"],[class*=" bg-black/7"],[class^="bg-black/8"],
+        [class*=" bg-black/8"],[class^="bg-black/9"],[class*=" bg-black/9"]):is([class^="text-white"],
+        [class*=" text-white"]),[class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],
+        [class*=" bg-[#141414]"],.igCanvas) *):not([data-nb-surface="dark"]):not(input):not(textarea):not(select) {
+        background-color: var(--gv-surface-4) !important;
+      }
+      body.gravity-shell :is([class^="border-white/"],[class*=" border-white/"]):not(:is([data-nb-surface="dark"],
+        [class~="bg-black"],.absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]):not(input):not(textarea):not(select) {
+        border-color: var(--gv-border-subtle) !important;
+      }
+      body.gravity-shell :is([class^="border-white/1"],[class*=" border-white/1"],[class^="border-white/2"],
+        [class*=" border-white/2"],[class^="border-white/3"],[class*=" border-white/3"],[class^="border-white/[0.1"],
+        [class*=" border-white/[0.1"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]):not(input):not(textarea):not(select) {
+        border-color: var(--gv-border-default) !important;
+      }
+      body.gravity-shell :is([class^="hover:bg-white/"],
+        [class*=" hover:bg-white/"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]):not(input):not(textarea):not(select):hover {
+        background-color: var(--gv-surface-3) !important;
+      }
+      body.gravity-shell :is([class^="hover:border-white/"],
+        [class*=" hover:border-white/"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]):hover {
+        border-color: var(--gv-border-strong) !important;
+      }
+      /* Dark-era slate/gray-700/800 borders and dividers become cream rules. */
+      body.gravity-shell :is([class^="border-slate-700"],[class*=" border-slate-700"],[class^="border-slate-800"],
+        [class*=" border-slate-800"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]):not(input):not(textarea):not(select) {
+        border-color: var(--gv-border-subtle) !important;
+      }
+      body.gravity-shell :is([class^="divide-slate-700"],[class*=" divide-slate-700"],[class^="divide-slate-800"],
+        [class*=" divide-slate-800"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]) > * {
+        border-color: var(--gv-border-subtle) !important;
+      }
+      /* 5. Fields: panel fill, ink text, a 1px border in --gv-text-muted (3.4:1, the 3:1 rule for UI
+         component borders), tertiary placeholders (5.9:1), focus = accent-text border + 25% accent ring.
+         .gravity-bare fields (inside a GravityPanel, which draws the box) and border-0 fields are left alone. */
+      body.gravity-shell input[type="text"],body.gravity-shell input[type="email"],
+        body.gravity-shell input[type="password"],body.gravity-shell input[type="url"],
+        body.gravity-shell input[type="search"],body.gravity-shell input[type="number"],
+        body.gravity-shell input[type="date"],body.gravity-shell input[type="time"],
+        body.gravity-shell input[type="tel"],body.gravity-shell input:not([type]),body.gravity-shell textarea,
+        body.gravity-shell select {
+        background-color: var(--gv-panel) !important;
+        color: var(--gv-text-primary) !important;
+        border-color: var(--gv-text-muted) !important;
+      }
+      body.gravity-shell input[type="text"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input[type="email"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input[type="password"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input[type="url"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input[type="search"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input[type="number"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input[type="date"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input[type="time"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input[type="tel"]:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell input:not([type]):not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell textarea:not(.gravity-bare):not(.border-0):not(.border-none),
+        body.gravity-shell select:not(.gravity-bare):not(.border-0):not(.border-none) {
+        border-width: 1px;
+        border-style: solid;
+      }
+      body.gravity-shell input::placeholder,body.gravity-shell textarea::placeholder {
+        color: var(--gv-text-tertiary) !important;
+        opacity: 1 !important;
+      }
+      body.gravity-shell :is(input, textarea, select):focus {
+        border-color: var(--gv-accent-text) !important;
         outline: none !important;
-        box-shadow: 0 0 0 3px rgba(245,166,35,0.10) !important;
+        box-shadow: 0 0 0 3px rgb(var(--gv-accent-rgb) / 0.25) !important;
       }
-      /* Opt-out for fields inside a GravityPanel. The panel already supplies
-         the surface, so the field styling above would draw a second, visibly
-         lighter box within the card. Tailwind's bg-transparent cannot win on
-         its own — the rule above carries !important AND higher specificity —
-         so this needs the element+class selector to override it. */
-      body.gravity-shell textarea.gravity-bare,
-      body.gravity-shell input.gravity-bare,
-      body.gravity-shell textarea.gravity-bare:focus,
-      body.gravity-shell input.gravity-bare:focus {
+      /* Fields on an intentionally dark surface keep the dark styling. */
+      body.gravity-shell :where([data-nb-surface="dark"],[class~="bg-black"],.absolute:is([class^="bg-black/"],
+        [class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],[class*=" bg-black/85"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]),:is([class^="bg-black/5"],[class*=" bg-black/5"],[class^="bg-black/6"],
+        [class*=" bg-black/6"],[class^="bg-black/7"],[class*=" bg-black/7"],[class^="bg-black/8"],
+        [class*=" bg-black/8"],[class^="bg-black/9"],[class*=" bg-black/9"]):is([class^="text-white"],
+        [class*=" text-white"]),[class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],
+        [class*=" bg-[#141414]"],.igCanvas) :is(input[type="text"], input[type="email"], input[type="password"],
+         input[type="url"], input[type="search"], input[type="number"], input[type="date"], input[type="time"],
+         input[type="tel"], input:not([type]), textarea, select) {
+        background-color: rgb(255 255 255 / 0.04) !important;
+        border-color: rgb(255 255 255 / 0.30) !important;
+        color: #F5F4F1 !important;
+      }
+      body.gravity-shell :where([data-nb-surface="dark"],[class~="bg-black"],.absolute:is([class^="bg-black/"],
+        [class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],[class*=" bg-black/85"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]),:is([class^="bg-black/5"],[class*=" bg-black/5"],[class^="bg-black/6"],
+        [class*=" bg-black/6"],[class^="bg-black/7"],[class*=" bg-black/7"],[class^="bg-black/8"],
+        [class*=" bg-black/8"],[class^="bg-black/9"],[class*=" bg-black/9"]):is([class^="text-white"],
+        [class*=" text-white"]),[class^="from-black"],[class*=" from-black"],[class^="bg-[#141414]"],
+        [class*=" bg-[#141414]"],.igCanvas) :is(input, textarea)::placeholder {
+        color: rgb(255 255 255 / 0.60) !important;
+      }
+      /* Opt-out for fields inside a GravityPanel: the panel already draws the surface. */
+      body.gravity-shell textarea.gravity-bare,body.gravity-shell input.gravity-bare,
+        body.gravity-shell textarea.gravity-bare:focus,body.gravity-shell input.gravity-bare:focus {
         background-color: transparent !important;
         border: none !important;
         box-shadow: none !important;
         outline: none !important;
       }
-      /* Primary action buttons (gold in old code) — Gravity gold with shadow */
-      body.gravity-shell button[class*="bg-[#ffcc29]"],
-      body.gravity-shell a[class*="bg-[#ffcc29]"] {
+      /* 6. Legacy yellow fills -> Gravity gold with dark ink (solid fills only; tints such as
+         bg-[#ffcc29]/10 stay light). Gold/yellow TEXT -> the AA-safe accent text colour. */
+      body.gravity-shell :is([class^="bg-[#ffcc29]"],
+        [class*=" bg-[#ffcc29]"]):not([class^="bg-[#ffcc29]/"]):not([class*=" bg-[#ffcc29]/"]):not(aside) {
         background-color: var(--grav-gold) !important;
-        color: #1A1208 !important;
+        color: var(--gv-accent-ink) !important;
+      }
+      body.gravity-shell :is(button, a):is([class^="bg-[#ffcc29]"],
+        [class*=" bg-[#ffcc29]"]):not([class^="bg-[#ffcc29]/"]):not([class*=" bg-[#ffcc29]/"]) {
         box-shadow: 0 4px 18px rgba(245,166,35,0.20) !important;
       }
-      body.gravity-shell button[class*="bg-[#ffcc29]"]:hover,
-      body.gravity-shell a[class*="bg-[#ffcc29]"]:hover {
+      body.gravity-shell :is(button, a):is([class^="bg-[#ffcc29]"],
+        [class*=" bg-[#ffcc29]"]):not([class^="bg-[#ffcc29]/"]):not([class*=" bg-[#ffcc29]/"]):hover {
         background-color: var(--grav-gold-hover) !important;
       }
-      /* Focus rings — gold */
-      body.gravity-shell [class*="ring-[#ffcc29]"],
-      body.gravity-shell [class*="focus:ring-[#ffcc29]"]:focus {
+      body.gravity-shell :is([class^="border-[#ffcc29]"],[class*=" border-[#ffcc29]"]) {
+        border-color: var(--grav-gold) !important;
+      }
+      body.gravity-shell :is([class^="ring-[#ffcc29]"],[class*=" ring-[#ffcc29]"],[class^="focus:ring-[#ffcc29]"],
+        [class*=" focus:ring-[#ffcc29]"]) {
         --tw-ring-color: rgba(245,166,35,0.5) !important;
       }
-      /* Scrollbar for Gravity shell */
-      body.gravity-shell ::-webkit-scrollbar { width: 8px; height: 8px; }
-      body.gravity-shell ::-webkit-scrollbar-track { background: transparent; }
+      body.gravity-shell :is([class^="text-[#ffcc29]"],[class*=" text-[#ffcc29]"],[class^="text-[#d4a800]"],
+        [class*=" text-[#d4a800]"],[class^="text-[#e6b825]"],[class*=" text-[#e6b825]"],[class^="text-[#F5A623]"],
+        [class*=" text-[#F5A623]"],[class^="text-[#ffb833]"],[class*=" text-[#ffb833]"],[class^="text-yellow-300"],
+        [class*=" text-yellow-300"],[class^="text-yellow-400"],[class*=" text-yellow-400"],[class^="text-yellow-500"],
+        [class*=" text-yellow-500"],[class^="text-amber-300"],[class*=" text-amber-300"],[class^="text-amber-400"],
+        [class*=" text-amber-400"],[class^="text-amber-500"],[class*=" text-amber-500"],[class^="text-amber-600"],
+        [class*=" text-amber-600"],[class^="text-[var(--gv-accent)]"],[class*=" text-[var(--gv-accent)]"]) {
+        color: var(--nb-acc) !important;
+      }
+      body.gravity-shell :is([class^="hover:text-[#ffcc29]"],[class*=" hover:text-[#ffcc29]"],
+        [class^="hover:text-[#F5A623]"],[class*=" hover:text-[#F5A623]"]):hover {
+        color: var(--nb-acc) !important;
+      }
+      /* 7. Pale status colours (made for a dark page) -> their dark shades on light surfaces. */
+      body.gravity-shell :is([class^="text-green-300"],[class*=" text-green-300"],[class^="text-green-400"],
+        [class*=" text-green-400"],[class^="text-green-500"],[class*=" text-green-500"],[class^="text-green-600"],
+        [class*=" text-green-600"]) {
+        color: var(--nb-green) !important;
+      }
+      body.gravity-shell :is([class^="text-emerald-200"],[class*=" text-emerald-200"],[class^="text-emerald-300"],
+        [class*=" text-emerald-300"],[class^="text-emerald-400"],[class*=" text-emerald-400"],
+        [class^="text-emerald-500"],[class*=" text-emerald-500"],[class^="text-emerald-600"],
+        [class*=" text-emerald-600"]) {
+        color: var(--nb-emerald) !important;
+      }
+      body.gravity-shell :is([class^="text-teal-400"],[class*=" text-teal-400"]) {
+        color: var(--nb-teal) !important;
+      }
+      body.gravity-shell :is([class^="text-cyan-400"],[class*=" text-cyan-400"]) {
+        color: var(--nb-cyan) !important;
+      }
+      body.gravity-shell :is([class^="text-sky-300"],[class*=" text-sky-300"],[class^="text-sky-400"],
+        [class*=" text-sky-400"],[class^="text-sky-500"],[class*=" text-sky-500"]) {
+        color: var(--nb-sky) !important;
+      }
+      body.gravity-shell :is([class^="text-blue-300"],[class*=" text-blue-300"],[class^="text-blue-400"],
+        [class*=" text-blue-400"],[class^="text-blue-500"],[class*=" text-blue-500"]) {
+        color: var(--nb-blue) !important;
+      }
+      body.gravity-shell :is([class^="text-indigo-400"],[class*=" text-indigo-400"],[class^="text-indigo-500"],
+        [class*=" text-indigo-500"]) {
+        color: var(--nb-indigo) !important;
+      }
+      body.gravity-shell :is([class^="text-violet-400"],[class*=" text-violet-400"]) {
+        color: var(--nb-violet) !important;
+      }
+      body.gravity-shell :is([class^="text-purple-400"],[class*=" text-purple-400"],[class^="text-purple-500"],
+        [class*=" text-purple-500"]) {
+        color: var(--nb-purple) !important;
+      }
+      body.gravity-shell :is([class^="text-pink-400"],[class*=" text-pink-400"],[class^="text-pink-500"],
+        [class*=" text-pink-500"]) {
+        color: var(--nb-pink) !important;
+      }
+      body.gravity-shell :is([class^="text-red-200"],[class*=" text-red-200"],[class^="text-red-300"],
+        [class*=" text-red-300"],[class^="text-red-400"],[class*=" text-red-400"],[class^="text-red-500"],
+        [class*=" text-red-500"]) {
+        color: var(--nb-red) !important;
+      }
+      body.gravity-shell :is([class^="text-orange-300"],[class*=" text-orange-300"],[class^="text-orange-400"],
+        [class*=" text-orange-400"],[class^="text-orange-500"],[class*=" text-orange-500"]) {
+        color: var(--nb-orange) !important;
+      }
+      body.gravity-shell :is([class^="text-[#4ADE80]"],[class*=" text-[#4ADE80]"]) {
+        color: var(--nb-green) !important;
+      }
+      body.gravity-shell svg :is(text, tspan):is([fill="#94a3b8"],[fill="#94A3B8"],[fill="#9ca3af"],
+        [fill="#64748b"]) {
+        fill: var(--gv-text-tertiary) !important;
+      }
+      /* 8. Token misuse: --gv-text-muted (3:1, large text only) on body text, translucent ink hints,
+         and the italic display accent (#D07A00, 2.99:1) -> #C57503 (3.3:1). Token values unchanged. */
+      body.gravity-shell :is([class^="text-[var(--gv-text-muted)]"],[class*=" text-[var(--gv-text-muted)]"],
+        [class^="text-[#070A12]/5"],[class*=" text-[#070A12]/5"]) {
+        color: var(--gv-text-tertiary) !important;
+      }
+      body.gravity-shell :is([class^="text-[#1A1208]/70"],[class*=" text-[#1A1208]/70"]) {
+        color: var(--gv-accent-ink) !important;
+      }
+      body.gravity-shell [class*="placeholder:text-[var(--gv-text-muted)]"]::placeholder {
+        color: var(--gv-text-tertiary) !important;
+      }
+      body.gravity-shell :is([class^="text-[var(--gv-accent-display)]"],[class*=" text-[var(--gv-accent-display)]"]) {
+        color: #C57503 !important;
+      }
+      /* 9. Switch off-tracks (white-alpha or pale slate, ~1.1-1.4:1 on cream) -> --gv-text-muted (3.4:1). */
+      body.gravity-shell :is([role="switch"], .rounded-full:is(.w-8,.w-9,.w-10,.w-11,.w-12,.w-14):is(.h-4,.h-5,.h-6,
+        .h-7)):is([class^="bg-white/10"],[class*=" bg-white/10"],[class^="bg-white/[0.1"],[class*=" bg-white/[0.1"],
+        [class^="bg-white/[0.08"],[class*=" bg-white/[0.08"],[class^="bg-white/20"],[class*=" bg-white/20"],
+        [class^="bg-slate-700"],[class*=" bg-slate-700"],[class^="bg-slate-600"],[class*=" bg-slate-600"],
+        [class^="bg-slate-300"],[class*=" bg-slate-300"],[class^="bg-gray-300"],[class*=" bg-gray-300"],
+        [class^="bg-gray-200"],[class*=" bg-gray-200"],[class^="bg-slate-200"],[class*=" bg-slate-200"],
+        [class^="bg-slate-500/40"],[class*=" bg-slate-500/40"]):not(:is([data-nb-surface="dark"],[class~="bg-black"],
+        .absolute:is([class^="bg-black/"],[class*=" bg-black/"]),.fixed:is([class^="bg-black/85"],
+        [class*=" bg-black/85"],[class^="bg-black/9"],[class*=" bg-black/9"]),:is([class^="bg-black/5"],
+        [class*=" bg-black/5"],[class^="bg-black/6"],[class*=" bg-black/6"],[class^="bg-black/7"],
+        [class*=" bg-black/7"],[class^="bg-black/8"],[class*=" bg-black/8"],[class^="bg-black/9"],
+        [class*=" bg-black/9"]):is([class^="text-white"],[class*=" text-white"]),[class^="from-black"],
+        [class*=" from-black"],[class^="bg-[#141414]"],[class*=" bg-[#141414]"],
+        .igCanvas) *):not([data-nb-surface="dark"]) {
+        background-color: var(--gv-text-muted) !important;
+      }
+      /* 10. Scrollbar thumbs in ink alpha (white alpha was invisible on cream). */
+      body.gravity-shell ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      body.gravity-shell ::-webkit-scrollbar-track {
+        background: transparent;
+      }
       body.gravity-shell ::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.08);
+        background: rgb(var(--gv-ink-rgb) / 0.18);
         border-radius: 4px;
       }
       body.gravity-shell ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255,255,255,0.16);
+        background: rgb(var(--gv-ink-rgb) / 0.30);
       }
+      /* ---- end LIGHT SEMANTICS ---- */
       /* Small-caps meta label used across Gravity screens */
       .gravity-label {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
         text-transform: uppercase;
         letter-spacing: 0.14em;
         font-size: 10.5px;
         font-weight: 600;
-        color: rgba(255,255,255,0.45);
+        /* was rgba(255,255,255,0.45): white on cream, invisible after the light-only switch */
+        color: var(--gv-text-tertiary);
       }
       /* Dark mode styles */
       .dark body {
@@ -451,7 +1463,7 @@
         position: absolute;
         top: 10px;
         right: 12px;
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: 10px;
         letter-spacing: 0.08em;
         font-variant-numeric: tabular-nums;
@@ -465,7 +1477,7 @@
       }
       /* Shimmer sweep across the label — that is ig-shine. */
       .igLabel {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: 12.5px;
         font-weight: 500;
         letter-spacing: 0.01em;
@@ -480,7 +1492,7 @@
         animation: ig-shine 2.6s linear infinite;
       }
       .igPrompt {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: 11px;
         color: rgba(255,255,255,0.35);
         overflow: hidden;

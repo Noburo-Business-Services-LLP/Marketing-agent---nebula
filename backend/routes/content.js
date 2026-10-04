@@ -30,7 +30,7 @@ router.post('/regenerate-image', protect, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     await ensureCreditCycle(user);
     if (user.credits.balance < 3) {
-      return res.status(403).json({ success: false, error: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 3 });
+      return res.status(403).json({ success: false, error: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 3 });
     }
 
     const { originalImagePrompt, caption } = req.body;
@@ -267,7 +267,7 @@ router.post('/image-audio-to-video', protect, async (req, res) => {
     if (user.credits.balance < 2) {
       return res.status(403).json({
         success: false,
-        error: 'Insufficient credits for video composition',
+        error: 'Insufficient Quarks for video composition',
         creditsRemaining: user.credits.balance,
         required: 2
       });

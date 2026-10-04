@@ -6,6 +6,8 @@ import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import LogoSelector from '../components/LogoSelector';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 const platformIcons: Record<string, React.ReactNode> = {
   instagram: <Instagram className="w-3 h-3" />,
@@ -43,6 +45,7 @@ const Competitors: React.FC = () => {
   // Auto-discover state
   const [discovering, setDiscovering] = useState(false);
   const [discoveryMessage, setDiscoveryMessage] = useState('');
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [location, setLocation] = useState('');
   
@@ -151,6 +154,7 @@ const Competitors: React.FC = () => {
       setTimeout(() => setDiscoveryMessage(''), 5000);
     } catch (e: any) {
       console.error(e);
+      setUpgrade(upgradeInfoOf(e));
       setDiscoveryMessage('❌ Discovery failed. Please try again.');
       setTimeout(() => setDiscoveryMessage(''), 3000);
     } finally {
@@ -179,6 +183,7 @@ const Competitors: React.FC = () => {
         setDiscoveryMessage(`⚠️ ${res.message || 'Failed to add competitor'}`);
       }
     } catch (e: any) {
+      setUpgrade(upgradeInfoOf(e));
       const msg = e?.message || '';
       setDiscoveryMessage(`❌ ${msg.includes('already') ? msg : 'Failed to add competitor. Try again.'}`);
     } finally {
@@ -475,6 +480,7 @@ const Competitors: React.FC = () => {
         });
       }
     } catch (error) {
+      setUpgrade(upgradeInfoOf(error));
       console.error('Failed to fetch posts for type:', type, error);
     } finally {
       setFetchingType(null);
@@ -542,6 +548,8 @@ const Competitors: React.FC = () => {
         headline={<>Who else is in the <GravityEmphasis>room</GravityEmphasis>?</>}
         subcopy="Track market rivals with real-time search."
       />
+
+      {upgrade && <UpgradePrompt className="mb-6" reason={upgrade.reason} feature={upgrade.feature} />}
 
       {/* Discovery Message */}
       {discoveryMessage && (
@@ -970,7 +978,7 @@ const Competitors: React.FC = () => {
                   </div>
                   <p className={`text-lg font-semibold ${theme.text} mb-2`}>Crafting Your Viral Post</p>
                   <p className={`text-sm ${theme.textMuted} text-center max-w-sm`}>
-                    Gravity is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
+                    Nebulaa is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
                   </p>
                   <div className="flex items-center gap-2 mt-4">
                     <div className="w-2 h-2 rounded-full bg-[#F5A623] animate-bounce" style={{ animationDelay: '0ms' }} />

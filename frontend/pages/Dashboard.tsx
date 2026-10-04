@@ -482,7 +482,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert(`Insufficient Quarks. You need 7 Quarks to create a post but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
+        alert(`You need 7 Quarks to create a post but you only have ${balance}. See the plans page to add more.`);
         return;
       }
     } catch (e) {
@@ -523,7 +523,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 3) {
-        alert(`Insufficient Quarks. You need 3 Quarks to refine an image but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
+        alert(`You need 3 Quarks to refine an image but you only have ${balance}. See the plans page to add more.`);
         return;
       }
     } catch (e) {
@@ -674,7 +674,7 @@ const Dashboard: React.FC = () => {
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert(`Insufficient Quarks. You need 7 Quarks to create a rival post but you only have ${balance}. Please wait for your next Quark cycle or upgrade your plan.`);
+        alert(`You need 7 Quarks to create a rival post but you only have ${balance}. See the plans page to add more.`);
         return;
       }
     } catch (e) {
@@ -1998,7 +1998,7 @@ const Dashboard: React.FC = () => {
                 <button
                   onClick={async () => {
                     if (generatingPost) {
-                      if (await confirm('7 credits have been consumed for this generation. Are you sure you want to close?', { title: 'Close post creator?', confirmLabel: 'Close' })) {
+                      if (await confirm('7 Quarks have been consumed for this generation. Are you sure you want to close?', { title: 'Close post creator?', confirmLabel: 'Close' })) {
                         setShowPostCreator(false);
                       }
                     } else {
@@ -2305,7 +2305,7 @@ const Dashboard: React.FC = () => {
       {showRivalPostModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={async () => {
             if (rivalPostLoading || rivalPost) {
-              const shouldClose = await confirm('7 credits have already been consumed. Do you want to close?', { title: '⚡ Close rival post?', confirmLabel: 'Close' });
+              const shouldClose = await confirm('7 Quarks have already been consumed. Do you want to close?', { title: '⚡ Close rival post?', confirmLabel: 'Close' });
               if (!shouldClose) return;
             }
             setShowRivalPostModal(false);
@@ -2333,7 +2333,7 @@ const Dashboard: React.FC = () => {
                 <button
                   onClick={async () => {
                     if (rivalPostLoading || rivalPost) {
-                      const shouldClose = await confirm('7 credits have already been consumed. Do you want to close?', { title: '⚡ Close rival post?', confirmLabel: 'Close' });
+                      const shouldClose = await confirm('7 Quarks have already been consumed. Do you want to close?', { title: '⚡ Close rival post?', confirmLabel: 'Close' });
                       if (!shouldClose) return;
                     }
                     setShowRivalPostModal(false);
@@ -2356,7 +2356,7 @@ const Dashboard: React.FC = () => {
                   </div>
                   <p className={`text-lg font-semibold ${theme.text} mb-2`}>Crafting Your Viral Post</p>
                   <p className={`text-sm ${theme.textMuted} text-center max-w-sm`}>
-                    Gravity is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
+                    Nebulaa is analyzing the competitor's content and creating a unique, engaging post that will help you stand out...
                   </p>
                   <div className="flex items-center gap-2 mt-4">
                     <div className="w-2 h-2 rounded-full bg-[#ffcc29] animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -3732,7 +3732,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 : `${isDarkMode ? 'text-slate-300 hover:bg-[#0d1117]' : 'text-slate-600 hover:bg-slate-50'}`
                             }`}
                           >
-                            <span className="w-5 h-5 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center text-white text-[10px]">All</span>
+                            <span className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-white text-[10px]">All</span>
                             All Platforms
                             {!platformFilter && <Check className="w-3.5 h-3.5 ml-auto text-[#ffcc29]" />}
                           </button>
@@ -3834,11 +3834,11 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
             <div className={`flex flex-wrap items-center gap-3 px-5 py-2 border-b ${isDarkMode ? 'border-[#ffcc29]/10 bg-[#0d1117]/50' : 'border-[#ededed] bg-[#f5f5f5]/50'}`}>
               <span className={`text-xs font-medium ${theme.textSecondary}`}>Legend:</span>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-orange-500"></div>
+                <div className="w-3 h-3 rounded bg-orange-700"></div>
                 <span className={`text-xs ${theme.textMuted}`}>National</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-pink-500"></div>
+                <div className="w-3 h-3 rounded bg-pink-600"></div>
                 <span className={`text-xs ${theme.textMuted}`}>Festival</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -3846,7 +3846,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 <span className={`text-xs ${theme.textMuted}`}>Marketing</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-blue-500"></div>
+                <div className="w-3 h-3 rounded bg-blue-600"></div>
                 <span className={`text-xs ${theme.textMuted}`}>International</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -3854,7 +3854,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                 <span className={`text-xs ${theme.textMuted}`}>Campaign</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-purple-500"></div>
+                <div className="w-3 h-3 rounded bg-purple-600"></div>
                 <span className={`text-xs ${theme.textMuted}`}>Reminder</span>
               </div>
             </div>
@@ -3927,12 +3927,12 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 title={event.eventType === 'holiday' ? `${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}` : undefined}
                                 className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium shadow-sm hover:opacity-80 ${event.eventType !== 'holiday' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${draggedEvent && (draggedEvent._id || draggedEvent.id) === (event._id || event.id) ? 'opacity-50 ring-1 ring-[#ffcc29]' : ''} ${
                                   event.eventType === 'holiday' 
-                                    ? event.type === 'national' ? 'bg-orange-500 text-white' :
-                                      event.type === 'festival' ? 'bg-pink-500 text-white' :
+                                    ? event.type === 'national' ? 'bg-orange-700 text-white' :
+                                      event.type === 'festival' ? 'bg-pink-600 text-white' :
                                       event.type === 'marketing' ? 'bg-green-500 text-white' :
-                                      'bg-blue-500 text-white'
+                                      'bg-blue-600 text-white'
                                     : event.eventType === 'reminder' || event.type === 'reminder' 
-                                      ? `${isDarkMode ? 'bg-purple-500/80 text-white' : 'bg-purple-500 text-white'}` 
+                                      ? `${isDarkMode ? 'bg-purple-600 text-white' : 'bg-purple-600 text-white'}` 
                                       : `${isDarkMode ? 'bg-[#ffcc29]/90 text-[#0a0f1a]' : 'bg-[#ffcc29] text-[#0a0f1a]'}`
                                 }`}
                               >
@@ -4003,12 +4003,12 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                             title={event.eventType === 'holiday' ? `${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}` : undefined}
                             className={`flex-1 py-2 px-3 rounded-lg shadow-md hover:opacity-90 ${event.eventType !== 'holiday' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${draggedEvent && (draggedEvent._id || draggedEvent.id) === (event._id || event.id) ? 'opacity-50 ring-2 ring-[#ffcc29]' : ''} ${
                               event.eventType === 'holiday' 
-                                ? event.type === 'national' ? 'bg-orange-500 text-white' :
-                                  event.type === 'festival' ? 'bg-pink-500 text-white' :
+                                ? event.type === 'national' ? 'bg-orange-700 text-white' :
+                                  event.type === 'festival' ? 'bg-pink-600 text-white' :
                                   event.type === 'marketing' ? 'bg-green-500 text-white' :
-                                  'bg-blue-500 text-white'
+                                  'bg-blue-600 text-white'
                                 : event.eventType === 'reminder' || event.type === 'reminder' 
-                                  ? 'bg-purple-500 text-white' 
+                                  ? 'bg-purple-600 text-white' 
                                   : 'bg-[#ffcc29] text-[#0a0f1a]'
                             }`}
                           >
@@ -4149,10 +4149,10 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                                 setSelectedHoliday(event);
                                               }}
                                               className={`absolute left-1 right-1 rounded-md px-2 py-1 cursor-pointer hover:opacity-90 transition-opacity shadow-md border-l-4 ${
-                                                event.type === 'national' ? 'bg-orange-500 border-orange-600' :
-                                                event.type === 'festival' ? 'bg-pink-500 border-pink-600' :
+                                                event.type === 'national' ? 'bg-orange-700 border-orange-800' :
+                                                event.type === 'festival' ? 'bg-pink-600 border-pink-700' :
                                                 event.type === 'marketing' ? 'bg-green-500 border-green-600' :
-                                                'bg-blue-500 border-blue-600'
+                                                'bg-blue-600 border-blue-700'
                                               }`}
                                               style={{ 
                                                 top: `${idx * 48}px`,
@@ -4161,7 +4161,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                               title={`${event.description}${event.marketingTip ? `\n💡 ${event.marketingTip}` : ''}`}
                                             >
                                               <div className="flex items-center gap-1">
-                                                <span className="text-xs">{event.emoji}</span>
+                                                <span className="text-xs text-white">{event.emoji}</span>
                                                 <p className="text-xs font-semibold truncate text-white">{event.name}</p>
                                               </div>
                                               <p className="text-[10px] truncate text-white/80">
@@ -4186,8 +4186,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                             'scheduled': 'bg-[#ffcc29] border-[#e6b825]',
                                             'draft': 'bg-amber-500 border-amber-600',
                                             'paused': 'bg-slate-400 border-slate-500',
-                                            'pending': 'bg-blue-500 border-blue-600',
-                                            'reminder': 'bg-purple-500 border-purple-600'
+                                            'pending': 'bg-blue-600 border-blue-700',
+                                            'reminder': 'bg-purple-600 border-purple-700'
                                         };
                                         
                                         const eventStatus = event.status || 'scheduled';
@@ -4341,7 +4341,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                 <div className="flex gap-1 mt-1.5 mb-3">
                                   {([
                                     { key: 'upload' as const, label: 'Upload', icon: <Upload className="w-3.5 h-3.5" /> },
-                                    { key: 'ai' as const, label: 'Gravity Generate', icon: <Sparkles className="w-3.5 h-3.5" /> },
+                                    { key: 'ai' as const, label: 'Nebulaa Generate', icon: <Sparkles className="w-3.5 h-3.5" /> },
                                     { key: 'reference' as const, label: 'From Reference', icon: <ImageIcon className="w-3.5 h-3.5" /> },
                                   ]).map(tab => (
                                     <button
@@ -4434,7 +4434,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           alt="Generated poster"
                                           className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
                                         />
-                                        <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">Gravity Generated</span>
+                                        <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">Nebulaa Generated</span>
                                         <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                           <button
                                             onClick={async () => {
@@ -4480,7 +4480,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           value={generatedPoster ? posterEditInstructions : posterContent}
                                           onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
                                           placeholder={generatedPoster
-                                            ? 'Tell Gravity what to change... e.g., Make the title bigger, use blue theme'
+                                            ? 'Tell Nebulaa what to change... e.g., Make the title bigger, use blue theme'
                                             : 'Describe what poster to create... e.g., Dark-themed marketing poster for a ChatGPT workshop'
                                           }
                                           rows={2}
@@ -4513,7 +4513,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
 
                                     {!generatedPoster && (
                                       <p className={`text-[10px] ${theme.textMuted}`}>
-                                        Gravity generates a poster from your description · Press Enter to send
+                                        Nebulaa generates a poster from your description · Press Enter to send
                                         {calendarSelectedLogo && <span className="ml-1">· Logo: selected</span>}
                                         {calendarAspectRatio !== '1:1' && <span className="ml-1">· {calendarAspectRatio}</span>}
                                       </p>
@@ -4533,7 +4533,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           className={`w-full max-h-80 object-contain rounded-xl border ${isDarkMode ? 'border-slate-700/50 bg-[#161b22]' : 'border-slate-200 bg-slate-50'}`}
                                         />
                                         {generatedPoster && (
-                                          <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">Gravity Generated</span>
+                                          <span className="absolute top-2 left-2 bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">Nebulaa Generated</span>
                                         )}
                                         {!generatedPoster && (
                                           <span className={`absolute top-2 left-2 ${isDarkMode ? 'bg-slate-800/90 text-slate-300' : 'bg-white/90 text-slate-600'} text-[10px] font-bold px-2 py-0.5 rounded-md`}>Reference</span>
@@ -4587,7 +4587,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                       >
                                         <ImageIcon className={`w-8 h-8 mx-auto mb-2 ${theme.textMuted}`} />
                                         <p className={`text-sm font-medium ${theme.text}`}>Upload a reference image</p>
-                                        <p className={`text-xs ${theme.textMuted} mt-1`}>Gravity will create a new poster inspired by this · Max 10MB</p>
+                                        <p className={`text-xs ${theme.textMuted} mt-1`}>Nebulaa will create a new poster inspired by this · Max 10MB</p>
                                       </div>
                                     )}
 
@@ -4604,8 +4604,8 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                           value={generatedPoster ? posterEditInstructions : posterContent}
                                           onChange={(e) => generatedPoster ? setPosterEditInstructions(e.target.value) : setPosterContent(e.target.value)}
                                           placeholder={generatedPoster
-                                            ? 'Tell Gravity what to change... e.g., Make the title bigger, use blue theme, add my phone number'
-                                            : 'Tell Gravity what poster to create from this reference... e.g., Dark-themed marketing poster for a ChatGPT workshop'
+                                            ? 'Tell Nebulaa what to change... e.g., Make the title bigger, use blue theme, add my phone number'
+                                            : 'Tell Nebulaa what poster to create from this reference... e.g., Dark-themed marketing poster for a ChatGPT workshop'
                                           }
                                           rows={2}
                                           className={`flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:border-purple-400 resize-none ${isDarkMode ? 'bg-[#161b22] border-slate-700/50 text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
@@ -4637,7 +4637,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
 
                                     {!generatedPoster && (
                                       <p className={`text-[10px] ${theme.textMuted}`}>
-                                        Gravity creates a new poster inspired by your reference image · Press Enter to send
+                                        Nebulaa creates a new poster inspired by your reference image · Press Enter to send
                                         {calendarSelectedLogo && <span className="ml-1">· Logo: selected</span>}
                                         {calendarAspectRatio !== '1:1' && <span className="ml-1">· {calendarAspectRatio}</span>}
                                       </p>
@@ -4698,7 +4698,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
                                     title={(!scheduleImage && !generatedPoster) ? 'Upload an image first to generate caption' : 'Generate caption & hashtags from image'}
                                   >
                                     {aiGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-                                    {aiGenerating ? 'Generating...' : 'Gravity Generate'}
+                                    {aiGenerating ? 'Generating...' : 'Nebulaa Generate'}
                                   </button>
                                 </div>
                                 <textarea

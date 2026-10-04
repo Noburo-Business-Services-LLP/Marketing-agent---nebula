@@ -80,7 +80,7 @@ const Influencers: React.FC = () => {
 
   const discoverNewInfluencers = async (forceRefresh = false) => {
     setDiscovering(true);
-    setDiscoveryMessage('🔍 Finding influencers across Instagram, YouTube, Facebook & more...');
+    setDiscoveryMessage('Finding influencers across Instagram, YouTube, Facebook and other platforms.');
     try {
       const res = await apiService.discoverInfluencers({
         platforms: ['instagram', 'youtube', 'facebook', 'twitter', 'linkedin'],
@@ -92,19 +92,19 @@ const Influencers: React.FC = () => {
         setInfluencers(res.influencers);
         const breakdown = res.breakdown || {};
         setDiscoveryMessage(
-          `✅ Found ${res.discovered || res.influencers.length} influencers! ` +
+          `Found ${res.discovered || res.influencers.length} influencers. ` +
           `(${breakdown.mega || 0} Mega, ${breakdown.macro || 0} Macro, ${breakdown.micro || 0} Micro)`
         );
         
         // Clear message after 5 seconds
         setTimeout(() => setDiscoveryMessage(''), 5000);
       } else {
-        setDiscoveryMessage(res.message || '⚠️ No influencers found. Please complete your onboarding first.');
+        setDiscoveryMessage(res.message || 'No influencers were found. Please complete your onboarding first.');
         setTimeout(() => setDiscoveryMessage(''), 5000);
       }
     } catch (e: any) {
       console.error(e);
-      setDiscoveryMessage('❌ Discovery failed. Please try again.');
+      setDiscoveryMessage('Influencer discovery failed. Please try again.');
       setTimeout(() => setDiscoveryMessage(''), 3000);
     } finally {
       setDiscovering(false);
@@ -500,7 +500,7 @@ const Influencers: React.FC = () => {
                   <div className="flex justify-between items-center mb-1.5">
                     <span className={`text-xs font-bold flex items-center gap-1 ${theme.text}`}>
                       <Sparkles className="w-3 h-3 text-[#ffcc29]" />
-                      Gravity AI Score
+                      Nebulaa AI Score
                     </span>
                     <span className={`text-sm font-bold ${getScoreColor(inf.aiMatchScore?.score || 0)}`}>
                       {inf.aiMatchScore?.score || 0}/100

@@ -490,7 +490,7 @@ router.post('/users/:id/reset-trial', adminAuth, async (req, res) => {
       user.credits.history.push({
         action: 'admin_grant',
         amount: 100,
-        description: 'Trial re-enabled — 100 credits added by admin',
+        description: 'Account re-enabled — 100 Quarks added by an admin',
         createdAt: new Date()
       });
     }
@@ -518,7 +518,7 @@ router.post('/users/:id/add-credits', adminAuth, async (req, res) => {
     user.credits.history.push({
       action: 'admin_grant',
       amount: Number(amount),
-      description: `Admin added ${amount} credits`,
+      description: `Admin added ${amount} Quarks`,
       createdAt: new Date()
     });
     await user.save({ validateBeforeSave: false });

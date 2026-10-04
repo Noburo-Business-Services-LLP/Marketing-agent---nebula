@@ -3,9 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { Loader2, Zap, Check, X as XIcon, ShieldCheck, Sun, Moon, Mail, ArrowLeft, RefreshCw, KeyRound, Lock, Eye, EyeOff } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { postAuthTarget } from '../utils/blueprint';
 
 interface AuthProps {
   onLoginSuccess: (user: any) => void;
+}
+
+const AUTH_BG: React.CSSProperties = {
+  background:
+    'radial-gradient(60% 80% at 92% 8%, rgba(255,203,46,0.45) 0%, rgba(255,203,46,0) 62%), radial-gradient(55% 70% at 100% 100%, rgba(238,99,48,0.22) 0%, rgba(238,99,48,0) 66%), linear-gradient(180deg, #FBF5EA 0%, #FFEBD6 100%)',
 }
 
 const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
@@ -14,7 +20,9 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
+  // The sign-in pages always use the light, warm look of the Nebulaa website.
+  const { toggleTheme } = useTheme();
+  const theme = 'light' as 'light' | 'dark';
 
   // Form State
   const [email, setEmail] = useState('');
@@ -136,7 +144,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           sessionStorage.setItem('nebulaa_registration_company', companyName);
         }
         onLoginSuccess(response.user);
-        navigate('/dashboard');
+        navigate(postAuthTarget(searchParams.toString()));
       } else {
         setError("Authentication failed. Please try again.");
       }
@@ -211,7 +219,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         setOtpSuccess(true);
         setTimeout(() => {
           onLoginSuccess(response.user);
-          navigate('/dashboard');
+          navigate(postAuthTarget(searchParams.toString()));
         }, 1500);
       } else {
         setError('Verification failed.');
@@ -381,8 +389,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   // ========================
   if (forgotPasswordStep !== 'idle') {
     return (
-      <div className={"min-h-screen flex items-center justify-center p-4"}>
-        <div className={"rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 bg-[#111111] border border-white/[0.08]"}>
+      <div className="min-h-screen flex items-center justify-center p-4" style={AUTH_BG}>
+        <div className={"rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 bg-[#FFFDF8] border border-[#E5D8BF]"}>
           {/* Header */}
           <div className="bg-gradient-to-r from-[#F5A623] to-[#ffb833] p-8 text-center relative">
             <button
@@ -398,7 +406,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               {forgotPasswordStep === 'email' && 'Reset Password'}
               {forgotPasswordStep === 'otp' && 'Enter Verification Code'}
               {forgotPasswordStep === 'newpw' && 'Set New Password'}
-              {forgotPasswordStep === 'done' && 'Password Updated!'}
+              {forgotPasswordStep === 'done' && 'Password updated'}
             </h1>
             <p className="text-[#070A12]/80 text-sm mt-2">
               {forgotPasswordStep === 'email' && 'Enter your email to receive a reset code'}
@@ -410,7 +418,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
           <div className="p-8">
             {error && (
-              <div className="bg-red-500/20 text-red-400 p-3 rounded-lg text-sm mb-6 border border-red-500/30 flex items-start gap-2">
+              <div className="bg-red-500/20 text-red-700 p-3 rounded-lg text-sm mb-6 border border-red-500/30 flex items-start gap-2">
                 <XIcon className="w-4 h-4 mt-0.5 flex-shrink-0" /><span>{error}</span>
               </div>
             )}
@@ -425,7 +433,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                     value={fpEmail}
                     onChange={(e) => setFpEmail(e.target.value)}
                     placeholder="you@company.com"
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all bg-white/[0.03] border-white/[0.08] focus:ring-[#F5A623]/30 focus:border-[#F5A623]/50 text-[#F5F4F1] placeholder-white/25`}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 outline-none transition-all bg-white/[0.03] border-white/[0.08] focus:ring-[#F5A623]/30 focus:border-[#F5A623]/50 text-[#14203A] placeholder-white/25`}
                     onKeyDown={(e) => e.key === 'Enter' && handleForgotSendOtp()}
                   />
                 </div>
@@ -531,8 +539,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             {/* Step 4: Done */}
             {forgotPasswordStep === 'done' && (
               <div className="text-center py-4">
-                <div className="bg-green-500/20 text-green-400 p-3 rounded-lg text-sm border border-green-500/30 flex items-center justify-center gap-2">
-                  <Check className="w-4 h-4" /> Password updated! Redirecting to sign in...
+                <div className="bg-green-500/20 text-green-700 p-3 rounded-lg text-sm border border-green-500/30 flex items-center justify-center gap-2">
+                  <Check className="w-4 h-4" /> Password updated. Redirecting to sign in...
                 </div>
               </div>
             )}
@@ -547,7 +555,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   // ========================
   if (showOtpScreen) {
     return (
-      <div className={"min-h-screen flex items-center justify-center p-4"}>
+      <div className="min-h-screen flex items-center justify-center p-4" style={AUTH_BG}>
 
         <div className={`rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 ${theme === 'dark'
             ? 'bg-[#0d1117] border border-slate-700/50'
@@ -573,16 +581,16 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           {/* OTP Input */}
           <div className="p-8">
             {error && (
-              <div className="bg-red-500/20 text-red-400 p-3 rounded-lg text-sm mb-6 border border-red-500/30 flex items-start gap-2">
+              <div className="bg-red-500/20 text-red-700 p-3 rounded-lg text-sm mb-6 border border-red-500/30 flex items-start gap-2">
                 <XIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
             {otpSuccess && (
-              <div className="bg-green-500/20 text-green-400 p-3 rounded-lg text-sm mb-6 border border-green-500/30 flex items-center gap-2">
+              <div className="bg-green-500/20 text-green-700 p-3 rounded-lg text-sm mb-6 border border-green-500/30 flex items-center gap-2">
                 <Check className="w-4 h-4 flex-shrink-0" />
-                <span>Email verified! Redirecting...</span>
+                <span>Email verified. Redirecting...</span>
               </div>
             )}
 
@@ -604,7 +612,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   onKeyDown={(e) => handleOtpKeyDown(index, e)}
                   disabled={otpLoading || otpSuccess}
                   className={`w-12 h-14 text-center text-xl font-bold rounded-xl border-2 outline-none transition-all duration-200 ${otpSuccess
-                      ? 'border-green-500 bg-green-500/10 text-green-400'
+                      ? 'border-green-500 bg-green-500/10 text-green-700'
                       : digit
                         ? theme === 'dark'
                           ? 'border-[#F5A623] bg-[#F5A623]/5 text-[#F5A623]'
@@ -626,7 +634,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               {otpLoading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
               ) : otpSuccess ? (
-                <><Check className="w-4 h-4" /> Verified!</>
+                <><Check className="w-4 h-4" /> Verified</>
               ) : (
                 <><ShieldCheck className="w-4 h-4" /> Verify Email</>
               )}
@@ -661,9 +669,9 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   // LOGIN / SIGNUP SCREEN
   // ========================
   return (
-    <div className={"min-h-screen flex items-center justify-center p-4"}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={AUTH_BG}>
 
-      <div className={"rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 bg-[#111111] border border-white/[0.08]"}>
+      <div className={"rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 bg-[#FFFDF8] border border-[#E5D8BF]"}>
 
         {/* Header */}
         <div
@@ -672,22 +680,20 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             backgroundImage: `linear-gradient(to right, ${brandPrimaryColor}, ${brandSecondaryColor})`
           }}
         >
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#070A12]/20 mb-4 backdrop-blur-sm">
-            <img src="/assets/logo.png" alt="Nebulaa Gravity" className="w-12 h-12" />
-          </div>
-          <h1 className="text-2xl font-bold text-[#070A12] tracking-tight">Nebulaa</h1>
-          <h2 className="text-xl font-bold text-[#070A12] tracking-tight">Gravity</h2>
-          <p className="text-[#070A12]/80 text-sm mt-2">Marketing Agent & Growth Engine</p>
+          <h1 className="inline-flex items-center justify-center px-5 py-3 rounded-2xl bg-[#FFFDF8] shadow-sm mb-2">
+            <img src="/assets/logo-nebulaa.png" alt="Nebulaa" className="h-12 w-auto" />
+          </h1>
+          <p className="text-[#070A12]/80 text-sm mt-2">Your marketing, done for you</p>
         </div>
 
         {/* Form */}
         <div className="p-8">
-          <h2 className={"font-serif-display text-[26px] mb-6 text-center text-[#F5F4F1]"}>
+          <h2 className={"font-serif-display text-[26px] mb-6 text-center text-[#14203A]"}>
             {isLogin ? 'Welcome Back' : 'Create Secure Account'}
           </h2>
 
           {error && (
-            <div className="bg-red-500/20 text-red-400 p-3 rounded-lg text-sm mb-6 border border-red-500/30 flex items-start gap-2">
+            <div className="bg-red-500/20 text-red-700 p-3 rounded-lg text-sm mb-6 border border-red-500/30 flex items-start gap-2">
               <XIcon className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </div>
@@ -857,7 +863,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 };
 
 const CriteriaItem: React.FC<{ met: boolean; label: string; theme?: string }> = ({ met, label, theme }) => (
-  <li className={`flex items-center gap-2 ${met ? 'text-green-400' : theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
+  <li className={`flex items-center gap-2 ${met ? 'text-green-700' : theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
     {met ? <Check className="w-3 h-3" /> : <div className={`w-3 h-3 rounded-full border ${theme === 'dark' ? 'border-[#ededed]/30' : 'border-gray-400'}`} />}
     <span>{label}</span>
   </li>

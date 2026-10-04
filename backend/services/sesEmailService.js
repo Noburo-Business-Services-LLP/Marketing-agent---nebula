@@ -99,8 +99,8 @@ class SESEmailService {
       <p style="margin-top: 20px;">Please ensure everything is ready for your campaign launch. Review your content and targeting settings before it goes live.</p>
       
       <div class="footer">
-        <p>This is an automated reminder from Nebulaa Gravity.</p>
-        <p>© ${new Date().getFullYear()} Nebulaa Gravity - Your AI Marketing Assistant</p>
+        <p>This is an automated reminder from Nebulaa.</p>
+        <p>© ${new Date().getFullYear()} Nebulaa - Your AI Marketing Assistant</p>
       </div>
     </div>
   </div>
@@ -118,7 +118,7 @@ Platforms: ${platforms.join(', ')}
 Please ensure everything is ready for your campaign launch.
 
 ---
-Nebulaa Gravity - Your AI Marketing Assistant
+Nebulaa - Your AI Marketing Assistant
 `;
 
     try {
@@ -210,8 +210,8 @@ Nebulaa Gravity - Your AI Marketing Assistant
       <p>Your campaign has started. Monitor your dashboard for real-time performance metrics.</p>
       
       <div class="footer">
-        <p>This is an automated notification from Nebulaa Gravity.</p>
-        <p>© ${new Date().getFullYear()} Nebulaa Gravity - Your AI Marketing Assistant</p>
+        <p>This is an automated notification from Nebulaa.</p>
+        <p>© ${new Date().getFullYear()} Nebulaa - Your AI Marketing Assistant</p>
       </div>
     </div>
   </div>

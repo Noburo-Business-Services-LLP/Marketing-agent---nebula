@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
+import { tierLabel } from '../utils/plans';
 import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { jsPDF } from 'jspdf';
@@ -129,7 +130,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       }
     } catch (error: any) {
       setBizStatus('error');
-      setBizError(error.message || 'Failed to save business profile');
+      setBizError(error.message || 'The business profile could not be saved.');
     }
   };
 
@@ -137,7 +138,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
     setIsGeneratingPDF(true);
     try {
       const res = await apiService.getContentStrategy();
-      if (!res.success || !res.html) throw new Error(res.error || 'Failed to generate content strategy');
+      if (!res.success || !res.html) throw new Error(res.error || 'The content strategy could not be generated.');
       
       const doc = new jsPDF({
         orientation: 'portrait',
@@ -179,7 +180,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       });
       
     } catch (err: any) {
-      alert('Error generating PDF: ' + err.message);
+      alert('The PDF could not be generated: ' + err.message);
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -254,7 +255,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
           }
       } catch (error: any) {
           setSaveStatus('error');
-          setSaveError(error.message || 'Failed to save changes');
+          setSaveError(error.message || 'Your changes could not be saved.');
       }
   };
 
@@ -267,7 +268,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       try {
           await apiService.changePassword(passwordData.currentPassword, passwordData.newPassword);
           setPasswordStatus('saved');
-          setPasswordStatusMessage('Password changed successfully!');
+          setPasswordStatusMessage('Your password was changed successfully.');
           setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
           setTimeout(() => {
               setPasswordStatus('idle');
@@ -275,7 +276,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
           }, 3000);
       } catch (error: any) {
           setPasswordStatus('error');
-          setPasswordStatusMessage(error.message || 'Failed to change password');
+          setPasswordStatusMessage(error.message || 'Your password could not be changed.');
       }
   };
 
@@ -284,8 +285,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       <GravityHero
         align="left"
         eyebrow="Settings"
-        headline={<>Your account, your <GravityEmphasis>rules</GravityEmphasis></>}
-        subcopy="Profile, business details, notifications, security and billing."
+        headline={<>Manage your <GravityEmphasis>account</GravityEmphasis></>}
+        subcopy="Manage your profile, business details, notifications, security and billing in one place."
       />
 
       {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
@@ -300,7 +301,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                 activeTab === tab ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
               }`}
             >
-              {tab}
+              {tab === 'Business Profile' ? 'Business profile' : tab}
             </button>
           ))}
         </div>
@@ -312,7 +313,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8">
                   {activeTab === 'Profile' && (
                       <div className="animate-in fade-in duration-300">
-                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Profile Settings</h2>
+                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Profile settings</h2>
                           
                           <div className="space-y-6 mb-8">
                               <div className="grid grid-cols-2 gap-6">
@@ -436,11 +437,11 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                               {saveStatus === 'saving' ? (
                                   <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
                               ) : saveStatus === 'saved' ? (
-                                  <><Check className="w-4 h-4" /> Saved Successfully</>
+                                  <><Check className="w-4 h-4" /> Changes saved</>
                               ) : saveStatus === 'error' ? (
-                                  <><AlertCircle className="w-4 h-4" /> Save Failed</>
+                                  <><AlertCircle className="w-4 h-4" /> Save failed</>
                               ) : (
-                                  <><Save className="w-4 h-4" /> Save Changes</>
+                                  <><Save className="w-4 h-4" /> Save changes</>
                               )}
                           </button>
                       </div>
@@ -462,8 +463,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                     const industryOptions = ['Technology/SaaS', 'E-commerce/Retail', 'Food & Beverage', 'Fashion & Apparel', 'Beauty & Wellness', 'Healthcare', 'Education', 'Finance/Fintech', 'Real Estate', 'Travel & Hospitality', 'Media & Entertainment', 'Professional Services', 'Manufacturing', 'Automotive', 'Jewellery', 'Home & Furniture', 'Non-profit', 'Other'];
                     return (
                       <div className="animate-in fade-in duration-300">
-                        <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-2">Business Profile</h2>
-                        <p className={`text-sm mb-6 ${theme.textSecondary}`}>All answers from your onboarding questionnaire. Edit any field and click Save.</p>
+                        <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-2">Business profile</h2>
+                        <p className={`text-sm mb-6 ${theme.textSecondary}`}>This page shows the answers you gave during onboarding. Some fields are optional details that onboarding no longer asks for, so you can add them here. Edit any field, then select Save business profile.</p>
 
                         <div className="space-y-5 mb-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -570,7 +571,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                               </select>
                             </Field>
                             <Field label="Brand Voice">
-                              <input className={inputCls} value={Array.isArray(bizData.brandVoice) ? bizData.brandVoice.join(', ') : (bizData.brandVoice || '')} onChange={e => handleBizChange('brandVoice', e.target.value)} placeholder="e.g. Professional, Witty" />
+                              <input className={inputCls} value={Array.isArray(bizData.brandVoice) ? bizData.brandVoice.join(', ') : (bizData.brandVoice || '')} onChange={e => handleBizChange('brandVoice', e.target.value)} placeholder="For example: Professional, Witty" />
                             </Field>
                             {/* How much the AI monthly planner generates. Forward-only —
                                 changing this reshapes next month's plan, not the current
@@ -594,7 +595,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             </Field>
                           </div>
                           <p className={`text-[11.5px] -mt-3 ${theme.textMuted}`}>
-                            Applies to next month's plan onward — the current month stays as already generated.
+                            Changes apply from next month's plan onward. The current month's plan stays as it was generated.
                           </p>
 
                           <Field label="Marketing Goals (comma separated)">
@@ -614,7 +615,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                           </Field>
 
                           <Field label="Content Restrictions">
-                            <textarea className={`${inputCls} min-h-[70px]`} value={bizData.contentRestrictions || ''} onChange={e => handleBizChange('contentRestrictions', e.target.value)} placeholder="Anything we should avoid?" />
+                            <textarea className={`${inputCls} min-h-[70px]`} value={bizData.contentRestrictions || ''} onChange={e => handleBizChange('contentRestrictions', e.target.value)} placeholder="Describe anything Nebulaa should avoid." />
                           </Field>
 
                           <Field label="First Month Content Angles">
@@ -641,7 +642,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             {bizStatus === 'saving' ? (<><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>)
                             : bizStatus === 'saved' ? (<><Check className="w-4 h-4" /> Saved</>)
                             : bizStatus === 'error' ? (<><AlertCircle className="w-4 h-4" /> Failed</>)
-                            : (<><Save className="w-4 h-4" /> Save Business Profile</>)}
+                            : (<><Save className="w-4 h-4" /> Save business profile</>)}
                           </button>
                           
                           <button
@@ -660,7 +661,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
                   {activeTab === 'Security' && (
                       <div className="animate-in fade-in duration-300">
-                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Change Password</h2>
+                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Change password</h2>
                           
                           <div className="space-y-6 mb-8 max-w-md">
                               <div>
@@ -760,9 +761,9 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             className="px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm bg-[#F5A623] text-black hover:bg-[#F5A623]/80 disabled:opacity-50"
                           >
                               {passwordStatus === 'saving' ? (
-                                  <><Loader2 className="w-4 h-4 animate-spin" /> Changing Password...</>
+                                  <><Loader2 className="w-4 h-4 animate-spin" /> Changing password...</>
                               ) : (
-                                  <><Save className="w-4 h-4" /> Change Password</>
+                                  <><Save className="w-4 h-4" /> Change password</>
                               )}
                           </button>
                       </div>
@@ -772,13 +773,13 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                       <div className={`text-center py-12 rounded-lg border border-dashed ${
                         isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
                       }`}>
-                          <p>Advanced notification settings coming soon.</p>
+                          <p>Advanced notification settings are not available yet.</p>
                       </div>
                   )}
 
                   {activeTab === 'Billing' && (
                       <div className="animate-in fade-in duration-300">
-                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Billing & Invoices</h2>
+                          <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Billing and invoices</h2>
 
                           {loadingBilling ? (
                             <div className="flex items-center justify-center py-16">
@@ -796,7 +797,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Current Plan</p>
                                     <div className="flex items-center gap-3">
                                       <span className={`text-xl font-bold ${theme.text}`}>
-                                        {billingData.subscription.plan.charAt(0).toUpperCase() + billingData.subscription.plan.slice(1)}
+                                        {tierLabel(billingData.plan?.tier)}
                                       </span>
                                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                                         billingData.subscription.status === 'active'
@@ -814,6 +815,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       </p>
                                     )}
                                   </div>
+                                  <a href="#/trial-expired" className="text-sm font-semibold text-[#F5A623] hover:underline">Plans and Quarks</a>
                                   <CreditCard className={`w-8 h-8 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
                                 </div>
                               </div>
@@ -897,7 +899,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
                                 {(quarkCosts.competitor_scrape === 0) && (
                                   <p className="text-[11.5px] text-slate-500 mt-4 pt-3 border-t border-slate-200/40">
-                                    🔍 Competitor Intel is free.
+                                    Competitor Intel is free.
                                   </p>
                                 )}
                               </div>
@@ -968,7 +970,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                     isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
                                   }`}>
                                     <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                                    <p>No payments yet.</p>
+                                    <p>No payments have been made yet.</p>
                                   </div>
                                 )}
                               </div>
@@ -977,7 +979,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             <div className={`text-center py-12 rounded-lg border border-dashed ${
                               isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
                             }`}>
-                              <p>Could not load billing data. Try again later.</p>
+                              <p>Billing data could not be loaded. Please try again later.</p>
                             </div>
                           )}
                       </div>

@@ -47,8 +47,9 @@ import { useConfirm } from '../context/ConfirmContext';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from '../services/api';
+import type { HeroBrief } from '../services/api';
 import { Product, Draft } from '../types';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { updateBackgroundReel } from '../utils/backgroundReel';
 
 type AudioMode = 'off' | 'auto' | 'upload';
@@ -58,19 +59,19 @@ type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
 // public/assets/video-styles/<slug>.svg — drop a .jpg/.png in with the
 // same slug and swap the extension here to use real photography instead.
 const VIDEO_STYLES: { value: string; slug: string; blurb: string }[] = [
-  { value: 'Cinematic Commercial', slug: 'cinematic-commercial', blurb: 'Filmic grade, shallow depth, dramatic light' },
-  { value: 'Storytelling', slug: 'storytelling', blurb: 'Narrative arc with characters and emotional beats' },
-  { value: 'Product Advertisement', slug: 'product-advertisement', blurb: 'Clean studio focus on the product itself' },
-  { value: 'Daily Life Vlog', slug: 'daily-life-vlog', blurb: 'Handheld, casual, first-person energy' },
-  { value: 'Documentary', slug: 'documentary', blurb: 'Observational, grounded, real-world texture' },
-  { value: 'Educational', slug: 'educational', blurb: 'Clear explainer pacing with visual aids' },
-  { value: 'Motivational', slug: 'motivational', blurb: 'Rising energy, aspirational imagery' },
-  { value: 'Corporate Presentation', slug: 'corporate-presentation', blurb: 'Polished, professional, data-forward' },
-  { value: 'Testimonial', slug: 'testimonial', blurb: 'Customer to camera, trust-building' },
-  { value: 'Product Showcase', slug: 'product-showcase', blurb: 'Hero product on a lit stage' },
-  { value: 'News Update', slug: 'news-update', blurb: 'Broadcast framing with lower-third titling' },
-  { value: 'Social Media Reel', slug: 'social-media-reel', blurb: 'Fast cuts, vertical-first, punchy hooks' },
-  { value: 'Luxury Advertisement', slug: 'luxury-advertisement', blurb: 'Restrained, premium, gold and black' }
+  { value: 'Cinematic Commercial', slug: 'cinematic-commercial', blurb: 'Film-style colour grading, shallow depth of field and dramatic lighting' },
+  { value: 'Storytelling', slug: 'storytelling', blurb: 'A story with characters and clear emotional moments' },
+  { value: 'Product Advertisement', slug: 'product-advertisement', blurb: 'A clean studio look that keeps the focus on the product' },
+  { value: 'Daily Life Vlog', slug: 'daily-life-vlog', blurb: 'Handheld, casual footage filmed from a first-person view' },
+  { value: 'Documentary', slug: 'documentary', blurb: 'Observational footage with a realistic, natural look' },
+  { value: 'Educational', slug: 'educational', blurb: 'A clear, steady pace with visuals that support the explanation' },
+  { value: 'Motivational', slug: 'motivational', blurb: 'Building momentum with uplifting, aspirational imagery' },
+  { value: 'Corporate Presentation', slug: 'corporate-presentation', blurb: 'A polished, professional look that puts data first' },
+  { value: 'Testimonial', slug: 'testimonial', blurb: 'A customer speaking to the camera to build trust' },
+  { value: 'Product Showcase', slug: 'product-showcase', blurb: 'The product shown prominently on a lit set' },
+  { value: 'News Update', slug: 'news-update', blurb: 'News-broadcast framing with lower-third titles' },
+  { value: 'Social Media Reel', slug: 'social-media-reel', blurb: 'Fast cuts, vertical format and a strong opening moment' },
+  { value: 'Luxury Advertisement', slug: 'luxury-advertisement', blurb: 'A restrained, premium look in gold and black' }
 ];
 
 const FINAL_OUTPUT_STEP = 13;
@@ -130,7 +131,7 @@ const VOICE_GENDER_OPTIONS = [
 ];
 
 const SCENE_COUNT_OPTIONS = [
-  { value: '', label: 'Auto — let Gravity decide' },
+  { value: '', label: 'Auto (Nebulaa decides)' },
   ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1} scene${i ? 's' : ''}` })),
 ];
 
@@ -388,6 +389,7 @@ const ReelGenerator: React.FC = () => {
   // Aspect ratio chosen on Step 1 — propagated into every image + clip
   // gen call so images and Kling clips render in the correct format.
   type AspectRatio = '9:16' | '16:9' | '1:1' | '4:5';
+  const navigate = useNavigate();
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   // Scene previews are framed to the chosen aspect and use object-contain,
   // so the whole generated frame is always visible — never centre-cropped.
@@ -443,6 +445,64 @@ const ReelGenerator: React.FC = () => {
   // any state declaration further down the function body). ----
   const [promptText, setPromptText] = useState('');
   const [scenes, setScenes] = useState<any[]>([]);
+  // ---- Hero Studio entry (shown from Step 4 onward) ----
+  // Assembles the compact hero brief from the wizard state; Hero Studio sends it to
+  // /api/hero-video/brief, which validates it and loads the brand server-side.
+  const [heroEntryNote, setHeroEntryNote] = useState<string>('');
+  const buildHeroBrief = (): HeroBrief => {
+    const accepted = generatedCharacters.find((c) => c.id === acceptedCharacterId);
+    const ordered = accepted ? [accepted, ...generatedCharacters.filter((c) => c.id !== acceptedCharacterId)] : generatedCharacters;
+    const langLabel = (LANGUAGE_OPTIONS.find((o) => o.value === languageCode)?.label || 'English').split(' (')[0];
+    return {
+      concept: {
+        title: acceptedConcept?.title || '',
+        storySummary: acceptedConcept?.storySummary || '',
+        coreEmotion: acceptedConcept?.coreEmotion || '',
+        visualStyle: acceptedConcept?.visualStyle || '',
+      },
+      // The Hero clip has no 4:5; the nearest supported frame is square.
+      aspectRatio: aspectRatio === '4:5' ? '1:1' : aspectRatio,
+      language: langLabel,
+      cast: ordered.map((c) => ({
+        id: c.id, name: c.name, age: c.age, gender: c.gender, role: c.role, appearance: c.appearance,
+        clothing: c.clothing, hairStyle: c.hairStyle, hairColor: c.hairColor, personality: c.personality,
+        portraitUrl: c.portraitUrl || undefined,
+      })),
+      castSheetUrl: castImageUrl || undefined,
+      environment: {
+        enabled: environmentEnabled,
+        notes: environmentEnabled ? environmentNotes : '',
+        images: environmentEnabled
+          ? environmentRefs.slice(0, 5).map((r) => (r.url ? { url: r.url, alt: r.alt } : { dataUrl: r.dataUrl, alt: r.alt }))
+          : [],
+      },
+      scenes: scenes.map((s, i) => ({
+        sceneId: String(s.sceneId || `scene-${i + 1}`),
+        title: s.title || '',
+        script: s.scriptLine || s.voiceLine || '',
+        visual: s.visualDescription || '',
+        durationSeconds: Number(s.durationSeconds) || undefined,
+        charactersRequired: Array.isArray(s.charactersRequired) ? s.charactersRequired.map(String) : undefined,
+        imageUrl: s.imageUrl || undefined,
+      })),
+    };
+  };
+  const openHeroStudio = () => {
+    const hasScript = scenes.some((s) => String(s.scriptLine || s.voiceLine || s.visualDescription || '').trim());
+    if (!generatedCharacters.length) {
+      setHeroEntryNote('A Hero video is made with your cast. Create your cast here first, then press "Make this a Hero video" again from the script step.');
+      setStep(2);
+      return;
+    }
+    if (!hasScript) {
+      setHeroEntryNote('A Hero video is cut from your script and scenes. Write them here first, then press "Make this a Hero video" again.');
+      setStep(4);
+      return;
+    }
+    setHeroEntryNote('');
+    const styleSlug = VIDEO_STYLES.find((s) => s.value === videoStyle)?.slug;
+    navigate('/reels/hero', { state: { brief: buildHeroBrief(), style: styleSlug } });
+  };
   type StoryArc = {
     hook: string; beginning: string; emotionalProgression: string;
     climax: string; brandReveal: string; ending: string;
@@ -904,7 +964,7 @@ const ReelGenerator: React.FC = () => {
         }
 
         if (status === 'cancelled') {
-          setError('Job cancelled by user.');
+          setError('The task was cancelled.');
           setTimeout(() => resetActiveJobState(), 2000);
           break;
         }
@@ -1170,7 +1230,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     try {
       await fn();
     } catch (e: any) {
-      setError(e?.message || 'Something went wrong');
+      setError(e?.message || 'Something went wrong. Please try again.');
       setActiveJobStatus('failed');
     } finally {
       setBusy(false);
@@ -1264,7 +1324,7 @@ setCharacterAge(nextDraft?.characterAge || '');
         if (next.has(url)) next.delete(url); else next.add(url);
         return next;
       });
-      setError(e?.message || 'Failed to save favourite audio');
+      setError(e?.message || 'The audio could not be saved to your favourites.');
     }
   };
 
@@ -1352,7 +1412,7 @@ setCharacterAge(nextDraft?.characterAge || '');
       setVoiceCatalog((prev) => prev.map((v) =>
         v.voiceId === voice.voiceId ? { ...v, isFavourite: !v.isFavourite } : v
       ));
-      setError(e?.message || 'Failed to save favourite voice');
+      setError(e?.message || 'The voice could not be saved to your favourites.');
     }
   };
 
@@ -1411,7 +1471,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (jobId) return jobId;
     const effectiveDescription = description.trim() || fallbackDescription.trim();
     if (!effectiveDescription) {
-      throw new Error('Description is required');
+      throw new Error('Please add a description of the video.');
     }
 
     const response = await videoGenerationAPI.createDraft({
@@ -1456,7 +1516,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   // generate, below them once they exist — so it needs a shared reference.
   const runConceptGeneration = async () => {
     if (!description.trim()) {
-      setConceptError('Describe the video first.');
+      setConceptError('Describe the video first, then generate concepts.');
       return;
     }
     setConceptError('');
@@ -1487,7 +1547,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   });
 
   const step2Next = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     await videoGenerationAPI.updateDraft(jobId, {
       characterEnabled,
       characterImage,
@@ -1550,7 +1610,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   };
 
   const step3EnvNext = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     // Persist to backend so scene / image / clip pipelines can read it.
     await videoGenerationAPI.updateEnvironment({
       jobId,
@@ -1570,7 +1630,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   const startAutoGenerate = async () => withBusy(async () => {
     const effectiveDescription = description.trim();
     if (!effectiveDescription) {
-      throw new Error('Description is required');
+      throw new Error('Please add a description of the video.');
     }
 
     const payload = {
@@ -1626,7 +1686,7 @@ setCharacterAge(nextDraft?.characterAge || '');
       throw new Error(response?.message || 'Failed to start auto generation');
     }
 
-    setSuccessMessage('Saved to Drafts. Video is generating in background.');
+    setSuccessMessage('Saved to Drafts. The video is being generated in the background.');
     resetWizard(true);
     setStatusFilter('draft');
   });
@@ -1684,7 +1744,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     // the first generation has nothing to lose.
     if (scenes.length > 0 && !(await confirmDialog('This replaces the current one.', { title: 'Regenerate the script and scene breakdown?', confirmLabel: 'Regenerate' }))) return;
     return withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing. Complete step 1 first.');
+    if (!jobId) throw new Error('The draft could not be found. Complete step 1 first.');
 
     // 1) Generate the structured strategy prompt (writes draft.prompt).
     const promptResp = await videoGenerationAPI.generatePrompt({
@@ -1752,7 +1812,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   };
 
   const saveStep2EditsAndNext = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     await videoGenerationAPI.generatePrompt({
       jobId,
       promptText,
@@ -1777,12 +1837,12 @@ setCharacterAge(nextDraft?.characterAge || '');
     if (!Array.isArray(scenes) || scenes.length === 0) return;
     if (!(await confirmRegenerateCost(scenes.length, quarkCosts.video_scene_image || 0, `${scenes.length} scene image${scenes.length === 1 ? '' : 's'}`))) return;
     return withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     if (!Array.isArray(scenes) || scenes.length === 0) {
-      throw new Error('No scenes yet — generate Script + Scenes first.');
+      throw new Error('There are no scenes yet. Generate the script and scenes first.');
     }
     const anchor = castImageUrl || characterImage || '';
-    console.log('🎭 Sequential image gen · scenes:', scenes.length, '· cast anchor:', anchor ? '✓' : '(none)');
+    console.log('Sequential image gen · scenes:', scenes.length, '· cast anchor:', anchor ? '✓' : '(none)');
     setTotalScenesForRun(scenes.length);
     for (let i = 0; i < scenes.length; i++) {
       setPendingSceneIndex(i);
@@ -1810,7 +1870,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   // mode: 'watermark' (subtle corner) | 'prominent' (larger, wall-sign
   // style — used for brand-reveal / end scene) | 'off' (restore clean).
   const applyLogoToScene = async (sceneIdx: number, mode: 'watermark' | 'prominent' | 'off') => {
-    if (!jobId) { setError('Draft missing'); return; }
+    if (!jobId) { setError('The draft could not be found. Please start again from step 1.'); return; }
     const scene = scenes[sceneIdx];
     if (!scene) return;
     const sid = String(scene.sceneId || sceneIdx);
@@ -1832,7 +1892,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   // Apply the logo to EVERY scene in one click. Uses 'prominent' for
   // the last scene (brand reveal) and 'watermark' for the rest.
   const applyLogoToAllScenes = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     if (!Array.isArray(scenes) || scenes.length === 0) return;
     for (let i = 0; i < scenes.length; i++) {
       const isLast = i === scenes.length - 1;
@@ -1845,21 +1905,21 @@ setCharacterAge(nextDraft?.characterAge || '');
   });
 
   const removeLogoFromAllScenes = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     for (let i = 0; i < scenes.length; i++) {
       try { await applyLogoToScene(i, 'off'); } catch (_) { /* noop */ }
     }
   });
 
   const regenerateSceneImage = async (scene: any) => {
-    if (!jobId) { setError('Draft missing'); return; }
+    if (!jobId) { setError('The draft could not be found. Please start again from step 1.'); return; }
     if (!(await confirmRegenerateCost(1, quarkCosts.video_scene_image || 0, 'this scene image'))) return;
     const sid = String(scene.sceneId || '');
     // Find the scene's index in the current scenes array (source of
     // truth for the single-scene endpoint).
     const sceneIdx = scenes.findIndex((s) => String(s.sceneId || '') === sid);
     if (sceneIdx < 0) {
-      setError('Scene not found for regeneration');
+      setError('The scene to regenerate could not be found.');
       return;
     }
     markSceneRegenerating(sid, true);
@@ -1889,7 +1949,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   };
 
   const regenerateScene = async (scene: any) => {
-    if (!jobId) { setError('Draft missing'); return; }
+    if (!jobId) { setError('The draft could not be found. Please start again from step 1.'); return; }
     if (!(await confirmDialog('This replaces its current script details.', { title: "Regenerate this scene's breakdown?", confirmLabel: 'Regenerate' }))) return;
     const sid = String(scene.sceneId || '');
     markSceneRegenerating(sid, true);
@@ -1919,9 +1979,9 @@ setCharacterAge(nextDraft?.characterAge || '');
     const pending = (scenes || []).filter((s: any) => !s.clipUrl && s.imageUrl).length;
     if (pending > 0 && !(await confirmRegenerateCost(pending, quarkCosts.video_scene_clip || 0, `${pending} scene clip${pending === 1 ? '' : 's'}`))) return;
     return withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     if (!Array.isArray(scenes) || scenes.length === 0) {
-      throw new Error('No scenes to render — generate scenes + images first.');
+      throw new Error('There are no scenes to render. Generate the scenes and scene images first.');
     }
     setTotalScenesForRun(scenes.length);
     for (let i = 0; i < scenes.length; i++) {
@@ -1956,7 +2016,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   // appended to the Kling prompt as a hard override (user gets to
   // steer motion / performance for that specific shot).
   const regenerateSceneClip = async (sceneIdx: number, tweak: string = '') => {
-    if (!jobId) { setError('Draft missing'); return; }
+    if (!jobId) { setError('The draft could not be found. Please start again from step 1.'); return; }
     const scene = scenes[sceneIdx];
     if (!scene) return;
     if (!(await confirmRegenerateCost(1, quarkCosts.video_scene_clip || 0, 'this scene clip'))) return;
@@ -2007,7 +2067,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   });
 
   const generateAudioTracks = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     const response = await videoGenerationAPI.generateAudio({
       jobId,
       audio: buildAudioPayload(),
@@ -2031,7 +2091,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   });
 
   const mixAudio = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     const response = await videoGenerationAPI.mixAudio({
       jobId,
       tracks: generatedTracks || draft?.audio?.tracks || {},
@@ -2054,7 +2114,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   });
 
   const mergeVideo = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     const response = await videoGenerationAPI.mergeVideo({
       jobId,
       finalAudioUrl: finalAudioUrl || undefined,
@@ -2080,7 +2140,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   });
 
   const generateContent = async () => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
     const response = await videoGenerationAPI.generateContent({
       jobId,
       selectedPlatforms
@@ -2094,12 +2154,12 @@ setCharacterAge(nextDraft?.characterAge || '');
   });
 
   const schedulePost = async (publishNow = false) => withBusy(async () => {
-    if (!jobId) throw new Error('Draft missing');
-    if (!selectedPlatforms.length) throw new Error('Select at least one platform');
+    if (!jobId) throw new Error('The draft could not be found. Please start again from step 1.');
+    if (!selectedPlatforms.length) throw new Error('Select at least one platform.');
 
     let scheduledAt: string | undefined = undefined;
     if (!publishNow) {
-      if (!scheduleDate || !scheduleTime) throw new Error('Select date and time');
+      if (!scheduleDate || !scheduleTime) throw new Error('Select a date and a time.');
       scheduledAt = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
     }
 
@@ -2284,7 +2344,7 @@ setCharacterAge(nextDraft?.characterAge || '');
             <GravityHero
               align="left"
               eyebrow="Videos"
-              headline={<>Bring your brand to <GravityEmphasis>life</GravityEmphasis></>}
+              headline={<>Create videos for your <GravityEmphasis>brand</GravityEmphasis></>}
               subcopy="Create, schedule, and track your AI videos in one place."
               className="!mb-0"
             />
@@ -2596,6 +2656,39 @@ setCharacterAge(nextDraft?.characterAge || '');
               </button>
             )}
 
+            {heroEntryNote && (
+              <div role="status" className="rounded-xl border border-[rgb(var(--gv-accent-rgb)/0.35)] bg-[var(--gv-accent-fill)] px-5 py-3.5 flex items-start justify-between gap-4">
+                <div className="flex-1 text-[13px] text-[var(--gv-text-primary)]">{heroEntryNote}</div>
+                <button
+                  type="button"
+                  onClick={() => setHeroEntryNote('')}
+                  aria-label="Dismiss"
+                  className="flex-shrink-0 p-1 rounded-md text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {step >= 4 && (
+              <div className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Hero video</div>
+                  <div className="text-[12px] text-[var(--gv-text-tertiary)]">
+                    One premium 15-second clip from this story, cast and place. Scene images are optional and help keep faces consistent.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={openHeroStudio}
+                  disabled={busy}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-[rgb(var(--gv-accent-rgb)/0.45)] text-[var(--gv-accent-text)] hover:bg-[var(--gv-accent-fill)] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Make this a Hero video
+                </button>
+              </div>
+            )}
+
             {error && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/[0.08] px-5 py-3.5 flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -2707,8 +2800,8 @@ setCharacterAge(nextDraft?.characterAge || '');
               <div className="space-y-6">
                 <GravityHero
                   eyebrow="Videos"
-                  headline={<>What are we <GravityEmphasis>filming</GravityEmphasis>?</>}
-                  subcopy="Describe the video once. Gravity writes the script, casts the voice, and renders every scene."
+                  headline={<>Describe your <GravityEmphasis>video</GravityEmphasis></>}
+                  subcopy="Describe the video once. Nebulaa then writes the script, chooses the voice and creates every scene."
                 />
                 {/* Ideas already planned in the calendar. A button, not a
                     permanent tile wall — the brief is what this step is for. */}
@@ -2745,8 +2838,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                     rows={5}
                     className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-white/70 leading-relaxed resize-none placeholder:text-white/25"
                     placeholder={pickedIdea
-                      ? 'Loaded from your calendar — edit before continuing…'
-                      : 'e.g. A 30-second walkthrough of our new filter coffee — close-ups of the pour, steam rising, ending on the storefront at golden hour.'}
+                      ? 'Loaded from your calendar. Edit it before you continue.'
+                      : 'For example: A 30-second walkthrough of our new filter coffee, with close-ups of the pour and the steam, ending on the storefront at golden hour.'}
                   />
                 </GravityPanel>
                 {/* Settings. Previously six raw <select>s at xl:grid-cols-6;
@@ -2920,12 +3013,12 @@ setCharacterAge(nextDraft?.characterAge || '');
                           Creative Director · 3 concepts
                         </div>
                         <div className={`text-sm mt-1 ${theme.textSecondary}`}>
-                          Pick one to build the video around. Recommendation highlighted in gold.
+                          Choose one concept to build the video around. The recommended concept is highlighted in gold.
                         </div>
                       </div>
                       {acceptedConceptId && (
                         <div className="text-[11px] text-[#4ADE80] font-semibold">
-                          ✓ Accepted — you can proceed
+                          Concept accepted. You can continue.
                         </div>
                       )}
                     </div>
@@ -3023,7 +3116,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                                   : 'bg-white/[0.08] hover:bg-[#F5A623] text-[#F5F4F1] hover:text-[#1A1208]'
                               }`}
                             >
-                              {isAccepted ? '✓ Accepted' : 'Accept this concept'}
+                              {isAccepted ? 'Accepted' : 'Accept this concept'}
                             </button>
                           </div>
                         );
@@ -3093,10 +3186,10 @@ setCharacterAge(nextDraft?.characterAge || '');
                     Concept required
                   </div>
                   <div className={`text-sm ${theme.text} mb-1`}>
-                    Head back to Step 1 and accept a creative concept first.
+                    Go back to Step 1 and accept a creative concept first.
                   </div>
                   <div className={`text-xs ${theme.textSecondary} mb-4`}>
-                    The Character Designer builds characters specifically for the story you approve.
+                    Nebulaa designs the characters for the story you approve.
                   </div>
                   <button
                     onClick={() => setStep(1)}
@@ -3113,7 +3206,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Character Bible · from your accepted concept
                       </div>
                       <div className={`text-xs mt-1 ${theme.textSecondary}`}>
-                        The full cast is generated together in one reference image. Click a name below to make that character the lead the video follows — the rest stay in the cast for scene consistency.
+                        The full cast is generated together in one reference image. Select a name below to make that character the lead of the video. The other characters stay in the cast so that the scenes remain consistent.
                       </div>
                     </div>
                     <button
@@ -3125,7 +3218,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     >
                       {generatingCharacters2 ? (
                         <><Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1.5" />Generating…</>
-                      ) : (generatedCharacters.length > 0 ? '↻ Regenerate' : '✨ Generate')}
+                      ) : (generatedCharacters.length > 0 ? 'Regenerate' : 'Generate')}
                     </button>
                   </div>
 
@@ -3134,7 +3227,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   {generatingCharacters2 && generatedCharacters.length === 0 && (
                     <div className="flex items-center gap-2 py-6 justify-center text-white/50 text-sm">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Designing characters that match your concept…
+                      Designing characters that match your concept.
                     </div>
                   )}
 
@@ -3142,10 +3235,10 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <div className="py-8 text-center">
                       <Sparkles className="w-5 h-5 text-[#F5A623] mx-auto mb-2.5" />
                       <div className="text-[13.5px] text-[#F5F4F1]">
-                        Ready to design your cast from “{acceptedConcept?.title || 'your concept'}”.
+                        The cast is ready to be designed from “{acceptedConcept?.title || 'your concept'}”.
                       </div>
                       <div className="text-[12px] text-white/45 mt-1">
-                        Hit Generate above when you are — it costs Quarks, so nothing runs until you ask.
+                        Select Generate above to begin. This costs Quarks, so nothing runs until you ask.
                       </div>
                     </div>
                   )}
@@ -3178,7 +3271,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           )}
                           {acceptedCharacterId && (
                             <div className="absolute top-3 right-3 h-6 px-2 rounded-full bg-[#4ADE80] text-[#0A2A0F] text-[10px] font-bold uppercase tracking-wider flex items-center">
-                              ✓ Cast approved
+                              Cast approved
                             </div>
                           )}
                         </div>
@@ -3239,7 +3332,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           type="text"
                           value={castTweakPrompt}
                           onChange={(e) => setCastTweakPrompt(e.target.value)}
-                          placeholder="Tweak the cast image: e.g. 'warmer lighting', 'traditional attire', 'add glasses to father'"
+                          placeholder="Adjust the cast image, for example 'warmer lighting', 'traditional attire' or 'add glasses to the father'"
                           className="flex-1 h-10 px-3 rounded-md bg-white/[0.04] border border-white/[0.08] text-[12.5px] text-[#F5F4F1] placeholder:text-white/30 focus:outline-none focus:border-[#F5A623]/60"
                         />
                         <button
@@ -3251,14 +3344,14 @@ setCharacterAge(nextDraft?.characterAge || '');
                               : 'bg-white/[0.08] hover:bg-[#F5A623] text-[#F5F4F1] hover:text-[#1A1208]'
                           }`}
                         >
-                          {castImageLoading ? 'Rendering…' : (castTweakPrompt.trim() ? '↻ Regenerate with tweak' : '↻ Regenerate cast image')}
+                          {castImageLoading ? 'Rendering…' : (castTweakPrompt.trim() ? 'Regenerate with tweak' : 'Regenerate cast image')}
                         </button>
                       </div>
 
                       {/* Compact character bible list (text) */}
                       <details className="rounded-xl border border-white/[0.06] bg-white/[0.02]">
                         <summary className="cursor-pointer px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/50 hover:text-white/80">
-                          Character bible — full details
+                          Character bible: full details
                         </summary>
                         <div className="px-4 pb-4 space-y-3">
                           {generatedCharacters.map((ch) => (
@@ -3599,7 +3692,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   disabled={busy || (characterEnabled && !characterApproved && characterSource === 'generate')}
                   className="px-6 py-2.5 bg-[#F5A623] text-black font-semibold rounded-xl hover:bg-[#ffb833] transition disabled:opacity-50"
                 >
-                  {characterEnabled && !characterApproved && characterSource === 'generate' ? 'Approve Character to Continue' : 'Save & Next (Environment)'}
+                  {characterEnabled && !characterApproved && characterSource === 'generate' ? 'Approve Character to Continue' : 'Save and continue (Environment)'}
                 </button>
               </div>
             </div>
@@ -3611,7 +3704,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <div>
                   <GravityHero size="md" align="left" eyebrow="Videos" headline="Environment" />
                   <p className={`text-[12px] mt-1 ${theme.textSecondary}`}>
-                    Lock every scene to your actual space (shop, showroom, workshop, storefront). Every image + clip will render inside this exact environment.
+                    Keep every scene in your real space, such as a shop, showroom, workshop or storefront. Every image and clip is created inside this environment.
                   </p>
                 </div>
                 {/* ON/OFF toggle. flex-shrink-0 throughout: the knob is
@@ -3651,7 +3744,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                       Upload environment reference (1–5 images)
                     </label>
                     <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                      Wide shot of the space + a detail or two. Same lighting / angle-of-day as you want the video to feel like.
+                      A wide shot of the space and one or two detail shots. Use the same lighting and time of day that you want the video to have.
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2.5">
                       <GravityFileInput
@@ -3759,7 +3852,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <textarea
                       value={environmentNotes}
                       onChange={(e) => setEnvironmentNotes(e.target.value.slice(0, 500))}
-                      placeholder="e.g. 'warm wood tones, north-facing window light, traditional Chettinad furniture, brass fittings' — helps the model disambiguate what to preserve"
+                      placeholder="e.g. 'warm wood tones, north-facing window light, traditional Chettinad furniture, brass fittings' This helps Nebulaa identify what to preserve."
                       className={`${inputClass} mt-2 min-h-[80px]`}
                     />
                     <p className={`text-[10px] mt-1 text-right ${theme.textSecondary}`}>{environmentNotes.length}/500</p>
@@ -3775,9 +3868,9 @@ setCharacterAge(nextDraft?.characterAge || '');
                   onClick={step3EnvNext}
                   disabled={busy || (environmentEnabled && environmentRefs.length === 0)}
                   className={primaryButtonClass(busy || (environmentEnabled && environmentRefs.length === 0))}
-                  title={environmentEnabled && environmentRefs.length === 0 ? 'Add at least one reference image, or toggle OFF to skip' : undefined}
+                  title={environmentEnabled && environmentRefs.length === 0 ? 'Add at least one reference image, or turn the environment off to skip this step.' : undefined}
                 >
-                  {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Save & Next (Script + Scenes)'}
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Save and continue (Script and scenes)'}
                 </button>
               </div>
             </div>
@@ -3804,7 +3897,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 { text: 'Brand appears naturally near the end', ok: Boolean(String(story?.brandReveal || '').trim().length > 20) },
                 { text: 'Ending feels memorable', ok: Boolean(String(story?.ending || '').trim().length > 20) },
                 { text: 'Audience feels something BEFORE seeing the logo', ok: Boolean(String(story?.emotionalProgression || '').trim().length > 20) },
-                { text: "Tone matches this brand's tier — not a generic luxury film", ok: (scenes || []).length > 0 },
+                { text: "The tone suits this brand's price tier and does not read as a generic luxury film", ok: (scenes || []).length > 0 },
               ];
               const rulesPassed = rules.filter((r) => r.ok).length;
 
@@ -3818,12 +3911,12 @@ setCharacterAge(nextDraft?.characterAge || '');
                   <div>
                     <GravityHero size="md" align="left" eyebrow="Videos" headline="Script + Scenes" />
                     <p className={`text-xs mt-0.5 ${theme.textSecondary}`}>
-                      Story arc · Voiceover · Scene-by-scene breakdown — production-ready and editable.
+                      Includes the story arc, the voiceover and a scene-by-scene breakdown. All of it can be edited.
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={generatePromptAndScenes} disabled={busy} className="px-4 py-2 rounded-xl bg-[#F5A623] text-[#1A1208] font-semibold hover:bg-[#ffb833] disabled:opacity-60">
-                      {busy ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />Generating…</> : (scenes.length > 0 ? '↻ Regenerate all' : '✨ Generate Script + Scenes')}
+                      {busy ? <><Loader2 className="w-4 h-4 animate-spin inline mr-1.5" />Generating…</> : (scenes.length > 0 ? 'Regenerate all' : 'Generate script and scenes')}
                     </button>
                     <button onClick={() => refreshDraft()} className="px-3 py-2 rounded-xl border border-white/10 text-white/70 hover:text-white hover:bg-white/[0.04]">
                       <RefreshCcw className="w-4 h-4 inline mr-1" /> Refresh
@@ -3834,8 +3927,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                 {/* Empty state — nudge user to generate */}
                 {scenes.length === 0 && !busy && (
                   <div className="rounded-2xl border border-[#F5A623]/25 bg-[#F5A623]/[0.03] p-8 text-center">
-                    <div className="gravity-label text-[#F5A623] mb-2">Ready when you are</div>
-                    <p className={`text-sm ${theme.text}`}>Click <b>Generate Script + Scenes</b> to build the story arc, full voiceover, and scene-by-scene breakdown from your approved concept.</p>
+                    <div className="gravity-label text-[#F5A623] mb-2">Script not yet generated</div>
+                    <p className={`text-sm ${theme.text}`}>Select <b>Generate script and scenes</b> to create the story arc, the full voiceover and a scene-by-scene breakdown from your approved concept.</p>
                   </div>
                 )}
 
@@ -3927,7 +4020,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                             value={promptText}
                             onChange={(e) => setPromptText(e.target.value)}
                             className={`${inputClass} mt-4 min-h-[110px] text-[13px] leading-relaxed text-left`}
-                            placeholder="Or write your own narration here — one line per sentence, natural pauses."
+                            placeholder="Or write your own narration here. Use one line per sentence so that the voice pauses naturally."
                             disabled={busy}
                           />
                         </div>
@@ -3937,7 +4030,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                             value={promptText}
                             onChange={(e) => setPromptText(e.target.value)}
                             className={`${inputClass} min-h-[180px] leading-relaxed text-[13.5px]`}
-                            placeholder="The full narration, one line per sentence — will be spoken by ElevenLabs / your chosen TTS voice."
+                            placeholder="The full narration, one line per sentence. It will be spoken by ElevenLabs or the text-to-speech voice you choose."
                             disabled={busy}
                           />
                           <div className={`mt-2 text-[11px] ${theme.textMuted}`}>
@@ -4137,7 +4230,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-[2px]">
                                   <Sparkles className="w-7 h-7 text-[#F5A623] animate-pulse" />
                                   <p className="text-sm font-semibold text-[#F5A623] tracking-wide">
-                                    {isRegen ? 'Regenerating scene...' : `Writing scene ${idx + 1}...`}
+                                    {isRegen ? 'Regenerating this scene.' : `Writing scene ${idx + 1}.`}
                                   </p>
                                 </div>
                               </div>
@@ -4188,7 +4281,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     ← Back to Character & Style
                   </button>
                   <button onClick={saveStep2EditsAndNext} disabled={!canStep2Next} className={primaryButtonClass(!canStep2Next)}>
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Save & Next (Scene Images)'}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Save and continue (Scene images)'}
                   </button>
                 </div>
               </div>
@@ -4213,7 +4306,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Rendering scene {pendingSceneIndex + 1} of {totalScenesForRun}…
                       </p>
                       <p className={`text-xs ${theme.textSecondary}`}>
-                        Nano Banana · consistent characters + locked environment
+                        Characters and environment stay consistent across scenes
                       </p>
                     </div>
                     <span className="text-xs text-[#F5A623] font-semibold tabular-nums">
@@ -4224,7 +4317,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 <div className="flex flex-wrap items-center gap-2">
                   <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.imageUrl) ? 'Regenerate All Scene Images' : 'Generate All Scene Images')}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.imageUrl) ? 'Regenerate all scene images' : 'Generate all scene images')}
                   </button>
                   {scenes.some((s) => s.imageUrl) && (
                     <>
@@ -4234,7 +4327,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         className="px-4 py-2 rounded-xl bg-[#F5A623] text-black font-semibold disabled:opacity-50"
                         title="Composite your brand logo (from Brand Assets) onto every scene image"
                       >
-                        Apply Logo to All
+                        Apply logo to all
                       </button>
                       {scenes.some((s) => s.logoApplied) && (
                         <button
@@ -4242,7 +4335,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           disabled={busy}
                           className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300 font-semibold disabled:opacity-50"
                         >
-                          Remove Logo from All
+                          Remove logo from all
                         </button>
                       )}
                     </>
@@ -4351,7 +4444,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                               }`}
                               title={scene.logoApplied ? `Logo applied (${scene.logoMode || 'watermark'}). Click to remove.` : 'Composite your actual brand logo onto this image'}
                             >
-                              {scene.logoApplied ? '✓ Logo On' : 'Use Logo'}
+                              {scene.logoApplied ? 'Logo on' : 'Use logo'}
                             </button>
                           )}
                         </div>
@@ -4381,7 +4474,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         Rendering scene {pendingSceneIndex + 1} of {totalScenesForRun}
                       </p>
                       <p className={`text-xs ${theme.textSecondary}`}>
-                        Kling v2.5 Turbo Pro · characters performing to scene direction
+                        Characters act out the scene direction
                       </p>
                     </div>
                   </div>
@@ -4389,7 +4482,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 <div className="flex flex-wrap gap-2">
                   <button onClick={generateClips} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.clipUrl) ? 'Resume / Continue' : 'Generate All Clips')}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.clipUrl) ? 'Resume' : 'Generate all clips')}
                   </button>
                   {scenes.some((s) => s.clipUrl) && (
                     <button
@@ -4457,7 +4550,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           </button>
                           <input
                             type="text"
-                            placeholder="Tweak (e.g. 'slower dolly-in, character smiles')"
+                            placeholder="Adjust this clip, for example 'slower push-in, the character smiles'"
                             value={scene.videoRegenTweakDraft || ''}
                             onChange={(e) => setScenes((prev) => prev.map((item, i) => i === idx ? { ...item, videoRegenTweakDraft: e.target.value } : item))}
                             disabled={busy || isRegen || isPending}
@@ -4530,7 +4623,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         onChange={(e) => setMusicSource(e.target.value as 'tone' | 'library' | 'elevenlabs_ai')}
                         className={`${inputClass} mt-2`}
                       >
-                        <option value="elevenlabs_ai">✨ AI-Composed (ElevenLabs)</option>
+                        <option value="elevenlabs_ai">AI-composed (ElevenLabs)</option>
                         <option value="library">Library (by duration)</option>
                         <option value="tone">Tone Pack (default)</option>
                       </select>
@@ -4585,7 +4678,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         className="px-3 py-1.5 text-xs rounded-lg border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-50 flex items-center gap-1.5"
                       >
                         {voiceCatalogLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                        {voiceCatalog.length > 0 ? 'Refresh' : 'Load Voices'}
+                        {voiceCatalog.length > 0 ? 'Refresh' : 'Load voices'}
                       </button>
                     </div>
 
@@ -4602,7 +4695,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           No native {audioLanguageCode.toUpperCase()} voices found on your ElevenLabs account.
                         </p>
                         <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                          You can enable multilingual fallback — voices that aren't native but can speak
+                          You can enable multilingual voices. These are voices that are not native to this language but can speak
                           {' '}{audioLanguageCode.toUpperCase()} via ElevenLabs multilingual v2 (accent may not sound authentic).
                         </p>
                         <button
@@ -4668,7 +4761,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                               </div>
                               {isSelected && (
                                 <div className="mt-2 text-[10px] font-semibold text-[#F5A623] uppercase tracking-wide">
-                                  ✓ Selected for this video
+                                  Selected for this video
                                 </div>
                               )}
                             </div>
@@ -4679,7 +4772,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                     {voiceCatalog.length === 0 && !voiceCatalogLoading && !voiceCatalogError && !voiceCatalogCanFallback && (
                       <p className={`text-xs ${theme.textSecondary}`}>
-                        Click "Load Voices" to fetch ElevenLabs voices for {audioLanguageCode.toUpperCase()} · {voiceGender}.
+                        Select "Load voices" to fetch ElevenLabs voices for {audioLanguageCode.toUpperCase()} · {voiceGender}.
                       </p>
                     )}
                   </div>
@@ -4691,7 +4784,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     <textarea
                       value={musicPrompt}
                       onChange={(e) => setMusicPrompt(e.target.value.slice(0, 500))}
-                      placeholder="Leave empty to auto-derive from voice script + scene emotions. Or type your own — e.g. 'warm sentimental Indian classical instrumental, gentle strings, tabla rhythm, no vocals'"
+                      placeholder="Leave this empty to base the music on the voice script and the scene emotions, or describe your own. For example: 'warm, sentimental Indian classical instrumental with gentle strings and tabla rhythm, no vocals'."
                       className={`${inputClass} mt-2 min-h-[70px] w-full`}
                     />
                     <p className={`text-[10px] mt-1 text-right ${theme.textSecondary}`}>{musicPrompt.length}/500 · ElevenLabs eleven_music</p>
@@ -4708,7 +4801,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                       className={`${inputClass} mt-2 w-full`}
                     />
                     <p className={`text-[11px] mt-1 ${theme.textSecondary}`}>
-                      Leave empty to auto-pick a track for this video duration.
+                      Leave this empty and Nebulaa chooses a track that fits the video length.
                     </p>
                   </div>
                 )}
@@ -4738,7 +4831,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 <div className="flex flex-wrap gap-3">
                   <button onClick={generateAudioPreview} disabled={!canAudioPreview} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Audio Preview'}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate audio preview'}
                   </button>
                   <button onClick={mixAudio} disabled={busy || !generatedTracks} className="px-4 py-2 rounded-xl border border-slate-500 text-slate-300 font-semibold disabled:opacity-60">
                     Mix Preview
@@ -4869,7 +4962,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <GravityHero size="md" align="left" eyebrow="Videos" headline="Video Merge" />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <button onClick={mergeVideo} disabled={busy} className="px-5 py-3 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-60">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge Video + Audio'}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Merge video and audio'}
                   </button>
                   <button onClick={() => setStep(10)} disabled={!canStep7Next} className={primaryButtonClass(!canStep7Next)}>Next</button>
                 </div>
@@ -4886,7 +4979,7 @@ setCharacterAge(nextDraft?.characterAge || '');
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="Videos" headline="Thumbnail + Content" />
                 <button onClick={generateContent} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
-                  {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate Thumbnail + Caption + Hashtags'}
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Generate thumbnail, caption and hashtags'}
                 </button>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} border rounded-xl p-3`}>
@@ -4955,7 +5048,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => schedulePost(false)} disabled={!canSchedule} className={primaryButtonClass(!canSchedule)}>
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Post / Schedule'}
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : 'Post or schedule'}
                   </button>
                   <button onClick={() => schedulePost(true)} disabled={busy} className="px-6 py-3 rounded-xl border border-slate-500 text-slate-200 font-semibold">
                     Publish Now
@@ -5016,7 +5109,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     onClick={() => resetWizard()}
                     className="px-6 py-3 rounded-xl border border-slate-500 text-slate-200 font-semibold"
                   >
-                    Start New Wizard
+                    Start a new video
                   </button>
                 </div>
               </div>
@@ -5064,6 +5157,7 @@ setCharacterAge(nextDraft?.characterAge || '');
         >
           <div
             className="relative w-full max-w-[1080px] max-h-[92vh] bg-[#0A0A0A] rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col md:flex-row"
+            data-nb-surface="dark"
             onClick={(e) => e.stopPropagation()}
           >
             <button
