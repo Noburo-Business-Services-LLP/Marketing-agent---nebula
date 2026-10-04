@@ -79,3 +79,8 @@ Result: **no Critical issues; three Important issues to fix before any deploy.**
 - **Check by eye** (longer sentences now): the step buttons in the Videos wizard ("Save and continue (Script and scenes)"), the video style blurbs on the style cards, and the AdCampaigns banner titles.
 - **Owner-side items still open (nothing a developer session can do without the owner/dev):** the AWS Secrets Manager step for `RAZORPAY_WEBHOOK_SECRET` (the owner's developer is unwell; steps are in "Update 4"); the Razorpay Dashboard webhook (create a NEW webhook for the production host and keep the existing `demo.nebulaa.ai` one unchanged); the push of `dev-dk` and `nebulaa-redesign` (blocked in the previous session by the permission classifier: run the two commands in "Update 4" in a terminal); the deploy-path decision; the Razorpay and GST checks in "Update 3".
 - Test status at the end of the session: frontend 98, backend 464, tsc 3 pre-existing errors. Working tree clean. Nothing pushed or deployed.
+
+## Update 6, 2026-10-04 night: push status (supersedes the push lines in Updates 4 and 5)
+
+- `dev-dk` (Hero Studio) **is pushed**: `c2b42b9..11e0954` on `origin/dev-dk`.
+- `nebulaa-redesign` is **still local only** (about 87 commits on top of `dev-dk`). The owner approved the push, but the Claude Code permission classifier blocked creating the new remote branch from the session. Run this once in a terminal to publish it: `cd "<repo>/nebula-worktrees/nebulaa-redesign" && git push -u origin nebulaa-redesign` (or add a Bash permission rule for it). Until it runs, this Mac is the only copy of the redesign, plans/Quarks, Blueprint and voice work.
