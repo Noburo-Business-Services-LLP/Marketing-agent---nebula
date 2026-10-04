@@ -296,6 +296,15 @@ const generateContextAwareCaption = (topic: string, business?: BusinessProfile) 
 // API SERVICE EXPORTS
 // ============================================
 
+// GET /api/payment/plans: every amount is integer paise or whole rupees from the server config.
+export interface PlanPrice { inr: number; gstPaise: number; chargePaise: number }
+export interface PlansResponse {
+  success: boolean;
+  plans: Array<PlanPrice & { id: 'starter' | 'professional'; name: string; description: string; quarks: number; features: string[] }>;
+  topups: Array<PlanPrice & { quarks: number }>;
+  addons: Array<PlanPrice & { id: 'publish' | 'competitors' | 'inbox' | 'bundle'; label: string; requires: string[]; includes: string[] }>;
+}
+
 export const apiService = {
   // ============================================
   // REAL AUTHENTICATION ENDPOINTS
@@ -416,19 +425,23 @@ export const apiService = {
   },
 
   // Payment / Razorpay
-  createPaymentOrder: async (amount: number): Promise<any> => {
-    return apiCall('/payment/create-order', { method: 'POST', body: JSON.stringify({ amount }) }, true);
+  createPaymentOrder: async (packInr: number): Promise<any> => {
+    return apiCall('/payment/create-order', { method: 'POST', body: JSON.stringify({ packInr }) }, true);
   },
 
   verifyPayment: async (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<any> => {
     return apiCall('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
-  createSubscription: async (planId: string, couponCode?: string): Promise<any> => {
+  createSubscription: async (planId: 'starter' | 'professional', couponCode?: string): Promise<any> => {
     return apiCall('/payment/create-subscription', { method: 'POST', body: JSON.stringify({ planId, couponCode: couponCode || '' }) }, true);
   },
 
-  getPlans: async (): Promise<any> => {
+  createAddonSubscription: async (addon: 'publish' | 'competitors' | 'inbox' | 'bundle'): Promise<any> => {
+    return apiCall('/payment/create-addon-subscription', { method: 'POST', body: JSON.stringify({ addon }) }, true);
+  },
+
+  getPlans: async (): Promise<PlansResponse> => {
     return apiCall('/payment/plans', { method: 'GET' }, false);
   },
 
@@ -4000,8 +4013,8 @@ export const contentCalendarAPI = {
 // ============================================
 
 export const paymentService = {
-  createOrder: async (): Promise<any> => {
-    return apiCall<any>('/payment/create-order', { method: 'POST' }, true);
+  createOrder: async (packInr: number): Promise<any> => {
+    return apiCall<any>('/payment/create-order', { method: 'POST', body: JSON.stringify({ packInr }) }, true);
   },
 
   verify: async (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }): Promise<any> => {

@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import { UploadCloud, Loader2, Sparkles, Calendar, Send, X, Instagram, Facebook, Linkedin, Twitter, Check } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 const PLATFORMS = [
   { key: 'instagram', label: 'Instagram', Icon: Instagram },
@@ -33,6 +35,7 @@ const UploadAndSchedule: React.FC = () => {
   const [mediaUrl, setMediaUrl] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
   const [done, setDone] = useState('');
   const [dragging, setDragging] = useState(false);
 
@@ -67,8 +70,8 @@ const UploadAndSchedule: React.FC = () => {
   };
 
   const run = async (key: string, fn: () => Promise<void>) => {
-    setBusy(key); setError(''); setDone('');
-    try { await fn(); } catch (e: any) { setError(e?.message || 'Something went wrong. Please try again.'); }
+    setBusy(key); setError(''); setDone(''); setUpgrade(null);
+    try { await fn(); } catch (e: any) { const u = upgradeInfoOf(e); if (u) setUpgrade(u); else setError(e?.message || 'Something went wrong. Please try again.'); }
     finally { setBusy(''); }
   };
 
@@ -222,6 +225,7 @@ const UploadAndSchedule: React.FC = () => {
               />
             </div>
 
+            {upgrade && <UpgradePrompt reason={upgrade.reason} feature={upgrade.feature} />}
             {error && <p className="text-[12.5px] text-red-300 bg-red-500/[0.08] border border-red-400/20 px-3.5 py-2.5 rounded-xl">{error}</p>}
             {done && (
               <p className="text-[12.5px] text-emerald-300 bg-emerald-500/[0.08] border border-emerald-400/20 px-3.5 py-2.5 rounded-xl flex items-center gap-2">

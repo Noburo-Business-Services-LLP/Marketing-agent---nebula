@@ -12,6 +12,8 @@ import {
 } from '../components/gravity';
 import UnifiedInbox from './UnifiedInbox';
 import AutoReplySettingsPage from './AutoReplySettingsPage';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -56,6 +58,7 @@ const ConnectSocials: React.FC = () => {
   const [inboxSummary, setInboxSummary] = useState<InboxSummary | null>(null);
   const [inboxSummaryLoading, setInboxSummaryLoading] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
   
   // Connection State
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
@@ -376,6 +379,7 @@ const ConnectSocials: React.FC = () => {
 
   const initiateConnection = async (platform: string) => {
     setManualAuthUrl(null);
+    setUpgrade(null);
     setLoadingPlatform(platform);
     setConnectingPlatform(platform);
     const popupName = `nebula-social-${platform.toLowerCase()}`;
@@ -417,6 +421,8 @@ const ConnectSocials: React.FC = () => {
         pendingPopup.close();
       }
       console.error('OAuth connect error:', error);
+      const needsUpgrade = upgradeInfoOf(error);
+      if (needsUpgrade) { setUpgrade(needsUpgrade); setLoadingPlatform(null); setConnectingPlatform(null); return; }
       setNotification({
         type: 'error',
         message: error.message || `Nebulaa could not connect to ${platform}.`
@@ -534,6 +540,7 @@ const ConnectSocials: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto relative">
+      {upgrade && <UpgradePrompt className="mb-6" reason={upgrade.reason} feature={upgrade.feature} />}
       {/* Notification Toast */}
       {notification && (
         <div className={`fixed top-4 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg border animate-in slide-in-from-top-2 duration-300 flex items-start gap-3 ${

@@ -8,6 +8,8 @@ import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
+import UpgradePrompt from '../components/UpgradePrompt';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 // Gravity Approve — matches the prototype's Approve screen: single big
 // preview on the left, structured metadata + caption on the right,
@@ -47,6 +49,7 @@ const GravityApprove: React.FC = () => {
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
   // Grid is for bulk triage across everything awaiting review at once;
   // single is the full detail view. A customer with fifty drafts going
   // through them one swipe at a time is the exact problem this solves.
@@ -280,7 +283,8 @@ const GravityApprove: React.FC = () => {
         return next;
       });
     } catch (e: any) {
-      setError(e?.message || 'The post could not be approved.');
+      const u = upgradeInfoOf(e);
+      if (u) setUpgrade(u); else setError(e?.message || 'The post could not be approved.');
       throw e;
     }
   };
@@ -878,6 +882,7 @@ const GravityApprove: React.FC = () => {
       </div>
       )}
 
+      {upgrade && <UpgradePrompt className="mt-6" reason={upgrade.reason} feature={upgrade.feature} />}
       {error && (
         <div className="mt-6 text-center text-[12px] text-red-400">{error}</div>
       )}

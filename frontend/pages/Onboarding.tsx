@@ -119,6 +119,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         ]
     );
     const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+    // Free accounts cannot connect social accounts (it comes with the Publish and schedule add-on),
+    // so the connect step shows a note for them and never calls the connect API.
+    const [planTier, setPlanTier] = useState<string>('');
+    useEffect(() => {
+        apiService.getBillingData().then((b: any) => setPlanTier(b?.plan?.tier || '')).catch(() => {});
+    }, []);
     const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
 
     // Website analysis state
@@ -1068,6 +1074,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         {step === 4 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
                                 <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>Connect Your Accounts</h3>
+                                {planTier === 'free' ? (
+                                    <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>
+                                        Connecting your social media accounts comes with the Publish and schedule add-on, which you can add to a Starter or Professional plan at any time. You can continue without connecting an account.
+                                    </p>
+                                ) : (
+                                <>
                                 <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>
                                     Link your social media accounts to enable seamless publishing and analytics. 
                                     <span className="text-[#F5A623] font-medium"> This step is optional.</span>
@@ -1140,6 +1152,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         <Check className="w-4 h-4" />
                                         {socialConnections.filter(s => s.connected).length} account(s) connected
                                     </div>
+                                )}
+                                </>
                                 )}
                             </div>
                         )}

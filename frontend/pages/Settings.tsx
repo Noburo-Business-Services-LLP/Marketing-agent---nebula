@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
+import { tierLabel } from '../utils/plans';
 import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { jsPDF } from 'jspdf';
@@ -796,7 +797,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Current Plan</p>
                                     <div className="flex items-center gap-3">
                                       <span className={`text-xl font-bold ${theme.text}`}>
-                                        {billingData.subscription.plan.charAt(0).toUpperCase() + billingData.subscription.plan.slice(1)}
+                                        {tierLabel(billingData.plan?.tier)}
                                       </span>
                                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                                         billingData.subscription.status === 'active'
@@ -814,6 +815,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       </p>
                                     )}
                                   </div>
+                                  <a href="#/trial-expired" className="text-sm font-semibold text-[#F5A623] hover:underline">Plans and Quarks</a>
                                   <CreditCard className={`w-8 h-8 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
                                 </div>
                               </div>
