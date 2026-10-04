@@ -679,10 +679,9 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
             backgroundImage: `linear-gradient(to right, ${brandPrimaryColor}, ${brandSecondaryColor})`
           }}
         >
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#070A12]/20 mb-4 backdrop-blur-sm">
-            <img src="/assets/logo.png" alt="Nebulaa" className="w-12 h-12" />
-          </div>
-          <h1 className="text-2xl font-bold text-[#070A12] tracking-tight">Nebulaa</h1>
+          <h1 className="inline-flex items-center justify-center px-5 py-3 rounded-2xl bg-[#FFFDF8] shadow-sm mb-2">
+            <img src="/assets/logo-nebulaa.png" alt="Nebulaa" className="h-12 w-auto" />
+          </h1>
           <p className="text-[#070A12]/80 text-sm mt-2">Your marketing, done for you</p>
         </div>
 
