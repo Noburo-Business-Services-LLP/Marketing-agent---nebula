@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "client": {
+    "name": "Sweet Co",
+    "website": "https://sweetco.in/",
+    "instagram": "",
+    "city": "Chennai"
+  },
+  "facts": [
+    {
+      "id": "F1",
+      "tag": "verified",
+      "kind": "typed",
+      "field": "Business name",
+      "subject": null,
+      "text": "Business name: Sweet Co",
+      "quote": "Sweet Co",
+      "source": {
+        "type": "typed",
+        "field": "Business name"
+      }
+    },
+    {
+      "id": "F2",
+      "tag": "verified",
+      "kind": "typed",
+      "field": "What you sell",
+      "subject": null,
+      "text": "What you sell: Custom cakes baked to order.",
+      "quote": "Custom cakes baked to order.",
+      "source": {
+        "type": "typed",
+        "field": "What you sell"
+      }
+    },
+    {
+      "id": "F3",
+      "tag": "verified",
+      "kind": "typed",
+      "field": "Who it is for",
+      "subject": null,
+      "text": "Who it is for: Families in Chennai",
+      "quote": "Families in Chennai",
+      "source": {
+        "type": "typed",
+        "field": "Who it is for"
+      }
+    },
+    {
+      "id": "F4",
+      "tag": "verified",
+      "kind": "typed",
+      "field": "Main goal",
+      "subject": null,
+      "text": "Main goal: enquiries",
+      "quote": "enquiries",
+      "source": {
+        "type": "typed",
+        "field": "Main goal"
+      }
+    },
+    {
+      "id": "F5",
+      "tag": "verified",
+      "kind": "typed",
+      "field": "Offer",
+      "subject": null,
+      "text": "Offer: Birthday cake, ₹499",
+      "quote": "Birthday cake",
+      "source": {
+        "type": "typed",
+        "field": "Offer"
+      }
+    },
+    {
+      "id": "F6",
+      "tag": "verified",
+      "kind": "page",
+      "field": "Page title",
+      "subject": null,
+      "text": "Page title: Sweet Co | Custom cakes",
+      "quote": "Sweet Co | Custom cakes",
+      "source": {
+        "type": "page",
+        "url": "https://sweetco.in/",
+        "field": "title"
+      }
+    },
+    {
+      "id": "F7",
+      "tag": "verified",
+      "kind": "page",
+      "field": "Page description",
+      "subject": null,
+      "text": "Page description: Custom cakes baked to order in Chennai.",
+      "quote": "Custom cakes baked to order in Chennai.",
+      "source": {
+        "type": "page",
+        "url": "https://sweetco.in/",
+        "field": "description"
+      }
+    },
+    {
+      "id": "F8",
+      "tag": "verified",
+      "kind": "page",
+      "field": "Heading",
+      "subject": null,
+      "text": "Heading: Cakes for every day",
+      "quote": "Cakes for every day",
+      "source": {
+        "type": "page",
+        "url": "https://sweetco.in/",
+        "field": "heading"
+      }
+    },
+    {
+      "id": "F9",
+      "tag": "verified",
+      "kind": "competitor_page",
+      "field": "Page title",
+      "subject": "Rival Cakes",
+      "text": "Rival Cakes, Page title: Rival Cakes | Fresh bakes",
+      "quote": "Rival Cakes | Fresh bakes",
+      "source": {
+        "type": "competitor",
+        "url": "https://rivalcakes.in/",
+        "field": "title"
+      }
+    }
+  ],
+  "unverified": [
+    {
+      "id": "U1",
+      "text": "Instagram page",
+      "reason": "The Instagram page could not be read."
+    },
+    {
+      "id": "U2",
+      "text": "Competitor Other Bakery",
+      "reason": "Named by you; not researched"
+    }
+  ],
+  "removed": 0,
+  "assets": {
+    "logo": {
+      "url": "https://sweetco.in/icon.png",
+      "source": "page"
+    },
+    "colours": [
+      {
+        "hex": "#c2185b",
+        "source": "page"
+      }
+    ]
+  },
+  "missing": [
+    "competitors"
+  ],
+  "evidence": 9,
+  "basis": "full",
+  "stop": null,
+  "warnings": []
+}

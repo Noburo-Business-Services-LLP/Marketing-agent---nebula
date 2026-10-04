@@ -1,0 +1,511 @@
+{
+  "promise": "A steady month of cake content that shows how each order is made.",
+  "positioning": {
+    "audience": [
+      {
+        "text": "Families in Chennai are the people this content speaks to first.",
+        "tag": "inference",
+        "factIds": [
+          "F3"
+        ]
+      }
+    ],
+    "territory": {
+      "name": "Baked for your table",
+      "rationale": {
+        "text": "It fits cakes made to order and works for every product and every month.",
+        "tag": "proposed"
+      },
+      "risk": {
+        "text": "It may sound general unless each post shows a real cake.",
+        "tag": "proposed"
+      }
+    },
+    "line": {
+      "text": "Cakes made to order for the moments at your table.",
+      "tag": "proposed"
+    }
+  },
+  "whereToday": [
+    {
+      "text": "The business presents itself as a maker of custom cakes in Chennai.",
+      "tag": "inference",
+      "factIds": [
+        "F2",
+        "F7"
+      ]
+    },
+    {
+      "text": "The main goal is to receive more enquiries, so each post needs a clear way to ask.",
+      "tag": "inference",
+      "factIds": [
+        "F4"
+      ]
+    }
+  ],
+  "competitors": [
+    {
+      "name": "Rival Cakes",
+      "observations": [
+        {
+          "text": "The competitor presents itself with a focus on fresh bakes.",
+          "tag": "inference",
+          "factIds": [
+            "F9"
+          ]
+        }
+      ]
+    }
+  ],
+  "pillars": [
+    {
+      "name": "Everyday cakes",
+      "why": {
+        "text": "It keeps the plan close to what the business sells.",
+        "tag": "inference",
+        "factIds": [
+          "F2"
+        ]
+      },
+      "example": {
+        "text": "Show one cake from the day with a short description.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "name": "Made to order",
+      "why": {
+        "text": "It shows the custom side of the work.",
+        "tag": "inference",
+        "factIds": [
+          "F2",
+          "F7"
+        ]
+      },
+      "example": {
+        "text": "Show the steps from request to finished cake.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "name": "Celebrations at home",
+      "why": {
+        "text": "It connects cakes to the moments families plan for.",
+        "tag": "inference",
+        "factIds": [
+          "F3"
+        ]
+      },
+      "example": {
+        "text": "Show a cake on a family table.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "name": "Behind the oven",
+      "why": {
+        "text": "It lets people see how the work is done.",
+        "tag": "inference",
+        "factIds": [
+          "F8"
+        ]
+      },
+      "example": {
+        "text": "Show the oven and the tools in use.",
+        "tag": "proposed"
+      }
+    }
+  ],
+  "calendar": [
+    {
+      "day": 1,
+      "pillar": "Everyday cakes",
+      "format": "image post",
+      "hook": {
+        "text": "Show a fresh bake today.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 2,
+      "pillar": "Made to order",
+      "format": "carousel",
+      "hook": {
+        "text": "Explain a finished cake in a short clip.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 3,
+      "pillar": "Celebrations at home",
+      "format": "reel",
+      "hook": {
+        "text": "Introduce the baking table with a clear caption.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 4,
+      "pillar": "Behind the oven",
+      "format": "story",
+      "hook": {
+        "text": "Compare a customer order for a first time buyer.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 5,
+      "pillar": "Everyday cakes",
+      "format": "image post",
+      "hook": {
+        "text": "Walk through a tasting plate from the kitchen.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 6,
+      "pillar": "Made to order",
+      "format": "carousel",
+      "hook": {
+        "text": "Share a fresh bake today.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 7,
+      "pillar": "Celebrations at home",
+      "format": "reel",
+      "hook": {
+        "text": "Show a finished cake in a short clip.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 8,
+      "pillar": "Behind the oven",
+      "format": "story",
+      "hook": {
+        "text": "Explain the baking table with a clear caption.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 9,
+      "pillar": "Everyday cakes",
+      "format": "image post",
+      "hook": {
+        "text": "Introduce a customer order for a first time buyer.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 10,
+      "pillar": "Made to order",
+      "format": "carousel",
+      "hook": {
+        "text": "Compare a tasting plate from the kitchen.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 11,
+      "pillar": "Celebrations at home",
+      "format": "reel",
+      "hook": {
+        "text": "Walk through a fresh bake today.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 12,
+      "pillar": "Behind the oven",
+      "format": "story",
+      "hook": {
+        "text": "Share a finished cake in a short clip.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 13,
+      "pillar": "Everyday cakes",
+      "format": "image post",
+      "hook": {
+        "text": "Show the baking table with a clear caption.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 14,
+      "pillar": "Made to order",
+      "format": "carousel",
+      "hook": {
+        "text": "Explain a customer order for a first time buyer.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 15,
+      "pillar": "Celebrations at home",
+      "format": "reel",
+      "hook": {
+        "text": "Introduce a tasting plate from the kitchen.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 16,
+      "pillar": "Behind the oven",
+      "format": "story",
+      "hook": {
+        "text": "Compare a fresh bake today.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 17,
+      "pillar": "Everyday cakes",
+      "format": "image post",
+      "hook": {
+        "text": "Walk through a finished cake in a short clip.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 18,
+      "pillar": "Made to order",
+      "format": "carousel",
+      "hook": {
+        "text": "Share the baking table with a clear caption.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 19,
+      "pillar": "Celebrations at home",
+      "format": "reel",
+      "hook": {
+        "text": "Show a customer order for a first time buyer.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 20,
+      "pillar": "Behind the oven",
+      "format": "story",
+      "hook": {
+        "text": "Explain a tasting plate from the kitchen.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 21,
+      "pillar": "Everyday cakes",
+      "format": "image post",
+      "hook": {
+        "text": "Introduce a fresh bake today.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 22,
+      "pillar": "Made to order",
+      "format": "carousel",
+      "hook": {
+        "text": "Compare a finished cake in a short clip.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 23,
+      "pillar": "Celebrations at home",
+      "format": "reel",
+      "hook": {
+        "text": "Walk through the baking table with a clear caption.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 24,
+      "pillar": "Behind the oven",
+      "format": "story",
+      "hook": {
+        "text": "Share a customer order for a first time buyer.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 25,
+      "pillar": "Everyday cakes",
+      "format": "image post",
+      "hook": {
+        "text": "Show a tasting plate from the kitchen.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 26,
+      "pillar": "Made to order",
+      "format": "carousel",
+      "hook": {
+        "text": "Explain a fresh bake today.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 27,
+      "pillar": "Celebrations at home",
+      "format": "reel",
+      "hook": {
+        "text": "Introduce a finished cake in a short clip.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 28,
+      "pillar": "Behind the oven",
+      "format": "story",
+      "hook": {
+        "text": "Compare the baking table with a clear caption.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 29,
+      "pillar": "Everyday cakes",
+      "format": "image post",
+      "hook": {
+        "text": "Walk through a customer order for a first time buyer.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "day": 30,
+      "pillar": "Made to order",
+      "format": "carousel",
+      "hook": {
+        "text": "Share a tasting plate from the kitchen.",
+        "tag": "proposed"
+      }
+    }
+  ],
+  "offers": [
+    {
+      "factId": "F5",
+      "hook": {
+        "text": "Introduce the birthday cake as a simple way to plan a celebration.",
+        "tag": "proposed"
+      },
+      "cta": {
+        "text": "Send a message to order.",
+        "tag": "proposed"
+      }
+    }
+  ],
+  "channels": [
+    {
+      "channel": "Instagram",
+      "priority": 1,
+      "role": {
+        "text": "Show finished cakes and the work behind them.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "channel": "WhatsApp",
+      "priority": 2,
+      "role": {
+        "text": "Receive and confirm orders in a direct conversation.",
+        "tag": "proposed"
+      }
+    },
+    {
+      "channel": "Google Business Profile",
+      "priority": 3,
+      "role": {
+        "text": "Help local families find the business and ask a question.",
+        "tag": "proposed"
+      }
+    }
+  ],
+  "roadmap": [
+    {
+      "phase": "foundation",
+      "focus": {
+        "text": "Set up a steady rhythm of posts around the four pillars.",
+        "tag": "proposed"
+      },
+      "actions": [
+        {
+          "text": "Publish on the days set in the calendar.",
+          "tag": "proposed"
+        },
+        {
+          "text": "Reply to every enquiry on the same day.",
+          "tag": "proposed"
+        }
+      ],
+      "measure": [
+        {
+          "text": "Count the enquiries that follow each pillar.",
+          "tag": "proposed"
+        }
+      ]
+    },
+    {
+      "phase": "storytelling",
+      "focus": {
+        "text": "Tell the story behind the work in more depth.",
+        "tag": "proposed"
+      },
+      "actions": [
+        {
+          "text": "Add a short video of one order from start to finish.",
+          "tag": "proposed"
+        }
+      ],
+      "measure": [
+        {
+          "text": "Note which stories bring replies.",
+          "tag": "proposed"
+        }
+      ]
+    },
+    {
+      "phase": "growth",
+      "focus": {
+        "text": "Repeat what worked and test one new idea.",
+        "tag": "proposed"
+      },
+      "actions": [
+        {
+          "text": "Run the strongest pillar twice as often.",
+          "tag": "proposed"
+        }
+      ],
+      "measure": [
+        {
+          "text": "Compare enquiries with the earlier phases.",
+          "tag": "proposed"
+        }
+      ]
+    }
+  ],
+  "firstSteps": [
+    {
+      "text": "Confirm the four pillars.",
+      "tag": "proposed"
+    },
+    {
+      "text": "Photograph three cakes for the first posts.",
+      "tag": "proposed"
+    },
+    {
+      "text": "Choose the days to publish.",
+      "tag": "proposed"
+    },
+    {
+      "text": "Prepare a standard reply for new enquiries.",
+      "tag": "proposed"
+    }
+  ]
+}

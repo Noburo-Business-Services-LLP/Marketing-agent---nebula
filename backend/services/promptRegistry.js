@@ -16,6 +16,8 @@
 // live next door and are merged in here. Same contract either way.
 const VIDEO_PROMPTS = require('./promptRegistry.video');
 const VIDEO_PROMPTS_2 = require('./promptRegistry.video2');
+// Brand Growth Blueprint prompts: locked (never listed, never overridden, never editable).
+const BLUEPRINT_PROMPTS = require('./promptRegistry.blueprint');
 // Hero video style rules: plain prose (no placeholders). Required here, not the other way round,
 // so heroVideoStyles can load the registry lazily without a cycle.
 const { GROUP_BLOCKS: HERO_STYLE_RULES } = require('./heroVideoStyles');
@@ -23,6 +25,7 @@ const { GROUP_BLOCKS: HERO_STYLE_RULES } = require('./heroVideoStyles');
 const PROMPTS = {
   ...VIDEO_PROMPTS,
   ...VIDEO_PROMPTS_2,
+  ...BLUEPRINT_PROMPTS,
 
   'creative.director': {
     label: 'Creative Director',
@@ -2305,7 +2308,7 @@ function renderTemplate(template, vars = {}) {
 }
 
 function listPrompts() {
-  return Object.entries(PROMPTS).map(([id, p]) => ({
+  return Object.entries(PROMPTS).filter(([, p]) => !p.locked).map(([id, p]) => ({
     id,
     label: p.label,
     summary: p.summary,
@@ -2347,6 +2350,8 @@ function isStaleOverride(id, template) {
 async function resolveTemplate(userId, id) {
   const prompt = PROMPTS[id];
   if (!prompt) throw new Error(`Unknown prompt: ${id}`);
+  // A locked prompt is never overridden: a customer edit must not weaken its rules.
+  if (prompt.locked) return prompt.template;
   if (!userId) return prompt.template;
 
   try {
