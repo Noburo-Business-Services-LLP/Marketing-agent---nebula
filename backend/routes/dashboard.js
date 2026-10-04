@@ -798,7 +798,7 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
       if (user.credits.balance < creditCost) {
         return res.status(403).json({
           success: false,
-          message: 'Insufficient credits',
+          message: 'Insufficient Quarks',
           creditsRemaining: user.credits.balance,
           required: creditCost
         });
@@ -951,7 +951,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
       await ensureCreditCycle(user);
       const creditCostStream = count * CREDIT_COSTS.campaign_full;
       if (user.credits.balance < creditCostStream) {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
         res.end();
         return;
       }
@@ -1231,7 +1231,7 @@ router.post('/generate-rival-post', protect, async (req, res) => {
     // Credit check
     await ensureCreditCycle(user);
     if (user.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 7 });
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 7 });
     }
 
     const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo, aspectRatio } = req.body;
@@ -1593,7 +1593,7 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(user);
     if (user.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 7 });
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 7 });
     }
     
     // Get user's business context
@@ -1641,7 +1641,7 @@ router.post('/strategic-advisor/refine-image', protect, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(user);
     if (user.credits.balance < 3) {
-      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: user.credits.balance, required: 3 });
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 3 });
     }
     
     const result = await refineImageWithPrompt(originalPrompt, refinementPrompt, style, currentImageUrl);
@@ -1679,7 +1679,7 @@ router.post('/generate-event-post', protect, async (req, res) => {
     if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(creditUser);
     if (creditUser.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient credits', creditsRemaining: creditUser.credits.balance, required: 7 });
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: creditUser.credits.balance, required: 7 });
     }
     
     // Get user's business context

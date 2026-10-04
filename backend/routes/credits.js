@@ -21,11 +21,6 @@ router.get('/', protect, async (req, res) => {
     // Initialize credits + trial if not set yet
     await ensureCreditCycle(user);
 
-    const now = new Date();
-    const trialEnd = user.trial?.expiresAt ? new Date(user.trial.expiresAt) : null;
-    const daysLeft = trialEnd ? Math.max(0, Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24))) : 0;
-    const isTrialExpired = trialEnd ? now > trialEnd : false;
-
     res.json({
       success: true,
       credits: {
@@ -35,9 +30,8 @@ router.get('/', protect, async (req, res) => {
       },
       trial: {
         startDate: user.trial?.startDate || user.createdAt,
-        expiresAt: trialEnd,
-        daysLeft,
-        isExpired: isTrialExpired || (user.trial?.isExpired ?? false)
+        // No expiry date or day count is shown any more.
+        isExpired: false
       },
       costs: CREDIT_COSTS,
       // Prices are per unit, and the unit differs per action (per slide,
@@ -48,7 +42,7 @@ router.get('/', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Get credits error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get credit info' });
+    res.status(500).json({ success: false, message: 'Failed to get Quark info' });
   }
 });
 
@@ -73,7 +67,7 @@ router.get('/history', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Get credit history error:', error);
-    res.status(500).json({ success: false, message: 'Failed to get credit history' });
+    res.status(500).json({ success: false, message: 'Failed to get Quark history' });
   }
 });
 

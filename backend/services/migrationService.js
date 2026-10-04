@@ -95,7 +95,7 @@ async function migrateUserData(demoUserId, paidCredits = 100) {
         cost: -paidCredits,
         balanceAfter: paidCredits,
         timestamp: now,
-        description: `Welcome to Nebulaa Production — ${paidCredits} credits`
+        description: `Welcome to Nebulaa Production — ${paidCredits} Quarks`
       }]
     };
 

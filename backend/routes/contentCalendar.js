@@ -242,7 +242,7 @@ router.post('/items/:itemId/auto-generate', protect, async (req, res) => {
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: creditResult.error || 'Insufficient credits to generate this reel.'
+        message: creditResult.error || 'Insufficient Quarks to generate this reel.'
       });
     }
     creditsTaken = true;

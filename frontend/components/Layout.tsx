@@ -14,7 +14,6 @@ import {
   Palette,
   BarChart3,
   Package,
-  Clock,
   Zap,
   ChevronDown,
   ImageIcon,
@@ -34,7 +33,6 @@ import AppSwitcher from './AppSwitcher';
 import { apiService } from '../services/api';
 
 interface TrialData {
-  daysLeft: number;
   creditsBalance: number;
   totalUsed: number;
   startingCredits: number;
@@ -70,7 +68,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       const data = await apiService.getCredits();
       if (data.success) {
         setTrialInfo({
-          daysLeft: data.trial?.daysLeft ?? 7,
           creditsBalance: data.credits?.balance ?? STARTING_CREDITS,
           totalUsed: data.credits?.totalUsed ?? 0,
           startingCredits: STARTING_CREDITS,
@@ -387,9 +384,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                         <div className="px-5 pt-5 pb-4 bg-[var(--gv-surface-1)]">
                           <div className="flex items-center justify-between mb-4">
                             <h3 className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Usage overview</h3>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium tracking-wider uppercase whitespace-nowrap ${
-                              trialInfo.daysLeft <= 2 ? 'bg-red-500/10 text-red-400' : 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
-                            }`}>Free trial</span>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="flex items-baseline gap-1.5">
@@ -416,16 +410,14 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                         <div className="px-5 py-3 border-t border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <Clock className={`w-3.5 h-3.5 ${trialInfo.daysLeft <= 2 ? 'text-red-400' : 'text-[var(--gv-text-muted)]'}`} />
-                              <span className={`text-[11px] ${trialInfo.daysLeft <= 2 ? 'text-red-400 font-medium' : 'text-[var(--gv-text-tertiary)]'}`}>
-                                {trialInfo.daysLeft} day{trialInfo.daysLeft !== 1 ? 's' : ''} left in trial
-                              </span>
+                              <Zap className="w-3.5 h-3.5 text-[var(--gv-text-muted)]" />
+                              <span className="text-[11px] text-[var(--gv-text-tertiary)]">Need more Quarks?</span>
                             </div>
                             <button
                               onClick={() => navigate('/trial-expired')}
                               className="text-[11px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)] transition-colors"
                             >
-                              Upgrade
+                              See plans
                             </button>
                           </div>
                         </div>

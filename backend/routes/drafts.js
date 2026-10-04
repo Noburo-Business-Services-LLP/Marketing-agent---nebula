@@ -778,7 +778,7 @@ router.post('/:id/edit-image', protect, checkTrial, async (req, res) => {
 
     const creditResult = await deductCredits(userId, 'image_edit', 1, 'Edit image');
     if (!creditResult.success) {
-      return res.status(403).json({ success: false, message: creditResult.error || 'Insufficient credits', creditsRemaining: creditResult.creditsRemaining });
+      return res.status(403).json({ success: false, message: creditResult.error || 'Insufficient Quarks', creditsRemaining: creditResult.creditsRemaining });
     }
 
     const { refineImageWithPrompt } = require('../services/geminiAI');

@@ -480,7 +480,7 @@ const ContentCalendar: React.FC = () => {
                   {(cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT) > AUTO_GENERATE_DEFAULT && (
                     <p className="mt-2 text-[11.5px] text-[#F5A623]/90 leading-relaxed">
                       Above a week's worth. Each post generates an image, so this
-                      will use credits faster.
+                      will use Quarks faster.
                     </p>
                   )}
                 </div>

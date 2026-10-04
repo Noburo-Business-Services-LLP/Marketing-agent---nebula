@@ -130,7 +130,7 @@ async function apiCall<T>(
           creditsRemaining: data.creditsRemaining
         }
       }));
-      throw new Error(data.message || 'Trial expired or credits exhausted');
+      throw new Error(data.message || 'You have used all of your Quarks.');
     }
 
     if (!response.ok) {
@@ -667,7 +667,7 @@ export const apiService = {
       return { ...response.data, cached: response.cached };
     } catch (error: any) {
       // Propagate credit errors instead of swallowing them
-      if (error?.message?.includes('Insufficient credits') || error?.message?.includes('credits') || error?.status === 403) {
+      if (error?.message?.includes('Quarks') || error?.message?.includes('credits') || error?.status === 403) {
         // Insufficient credits for campaign suggestions
         return { campaigns: [], insufficientCredits: true, creditsRemaining: error?.creditsRemaining || 0, required: error?.required || 0 };
       }

@@ -237,10 +237,10 @@ async function startHeroGeneration(deps, { userId, body }) {
     dres = await deps.deduct(userId, ACTION, 1, 'Hero video clip');
   } catch (err) {
     console.error('Hero credit deduction threw:', err && err.message);
-    return { status: 500, json: { success: false, message: 'Could not charge credits' } };
+    return { status: 500, json: { success: false, message: 'Could not charge Quarks' } };
   }
   if (!dres || !dres.success) {
-    return { status: 403, json: { success: false, creditsExhausted: true, message: (dres && dres.error) || 'Insufficient credits' } };
+    return { status: 403, json: { success: false, creditsExhausted: true, message: (dres && dres.error) || 'Insufficient Quarks' } };
   }
 
   const payload = { prompt, refImageUrls, references, aspectRatio, model: built.model, finish: normalizeFinishOptions(b.finish) };
@@ -310,7 +310,7 @@ async function startHeroGeneration(deps, { userId, body }) {
     console.error(`Hero submit failed: status=${falStatus} detail=${detail}`);
     await failJob(deps, jobId, 'Video generation could not be started', 'failed').catch(() => {});
     await refundOnce(deps, jobId, userId, 'Refund: hero submit failed');
-    return { status: 500, json: { success: false, message: 'Could not start video generation. Your credit was refunded.' } };
+    return { status: 500, json: { success: false, message: 'Could not start video generation. Your Quarks were refunded.' } };
   }
 
   return { status: 200, json: { success: true, jobId } };

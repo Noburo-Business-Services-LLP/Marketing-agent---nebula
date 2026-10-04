@@ -39,12 +39,11 @@ async function ensureCreditCycle(user) {
     changed = true;
   }
 
-  // Initialize trial if missing
-  if (!user.trial || !user.trial.expiresAt) {
-    const trialEnd = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  // Record the start date only. There is no expiry date any more; the
+  // `trial.expiresAt` field stays in the schema for older accounts.
+  if (!user.trial || !user.trial.startDate) {
     user.trial = {
       startDate: now,
-      expiresAt: trialEnd,
       isExpired: false
     };
     changed = true;
@@ -79,7 +78,7 @@ function checkCredits(requiredCredits) {
       if (user.credits.balance < requiredCredits) {
         return res.status(403).json({
           success: false,
-          message: 'Insufficient credits',
+          message: 'Insufficient Quarks',
           creditsRemaining: user.credits.balance,
           required: requiredCredits,
           cycleEnd: user.credits.cycleEnd
@@ -92,7 +91,7 @@ function checkCredits(requiredCredits) {
       next();
     } catch (error) {
       console.error('Credit check error:', error);
-      res.status(500).json({ success: false, message: 'Credit check failed' });
+      res.status(500).json({ success: false, message: 'Quark check failed' });
     }
   };
 }
@@ -154,7 +153,7 @@ async function requireCredits(userId, amount) {
   await ensureCreditCycle(user);
   
   if (user.credits.balance < amount) {
-    const err = new Error('Insufficient credits');
+    const err = new Error('Insufficient Quarks');
     err.creditsRemaining = user.credits.balance;
     err.required = amount;
     throw err;

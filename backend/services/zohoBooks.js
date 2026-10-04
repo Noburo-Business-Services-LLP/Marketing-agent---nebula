@@ -200,8 +200,8 @@ async function createInvoice(params) {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
   let lineItem = {
-    name: `Nebulaa - ${credits} Credits`,
-    description: `${credits} AI marketing credits for Nebulaa platform`,
+    name: `Nebulaa - ${credits} Quarks`,
+    description: `${credits} AI marketing Quarks for Nebulaa platform`,
     rate: amount,
     quantity: 1
   };

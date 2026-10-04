@@ -19,7 +19,7 @@ import { SHOWCASE_SLIDES } from '../components/onboarding/showcaseData';
 
 /**
  * The public page for the Nebulaa app. Everything here leads to one action:
- * sign up and start the 7-day trial. It always shows the light, warm look,
+ * sign up and start with 100 free Quarks. It always shows the light, warm look,
  * whatever theme the signed-in app uses.
  */
 
@@ -96,12 +96,12 @@ const TOOLS = [
   { icon: ImageIcon, tint: '#DCEBFA', title: 'Images and posters', text: 'For offers, festivals and new products. Your name, colours and style on every one.' },
   { icon: Clapperboard, tint: '#ECE6FB', title: 'Reels and videos', text: 'Short videos for Instagram and Facebook, made from a one-line idea.' },
   { icon: CalendarDays, tint: '#DDF2E6', title: 'A plan for the whole month', text: 'Every post on a calendar, built around your festivals and offers.' },
-  { icon: MessageCircle, tint: '#DDF2E6', title: 'Replies to customers', text: 'Reply drafts for WhatsApp, email and SMS enquiries, ready in minutes.' },
-  { icon: Radar, tint: '#FFE3D0', title: 'What others are posting', text: 'See what businesses like yours post, and what works for them.' },
+  { icon: MessageCircle, tint: '#DDF2E6', title: 'Replies to customers (add-on)', text: 'Reply drafts for WhatsApp, email and SMS enquiries, ready in minutes. Available as an add-on.' },
+  { icon: Radar, tint: '#FFE3D0', title: 'What others are posting (add-on)', text: 'See what businesses like yours post, and what works for them. Available as an add-on.' },
 ];
 
 const STEPS = [
-  { title: 'Sign up', text: 'It takes one minute. No card needed.' },
+  { title: 'Sign up', text: 'It takes one minute.' },
   { title: 'Answer a few simple questions', text: 'Add your website if you have one and Nebulaa fills in most of it. Pick your language.' },
   { title: 'Approve your month', text: 'Check each post on your phone, change what you like, and post.' },
 ];
@@ -111,14 +111,14 @@ const PLANS = [
     name: 'Starter',
     price: 999,
     note: 'For one person getting started',
-    features: ['60 credits a month', 'A full month of posts, planned and ready', 'Replies to customer enquiries', '1 team member'],
+    features: ['2,100 Quarks a month', '30 image posts and 1 Hero video a month', '1 team member'],
   },
   {
     name: 'Professional',
     price: 1999,
     note: 'For more posts and more people',
     popular: true,
-    features: ['200 credits a month', 'Everything in Starter', 'Voice calls to your best leads', 'Up to 5 team members'],
+    features: ['3,500 Quarks a month', 'Everything in Starter', '2 Hero videos a month', 'Extra captions', 'Up to 5 team members'],
   },
 ];
 
@@ -126,9 +126,9 @@ const FAQS = [
   { q: 'Do I need design or writing skills?', a: 'No. Nebulaa writes the captions and makes the images and videos. You only check them and press approve.' },
   { q: 'Which languages does it write in?', a: 'English, Tamil, Hindi, Telugu, Kannada, Malayalam and more. You choose when you sign up and can change it any time.' },
   { q: 'Do I need a website?', a: 'No. If you have one, add it and Nebulaa fills in most of your details. If you do not, answer a few simple questions.' },
-  { q: 'Where do my posts go?', a: 'You connect your Instagram, Facebook and other pages. A post goes out only after you approve it.' },
-  { q: 'What are credits?', a: 'Credits are what the app uses each time it makes something for you, like an image or a video. Running low? Add more any time from inside the app.' },
-  { q: 'What happens after the 7 days?', a: 'You pick a plan or stop. Nothing is charged automatically.' },
+  { q: 'Where do my posts go?', a: 'You connect your Instagram, Facebook and other pages with the Publish and schedule add-on. A post goes out only after you approve it.' },
+  { q: 'What are Quarks?', a: 'Quarks are what the app uses each time it makes something for you. An image post uses 20, a caption uses 1 and a Hero video uses 729. Running low? Add more any time from inside the app.' },
+  { q: 'What happens when my 100 free Quarks are used?', a: 'Your 100 Quarks stay with you until you use them. The plans are optional, and nothing is charged unless you choose one.' },
 ];
 
 const CtaButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string }> = ({ onClick, children, className = '' }) => (
@@ -243,7 +243,7 @@ const LandingPage: React.FC = () => {
               Tell Nebulaa about your business once. It writes the captions, makes the images and videos, and plans every post. You check them and post.
             </p>
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start free for 7 days</CtaButton>
+              <CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start with 100 free Quarks</CtaButton>
               <a
                 href="#how-it-works"
                 className="inline-flex items-center px-7 py-[14px] rounded-full text-[15px] font-bold transition-transform hover:scale-[1.03]"
@@ -252,7 +252,7 @@ const LandingPage: React.FC = () => {
                 See how it works
               </a>
             </div>
-            <p className="text-[13.5px] mb-6" style={{ color: MUTED }}>No card needed. Set up in 3 minutes.</p>
+            <p className="text-[13.5px] mb-6" style={{ color: MUTED }}>Set up in 3 minutes.</p>
             <p className="max-w-[460px] border-l-2 pl-3 text-[13.5px] leading-[1.5]" style={{ borderColor: 'rgba(238,99,48,0.5)', color: INK2 }}>
               Built on real experience with 2,000+ MSMEs and startups.
             </p>
@@ -340,7 +340,7 @@ const LandingPage: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Try it free for 7 days</CtaButton></div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Get started</CtaButton></div>
         </div>
       </section>
 
@@ -366,7 +366,7 @@ const LandingPage: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start free for 7 days</CtaButton></div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-8 py-4 text-[15.5px]">Start with 100 free Quarks</CtaButton></div>
         </div>
       </section>
 
@@ -379,7 +379,7 @@ const LandingPage: React.FC = () => {
               Two plans. <Swash>Start from ₹999.</Swash>
             </h2>
             <p className="text-[16.5px] leading-[1.6]" style={{ color: INK2 }}>
-              Try any plan free for 7 days. No card needed. Both plans do the same things. The bigger plan gives you more each month.
+              Prices are per month plus GST. Both plans do the same things. The bigger plan gives you more Quarks each month. Publishing, competitor insights and replies are add-ons.
             </p>
           </div>
           <div className="grid md:grid-cols-2 gap-6 max-w-[860px]">
@@ -394,7 +394,7 @@ const LandingPage: React.FC = () => {
                 </p>
                 <p className="mb-1">
                   <span style={display} className="text-[48px]">₹{plan.price.toLocaleString('en-IN')}</span>
-                  <span className="text-[14px] ml-1" style={{ color: MUTED }}>/month</span>
+                  <span className="text-[14px] ml-1" style={{ color: MUTED }}>/month + GST</span>
                 </p>
                 <p className="text-[14px] mb-6" style={{ color: MUTED }}>{plan.note}</p>
                 <ul className="space-y-3 mb-8 flex-1">
@@ -410,7 +410,7 @@ const LandingPage: React.FC = () => {
                   className="w-full py-3.5 rounded-full text-[15px] font-bold transition-transform hover:scale-[1.02]"
                   style={plan.popular ? { background: GOLD, color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' } : { border: `1.5px solid ${INK}`, color: INK }}
                 >
-                  Start free with {plan.name}
+                  Get started with {plan.name}
                 </button>
               </div>
             ))}
@@ -455,9 +455,9 @@ const LandingPage: React.FC = () => {
             <span style={script} className="text-[1.15em] leading-none">3 minutes away.</span>
           </h2>
           <p className="text-[17px] md:text-[18px] leading-[1.6] max-w-[500px] mb-8" style={{ color: INK2 }}>
-            Sign up, answer a few questions and see your posts. Free for 7 days. No card needed.
+            Sign up, answer a few questions and see your posts. Start with 100 free Quarks to explore.
           </p>
-          <CtaButton onClick={signUp} className="px-9 py-4 text-[16px]">Start free for 7 days</CtaButton>
+          <CtaButton onClick={signUp} className="px-9 py-4 text-[16px]">Start with 100 free Quarks</CtaButton>
           <p className="mt-5 text-[14px]" style={{ color: INK2 }}>
             Already have an account?{' '}
             <button onClick={signIn} className="font-bold underline underline-offset-2">Sign in</button>
@@ -488,7 +488,7 @@ const LandingPage: React.FC = () => {
           className="w-full flex items-center justify-center gap-2 rounded-full py-3.5 text-[15.5px] font-bold"
           style={{ background: GOLD, color: INK, boxShadow: '0 8px 22px rgba(245,166,35,0.45)' }}
         >
-          Start free for 7 days <ArrowRight className="w-4 h-4" />
+          Start with 100 free Quarks <ArrowRight className="w-4 h-4" />
         </button>
       </div>
 

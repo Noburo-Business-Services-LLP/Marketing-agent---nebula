@@ -33,7 +33,7 @@ router.post('/message', optionalAuth, async (req, res) => {
 
       // Credits check only (no time-based expiry)
       if (user && (user.credits?.balance ?? 100) < 0.5) {
-        return res.status(403).json({ success: false, creditsExhausted: true, message: 'Insufficient credits for chat' });
+        return res.status(403).json({ success: false, creditsExhausted: true, message: 'Insufficient Quarks for chat' });
       }
     }
 
