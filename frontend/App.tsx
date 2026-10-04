@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import Layout from './components/Layout';
 import ChatBot from './components/ChatBot';
 import CampaignReminderPopup from './components/CampaignReminderPopup';
@@ -42,6 +42,8 @@ import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import BlueprintRoutes from './pages/BlueprintRoutes';
+import { postAuthTarget, BLUEPRINT_SIGNUP_PATH } from './utils/blueprint';
 import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { apiService } from './services/api';
@@ -59,6 +61,12 @@ const RouteChangeWatcher: React.FC<{ onChange: () => void }> = ({ onChange }) =>
     cb.current();
   }, [pathname]);
   return null;
+};
+
+// A signed-in visitor who opens the sign-up link from the ad goes to the Blueprint form, not the dashboard.
+const LoginRedirect: React.FC = () => {
+  const [params] = useSearchParams();
+  return <Navigate to={postAuthTarget(params.toString())} replace />;
 };
 
 const App: React.FC = () => {
@@ -183,12 +191,18 @@ const App: React.FC = () => {
         
         <Route 
           path="/login" 
-          element={!user ? <Auth onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/dashboard" replace />} 
+          element={!user ? <Auth onLoginSuccess={handleLoginSuccess} /> : <LoginRedirect />} 
         />
         
         {/* Public legal pages */}
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+
+        {/* Brand Growth Blueprint: outside the onboarding gate and the Quark paywall on purpose. */}
+        <Route
+          path="/blueprint/*"
+          element={user ? <BlueprintRoutes user={user} onLogout={handleLogout} /> : <Navigate to={BLUEPRINT_SIGNUP_PATH} replace />}
+        />
 
         {/* Admin routes — completely separate from user auth */}
         <Route path="/admin/login" element={<AdminLogin />} />

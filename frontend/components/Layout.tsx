@@ -150,6 +150,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (pathname.startsWith('/idea-inbox')) return { title: 'Content ideas', crumb: '' };
     if (pathname.startsWith('/upload')) return { title: 'Upload and schedule', crumb: '' };
     if (pathname.startsWith('/settings')) return { title: 'Settings', crumb: '' };
+    if (pathname.startsWith('/blueprint')) return { title: 'Brand Growth Blueprint', crumb: '' };
     return { title: 'Dashboard', crumb: '' };
   };
 

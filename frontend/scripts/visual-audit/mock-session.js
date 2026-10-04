@@ -159,7 +159,7 @@
   var ROUTES = [
     ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
-    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250 }, units: {} })],
+    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {
       var cyc = function (amt) { return { monthly: { planId: 'audit-m', amount: amt, label: 'Monthly', per: 'per month' }, quarterly: { planId: 'audit-q', amount: amt * 3, label: 'Quarterly', per: 'per quarter' }, annual: { planId: 'audit-a', amount: amt * 10, label: 'Annual', per: 'per year' } }; };
       var plan = function (name, amt) { return { name: name, description: 'Audit placeholder plan.', features: ['Feature one', 'Feature two', 'Feature three'], cycles: cyc(amt) }; };
@@ -195,6 +195,26 @@
     ['GET', /^\/notifications\/unread-count/, ok({ count: 1, unreadCount: 1 })],
     ['GET', /^\/notifications/, ok({ notifications: [{ _id: 'audit-n1', title: 'Your plan is ready', message: 'Your monthly plan is ready.', read: false, createdAt: iso(-1), type: 'info' }], unreadCount: 1 })],
     ['GET', /^\/reminders/, ok({ reminders: [], count: 0 })],
+    // Brand Growth Blueprint: the view depends on the id so each state can be audited.
+    ['GET', /^\/blueprint\/?$/, ok({ blueprints: [{ id: 'audit-processing', businessName: 'Sunrise Bakery', status: 'processing', createdAt: iso(-1) }] })],
+    ['GET', /^\/blueprint\/[^/]+$/, function (c) {
+      var id = decodeURIComponent(c.path.split('/')[2]);
+      var base = { id: id, mode: 'guided', businessName: 'Sunrise Bakery', createdAt: iso(-1), refunded: false, stop: null, error: null, checkpoint: null, progress: 35, step: 'checking', status: 'processing' };
+      var o = {
+        'audit-checkpoint0': { status: 'awaiting_approval', step: 'approval', checkpoint: 0, progress: 40, discovery: { basis: 'limited', warnings: [{ reason: 'name_mismatch', message: 'The name on the website does not match the business name you entered.' }],
+          facts: [{ id: 'f1', text: 'The website describes sourdough bread, croissants and celebration cakes baked each morning.', source: 'sunrise-bakery.example' }, { id: 'f2', text: 'Offer typed by you: Country sourdough, \u20b9220.', source: 'typed' }],
+          unverified: [{ id: 'u1', text: 'Logo', reason: 'No logo was provided or found on the page.' }], missing: ['logo', 'city'] } },
+        'audit-checkpoint1': { status: 'awaiting_approval', step: 'approval', checkpoint: 1, progress: 50, directions: [
+          { id: 0, name: 'Fresh every morning', rationale: { text: 'Lead with the daily bake, because it is the clearest thing your own pages say.', tag: 'proposed' }, risk: { text: 'It can read as routine if the photos repeat.', tag: 'proposed' } },
+          { id: 1, name: 'Made for celebrations', rationale: { text: 'Build the month around cakes and orders placed ahead.', tag: 'proposed' }, risk: null } ] },
+        'audit-stopped': { status: 'stopped', step: 'stopped', progress: 100, refunded: true, stop: { reason: 'thin', message: 'We could not find enough about your business to build a reliable Blueprint. Add your website address, your Instagram page or one of your real offers, then try again.' } },
+        'audit-done': { status: 'completed', step: 'done', progress: 100, result: {} }
+      }[id] || {};
+      var out = {}; for (var k in base) out[k] = base[k]; for (var k2 in o) out[k2] = o[k2];
+      return ok(out);
+    }],
+    ['POST', /^\/blueprint\/[^/]+\/continue$/, { __status: 202, body: { success: true, id: 'audit-processing', status: 'queued' } }],
+    ['POST', /^\/blueprint\/?$/, { __status: 202, body: { success: true, id: 'audit-processing', status: 'queued' } }],
     ['GET', /^\/hero-video\/quota/, ok({ quota: { used: 1, limit: 4, remaining: 3 }, used: 1, limit: 4, remaining: 3 })],
     ['GET', /^\/hero-video\/styles/, ok({ styles: [] })],
     ['GET', /^\/hero-video\/jobs/, ok({ jobs: [] })],

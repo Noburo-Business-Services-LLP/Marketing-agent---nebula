@@ -1,5 +1,6 @@
 import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft } from '../types';
 import { apiErrorFrom } from '../utils/plans';
+import type { BlueprintView } from '../utils/blueprint';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -423,6 +424,20 @@ export const apiService = {
     } catch (error) {
       return { success: false };
     }
+  },
+
+  // Brand Growth Blueprint. Errors are thrown with .status and .data (see apiCall).
+  blueprintStart: async (body: Record<string, any>): Promise<{ success: boolean; id: string; status: string }> => {
+    return apiCall('/blueprint', { method: 'POST', body: JSON.stringify(body) }, true);
+  },
+  blueprintGet: async (id: string): Promise<BlueprintView> => {
+    return apiCall(`/blueprint/${encodeURIComponent(id)}`, { method: 'GET' }, true);
+  },
+  blueprintList: async (): Promise<{ success: boolean; blueprints: Array<{ id: string; businessName: string; status: string; createdAt: string }> }> => {
+    return apiCall('/blueprint', { method: 'GET' }, true);
+  },
+  blueprintContinue: async (id: string, body: { directionId?: number } = {}): Promise<{ success: boolean; id: string; status: string }> => {
+    return apiCall(`/blueprint/${encodeURIComponent(id)}/continue`, { method: 'POST', body: JSON.stringify(body) }, true);
   },
 
   // Payment / Razorpay

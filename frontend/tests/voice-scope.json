@@ -14,5 +14,11 @@
   "pages/ConnectSocials.tsx",
   "pages/Settings.tsx",
   "pages/HeroVideo.tsx",
-  "components/AssetPicker.tsx"
+  "components/AssetPicker.tsx",
+  "pages/BlueprintStart.tsx",
+  "pages/BlueprintView.tsx",
+  "pages/BlueprintRoutes.tsx",
+  "components/blueprint/BlueprintDocument.tsx",
+  "components/blueprint/TagChip.tsx",
+  "constants/blueprintCopy.ts"
 ]

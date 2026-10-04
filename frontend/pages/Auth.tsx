@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { Loader2, Zap, Check, X as XIcon, ShieldCheck, Sun, Moon, Mail, ArrowLeft, RefreshCw, KeyRound, Lock, Eye, EyeOff } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { postAuthTarget } from '../utils/blueprint';
 
 interface AuthProps {
   onLoginSuccess: (user: any) => void;
@@ -143,7 +144,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           sessionStorage.setItem('nebulaa_registration_company', companyName);
         }
         onLoginSuccess(response.user);
-        navigate('/dashboard');
+        navigate(postAuthTarget(searchParams.toString()));
       } else {
         setError("Authentication failed. Please try again.");
       }
@@ -218,7 +219,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
         setOtpSuccess(true);
         setTimeout(() => {
           onLoginSuccess(response.user);
-          navigate('/dashboard');
+          navigate(postAuthTarget(searchParams.toString()));
         }, 1500);
       } else {
         setError('Verification failed.');

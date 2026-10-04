@@ -16,6 +16,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { SHOWCASE_SLIDES } from '../components/onboarding/showcaseData';
+import { BLUEPRINT_COPY } from '../constants/blueprintCopy';
+import { BLUEPRINT_SIGNUP_PATH } from '../utils/blueprint';
 
 /**
  * The public page for the Nebulaa app. Everything here leads to one action:
@@ -161,6 +163,8 @@ const LandingPage: React.FC = () => {
 
   const signUp = () => navigate('/login?mode=signup');
   const signIn = () => navigate('/login');
+  const signUpBlueprint = () => navigate(BLUEPRINT_SIGNUP_PATH);
+  const BP = BLUEPRINT_COPY.landing;
 
   return (
     <div className="min-h-screen overflow-x-hidden antialiased pb-20 md:pb-0" style={{ ...body, background: GROUND, color: INK }}>
@@ -186,6 +190,7 @@ const LandingPage: React.FC = () => {
 
             <div className="hidden md:flex items-center gap-9 text-[14.5px] font-medium" style={{ color: INK2 }}>
               <a href="#what-it-makes" className="hover:opacity-70">What it makes</a>
+              <a href="#blueprint" className="hover:opacity-70">{BP.navLabel}</a>
               <a href="#how-it-works" className="hover:opacity-70">How it works</a>
               <a href="#pricing" className="hover:opacity-70">Pricing</a>
             </div>
@@ -208,7 +213,7 @@ const LandingPage: React.FC = () => {
 
           {menuOpen && (
             <div className="md:hidden pb-5 flex flex-col gap-1 text-[16px] font-medium">
-              {[['What it makes', '#what-it-makes'], ['How it works', '#how-it-works'], ['Pricing', '#pricing']].map(([label, href]) => (
+              {[['What it makes', '#what-it-makes'], [BP.navLabel, '#blueprint'], ['How it works', '#how-it-works'], ['Pricing', '#pricing']].map(([label, href]) => (
                 <a key={href} href={href} onClick={() => setMenuOpen(false)} className="py-2.5">{label}</a>
               ))}
               <div className="flex gap-3 pt-2">
@@ -341,6 +346,50 @@ const LandingPage: React.FC = () => {
             ))}
           </div>
           <div className="mt-10"><CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Get started</CtaButton></div>
+        </div>
+      </section>
+
+      {/* Free Brand Growth Blueprint */}
+      <section id="blueprint" className="py-[72px] md:py-[96px]">
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div
+            className="rounded-[28px] md:rounded-[36px] px-6 md:px-12 py-10 md:py-14 grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-start"
+            style={{ background: SURFACE, border: `1px solid ${RULE}`, boxShadow: '0 14px 34px rgba(20,32,58,0.08)' }}
+          >
+            <div>
+              <Label>{BP.eyebrow}</Label>
+              <h2 style={display} className="text-[30px] md:text-[44px] mb-5">{BP.headline}</h2>
+              <p className="text-[16.5px] leading-[1.6] mb-6 max-w-[520px]" style={{ color: INK2 }}>{BP.subline}</p>
+              <ul className="space-y-3 mb-8">
+                {BP.receive.map(line => (
+                  <li key={line} className="flex items-start gap-3 text-[15px] leading-[1.55]" style={{ color: INK2 }}>
+                    <CheckCircle2 className="w-4 h-4 mt-[4px] shrink-0" style={{ color: '#9A5B00' }} />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+              <CtaButton onClick={signUpBlueprint} className="px-6 sm:px-8 py-4 text-[15.5px]">{BP.button}</CtaButton>
+              <p className="mt-4 text-[13.5px]" style={{ color: MUTED }}>{BP.note}</p>
+            </div>
+            <div className="rounded-[22px] p-6" style={{ background: GROUND, border: `1px solid ${RULE}` }}>
+              <h3 className="text-[17px] font-bold leading-tight mb-4">{BP.legendTitle}</h3>
+              <dl className="space-y-3.5">
+                {BP.legend.map((l, i) => (
+                  <div key={l.label}>
+                    <dt>
+                      <span
+                        className="inline-block rounded-full px-3 py-1 text-[12.5px] font-bold"
+                        style={{ background: ['#DDF2E6', '#DCEBFA', '#ECE6FB', '#FFE3D0'][i], color: INK, border: `1px solid ${RULE}` }}
+                      >
+                        {l.label}
+                      </span>
+                    </dt>
+                    <dd className="mt-1.5 text-[14px] leading-[1.5]" style={{ color: INK2 }}>{l.meaning}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
         </div>
       </section>
 
