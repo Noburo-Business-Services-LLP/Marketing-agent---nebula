@@ -33,6 +33,8 @@ Read this first, then `docs/superpowers/HANDOVER-nebulaa-redesign-2.md` in the G
 
 Stack: Fastify + MongoDB + Vite frontend. Per-organisation tenancy already exists (`Organization`, `TenantConfig`).
 
+**Email finding (2026-10-05, read-only check of AWS account 609665073007):** SES is in **sandbox mode** in both ap-south-1 and us-east-1 (production access off, 200 emails per day, nothing sent in the last 24 h) and the only verified sender identity is one Gmail address. In sandbox, SES can only deliver to verified addresses, so campaign email to real contacts cannot work from this account until production access is requested and a sending domain is verified (SPF, DKIM, DMARC). If Pulsar uses a different AWS account or Resend for live email, confirm that first.
+
 **First task: confirm all of this against the real running system** (which provider each live organisation actually uses, which env/credentials exist, which parts have never run). Do not trust this table beyond the code reading above.
 
 ## 4. The single brain (the important design)
@@ -50,7 +52,7 @@ Outreach then decides, per contact segment, **what to say, on which channel, and
 - campaigns run automatically from that plan, with the owner able to approve or edit;
 - **inbound replies are answered automatically** (WhatsApp first) from the FAQ and business memory, with a clear hand-off to a human when it is unsure.
 
-Open design question for the Pulsar session to settle with Dinesh before building: where this shared memory lives (one service both backends call, vs a shared collection). Gravity already has a "brand memory" and a `buildAIContext` helper; start there. Do not duplicate it.
+**Decision (2026-10-05): where the memory lives.** Not on anyone's laptop. In production all customer data is in **MongoDB Atlas** (cloud, Mumbai); a laptop only holds local test copies. Put the shared business memory in the **same Atlas cluster, in its own collections**, owned by the **Nebulaa Accounts service** (one account id per customer, referenced by Content, Outreach and Lead generation). Each app reads it through one small module and writes only the parts it owns (Content writes brand and content facts; Outreach writes contacts and conversations). Reasons: one login and one account id already need that service; one database means one backup and one place to enforce who may see what; and no new infrastructure to run. Keep the existing Gravity brand memory and `buildAIContext` as the reader and migrate it, do not duplicate it. Watch the Atlas disk limit (it has hit its ceiling before; see the Gravity hand-over) and keep conversation logs trimmed.
 
 Leads flow: Meta lead form → Nebulaa lead record → Outreach contact. Customers can also upload a spreadsheet of leads or existing customers (`leads_import_template.xlsx` exists).
 
@@ -59,18 +61,23 @@ Leads flow: Meta lead form → Nebulaa lead record → Outreach contact. Custome
 - **One account** across apps. The `nebulaa-accounts` service plan exists (`docs/superpowers/plans`, "Nebulaa Accounts service"). Pulsar's repo already contains its spec and plan; continue it rather than inventing another.
 - **One balance of Quarks** (1 Quark = $0.02; recharge once, spend anywhere). All prices come from one table (Gravity: `backend/config/apiCosts.js`). Outreach actions get Quark prices derived from real provider cost plus margin; never hard-code a price.
 - Pulsar currently meters in rupees (`usageControl.service.js`) and, for voice, reads an ElevenLabs balance. Replace this with Quark deduction using the same deduct → act → refund-once pattern as Gravity's money path.
-- Currency: today's pricing is INR with 18% GST. Add **USD and CAD** display and charging for the Canadian client. Razorpay can take international cards if enabled for the account; otherwise add Stripe for non-India customers. Decide with Dinesh.
+- Currency: today's pricing is INR with 18% GST. Add **USD and CAD** display for the Canadian client. Dinesh says Razorpay already has international payments enabled, so keep Razorpay and do not add a second payment provider for now; verify with one small real test payment before promising her anything.
 
-## 6. Pricing: how to build it (numbers to be re-checked live)
+## 6. Providers: decisions and a bake-off (replaces the earlier pricing section)
 
-Work out unit cost per action, then Quark price = cost × margin, rounded. Approximate vendor costs to verify against current price pages before publishing any price:
+Do not publish any price until it is built from current vendor rate cards (re-check live; web research for this brief returned nothing, so no numbers are quoted here). Method: unit cost per action, plus margin, rounded, from one price table, in Quarks.
 
-- **WhatsApp (Meta)**: priced per message by category (marketing, utility, authentication, service) and by recipient country. Marketing messages are the expensive ones. Service replies inside the 24-hour window are free or cheap. Using Twilio as the sender adds a small per-message fee on top of Meta's.
-- **SMS**: per message, varies a lot by country. India SMS needs DLT registration (templates and sender IDs). Canada needs a registered number and compliance (see below).
-- **Email**: AWS SES is a few cents per thousand emails; the real cost is deliverability work (domain authentication).
-- **Voice AI calls**: three parts per minute: the phone network (Twilio or Exotel), the voice agent platform (ElevenLabs), and the language model. This is the largest cost. Price voice by the minute with a safety margin and a hard per-call cap (the existing `usageControl` caps are a good base).
+**WhatsApp: use Meta's Cloud API directly (decision).** Twilio sits between you and Meta and charges its own fee on every message on top of Meta's charge. Direct Meta has no middleman fee, and the code already supports it (`whatsapp.service.js` routes per organisation). It needs a verified Meta business, a registered number and approved templates per customer. Keep the Twilio route only as an existing option for organisations already on it. If direct onboarding proves too heavy for non-technical customers, a cheaper Indian WhatsApp provider (a "BSP") is the second choice, evaluated in the bake-off.
 
-Alternatives worth evaluating (research task, not a decision): for WhatsApp, a direct Meta Cloud API connection (cheapest) vs Twilio; for SMS, Twilio vs MSG91 (India) vs Plivo; for voice, ElevenLabs agents vs Vapi or Retell on top of Twilio; Exotel stays useful for Indian numbers.
+**SMS in India: use an Indian SMS aggregator, not Twilio.** Indian SMS must be sent over the telecom operators' regulated DLT system (registered business, sender ID, approved templates). Airtel, Jio and Vi run that system, and Indian aggregators sit on top of it with the same registration; going "direct to Airtel" is an enterprise contract that still needs the same DLT work, and becoming a telecom operator ourselves is not realistic. Candidates to compare: MSG91, Kaleyra, Gupshup, Exotel's SMS, Airtel's enterprise SMS. Keep the SMS sender behind one interface so the provider can be swapped without changing the app. Canada SMS stays on a provider with Canadian numbers (Twilio is acceptable there until volume justifies change).
+
+**Voice AI calls: bake-off, then decide.** Today it is ElevenLabs agents over Twilio/Exotel. Evaluate Indian voice-AI options with real regional-language calls (Hindi, Tamil, Kannada, Telugu, Malayalam, plus Canadian English and French). Candidates to look at: **Sarvam** (its own speech-to-text, text-to-speech and agent products), other India-built voice agent platforms (for example Bolna, Smallest.ai, Gnani; verify they still exist and what they offer), and the current ElevenLabs set-up as the baseline. Judge on: how natural the voice sounds to a native speaker, accuracy on names and numbers, delay, price per minute all-in, and whether they support outbound calling with Canadian numbers (the Canadian client needs this first, and it may need a different stack from India).
+
+**Language quality for Gravity and Outreach: test Sarvam against the current models.** Dinesh's experience is that Gemini, ChatGPT and Claude rate roughly 6 to 7 out of 10 for regional Indian languages. Sarvam builds models for Indian languages (translation, text-to-speech, speech-to-text, chat). Run a **blind bake-off**: 20 to 30 real customer-style texts (captions, WhatsApp messages, FAQ answers, voice scripts) in each target language, produced by each model, scored by native speakers without knowing which is which. Switch a language to Sarvam only where it wins. Gravity already has a model router (`backend/services/llmRouter.js`) and a language module (`languageSupport.js`), so adding a provider is small once the bake-off picks winners.
+
+**Text writing: prefer OpenAI.** Gravity already tries OpenAI first and falls back to Gemini (its production OpenAI key was missing until 2026-10-05, so it silently used Gemini). Do the same in Pulsar: replace `gemini.service.js` calls with a router that tries OpenAI first, then the next provider, and never shows a provider error to a customer.
+
+**Email: verify before anything else.** See the SES sandbox finding above. Decide between getting SES production access with a verified domain, or a transactional email service, then test with a real inbox that Dinesh owns.
 
 ## 7. Canada: what to check before selling voice calls there
 
@@ -84,10 +91,11 @@ Dinesh should confirm with the client's own counsel; the app must at least suppo
 
 ## 8. Order of work (proposed)
 
-1. **Audit and read-only inventory**: which providers each live org uses, what works, what has never run. Written list of bugs.
+1. **Audit and read-only inventory**: which providers each live org uses, what works, what has never run (include the SES sandbox finding). Written list of bugs.
 2. **Stabilise**: fix bugs; test WhatsApp (send, template approval, inbound replies), SMS, email, voice calls with real test numbers. Never run live sends or calls to real customers without Dinesh's OK for that specific run.
 3. **Redesign** Pulsar to the Nebulaa look (light theme, plain wording, no agent names). A design spec for aligning Pulsar to Gravity's v2 tokens is already committed (`92bc273c`); that spec predates the move to a light-only theme, so update it.
-4. **Voice AI offer**: outbound calls with a campaign script, FAQ-aware answers, call logging, consent and opt-out, hard cost caps. Target the Canadian client.
+4. **Provider bake-off** (voice, regional-language text, SMS aggregator), small and scored by native speakers, then decide.
+4b. **Voice AI offer**: outbound calls with a campaign script, FAQ-aware answers, call logging, consent and opt-out, hard cost caps. Target the Canadian client.
 5. **Single brain and inbound auto-reply** (WhatsApp first).
 6. **One login and one Quark balance** across apps; USD/CAD pricing.
 7. App switcher goes live for Outreach.
