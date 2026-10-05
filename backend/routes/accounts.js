@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { getInstagramAccountHealthReport } = require('../services/instagram-fix');
+const { friendlyMessage } = require('../services/providerErrors');
 
 router.get('/health', protect, async (req, res) => {
   try {
@@ -53,15 +54,15 @@ router.get('/health', protect, async (req, res) => {
       ayrshare: {
         profileKeyPresent: Boolean(user?.ayrshare?.profileKey),
         lastCheckedAt: user?.ayrshare?.lastCheckedAt || null,
-        lastError: user?.ayrshare?.lastError || ''
+        lastError: user?.ayrshare?.lastError ? friendlyMessage(user.ayrshare.lastError, 'social') : ''
       }
     });
   } catch (error) {
-    console.error('Account health error:', error);
+    console.error('Account health error:', error && error.message);
     return res.status(500).json({
       success: false,
       message: 'Failed to check account health',
-      error: error.message
+      error: friendlyMessage(error, 'social')
     });
   }
 });

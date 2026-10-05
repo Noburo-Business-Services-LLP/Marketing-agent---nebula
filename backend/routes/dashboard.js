@@ -25,6 +25,7 @@ const {
   generateEventPost
 } = require('../services/geminiAI');
 const { generateWithLLM } = require('../services/llmRouter');
+const { friendlyMessage, isProviderLimitError } = require('../services/providerErrors');
 const { getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
 const DashboardCache = require('../models/DashboardCache');
 
@@ -1783,8 +1784,8 @@ Ensure the table is an actual HTML <table> tag with borders.
       html: htmlContent.replace(/```html|```/g, '').trim() // Strip any markdown fences if AI ignores instruction
     });
   } catch (error) {
-    console.error('Content strategy generation error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Content strategy generation error:', error && error.message);
+    res.status(500).json({ success: false, error: friendlyMessage(error, 'ai') });
   }
 });
 

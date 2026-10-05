@@ -186,7 +186,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       });
       
     } catch (err: any) {
-      alert('The PDF could not be generated: ' + err.message);
+      console.error('Strategy PDF failed:', err?.message);
+      alert('The strategy PDF could not be created right now. Please try again later.');
     } finally {
       setIsGeneratingPDF(false);
     }

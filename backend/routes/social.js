@@ -21,6 +21,7 @@ const {
 const { publishSocialPostWithSafetyWrapper } = require('../services/instagram-fix');
 const SocialInboxConversation = require('../models/SocialInboxConversation');
 const { requireOwnProfileKey } = require('../services/ayrshareGuard');
+const { friendlyMessage, isProviderLimitError } = require('../services/providerErrors');
 const {
   normalizePlatform,
   analyzeEngagement,
@@ -469,7 +470,8 @@ router.post('/inbox/webhooks/register', protect, requireFeature('inbox'), async 
 
     const result = await setAyrshareWebhook(user.ayrshare.profileKey, webhookUrl);
     if (!result.success) {
-      return res.status(500).json({ success: false, message: 'Failed to register webhook with Ayrshare', error: result.error });
+      console.error('Webhook registration failed:', result.error);
+      return res.status(500).json({ success: false, message: 'Failed to register webhook', error: friendlyMessage(result.error, 'social') });
     }
 
     res.json({ success: true, message: 'Webhook registered successfully', webhookUrl });
@@ -527,10 +529,11 @@ router.get('/:platform/auth', protect, requireFeature('social_connect'), async (
           });
           
           if (!retryResult.success) {
+            console.error('[Platform Auth] Profile retry failed:', retryResult.error || retryResult.message);
             return res.status(500).json({
               success: false,
               message: 'Failed to create social linking profile. Please try again.',
-              error: retryResult.error || retryResult.message
+              error: friendlyMessage(retryResult, 'social')
             });
           }
           
@@ -548,7 +551,7 @@ router.get('/:platform/auth', protect, requireFeature('social_connect'), async (
           return res.status(500).json({
             success: false,
             message: 'Failed to create social linking profile.',
-            error: createResult.error || createResult.message
+            error: friendlyMessage(createResult, 'social')
           });
         }
       } else {
@@ -585,7 +588,7 @@ router.get('/:platform/auth', protect, requireFeature('social_connect'), async (
       return res.status(500).json({
         success: false,
         message: 'Failed to generate social linking URL',
-        error: jwtResult.error
+        error: friendlyMessage(jwtResult, 'social')
       });
     }
     
@@ -1513,7 +1516,7 @@ router.get('/status', protect, async (req, res) => {
       ayrshareConnected: ayrshareAccounts,
       ayrshareProfileOk,
       ayrshareUsedCache: usedCachedAyrshareAccounts,
-      ayrshareError
+      ayrshareError: ayrshareError ? friendlyMessage(ayrshareError, 'social') : ayrshareError
     });
   } catch (error) {
     console.error('Get socials status error:', error);
@@ -1594,13 +1597,17 @@ router.post('/post', protect, requireFeature('publish'), async (req, res) => {
       (Array.isArray(result?.data?.errors) && result.data.errors.length > 0);
 
     if (hasError) {
-      const msg =
+      let msg =
         result?.error ||
         result?.rawError ||
         result?.data?.message ||
         firstPost?.message ||
         firstPost?.errors?.[0]?.message ||
         'Failed to post to social media';
+      if (typeof msg !== 'string' || isProviderLimitError(msg)) {
+        console.error('Social post provider error:', typeof msg === 'string' ? msg : JSON.stringify(msg));
+        msg = friendlyMessage(msg, 'social');
+      }
       return res.status(400).json({
         success: false,
         message: msg,
@@ -1623,11 +1630,11 @@ router.post('/post', protect, requireFeature('publish'), async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Social post error:', error);
+    console.error('Social post error:', error && error.message);
     res.status(500).json({
       success: false,
       message: 'Failed to post to social media',
-      error: error.message
+      error: friendlyMessage(error, 'social')
     });
   }
 });
@@ -1649,11 +1656,11 @@ router.get('/analytics/:platform', protect, async (req, res) => {
       fetchedAt: new Date()
     });
   } catch (error) {
-    console.error('Analytics fetch error:', error);
+    console.error('Analytics fetch error:', error && error.message);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch analytics',
-      error: error.message
+      error: friendlyMessage(error, 'social')
     });
   }
 });
@@ -1685,11 +1692,11 @@ router.get('/api-status', protect, async (req, res) => {
       checkedAt: new Date()
     });
   } catch (error) {
-    console.error('API status check error:', error);
+    console.error('API status check error:', error && error.message);
     res.status(500).json({
       success: false,
       message: 'Failed to check API status',
-      error: error.message
+      error: friendlyMessage(error, 'social')
     });
   }
 });

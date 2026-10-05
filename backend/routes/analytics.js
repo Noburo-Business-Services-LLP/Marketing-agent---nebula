@@ -10,6 +10,7 @@ const AnalyticsSnapshot = require('../models/AnalyticsSnapshot');
 const SocialSnapshot = require('../models/SocialSnapshot');
 const User = require('../models/User');
 const { analyzeMetrics, generateWithLLM } = require('../services/llmRouter');
+const { friendlyMessage, isProviderLimitError } = require('../services/providerErrors');
 const { getPostAnalytics, getSocialAnalyticsDetailed, getAyrshareUserProfile, getUserSocialAnalytics } = require('../services/socialMediaAPI');
 const { trackCampaignPerformanceFromAnalytics } = require('../services/aiPerformanceTracker');
 const { resolveOrganizationId } = require('../services/aiMemoryService');
@@ -364,9 +365,9 @@ async function generateInsightsAsync(snapshotId) {
     await snapshot.save();
     
   } catch (error) {
-    console.error('Insight generation error:', error);
+    console.error('Insight generation error:', error && error.message);
     snapshot.processingStatus = 'failed';
-    snapshot.processingError = error.message;
+    snapshot.processingError = friendlyMessage(error, 'ai');
     await snapshot.save();
   }
 }

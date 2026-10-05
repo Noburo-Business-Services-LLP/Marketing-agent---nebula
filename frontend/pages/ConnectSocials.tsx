@@ -14,6 +14,7 @@ import UnifiedInbox from './UnifiedInbox';
 import AutoReplySettingsPage from './AutoReplySettingsPage';
 import UpgradePrompt from '../components/UpgradePrompt';
 import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
+import { customerMessage } from '../utils/errors';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -411,7 +412,7 @@ const ConnectSocials: React.FC = () => {
         }
         setNotification({
           type: 'error',
-          message: response.message || `The ${platform} connection could not be started.`
+          message: customerMessage(response.message || `The ${platform} connection could not be started.`)
         });
         setLoadingPlatform(null);
         setConnectingPlatform(null);
@@ -425,7 +426,7 @@ const ConnectSocials: React.FC = () => {
       if (needsUpgrade) { setUpgrade(needsUpgrade); setLoadingPlatform(null); setConnectingPlatform(null); return; }
       setNotification({
         type: 'error',
-        message: error.message || `Nebulaa could not connect to ${platform}.`
+        message: customerMessage(error.message || `Nebulaa could not connect to ${platform}.`)
       });
       setLoadingPlatform(null);
       setConnectingPlatform(null);
@@ -476,7 +477,7 @@ const ConnectSocials: React.FC = () => {
         throw new Error('Disconnect failed');
       }
     } catch (error: any) {
-      setNotification({ type: 'error', message: error.message || `${platform} could not be disconnected.` });
+      setNotification({ type: 'error', message: customerMessage(error.message || `${platform} could not be disconnected.`) });
     }
   };
 
