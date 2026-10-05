@@ -102,6 +102,9 @@ export interface OnboardingStrings {
   differentiatorPlaceholder: string;
   differentiatorHint: string;
   postLanguage: string;
+  additionalLanguages: string;
+  additionalLanguagesHint: string;
+  additionalLanguagesFull: string;
   restrictions: string;
   restrictionsPlaceholder: string;
   upcoming: string;
@@ -223,6 +226,9 @@ const en: OnboardingStrings = {
   differentiatorPlaceholder: 'e.g. 25 years of family craftsmanship',
   differentiatorHint: 'One line. Why should someone choose you?',
   postLanguage: 'Language for your posts',
+  additionalLanguages: 'Also post in',
+  additionalLanguagesHint: 'Optional. Choose up to three more languages. You can turn any post into these languages later.',
+  additionalLanguagesFull: 'Three languages are chosen. Remove one to choose another.',
   restrictions: 'Anything we should not post?',
   restrictionsPlaceholder: 'e.g. No political posts. No photos of staff.',
   upcoming: 'Anything coming up in the next 30 days?',
@@ -393,6 +399,10 @@ const ta: OnboardingStrings = {
   differentiatorPlaceholder: 'எ.கா. 25 ஆண்டுகால குடும்பக் கைவினைத் திறன்',
   differentiatorHint: 'ஒரு வரி போதும். ஒருவர் ஏன் உங்களைத் தேர்ந்தெடுக்க வேண்டும்?',
   postLanguage: 'பதிவுகளுக்கான மொழி',
+  // needs a native-speaker read
+  additionalLanguages: 'இந்த மொழிகளிலும் பதிவிடுங்கள்',
+  additionalLanguagesHint: 'விருப்பத்திற்குரியது. மேலும் மூன்று மொழிகள் வரை தேர்ந்தெடுக்கலாம். எந்தப் பதிவையும் பின்னர் இந்த மொழிகளுக்கு மாற்றலாம்.',
+  additionalLanguagesFull: 'மூன்று மொழிகள் தேர்ந்தெடுக்கப்பட்டுள்ளன. வேறொன்றைத் தேர்ந்தெடுக்க ஒன்றை நீக்கவும்.',
   restrictions: 'எதையாவது பதிவிடக் கூடாதா?',
   restrictionsPlaceholder: 'எ.கா. அரசியல் பதிவுகள் வேண்டாம். ஊழியர்களின் புகைப்படங்கள் வேண்டாம்.',
   upcoming: 'அடுத்த 30 நாட்களில் ஏதாவது நிகழ்ச்சி உண்டா?',
@@ -563,6 +573,10 @@ const hi: OnboardingStrings = {
   differentiatorPlaceholder: 'जैसे: 25 साल की पारिवारिक कारीगरी',
   differentiatorHint: 'एक पंक्ति काफ़ी है। कोई आपको क्यों चुने?',
   postLanguage: 'पोस्ट की भाषा',
+  // needs a native-speaker read
+  additionalLanguages: 'इन भाषाओं में भी पोस्ट करें',
+  additionalLanguagesHint: 'वैकल्पिक। तीन तक और भाषाएँ चुन सकते हैं। आप किसी भी पोस्ट को बाद में इन भाषाओं में बदल सकते हैं।',
+  additionalLanguagesFull: 'तीन भाषाएँ चुनी जा चुकी हैं। दूसरी चुनने के लिए एक हटाएँ।',
   restrictions: 'क्या कुछ ऐसा है जो हमें पोस्ट नहीं करना है?',
   restrictionsPlaceholder: 'जैसे: राजनीतिक पोस्ट नहीं। स्टाफ़ की फ़ोटो नहीं।',
   upcoming: 'अगले 30 दिनों में कुछ ख़ास है?',
@@ -704,6 +718,7 @@ export function getChoices(lang: OnboardingLang) {
     voices: VOICE_VALUES.map((value): Choice => ({ value, label: s.voiceLabels[value] })),
     genders: GENDER_VALUES.map((value): Choice => ({ value, label: s.genderLabels[value] })),
     goals: GOAL_VALUES.map((value): Choice => ({ value, label: s.goalLabels[value] })),
+    baseLanguageNames: s.languageNames as Record<string, string>,
     contentLanguages: CONTENT_LANGUAGE_BASES.flatMap((base): Choice[] => [
       { value: base, label: s.languageNames[base] },
     ]).concat(

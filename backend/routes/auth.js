@@ -92,6 +92,15 @@ async function scrapeLinkedInPosts(linkedinUrl) {
   }
 }
 
+const { sanitizeAdditionalLanguages } = require('../services/languageSupport');
+
+// Keep the extra post languages to the allowed base codes, deduplicated,
+// at most three, and never the same language as the primary one.
+function withCleanLanguages(profile) {
+  if (!profile || typeof profile !== 'object') return profile;
+  return { ...profile, additionalLanguages: sanitizeAdditionalLanguages(profile.additionalLanguages, profile.contentLanguage) };
+}
+
 const router = express.Router();
 
 /**
@@ -1159,6 +1168,10 @@ router.put('/update-profile', protect, [
       }
     });
 
+    if (updates.businessProfile && typeof updates.businessProfile === 'object') {
+      updates.businessProfile = withCleanLanguages(updates.businessProfile);
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user._id,
       updates,
@@ -1263,7 +1276,7 @@ router.put('/complete-onboarding', protect, async (req, res) => {
 
     const updateData = {
       onboardingCompleted: true,
-      businessProfile: businessProfile || {}
+      businessProfile: withCleanLanguages(businessProfile || {})
     };
 
     if (mobileNumber) updateData.mobileNumber = mobileNumber;

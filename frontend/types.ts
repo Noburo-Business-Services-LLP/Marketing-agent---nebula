@@ -34,6 +34,8 @@ export interface BusinessProfile {
   brandStory?: string;
   heroProduct?: string;
   contentLanguage?: ContentLanguage;
+  // Extra languages (base codes only, at most three) a post can also be turned into.
+  additionalLanguages?: string[];
   contentRestrictions?: string;
   firstMonthContentAngles?: string;
   // How much content the AI monthly planner generates. Forward-only —

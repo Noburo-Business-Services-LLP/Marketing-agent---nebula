@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { BASE_LANGUAGES, MAX_ADDITIONAL_LANGUAGES } = require('../services/languageSupport');
 
 const userSchema = new mongoose.Schema({
   email: {
@@ -97,6 +98,16 @@ const userSchema = new mongoose.Schema({
         'odia_english_mix', 'urdu_english_mix'
       ],
       default: ''
+    },
+    // Extra languages each post can be turned into, as separate drafts.
+    // Base codes only (no English mix), at most three, never the primary's base.
+    additionalLanguages: {
+      type: [{ type: String, enum: BASE_LANGUAGES }],
+      default: [],
+      validate: {
+        validator: (list) => !Array.isArray(list) || list.length <= MAX_ADDITIONAL_LANGUAGES,
+        message: 'At most three extra languages can be added.'
+      }
     },
     contentRestrictions: { type: String, default: '' },
     firstMonthContentAngles: { type: String, default: '' },

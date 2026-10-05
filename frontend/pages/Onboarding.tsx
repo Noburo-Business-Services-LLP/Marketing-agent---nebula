@@ -9,6 +9,8 @@ import { INDIC_FONT_STACK } from '../components/onboarding/indicFonts';
 import { User, BusinessProfile, SocialConnection } from '../types';
 import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, AlertCircle, Share2, Instagram, Facebook, Linkedin, Youtube, Pin, MessageCircle, SkipForward, Sun, Moon, Globe, CheckCircle, XCircle, ExternalLink, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import AdditionalLanguagePicker from '../components/AdditionalLanguagePicker';
+import { cleanSelection } from '../utils/languages';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -96,6 +98,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         keyDifferentiator: '',
         brandStory: '',
         contentLanguage: 'english',
+        additionalLanguages: [] as string[],
         contentRestrictions: '',
         firstMonthContentAngles: '',
     });
@@ -469,6 +472,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 ...formData,
                 // Tone is optional in sign-up now; fall back to the same default the backend uses.
                 brandVoice: Array.isArray(formData.brandVoice) && formData.brandVoice.length ? formData.brandVoice : (formData.brandVoice || ['Professional']),
+                additionalLanguages: cleanSelection(formData.additionalLanguages, formData.contentLanguage),
                 niche: formData.niche || formData.heroProduct || '',
                 targetAudience: formData.targetAudience || formData.targetCustomerProfile || '',
                 description: formData.description || [formData.heroProduct, formData.targetCustomerProfile && `for ${formData.targetCustomerProfile}`].filter(Boolean).join(' '),
@@ -1009,6 +1013,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         ))}
                                     </div>
                                 </div>
+
+                                <AdditionalLanguagePicker
+                                    primary={formData.contentLanguage}
+                                    value={formData.additionalLanguages || []}
+                                    onChange={next => handleChange('additionalLanguages', next as any)}
+                                    labels={{ title: t.additionalLanguages, hint: t.additionalLanguagesHint, full: t.additionalLanguagesFull, names: choices.baseLanguageNames }}
+                                />
 
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>

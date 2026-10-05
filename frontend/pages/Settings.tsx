@@ -8,6 +8,8 @@ import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { jsPDF } from 'jspdf';
 import { apiService } from '../services/api';
 import { CONTENT_LANGUAGES } from '../constants/languages';
+import AdditionalLanguagePicker from '../components/AdditionalLanguagePicker';
+import { cleanSelection } from '../utils/languages';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import {
   GravityHero,
@@ -74,7 +76,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
     yearsInBusiness: undefined, brandMaturity: '',
     targetCustomerProfile: '', targetGender: '', geographicReach: '',
     customerType: '', pricePositioning: '', keyDifferentiator: '',
-    brandStory: '', heroProduct: '', contentLanguage: '',
+    brandStory: '', heroProduct: '', contentLanguage: '', additionalLanguages: [],
     contentRestrictions: '', firstMonthContentAngles: '',
     contentCadence: { postsPerDay: 1, reelsPerWeek: 1 }
   };
@@ -121,7 +123,11 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
     setBizError('');
     try {
       const response = await apiService.updateProfile({
-        businessProfile: { ...user?.businessProfile, ...bizData }
+        businessProfile: {
+          ...user?.businessProfile,
+          ...bizData,
+          additionalLanguages: cleanSelection(bizData.additionalLanguages, bizData.contentLanguage)
+        }
       });
       if (response.success && response.user) {
         onUserUpdate(response.user);
@@ -570,6 +576,14 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 ))}
                               </select>
                             </Field>
+                            <div className="md:col-span-2">
+                              <AdditionalLanguagePicker
+                                primary={bizData.contentLanguage}
+                                value={bizData.additionalLanguages || []}
+                                onChange={next => handleBizChange('additionalLanguages', next)}
+                                labels={{ title: 'Also post in', hint: 'Optional. Choose up to three more languages. You can turn any post into these languages later.', full: 'Three languages are chosen. Remove one to choose another.', names: Object.fromEntries(CONTENT_LANGUAGES.map(l => [l.value, l.label])) }}
+                              />
+                            </div>
                             <Field label="Brand Voice">
                               <input className={inputCls} value={Array.isArray(bizData.brandVoice) ? bizData.brandVoice.join(', ') : (bizData.brandVoice || '')} onChange={e => handleBizChange('brandVoice', e.target.value)} placeholder="For example: Professional, Witty" />
                             </Field>

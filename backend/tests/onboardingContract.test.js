@@ -85,3 +85,16 @@ test('existing accounts with the long profile still validate', () => {
   const bpErrors = err ? Object.keys(err.errors).filter((k) => k.startsWith('businessProfile')) : [];
   assert.deepStrictEqual(bpErrors, []);
 });
+
+test('additionalLanguages is optional and only base languages are accepted', () => {
+  const ok = new User({ name: 'x', email: 'a@b.co', password: 'x', businessProfile: shortPayload({ additionalLanguages: ['kannada', 'telugu'] }) });
+  assert.ok(!(ok.validateSync()?.errors || {})['businessProfile.additionalLanguages.0']);
+  assert.deepStrictEqual([...ok.businessProfile.additionalLanguages], ['kannada', 'telugu']);
+  const none = new User({ name: 'x', email: 'a@b.co', password: 'x', businessProfile: shortPayload() });
+  assert.deepStrictEqual([...none.businessProfile.additionalLanguages], []);
+  const bad = new User({ name: 'x', email: 'a@b.co', password: 'x', businessProfile: shortPayload({ additionalLanguages: ['kannada_english_mix'] }) });
+  const errKeys = Object.keys(bad.validateSync()?.errors || {});
+  assert.ok(errKeys.some((k) => k.startsWith('businessProfile.additionalLanguages')));
+  const tooMany = new User({ name: 'x', email: 'a@b.co', password: 'x', businessProfile: shortPayload({ additionalLanguages: ['kannada', 'telugu', 'hindi', 'urdu'] }) });
+  assert.ok(Object.keys(tooMany.validateSync()?.errors || {}).some((k) => k.startsWith('businessProfile.additionalLanguages')));
+});
