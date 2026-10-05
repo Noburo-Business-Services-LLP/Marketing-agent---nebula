@@ -6,7 +6,7 @@
 const { GoogleAuth } = require('google-auth-library');
 const { buildPrompt } = require('./promptRegistry');
 const { uploadBase64Image } = require('./imageUploader');
-const { generateOpenAIImage } = require('./openaiImage');
+const { generateOpenAIImage, referencesFromParts } = require('./openaiImage');
 const { isProviderLimitError } = require('./providerErrors');
 const { getPlatformRules } = require('./platformContentRules');
 const fs = require('fs/promises');
@@ -5183,7 +5183,7 @@ Only the visual language should carry over, not the specific scene.`);
     // for why); still worth trying over returning nothing.
     try {
       console.log('[NanoBanana2] Both Nano Banana attempts failed, trying OpenAI image generation...');
-      const openAiResult = await generateOpenAIImage(promptUsed, { aspectRatio });
+      const openAiResult = await generateOpenAIImage(promptUsed, { aspectRatio, references: referencesFromParts(parts) });
       if (openAiResult?.success && openAiResult?.imageUrl) {
         return { success: true, imageUrl: openAiResult.imageUrl, model: openAiResult.model, promptUsed };
       }
