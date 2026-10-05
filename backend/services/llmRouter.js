@@ -7,15 +7,35 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_FLASH_MODEL = 'gemini-2.5-flash';
+const GEMINI_FLASH_LITE_MODEL = 'gemini-2.5-flash-lite';
+const PRIMARY_UNAVAILABLE_MS = 10 * 60 * 1000;
+
+// Remembers for 10 minutes that the primary model has no quota, so repeated calls skip it.
+let primaryUnavailableUntil = 0;
+let clock = () => Date.now();
+let fetchImpl = null; // tests inject a fake; production uses global fetch
+
+function getPrimaryModel() {
+  return process.env.GEMINI_PRO_MODEL || 'gemini-2.5-pro';
+}
+
+// Test hooks: inject fetch/clock and clear the unavailable memory.
+function _setTestHooks({ fetch, now } = {}) {
+  fetchImpl = fetch || null;
+  clock = now || (() => Date.now());
+  primaryUnavailableUntil = 0;
+}
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
 // Structured logging for LLM calls (no keys logged)
-const logLLMCall = (provider, taskType, success, duration, error = null) => {
+const logLLMCall = (provider, taskType, success, duration, error = null, model = null) => {
   console.log(JSON.stringify({
     timestamp: new Date().toISOString(),
     type: 'llm_call',
     provider,
+    model,
     taskType,
     success,
     durationMs: duration,
@@ -117,42 +137,92 @@ function parseJSON(text) {
 }
 
 /**
- * Call Gemini API
+ * True when a Gemini failure means "this model cannot serve us right now"
+ * (quota, billing, model missing or not permitted), as opposed to a bad request.
+ */
+function isModelUnavailableError(status, bodyText) {
+  const text = String(bodyText || '');
+  if (status === 429) return true;
+  if (/RESOURCE_EXHAUSTED|Quota exceeded/i.test(text)) return true;
+  if (status === 404) return true;
+  if (status === 403 && /PERMISSION_DENIED/i.test(text)) return true;
+  return false;
+}
+
+function modelChain() {
+  const chain = [getPrimaryModel(), GEMINI_FLASH_MODEL, GEMINI_FLASH_LITE_MODEL];
+  return chain.filter((m, i) => chain.indexOf(m) === i);
+}
+
+async function callGeminiModel(model, prompt, options) {
+  const doFetch = fetchImpl || fetch;
+  const response = await doFetch(`${GEMINI_BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: options.temperature || 0.7,
+        maxOutputTokens: options.maxTokens || 8192, // Increased default for longer responses
+        topP: 0.9
+      }
+    })
+  });
+
+  let data = {};
+  try { data = await response.json(); } catch (_) { data = {}; }
+
+  if (!response.ok) {
+    const err = new Error(data.error?.message || 'Gemini API error');
+    err.status = response.status;
+    err.modelUnavailable = isModelUnavailableError(response.status, JSON.stringify(data));
+    throw err;
+  }
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error('No response from Gemini');
+  }
+  return text;
+}
+
+/**
+ * Call Gemini API, falling back to a model with quota when the preferred one has none.
  */
 async function callGemini(prompt, options = {}) {
   const startTime = Date.now();
-  
-  try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: options.temperature || 0.7,
-          maxOutputTokens: options.maxTokens || 8192, // Increased default for longer responses
-          topP: 0.9
-        }
-      })
-    });
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error?.message || 'Gemini API error');
-    }
-
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      throw new Error('No response from Gemini');
-    }
-
-    logLLMCall('gemini', options.taskType, true, Date.now() - startTime);
-    return text;
-  } catch (error) {
-    logLLMCall('gemini', options.taskType, false, Date.now() - startTime, error);
-    throw error;
+  const primary = getPrimaryModel();
+  let chain = modelChain();
+  if (clock() < primaryUnavailableUntil && chain.length > 1) {
+    chain = chain.filter(m => m !== primary);
   }
+
+  let lastError = null;
+  for (let i = 0; i < chain.length; i++) {
+    const model = chain[i];
+    try {
+      const text = await callGeminiModel(model, prompt, options);
+      logLLMCall('gemini', options.taskType, true, Date.now() - startTime, null, model);
+      return text;
+    } catch (error) {
+      lastError = error;
+      logLLMCall('gemini', options.taskType, false, Date.now() - startTime, error, model);
+      if (model === primary && error.modelUnavailable) {
+        primaryUnavailableUntil = clock() + PRIMARY_UNAVAILABLE_MS;
+      }
+      const next = chain[i + 1];
+      if (!error.modelUnavailable || !next) break;
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        type: 'llm_fallback',
+        provider: 'gemini',
+        taskType: options.taskType,
+        from: model,
+        to: next
+      }));
+    }
+  }
+  throw lastError;
 }
 
 /**
@@ -677,6 +747,7 @@ module.exports = {
   // Export raw callers for advanced use
   callGemini,
   callGrok,
+  _setTestHooks,
   parseJSON,
   validateSchema
 };
