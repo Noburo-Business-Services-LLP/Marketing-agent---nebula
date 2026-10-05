@@ -39,11 +39,12 @@ export const ShowcasePanel: React.FC = () => {
       aria-label={t.showcaseAria}
       lang={lang}
     >
+      {/* Full-bleed blurred background, one layer per post so it crossfades with the picture. */}
       {SHOWCASE_SLIDES.map((s, n) => (
         <div
-          key={s.src}
+          key={`bg-${s.src}`}
           className={`absolute inset-0 transition-opacity duration-1000 ${n === i ? 'opacity-100' : 'opacity-0'}`}
-          aria-hidden={n !== i}
+          aria-hidden="true"
         >
           <img
             src={s.src}
@@ -52,49 +53,63 @@ export const ShowcasePanel: React.FC = () => {
             className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl opacity-60"
           />
           <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(20,32,58,0.78) 0%, rgba(20,32,58,0.35) 40%, rgba(20,32,58,0.8) 100%)' }} />
-          <div className="absolute inset-0 flex items-center justify-center px-[9%]">
-            <img
-              src={s.src}
-              alt={alt(s.label)}
-              loading={n < 2 ? 'eager' : 'lazy'}
-              className="w-full max-h-[60vh] aspect-square object-contain rounded-[22px] shadow-[0_24px_60px_rgba(0,0,0,0.45)] border border-white/20"
-            />
-          </div>
         </div>
       ))}
 
-      <div className="absolute top-0 inset-x-0 px-10 pt-12 text-white">
-        <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#FFCB2E] mb-3">{t.showcaseMadeWith}</p>
-        <h2
-          style={latin
-            ? { fontFamily: "'Archivo', 'Arial Narrow', Arial, sans-serif", fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.05 }
-            : { fontFamily: INDIC_FONT_STACK, fontWeight: 800, lineHeight: 1.35 }}
-          className={latin ? 'text-[30px] xl:text-[36px]' : 'text-[26px] xl:text-[30px]'}
-        >
-          {t.showcaseHeadlineA}
-          <br />
-          <span
+      {/* Three zones in a column: the heading, the post (sized to the space left between the two), the footer.
+          The post can never ride up over the heading, whatever the screen size. */}
+      <div className="relative z-10 flex h-full flex-col text-white">
+        <div className="flex-shrink-0 px-10 pt-12">
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#FFCB2E] mb-3">{t.showcaseMadeWith}</p>
+          <h2
             style={latin
-              ? { fontFamily: "'Kaushan Script', cursive", textTransform: 'none', fontWeight: 400, color: '#FFCB2E' }
-              : { fontFamily: INDIC_FONT_STACK, fontWeight: 800, color: '#FFCB2E' }}
-            className={latin ? 'text-[1.15em]' : ''}
-          >{t.showcaseHeadlineB}</span>
-        </h2>
-      </div>
+              ? { fontFamily: "'Archivo', 'Arial Narrow', Arial, sans-serif", fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.05 }
+              : { fontFamily: INDIC_FONT_STACK, fontWeight: 800, lineHeight: 1.35 }}
+            className={latin ? 'text-[30px] xl:text-[36px]' : 'text-[26px] xl:text-[30px]'}
+          >
+            {t.showcaseHeadlineA}
+            <br />
+            <span
+              style={latin
+                ? { fontFamily: "'Kaushan Script', cursive", textTransform: 'none', fontWeight: 400, color: '#FFCB2E' }
+                : { fontFamily: INDIC_FONT_STACK, fontWeight: 800, color: '#FFCB2E' }}
+              className={latin ? 'text-[1.15em]' : ''}
+            >{t.showcaseHeadlineB}</span>
+          </h2>
+        </div>
 
-      <div className="absolute bottom-0 inset-x-0 px-10 pb-10 flex items-center justify-between gap-4 text-white">
-        <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white/15 backdrop-blur px-4 py-2 text-[13.5px] font-semibold border border-white/20">
-          {labelOf(current.label)}
-        </span>
-        <div className="flex gap-1.5" role="tablist" aria-label={t.showcaseChoose}>
+        <div className="relative min-h-0 flex-1">
           {SHOWCASE_SLIDES.map((s, n) => (
-            <button
+            <div
               key={s.src}
-              onClick={() => setI(n)}
-              aria-label={fillTemplate(t.showcaseShowPost, { n: n + 1 })}
-              className={`h-1.5 rounded-full transition-all ${n === i ? 'w-5 bg-[#FFCB2E]' : 'w-1.5 bg-white/40'}`}
-            />
+              className={`absolute inset-x-[9%] inset-y-6 flex items-center justify-center transition-opacity duration-1000 ${n === i ? 'opacity-100' : 'opacity-0'}`}
+              aria-hidden={n !== i}
+            >
+              <img
+                src={s.src}
+                alt={alt(s.label)}
+                loading={n < 2 ? 'eager' : 'lazy'}
+                style={{ maxWidth: 'min(100%, 460px)' }}
+                className="h-auto max-h-full w-auto object-contain rounded-[22px] shadow-[0_24px_60px_rgba(0,0,0,0.45)] border border-white/20"
+              />
+            </div>
           ))}
+        </div>
+
+        <div className="flex flex-shrink-0 items-center justify-between gap-4 px-10 pb-10">
+          <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white/15 backdrop-blur px-4 py-2 text-[13.5px] font-semibold border border-white/20">
+            {labelOf(current.label)}
+          </span>
+          <div className="flex gap-1.5" role="tablist" aria-label={t.showcaseChoose}>
+            {SHOWCASE_SLIDES.map((s, n) => (
+              <button
+                key={s.src}
+                onClick={() => setI(n)}
+                aria-label={fillTemplate(t.showcaseShowPost, { n: n + 1 })}
+                className={`h-1.5 rounded-full transition-all ${n === i ? 'w-5 bg-[#FFCB2E]' : 'w-1.5 bg-white/40'}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </aside>
