@@ -4619,6 +4619,11 @@ IMPORTANT RULES:
  * Generate campaign post image using Nano Banana 2 (gemini-3.1-flash-image-preview)
  * Supports aspect ratios and brand logo integration in the design
  */
+
+// Phrases from the realism skill (remove-ai-look): real camera, real light, visible skin
+// texture, no beauty-filter look. Used for video stills and cast portraits.
+const PHOTO_REALISM_BLOCK = `REALISM (mandatory): This must look like an unretouched real photograph taken on a real camera, not a render or an illustration. Photorealistic, natural imperfections, true-to-life textures. Real skin with visible pores, fine lines, under-eye texture, slight redness, peach fuzz, flyaway hairs, asymmetry, real teeth and natural fingernails. Real fabric grain and creases. Natural window or practical room light with realistic shadows, no beauty lighting, no glow. Natural muted colour and realistic contrast, subtle sensor grain, mostly sharp focus like a phone or documentary camera, candid unposed expression and posture. Correct hands and anatomy. No plastic or waxy skin, no airbrushing, no beauty filter, no CGI or 3D look, no over-sharpening, no HDR, no cinematic teal-and-orange grade, no text, logo or watermark unless the brief asks for it.`;
+
 async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   const {
     aspectRatio = '1:1',
@@ -4666,6 +4671,9 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
     // Present when generation runs for a signed-in user, so their edited
     // prompt is used; absent for internal calls, which get the default.
     userId = null,
+    // Video stills and characters: ask for real photography instead of the
+    // polished, airbrushed look image models fall back to.
+    photoRealism = false,
   } = options;
 
   const linkedProduct = options.linkedProduct && typeof options.linkedProduct === 'object' ? options.linkedProduct : null;
@@ -5058,6 +5066,7 @@ Only the visual language should carry over, not the specific scene.`);
     promptUsed = referenceNotes.length > 0
       ? `${referenceNotes.join('\n\n')}\n\n${prompt}`
       : prompt;
+    if (photoRealism) promptUsed = `${promptUsed}\n\n${PHOTO_REALISM_BLOCK}`;
 
     parts.push({ text: promptUsed });
 

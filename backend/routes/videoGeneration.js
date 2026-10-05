@@ -1872,6 +1872,7 @@ router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimit
     creditsDeducted = true;
 
     const result = await generateCampaignImageNanoBanana(prompt, {
+      photoRealism: true,
       aspectRatio: aspectRatio || '1:1',
       // For cast reference: suppress brandName so Nano Banana does NOT
       // bake "TRM SANTHI FURNITURE" onto tables / walls / signage.
@@ -1979,6 +1980,7 @@ router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimite
     }
 
     const imageUrl = await generateCampaignImageNanoBanana(prompt, {
+      photoRealism: true,
       aspectRatio: '16:9',
       brandName: brandName || '',
       tone: 'professional',
@@ -2510,6 +2512,7 @@ Match the reference's wall colors, floor materials, ceiling, lighting fixtures, 
     let lastResult = null;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const result = await generateCampaignImageNanoBanana(scenePrompt, {
+        photoRealism: true,
         aspectRatio,
         characterReferenceImage: castImageDataUrl || undefined,
         // Env slot — Nano Banana treats this as a PLACE (walls /
@@ -3069,6 +3072,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           
           try {
             const nanoResult = await generateCampaignImageNanoBanana(regenPrompt, {
+              photoRealism: true,
               aspectRatio: '16:9', // default for video
               characterReferenceImage: imageData,
               isCinematic: true
@@ -3086,6 +3090,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           }
       } else {
         const regen = await generateCampaignImageNanoBanana(regenPrompt, {
+          photoRealism: true,
           aspectRatio: '9:16',
           linkedProduct: draft?.input?.product || null,
           productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,

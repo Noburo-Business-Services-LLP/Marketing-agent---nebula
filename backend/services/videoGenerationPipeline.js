@@ -1709,6 +1709,7 @@ async function generateSceneImages({
             const imageData = `data:image/jpeg;base64,${cleanBase64}`;
 
             const nanoResult = await generateCampaignImageNanoBanana(promptWithConsistency, {
+              photoRealism: true,
               aspectRatio: '16:9', // default for video
               characterReferenceImage: imageData,
               isCinematic: true,
@@ -1726,6 +1727,7 @@ async function generateSceneImages({
 
           // Fallback to NanoBanana if no character image is provided
           const result = await generateCampaignImageNanoBanana(promptWithConsistency, {
+            photoRealism: true,
             aspectRatio: '9:16',
             brandName: input.useLogo !== false ? String(profile.name || '') : undefined,
             industry: input.useLogo !== false ? String(profile.industry || '') : undefined,
