@@ -61,6 +61,7 @@ const accountRoutes = require('./routes/accounts');
 const adCampaignRoutes = require('./routes/adCampaigns');
 const seoRoutes = require('./routes/seoRoutes');
 const draftRoutes = require('./routes/drafts');
+const draftLocalizeRoutes = require('./routes/draftLocalize');
 
 // New real-data routes
 const brandRoutes = require('./routes/brand');
@@ -458,6 +459,7 @@ app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);
 app.use('/api/submissions', submissionRoutes);
+app.use('/api/drafts', draftLocalizeRoutes);
 app.use('/api/drafts', draftRoutes);
 app.use('/api', videoStylePromptRoutes);
 

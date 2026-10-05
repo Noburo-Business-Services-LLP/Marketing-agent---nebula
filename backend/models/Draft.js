@@ -74,6 +74,13 @@ const draftSchema = new mongoose.Schema({
     type: String,
     default: 'English'
   },
+  // Set only on a language version made from another draft (Stage 1 localisation): the id of the
+  // original draft. `language` then holds the base language code, for example 'kannada'.
+  languageVariantOf: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Draft',
+    default: null
+  },
   tone: {
     type: String,
     default: ''
@@ -166,5 +173,10 @@ const draftSchema = new mongoose.Schema({
 // Composite Indexes
 draftSchema.index({ userId: 1, status: 1 });
 draftSchema.index({ userId: 1, createdAt: -1 });
+// One version per language per original draft, even if two requests arrive together.
+draftSchema.index(
+  { userId: 1, languageVariantOf: 1, language: 1 },
+  { unique: true, partialFilterExpression: { languageVariantOf: { $type: 'objectId' } } }
+);
 
 module.exports = mongoose.model('Draft', draftSchema);
