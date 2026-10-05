@@ -186,6 +186,8 @@ export interface Draft {
   imagePromptResolved?: string;
   platforms: string[];
   language: string;
+  /** Set on a language version: the id of the draft it was made from. */
+  languageVariantOf?: string | null;
   tone?: string;
   objective?: string;
   scheduledDate?: string;

@@ -4427,6 +4427,14 @@ export const draftsAPI = {
     }, true);
   },
 
+  /** Makes one separate draft per language from one of your drafts. Takes no Quarks and publishes nothing. */
+  localizeDraft: async (id: string, languages: string[]): Promise<{ results: { language: string; ok: boolean; existing?: boolean; draftId?: string; message?: string }[] }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/localize`, {
+      method: 'POST',
+      body: JSON.stringify({ languages })
+    }, true);
+  },
+
   getDraft: async (id: string): Promise<{ draft: Draft }> => {
     return apiCall(`/drafts/${encodeURIComponent(id)}`, {
       method: 'GET'

@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle, X, Pencil, LayoutGrid, Rows } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
-import { Draft } from '../types';
+import { Draft, User } from '../types';
+import AddLanguagesControl, { LANGUAGE_VERSION_NOTE } from '../components/AddLanguagesControl';
+import { languageName, variantLabel, versionsOf } from '../utils/languages';
 import GeneratingFill from '../components/GeneratingFill';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
@@ -36,7 +38,7 @@ const formatScheduleDate = (d?: string | null) => {
   return `${day} · ${time}`;
 };
 
-const GravityApprove: React.FC = () => {
+const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   const navigate = useNavigate();
   // Regenerate re-runs the full generation pipeline, so it costs the same
   // Quarks as the original — campaign-type drafts are billed through the
@@ -45,6 +47,8 @@ const GravityApprove: React.FC = () => {
   const confirm = useConfirm();
   const regenerateCostFor = (draft: any) => (draft?.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0));
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  // Every language version the client has, whatever its status, so the original can say which exist.
+  const [versionRows, setVersionRows] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -163,10 +167,11 @@ const GravityApprove: React.FC = () => {
     'pending', 'draft', 'ready', 'processing', 'failed', 'completed'
   ]);
 
-  const loadDrafts = async () => {
-    setLoading(true);
+  const loadDrafts = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const res = await draftsAPI.getDrafts();
+      setVersionRows((Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => d?.languageVariantOf));
       const filtered = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => {
         const status = String(d?.status || 'draft').toLowerCase();
         const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
@@ -306,6 +311,13 @@ const GravityApprove: React.FC = () => {
       setError(e?.message || 'The image could not be regenerated.');
       throw e;
     }
+  };
+
+  const createVersions = async (languages: string[]) => {
+    if (!current?._id) return [];
+    const res = await draftsAPI.localizeDraft(String(current._id), languages);
+    await loadDrafts(true);
+    return res?.results || [];
   };
 
   const handleApprove = async () => {
@@ -649,6 +661,9 @@ const GravityApprove: React.FC = () => {
                 </div>
                 <div className="p-3">
                   <p className="text-[12px] font-semibold text-[var(--gv-text-primary)] truncate">{d.title || 'Untitled'}</p>
+                  {variantLabel(d) && (
+                    <span className="inline-flex items-center h-5 px-2 mt-1 rounded-full bg-[var(--gv-accent-fill)] border border-[rgb(var(--gv-accent-rgb)/0.30)] text-[10.5px] font-medium text-[var(--gv-accent-text)]">{variantLabel(d)}</span>
+                  )}
                   {cap && <p className="text-[10.5px] text-[var(--gv-text-muted)] line-clamp-2 mt-1 leading-snug">{cap}</p>}
                   <div className="flex items-center gap-1 mt-2">
                     {(d.platforms || []).length === 0 ? (
@@ -751,6 +766,14 @@ const GravityApprove: React.FC = () => {
 
         {/* META + CAPTION */}
         <div className="flex flex-col">
+          {variantLabel(current) && (
+            <div className="mb-3">
+              <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-[var(--gv-accent-fill)] border border-[rgb(var(--gv-accent-rgb)/0.30)] text-[12px] font-medium text-[var(--gv-accent-text)]">
+                {variantLabel(current)}
+              </span>
+              <p className="text-[12.5px] text-[var(--gv-text-secondary)] mt-2">{LANGUAGE_VERSION_NOTE}</p>
+            </div>
+          )}
           <h1 className="font-serif-display text-[36px] leading-[1.1] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-6">
             {current?.title || current?.name || 'Untitled draft'}
           </h1>
@@ -778,6 +801,15 @@ const GravityApprove: React.FC = () => {
 
             <dt className="gravity-label pt-1">Style</dt>
             <dd className="text-[13px] text-[var(--gv-text-secondary)]">{current?.tone || current?.creative?.style || '—'}</dd>
+
+            {versionsOf(versionRows, current?._id).length > 0 && (
+              <>
+                <dt className="gravity-label pt-1">Versions</dt>
+                <dd className="text-[13px] text-[var(--gv-text-secondary)]">
+                  {versionsOf(versionRows, current?._id).map((v: any) => languageName(v.language)).join(', ')}
+                </dd>
+              </>
+            )}
 
             <dt className="gravity-label pt-1">Source</dt>
             <dd className="text-[13px] text-[var(--gv-text-secondary)]">
@@ -846,6 +878,16 @@ const GravityApprove: React.FC = () => {
                 </button>
               </div>
             </div>
+          )}
+
+          {!current?.languageVariantOf && (
+            <AddLanguagesControl
+              key={current?._id}
+              draftLanguage={current?.language}
+              additional={user?.businessProfile?.additionalLanguages || []}
+              created={versionsOf(versionRows, current?._id).map((v: any) => v.language)}
+              onCreate={createVersions}
+            />
           )}
 
           {/* Actions — bottom right */}

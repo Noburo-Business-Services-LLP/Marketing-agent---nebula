@@ -43,3 +43,39 @@ export const toggleLanguage = (selected: string[], code: string, primary?: strin
 
 export const isAtCap = (selected: string[]): boolean =>
   Array.isArray(selected) && selected.length >= MAX_ADDITIONAL_LANGUAGES;
+
+const NAMES: Record<string, string> = {
+  english: 'English', tamil: 'Tamil', telugu: 'Telugu', hindi: 'Hindi', kannada: 'Kannada',
+  malayalam: 'Malayalam', marathi: 'Marathi', bengali: 'Bengali', gujarati: 'Gujarati',
+  punjabi: 'Punjabi', odia: 'Odia', urdu: 'Urdu',
+};
+
+/** English display name of a language code or of a draft's language value ('English', 'tamil'). */
+export const languageName = (code?: string | null): string => NAMES[baseOf(code)] || '';
+
+export interface LanguageChoice { code: string; name: string; created: boolean }
+
+/**
+ * What the "Add languages" menu offers for one draft: the client's own extra languages first,
+ * then the remaining base languages. The draft's own language is never offered; a language that
+ * already has a version is marked created.
+ */
+export const languageChoices = (input: { additional?: string[]; draftLanguage?: string | null; created?: string[] }) => {
+  const own = baseOf(input.draftLanguage);
+  const created = input.created || [];
+  const make = (code: string): LanguageChoice => ({ code, name: NAMES[code] || code, created: created.includes(code) });
+  const mine = cleanSelection(input.additional, own).map(make);
+  const mineCodes = mine.map((m) => m.code);
+  const other = BASE_LANGUAGE_CODES.filter((c) => c !== own && !mineCodes.includes(c)).map(make);
+  return { mine, other };
+};
+
+type VariantLike = { _id?: string; languageVariantOf?: string | null; language?: string };
+
+/** The language versions made from one draft. */
+export const versionsOf = <T extends VariantLike>(rows: T[], draftId?: string | null): T[] =>
+  (Array.isArray(rows) ? rows : []).filter((r) => r && r.languageVariantOf && String(r.languageVariantOf) === String(draftId));
+
+/** "Kannada version" for a language version, otherwise an empty string. */
+export const variantLabel = (draft?: VariantLike | null): string =>
+  draft && draft.languageVariantOf && languageName(draft.language) ? `${languageName(draft.language)} version` : '';

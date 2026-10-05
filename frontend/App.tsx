@@ -271,7 +271,7 @@ const App: React.FC = () => {
                     <Route path="/idea-inbox" element={<IdeaInbox />} />
                     <Route path="/campaigns" element={<GravityCreate />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
-                    <Route path="/drafts" element={<GravityApprove />} />
+                    <Route path="/drafts" element={<GravityApprove user={user} />} />
                     <Route path="/reels" element={<ReelGenerator />} />
                     <Route path="/reels/hero" element={<HeroVideo />} />
                     <Route path="/upload" element={<UploadAndSchedule />} />

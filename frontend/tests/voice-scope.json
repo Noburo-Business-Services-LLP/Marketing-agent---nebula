@@ -37,5 +37,6 @@
   "pages/AIPerformance.tsx",
   "components/calendar/PlanMonthGrid.tsx",
   "components/calendar/PlanDayList.tsx",
-  "components/AdditionalLanguagePicker.tsx"
+  "components/AdditionalLanguagePicker.tsx",
+  "components/AddLanguagesControl.tsx"
 ]

@@ -79,7 +79,7 @@
     brandVoice: ['Warm', 'Friendly'], marketingGoals: ['Brand Awareness', 'Sales'],
     description: 'A neighbourhood bakery baking sourdough, croissants and celebration cakes every morning.',
     competitors: ['Daily Bread Co', 'Crumb & Co'], yearsInBusiness: 4, brandMaturity: 'growing',
-    contentLanguage: 'english', contentCadence: { postsPerDay: 1, reelsPerWeek: 2 },
+    contentLanguage: 'english', additionalLanguages: ['kannada', 'telugu'], contentCadence: { postsPerDay: 1, reelsPerWeek: 2 },
   };
   var user = {
     _id: 'audit-user-1', id: 'audit-user-1', email: 'owner@sunrise-bakery.example', firstName: 'Asha', lastName: 'Kumar',
@@ -203,6 +203,7 @@
     }],
     ['GET', /^\/payment\/(status|billing)/, ok({ subscription: user.subscription, credits: credits, payments: [] })],
     ['GET', /^\/drafts\/?$/, ok({ drafts: drafts, total: drafts.length })],
+    ['POST', /^\/drafts\/[^/]+\/localize$/, ok({ results: [{ language: 'kannada', ok: true, draftId: 'audit-draft-v1' }, { language: 'telugu', ok: false, message: 'We could not write the Telugu version this time. Please try again.' }] })],
     ['GET', /^\/drafts\/[^/]+$/, function (c) { return ok({ draft: drafts[0] }); }],
     ['GET', /^\/campaigns\/?$/, ok({ campaigns: campaigns, counts: { all: 3, draft: 1, scheduled: 1, posted: 1 } })],
     ['GET', /^\/campaigns\/reel\/options/, ok({ tones: [], styles: [], voices: [], music: [] })],

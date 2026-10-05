@@ -36,7 +36,7 @@ const AdditionalLanguagePicker: React.FC<Props> = ({ primary, value, onChange, l
               onClick={() => onChange(toggleLanguage(selected, code, primary))}
               className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 on
-                  ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-ink)]'
+                  ? 'border-[var(--gv-accent)] bg-[var(--gv-accent)] text-[var(--gv-accent-ink)]'
                   : 'border-[var(--gv-border-default)] bg-[var(--gv-panel)] text-[var(--gv-text-secondary)] hover:border-[var(--gv-border-strong)]'
               }`}
             >

@@ -37,3 +37,42 @@ test('cleanSelection drops a language that became the primary', () => {
   assert.deepEqual(cleanSelection(['kannada', 'tamil', 'kannada'], 'tamil'), ['kannada']);
   assert.deepEqual(cleanSelection(undefined, 'tamil'), []);
 });
+
+import { languageName, languageChoices, versionsOf, variantLabel } from '../utils/languages.ts';
+
+test('languageName gives English display names, also for mix codes', () => {
+  assert.equal(languageName('kannada'), 'Kannada');
+  assert.equal(languageName('tamil_english_mix'), 'Tamil');
+  assert.equal(languageName('English'), 'English');
+  assert.equal(languageName(''), '');
+});
+
+test('choices list the client\'s languages first and mark created ones', () => {
+  const c = languageChoices({ additional: ['kannada', 'telugu'], draftLanguage: 'English', created: ['telugu'] });
+  assert.deepEqual(c.mine.map((x) => [x.code, x.created]), [['kannada', false], ['telugu', true]]);
+  assert.equal(c.other.length, 9);
+  assert.ok(!c.other.some((x) => x.code === 'english' || x.code === 'kannada' || x.code === 'telugu'));
+  assert.ok(c.other.every((x) => x.created === false));
+});
+
+test('choices never offer the draft\'s own language', () => {
+  const c = languageChoices({ additional: ['tamil', 'kannada'], draftLanguage: 'tamil', created: [] });
+  assert.deepEqual(c.mine.map((x) => x.code), ['kannada']);
+  assert.ok(!c.other.some((x) => x.code === 'tamil'));
+});
+
+test('a created language outside the client\'s list shows as created under other', () => {
+  const c = languageChoices({ additional: [], draftLanguage: 'English', created: ['urdu'] });
+  assert.equal(c.mine.length, 0);
+  assert.equal(c.other.find((x) => x.code === 'urdu').created, true);
+});
+
+test('versionsOf finds the versions of one draft and variantLabel names them', () => {
+  const rows = [
+    { _id: 'a' }, { _id: 'b', languageVariantOf: 'a', language: 'kannada' },
+    { _id: 'c', languageVariantOf: 'x', language: 'hindi' }, { _id: 'd', languageVariantOf: 'a', language: 'telugu' },
+  ];
+  assert.deepEqual(versionsOf(rows, 'a').map((r) => r._id), ['b', 'd']);
+  assert.equal(variantLabel({ languageVariantOf: 'a', language: 'kannada' }), 'Kannada version');
+  assert.equal(variantLabel({ _id: 'a' }), '');
+});
