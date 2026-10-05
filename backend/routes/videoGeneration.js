@@ -2233,10 +2233,13 @@ router.post('/generateScenes', protect, checkTrial, videoAiWriteLimiter, async (
 // ============================================================
 router.post('/generateStoryAndSkeleton', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   try {
-    const { jobId, promptText, characters, castImageUrl } = req.body || {};
+    const { jobId, promptText, characters, castImageUrl, languageCode: bodyLanguageCode } = req.body || {};
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
     const userId = toUserId(req.user);
     const draft = await loadDraftForUser(jobId, userId);
+    // The language chosen for the video must reach the script writer; leaving it out
+    // made every script come back in English.
+    const chosenLanguageCode = bodyLanguageCode || draft?.input?.languageCode || draft?.audio?.config?.languageCode || 'en';
     const fullUser = (await User.findById(userId).lean().catch(() => null)) || req.user;
     const durationSeconds = normalizedDurationSeconds(draft?.input?.durationSeconds || 60, 60);
     const memCtx = await buildAIContext({ userId, product: draft?.input?.product || null });
@@ -2248,6 +2251,7 @@ router.post('/generateStoryAndSkeleton', protect, checkTrial, videoAiWriteLimite
       durationSeconds,
       sceneCount: draft?.input?.sceneCount || undefined,
       product: draft?.input?.product || undefined,
+      languageCode: chosenLanguageCode,
       // Carry env lock through so the story planner + scene enricher
       // stay inside the user's chosen space.
       environment: draft?.environment || draft?.input?.environment || undefined
@@ -2320,6 +2324,7 @@ router.post('/generateSingleScene', protect, checkTrial, videoAiWriteLimiter, as
     const input = normalizeCreateInput({
       description: String(draft?.prompt?.promptText || '').trim(),
       durationSeconds,
+      languageCode: draft?.input?.languageCode || draft?.audio?.config?.languageCode || 'en',
       environment: draft?.environment || draft?.input?.environment || undefined
     });
 

@@ -7,6 +7,7 @@ const { GoogleAuth } = require('google-auth-library');
 const { buildPrompt } = require('./promptRegistry');
 const { uploadBase64Image } = require('./imageUploader');
 const { generateOpenAIImage } = require('./openaiImage');
+const { isProviderLimitError } = require('./providerErrors');
 const { getPlatformRules } = require('./platformContentRules');
 const fs = require('fs/promises');
 const path = require('path');
@@ -5182,7 +5183,14 @@ Only the visual language should carry over, not the specific scene.`);
       console.error('[NanoBanana2] OpenAI fallback threw:', openAiErr.message);
     }
 
-    return { success: false, error: error.message };
+    // Customers see this text in the app, so it must never carry provider wording.
+    return {
+      success: false,
+      error: isProviderLimitError(error)
+        ? 'Image generation is temporarily unavailable. Please try again in a little while.'
+        : 'Image generation failed. Please try again.',
+      providerError: error.message
+    };
   }
 }
 

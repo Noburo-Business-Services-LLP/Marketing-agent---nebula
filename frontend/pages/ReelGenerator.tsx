@@ -1762,6 +1762,7 @@ setCharacterAge(nextDraft?.characterAge || '');
       promptText: structured || (description || '').trim(),
       characters: generatedCharacters,
       castImageUrl: castImageUrl || characterImage || '',
+      languageCode,
     });
     if (!skelResp?.success) {
       throw new Error(skelResp?.message || 'Story + skeleton generation failed');

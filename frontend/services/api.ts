@@ -3580,7 +3580,7 @@ export const videoGenerationAPI = {
   // Sequential v3 — returns story + voiceover + skeleton scenes (title,
   // duration, purpose only). Fast (~5-10s). Frontend then calls
   // generateSingleScene N times to fill each scene's rich detail.
-  generateStoryAndSkeleton: async (payload: { jobId: string; promptText?: string; characters?: any[]; castImageUrl?: string }): Promise<any> => {
+  generateStoryAndSkeleton: async (payload: { jobId: string; promptText?: string; characters?: any[]; castImageUrl?: string; languageCode?: string }): Promise<any> => {
     return apiCall('/video-generation/generateStoryAndSkeleton', {
       method: 'POST',
       body: JSON.stringify(payload)
