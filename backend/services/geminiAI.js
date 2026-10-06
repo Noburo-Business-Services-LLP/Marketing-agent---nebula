@@ -5192,6 +5192,7 @@ Only the visual language should carry over, not the specific scene.`);
       console.error('[NanoBanana2] OpenAI fallback threw:', openAiErr.message);
     }
 
+    require('./opsAlerts').recordFailure('image', error.message);
     // Customers see this text in the app, so it must never carry provider wording.
     return {
       success: false,

@@ -324,6 +324,7 @@ function createPaymentRouter(deps = {}) {
       });
     } catch (error) {
       console.error('Verify subscription error:', error);
+      require('../services/opsAlerts').recordFailure('payment', `verify-subscription: ${error.message}`);
       res.status(500).json({ success: false, message: 'Subscription verification failed' });
     }
   });
@@ -373,6 +374,7 @@ function createPaymentRouter(deps = {}) {
       res.json({ success: true });
     } catch (error) {
       console.error('Webhook error:', error);
+      require('../services/opsAlerts').recordFailure('payment', `webhook: ${error.message}`);
       res.status(500).json({ success: false });
     }
   });
@@ -410,6 +412,7 @@ function createPaymentRouter(deps = {}) {
       });
     } catch (error) {
       console.error('Create order error:', error);
+      require('../services/opsAlerts').recordFailure('payment', `create-order: ${error.message}`);
       res.status(500).json({ success: false, message: 'Failed to create payment order' });
     }
   });
@@ -452,6 +455,7 @@ function createPaymentRouter(deps = {}) {
       });
     } catch (error) {
       console.error('Payment verify error:', error);
+      require('../services/opsAlerts').recordFailure('payment', `verify: ${error.message}`);
       res.status(500).json({ success: false, message: 'Payment verification failed' });
     }
   });

@@ -452,6 +452,7 @@ async function postToSocialMedia(platforms, content, options = {}) {
         String(response.data?.message || response.data?.error || '').trim() ||
         'Ayrshare publish request failed';
       console.error('[Ayrshare] publish error:', returnedError);
+      require('./opsAlerts').recordFailure('publish', returnedError);
 
       // Post-error suspension guard: if we see code:156 (platform not linked)
       // or code:168 (profile suspended), Ayrshare will refuse this post forever
@@ -809,6 +810,7 @@ async function createAyrshareProfile(title, options = {}) {
     });
 
     console.log('Ayrshare create profile response:', response.status, response.data);
+    if (response.status !== 200) require('./opsAlerts').recordFailure('social_connect', `create profile HTTP ${response.status}`);
 
     if (response.status === 200 && response.data?.status === 'success') {
       return {
