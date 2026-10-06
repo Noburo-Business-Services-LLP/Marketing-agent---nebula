@@ -525,8 +525,8 @@ const ConnectSocials: React.FC = () => {
     { id: 'accounts', label: 'Accounts', icon: ShieldCheck, path: '/connect-socials' },
     { id: 'permissions', label: 'Permissions', icon: KeyRound, path: '/connect-socials?tab=permissions' },
     { id: 'sync', label: 'Sync status', icon: Activity, path: '/connect-socials?tab=sync' },
-    { id: 'inbox', label: 'Social inbox', icon: Inbox, path: '/connect-socials/inbox' },
-    { id: 'auto-reply', label: 'Automatic replies', icon: Sparkles, path: '/connect-socials?tab=auto-reply' },
+    { id: 'inbox', label: 'Inbox', icon: Inbox, path: '/inbox' },
+    { id: 'auto-reply', label: 'Automatic replies', icon: Sparkles, path: '/inbox?tab=auto-reply' },
   ];
   const activeTab = isInboxRoute ? 'inbox' : new URLSearchParams(location.search).get('tab') || 'accounts';
 
@@ -536,7 +536,7 @@ const ConnectSocials: React.FC = () => {
 
   const openInbox = () => {
     if (!inboxEnabled) return;
-    navigate('/connect-socials/inbox');
+    navigate('/inbox');
   };
 
   return (

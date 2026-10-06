@@ -26,7 +26,8 @@ import {
   HelpCircle,
   Plus,
   Lightbulb,
-  FileText
+  FileText,
+  Inbox
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
@@ -118,6 +119,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
     { path: '/drafts',           label: 'Review and approve', icon: PenTool, badge: 'drafts' as const },
+    { path: '/inbox',            label: 'Inbox',             icon: Inbox },
     { path: '/content-calendar', label: 'Calendar',          icon: CalendarDays },
     { path: '/idea-inbox',       label: 'Content ideas',     icon: Lightbulb },
     { path: '/upload',           label: 'Upload and schedule', icon: UploadCloud },
@@ -142,6 +144,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (pathname.startsWith('/reels')) return { title: 'Videos', crumb: '' };
     if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };
     if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
+    if (pathname.startsWith('/inbox')) return { title: 'Inbox', crumb: '' };
     if (pathname.startsWith('/connect-socials')) return { title: 'Connected accounts', crumb: '' };
     if (pathname.startsWith('/brand-assets')) return { title: 'Brand assets', crumb: '' };
     if (pathname.startsWith('/inventory')) return { title: 'Brand assets', crumb: 'Products and services' };
