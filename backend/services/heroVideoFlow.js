@@ -174,6 +174,8 @@ const bad = (message) => ({ status: 400, json: { success: false, message } });
 // Refund at most once per job. The flag is claimed atomically BEFORE refunding; if the
 // refund itself fails the claim is released so a later poll can retry.
 async function refundOnce(deps, jobId, userId, desc) {
+  // Every hero failure path refunds through here, so it is the one place to count failures.
+  require('./opsAlerts').recordFailure('hero_video', `job ${jobId}: ${desc}`);
   const claimed = await deps.JobModel.findOneAndUpdate(
     { jobId, 'metadata.refunded': { $ne: true } },
     { $set: { 'metadata.refunded': true } }

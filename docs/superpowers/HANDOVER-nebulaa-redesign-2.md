@@ -200,4 +200,5 @@ Deploy everything since the last release with `bash docs/superpowers/ops/release
 
 - `backend/services/opsAlerts.js`: emails the team (Resend) when a category fails 3 times in 10 minutes; at most one email per category per hour; per server process, in memory. Categories wired: `image` (final failure in `generateCampaignImageNanoBanana`), `publish` (Ayrshare publish errors), `social_connect` (Ayrshare create-profile non-200), `payment` (create-order, verify, verify-subscription, webhook errors in `routes/payment.js`). Tests: `tests/opsAlerts.test.js`.
 - To switch on: add `ALERT_EMAILS=you@example.com,other@example.com` to the prod secret `nebulaa-gravity/prod/backend` (RESEND_API_KEY and RESEND_FROM_EMAIL are already there), then release or restart. Optional: ALERT_THRESHOLD, ALERT_WINDOW_MINUTES, ALERT_COOLDOWN_MINUTES.
-- Not covered: AI text failures, video (fal) failures, and a full outage where the server itself is down (needs an external uptime check).
+- Added the same day: `ai_text` (only when OpenAI AND the Gemini fallback both fail, in `callTextLLM`), `video` (Kling queue job failure and stalled jobs in `videoGenerationQueue.js`), `hero_video` (every hero refund path, via `refundOnce` in `heroVideoFlow.js`).
+- Not covered: a full outage where the server itself is down (needs an external uptime check).

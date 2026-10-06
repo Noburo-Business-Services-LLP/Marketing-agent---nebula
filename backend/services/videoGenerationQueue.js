@@ -211,6 +211,7 @@ class PersistentVideoGenerationQueue {
         // Mark it failed, refund, and let the user press Retry if they want
         // to spend again.
         console.log(`❌ Stale job ${job.jobId} marked failed (no auto-retry; user can retry manually).`);
+        require('./opsAlerts').recordFailure('video', `job ${job.jobId} stalled and was marked failed`);
         await VideoJob.updateOne(
           { jobId: job.jobId },
           {
@@ -531,6 +532,7 @@ class PersistentVideoGenerationQueue {
       }
     } catch (error) {
       console.error(`❌ Video job ${jobId} failed:`, error);
+      require('./opsAlerts').recordFailure('video', `job ${jobId}: ${error?.message || error}`);
       // NO AUTOMATIC RETRY. Every retry re-runs paid fal.ai generation, so a
       // failure must cost exactly one run. The job is left failed (credits are
       // refunded below) and only the user can retry it, via retryJob().

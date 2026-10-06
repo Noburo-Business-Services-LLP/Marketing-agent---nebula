@@ -12,7 +12,9 @@ const LABELS = {
   publish: 'Publishing to social media',
   social_connect: 'Connecting social accounts',
   payment: 'Payments',
-  ai_text: 'AI writing'
+  ai_text: 'AI writing',
+  video: 'Video generation',
+  hero_video: 'Hero videos'
 };
 
 function createAlerter({ env = process.env, now = () => Date.now(), send = null } = {}) {

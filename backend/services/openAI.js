@@ -92,7 +92,13 @@ async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, tempera
   } catch (openAiErr) {
     console.warn(`[TextLLM] OpenAI call failed, falling back to Gemini: ${openAiErr.message}`);
     const { callGemini } = require('./geminiAI');
-    return callGemini(prompt, { skipCache });
+    try {
+      return await callGemini(prompt, { skipCache });
+    } catch (geminiErr) {
+      // Both writers failed: this is the case customers notice.
+      require('./opsAlerts').recordFailure('ai_text', `OpenAI: ${openAiErr.message} | Gemini: ${geminiErr.message}`);
+      throw geminiErr;
+    }
   }
 }
 
