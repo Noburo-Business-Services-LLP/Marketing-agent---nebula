@@ -356,7 +356,7 @@ async function postToSocialMedia(platforms, content, options = {}) {
 
   // Ensure platforms is always an array of lower-case strings
   platforms = Array.isArray(platforms)
-    ? platforms.map((p) => String(p || '').toLowerCase())
+    ? platforms.map((p) => require('./googleReviews').toAyrsharePlatform(p))
     : [];
 
   const instagramRequest = detectInstagramVideoRequest(platforms, options);
@@ -393,7 +393,9 @@ async function postToSocialMedia(platforms, content, options = {}) {
     ...(options.type ? { type: options.type } : {}),
     ...(options.isVideo ? { isVideo: true } : {}),
     ...(options.mediaType ? { mediaType: options.mediaType } : {}),
-    ...(options.instagramOptions ? { instagramOptions: options.instagramOptions } : {})
+    ...(options.instagramOptions ? { instagramOptions: options.instagramOptions } : {}),
+    // Posted by the provider as soon as the post is live (Facebook, Instagram, LinkedIn, X).
+    ...(String(options.firstComment || '').trim() ? { firstComment: { comment: String(options.firstComment).trim().slice(0, 2000) } } : {})
   };
 
   try {

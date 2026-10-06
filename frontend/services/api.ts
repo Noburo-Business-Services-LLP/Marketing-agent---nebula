@@ -1321,6 +1321,20 @@ export const apiService = {
     return apiCall('/social/inbox/summary', { method: 'GET' }, true);
   },
 
+  getGoogleReviews: async (): Promise<{
+    success: boolean;
+    connected: boolean;
+    message?: string;
+    summary?: { averageRating?: number; totalReviewCount?: number } | null;
+    reviews: Array<{ id: string; rating: number; text: string; reviewer: string; createdAt?: string | null; replied: boolean; existingReply: string; needsApproval: boolean }>;
+  }> => {
+    return apiCall('/social/inbox/reviews', { method: 'GET' }, true);
+  },
+
+  draftGoogleReviewReply: async (review: { reviewer: string; rating: number; text: string }): Promise<{ success: boolean; reply: string; needsApproval: boolean; message?: string }> => {
+    return apiCall('/social/inbox/reviews/draft', { method: 'POST', body: JSON.stringify(review) }, true);
+  },
+
   updateCampaignPostIds: async (
     id: string,
     data: { facebookPostId?: string; instagramPostId?: string }

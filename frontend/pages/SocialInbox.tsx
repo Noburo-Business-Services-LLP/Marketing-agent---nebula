@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Inbox, Sparkles, ArrowRight, Loader2 } from 'lucide-react';
+import { Inbox, Sparkles, ArrowRight, Loader2, Star } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import UnifiedInbox from './UnifiedInbox';
 import AutoReplySettingsPage from './AutoReplySettingsPage';
+import ReviewsPanel from '../components/ReviewsPanel';
 
 const TABS = [
   { id: 'messages', label: 'Messages and comments', icon: Inbox },
+  { id: 'reviews', label: 'Google reviews', icon: Star },
   { id: 'auto-reply', label: 'Automatic replies', icon: Sparkles },
 ] as const;
 
@@ -24,7 +26,8 @@ const SocialInbox: React.FC = () => {
   const [connectedCount, setConnectedCount] = useState<number | null>(null);
   const [unread, setUnread] = useState(0);
 
-  const tab = params.get('tab') === 'auto-reply' ? 'auto-reply' : 'messages';
+  const requestedTab = params.get('tab');
+  const tab = requestedTab === 'auto-reply' || requestedTab === 'reviews' ? requestedTab : 'messages';
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +84,7 @@ const SocialInbox: React.FC = () => {
           );
         })}
       </div>
-      {tab === 'messages' ? <UnifiedInbox /> : <AutoReplySettingsPage />}
+      {tab === 'messages' ? <UnifiedInbox /> : tab === 'reviews' ? <ReviewsPanel /> : <AutoReplySettingsPage />}
     </div>
   );
 };
