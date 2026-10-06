@@ -4572,7 +4572,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {!hasSceneClips && !busy && (
                   <p className={`text-sm ${theme.textSecondary}`}>
-                    Next unlocks once the clips are made. Select Generate all clips to create them.
+                    You can continue once the clips have been made. Select Generate all clips to create them.
                   </p>
                 )}
                 <button onClick={() => setStep(7)} disabled={!canStep4Next} className={primaryButtonClass(!canStep4Next)}>Next</button>
