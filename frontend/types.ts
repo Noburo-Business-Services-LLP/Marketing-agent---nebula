@@ -45,6 +45,7 @@ export interface BusinessProfile {
 
 export interface User {
   _id: string;
+  isCsm?: boolean;
   email: string;
   firstName: string;
   lastName: string;

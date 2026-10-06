@@ -1126,7 +1126,9 @@ router.get('/me', protect, async (req, res) => {
 
     res.status(200).json({
       success: true,
-      user: user.toPublicJSON()
+      user: { ...user.toPublicJSON(), isCsm: Boolean(user.isCsm) },
+      // Set when a CSM is working inside this account, so the app can show who is acting.
+      actingCsm: req.actingCsm ? { name: [req.actingCsm.firstName, req.actingCsm.lastName].filter(Boolean).join(' ') || req.actingCsm.email } : null
     });
   } catch (error) {
     console.error('Get user error:', error);

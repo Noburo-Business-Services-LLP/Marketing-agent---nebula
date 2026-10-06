@@ -412,7 +412,20 @@ export const apiService = {
 
       return { user: response.user };
     } catch (error) {
+      // A CSM whose pass into a client ended goes back to their own account, not to the login page.
+      const own = localStorage.getItem('csmReturnToken');
+      if (own && own !== getToken()) {
+        setToken(own);
+        localStorage.removeItem('csmReturnToken');
+        localStorage.removeItem('csmActingClient');
+        try {
+          const back = await apiCall<{ success: boolean; user: User }>('/auth/me', { method: 'GET' }, true);
+          return { user: back.user };
+        } catch (_) { /* fall through to signing out */ }
+      }
       removeToken();
+      localStorage.removeItem('csmReturnToken');
+      localStorage.removeItem('csmActingClient');
       return { user: null };
     }
   },
@@ -523,6 +536,8 @@ export const apiService = {
   },
 
   logout: (): void => {
+    localStorage.removeItem('csmReturnToken');
+    localStorage.removeItem('csmActingClient');
     removeToken();
     // Clear user-specific caches so next user doesn't see stale data
     Object.keys(localStorage).forEach(key => {
@@ -1319,6 +1334,31 @@ export const apiService = {
     };
   }> => {
     return apiCall('/social/inbox/summary', { method: 'GET' }, true);
+  },
+
+  getCsmClients: async (): Promise<{ success: boolean; clients: Array<{ id: string; name: string; email: string; industry: string; quarks: number; connectedAccounts: number; onboardingCompleted: boolean; draftsWaiting: number; lastLoginAt: string | null; isActive: boolean }> }> => {
+    return apiCall('/csm/clients', { method: 'GET' }, true);
+  },
+
+  // Opens a client's account: keeps the CSM's own login aside so "Back to my clients" can restore it.
+  openCsmClient: async (clientId: string): Promise<{ success: boolean; token: string; client: { id: string; name: string } }> => {
+    const res = await apiCall<{ success: boolean; token: string; client: { id: string; name: string } }>(`/csm/clients/${clientId}/open`, { method: 'POST' }, true);
+    if (res?.success && res.token) {
+      const own = getToken();
+      if (own && !localStorage.getItem('csmReturnToken')) localStorage.setItem('csmReturnToken', own);
+      localStorage.setItem('csmActingClient', res.client?.name || '');
+      setToken(res.token);
+    }
+    return res;
+  },
+
+  returnToCsmAccount: (): boolean => {
+    const own = localStorage.getItem('csmReturnToken');
+    if (!own) return false;
+    setToken(own);
+    localStorage.removeItem('csmReturnToken');
+    localStorage.removeItem('csmActingClient');
+    return true;
   },
 
   getGoogleReviews: async (): Promise<{

@@ -174,7 +174,7 @@ router.get('/users', adminAuth, async (req, res) => {
         createdAt: 1, lastLoginAt: 1, mobileNumber: 1, isHidden: 1,
         'credits.balance': 1, 'credits.totalUsed': 1,
         'trial.expiresAt': 1, 'trial.isExpired': 1, 'trial.migratedToProd': 1, 'trial.reenabled': 1,
-        connectedSocials: 1, onboardingCompleted: 1,
+        connectedSocials: 1, onboardingCompleted: 1, isCsm: 1, assignedCsm: 1,
         'businessProfile.yearsInBusiness': 1,
         'businessProfile.brandMaturity': 1,
         'businessProfile.targetCustomerProfile': 1,
@@ -504,6 +504,34 @@ router.post('/users/:id/reset-trial', adminAuth, async (req, res) => {
 });
 
 // POST /api/admin/users/:id/add-credits
+// CSM set-up: mark a user as a CSM, and assign a client to a CSM (or clear it with csmId null).
+router.post('/users/:id/csm', adminAuth, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(req.params.id, { $set: { isCsm: Boolean(req.body?.isCsm) } }, { new: true }).select('email isCsm');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!user.isCsm) await User.updateMany({ assignedCsm: user._id }, { $set: { assignedCsm: null } });
+    res.json({ success: true, data: user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Could not update the CSM setting.' });
+  }
+});
+
+router.post('/users/:id/assign-csm', adminAuth, async (req, res) => {
+  try {
+    const csmId = req.body?.csmId || null;
+    if (csmId) {
+      const csm = await User.findById(csmId).select('isCsm');
+      if (!csm || !csm.isCsm) return res.status(400).json({ success: false, message: 'That person is not marked as a CSM.' });
+      if (String(csmId) === String(req.params.id)) return res.status(400).json({ success: false, message: 'A CSM cannot be assigned to their own account.' });
+    }
+    const client = await User.findByIdAndUpdate(req.params.id, { $set: { assignedCsm: csmId } }, { new: true }).select('email assignedCsm');
+    if (!client) return res.status(404).json({ success: false, message: 'User not found' });
+    res.json({ success: true, data: client });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Could not assign the CSM.' });
+  }
+});
+
 router.post('/users/:id/add-credits', adminAuth, async (req, res) => {
   try {
     const { amount } = req.body;

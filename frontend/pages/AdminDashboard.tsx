@@ -172,6 +172,29 @@ const AdminDashboard: React.FC = () => {
     setResettingTrial(false);
   };
 
+  // CSM set-up: mark someone as a CSM, or assign this client to a CSM.
+  const setCsmFlag = async (userId: string, isCsm: boolean) => {
+    setAdminActionMsg('');
+    try {
+      const res = await adminFetch(`/users/${userId}/csm`, { method: 'POST', body: JSON.stringify({ isCsm }) });
+      if (res.success) {
+        setUsers(prev => prev.map((u: any) => (u._id === userId ? { ...u, isCsm } : (!isCsm && String(u.assignedCsm) === userId ? { ...u, assignedCsm: null } : u))));
+        setAdminActionMsg(isCsm ? 'Marked as a CSM.' : 'No longer a CSM. Their clients were unassigned.');
+      } else setAdminActionMsg(res.message || 'Could not update.');
+    } catch { setAdminActionMsg('Could not update the CSM setting.'); }
+  };
+
+  const assignCsm = async (userId: string, csmId: string) => {
+    setAdminActionMsg('');
+    try {
+      const res = await adminFetch(`/users/${userId}/assign-csm`, { method: 'POST', body: JSON.stringify({ csmId: csmId || null }) });
+      if (res.success) {
+        setUsers(prev => prev.map((u: any) => (u._id === userId ? { ...u, assignedCsm: csmId || null } : u)));
+        setAdminActionMsg(csmId ? 'CSM assigned.' : 'CSM removed.');
+      } else setAdminActionMsg(res.message || 'Could not assign.');
+    } catch { setAdminActionMsg('Could not assign the CSM.'); }
+  };
+
   const handleAddCredits = async (userId: string) => {
     const amount = Number(creditsToAdd);
     if (!amount || amount <= 0) return;
@@ -866,6 +889,30 @@ const AdminDashboard: React.FC = () => {
                           </button>
                         </div>
                       </div>
+
+                      {/* Customer success manager */}
+                      {(() => {
+                        const row: any = users.find((u: any) => u._id === selected.user._id) || {};
+                        const csms = users.filter((u: any) => u.isCsm && u._id !== selected.user._id);
+                        return (
+                          <div className="px-5 py-3 border-b border-white/[0.04] space-y-2">
+                            <label className="flex items-center gap-2 text-sm text-white">
+                              <input type="checkbox" checked={Boolean(row.isCsm)} onChange={e => setCsmFlag(selected.user._id, e.target.checked)} />
+                              This person is a customer success manager
+                            </label>
+                            {!row.isCsm && (
+                              <select
+                                value={row.assignedCsm ? String(row.assignedCsm) : ''}
+                                onChange={e => assignCsm(selected.user._id, e.target.value)}
+                                className="w-full bg-white/[0.05] border border-white/10 rounded-xl px-3 py-2 text-white text-sm"
+                              >
+                                <option value="">No CSM assigned</option>
+                                {csms.map((c: any) => <option key={c._id} value={c._id}>{c.email}</option>)}
+                              </select>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Toggle */}
                       <div className="px-5 py-3 border-b border-white/[0.04]">

@@ -294,6 +294,10 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // Customer success manager: may open the accounts of clients assigned to them.
+  isCsm: { type: Boolean, default: false },
+  // The CSM responsible for this client account (managed service).
+  assignedCsm: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
   isActive: {
     type: Boolean,
     default: true

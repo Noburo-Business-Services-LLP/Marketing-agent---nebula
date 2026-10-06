@@ -202,3 +202,11 @@ Deploy everything since the last release with `bash docs/superpowers/ops/release
 - To switch on: add `ALERT_EMAILS=you@example.com,other@example.com` to the prod secret `nebulaa-gravity/prod/backend` (RESEND_API_KEY and RESEND_FROM_EMAIL are already there), then release or restart. Optional: ALERT_THRESHOLD, ALERT_WINDOW_MINUTES, ALERT_COOLDOWN_MINUTES.
 - Added the same day: `ai_text` (only when OpenAI AND the Gemini fallback both fail, in `callTextLLM`), `video` (Kling queue job failure and stalled jobs in `videoGenerationQueue.js`), `hero_video` (every hero refund path, via `refundOnce` in `heroVideoFlow.js`).
 - Not covered: a full outage where the server itself is down (needs an external uptime check).
+
+## Update 24 (2026-10-06): CSM multi-client dashboard
+
+- A CSM is a normal user with `isCsm: true`; a client has `assignedCsm` (User fields). Admin area (client details panel): checkbox "This person is a customer success manager" and a dropdown to assign the client's CSM (`POST /api/admin/users/:id/csm`, `POST /api/admin/users/:id/assign-csm`; turning off CSM unassigns their clients).
+- CSM sees "My clients" in the sidebar (`/clients`, `frontend/pages/CsmClients.tsx`): drafts waiting, connected accounts, Quarks, onboarding, last sign-in, search, "Open account".
+- Opening (`POST /api/csm/clients/:id/open`, `routes/csm.js`) logs a `CsmSession` row and returns an 8-hour token `{ id: client, actingCsm: csm }`. `protect` re-checks on every request that the CSM still exists, is still a CSM and still assigned (`services/csmAccess.js`); payments, change-password, account deletion and `/api/csm` are refused while acting. The CSM's own token is kept in localStorage (`csmReturnToken`); a banner shows "You are working in X's account" with "Back to my clients"; an ended pass returns them to their own account.
+- `/api/auth/me` now returns `user.isCsm` and `actingCsm`.
+- Not done: actions taken while acting are not tagged with the CSM in each record (only the session open is logged); no CSM-specific login page (CSMs use the normal sign-in); not tried in a browser or against a real database.

@@ -66,6 +66,19 @@ const protect = async (req, res, next) => {
       });
     }
 
+    // A CSM working inside a client's account: re-check the assignment on every request.
+    if (decoded.actingCsm) {
+      const { canActFor, isBlockedWhileActing } = require('../services/csmAccess');
+      const csm = await User.findById(decoded.actingCsm).select('isCsm isActive firstName lastName email').lean();
+      if (!canActFor(csm, user)) {
+        return res.status(401).json({ success: false, message: 'Your access to this client has ended. Please open it again from your client list.' });
+      }
+      if (isBlockedWhileActing(req.originalUrl)) {
+        return res.status(403).json({ success: false, message: 'Payments, plans and passwords can only be changed by the client.' });
+      }
+      req.actingCsm = csm;
+    }
+
     // Grant access to protected route
     req.user = user;
     next();
