@@ -295,6 +295,8 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
   // Customer success manager: may open the accounts of clients assigned to them.
+  // Nebulaa team role: 'owner' | 'admin' | 'csm' (null for customers). See services/staff/permissions.js.
+  staffRole: { type: String, enum: ['owner', 'admin', 'csm', null], default: null, index: true },
   isCsm: { type: Boolean, default: false },
   // The CSM responsible for this client account (managed service).
   assignedCsm: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
@@ -354,6 +356,7 @@ userSchema.methods.toPublicJSON = function () {
     isVerified: this.isVerified,
     onboardingCompleted: this.onboardingCompleted,
     isCsm: Boolean(this.isCsm),
+    staffRole: this.staffRole || null,
     businessProfile: this.businessProfile,
     connectedSocials: this.connectedSocials?.map(s => ({
       platform: s.platform,
