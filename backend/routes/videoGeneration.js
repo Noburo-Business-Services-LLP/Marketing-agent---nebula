@@ -227,54 +227,7 @@ registerMissingMediaHandler('render_missing_scene_images', 'images', (req, res) 
 registerMissingMediaHandler('render_missing_clips', 'clips', (req, res) => handleGenerateSingleVideoClip(req, res),
   (p, sceneIndex) => ({ jobId: p.jobId, sceneIndex, aspectRatio: p.aspectRatio }));
 
-// POST /renderMissing { jobId, kind: 'images' | 'clips', castImageUrl?, aspectRatio? }
-router.post('/renderMissing', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
-  try {
-    const { jobId, kind, castImageUrl = '', aspectRatio } = req.body || {};
-    if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
-    if (!['images', 'clips'].includes(kind)) return res.status(400).json({ success: false, message: 'kind must be images or clips' });
-    const userId = toUserId(req.user);
-    const draft = await loadDraftForUser(jobId, userId);
-    const missing = missingIndexes(kind, draft);
-    if (missing.length === 0) {
-      return res.json({ success: true, nothingToDo: true, message: kind === 'images' ? 'Every scene already has an image.' : 'Every scene already has a clip.' });
-    }
-
-    const jobType = kind === 'images' ? 'render_missing_scene_images' : 'render_missing_clips';
-    const stateKey = kind === 'images' ? 'missingImages' : 'missingClips';
-    // One job per draft and kind: a double click, a second tab or a refresh gets the running job back.
-    const existingId = draft?.jobs?.[stateKey]?.queueJobId;
-    if (existingId) {
-      const existing = await videoGenerationQueue.getJob(existingId, userId);
-      if (existing && ['queued', 'processing'].includes(existing.status)) {
-        return res.status(202).json({ success: true, alreadyRunning: true, queueJobId: existing.jobId, missing: missing.length });
-      }
-    }
-
-    // Read-only check so the job does not start when the balance cannot cover what is missing.
-    const unit = Number(CREDIT_COSTS[kind === 'images' ? 'video_scene_image' : 'video_scene_clip']) || 0;
-    const owner = await User.findById(userId).select('credits.balance').lean();
-    const balance = Number(owner?.credits?.balance ?? 0);
-    if (unit > 0 && balance < unit) {
-      return res.status(403).json({ success: false, creditsExhausted: true, message: `You need at least ${unit} Quarks to make the next ${kind === 'images' ? 'image' : 'clip'}. Add Quarks and try again.` });
-    }
-
-    const aspect = ['9:16', '16:9', '1:1', '4:5'].includes(String(aspectRatio)) ? String(aspectRatio) : (draft?.input?.aspectRatio || '9:16');
-    const queued = await videoGenerationQueue.enqueue({
-      userId,
-      jobType,
-      payload: { jobId, userId, baseUrl: reqBaseUrl(req), aspectRatio: aspect, castImageUrl: String(castImageUrl || draft?.castImageUrl || draft?.characterImage || '') },
-      metadata: { perSceneCharging: true }
-    });
-    await updateDraft(jobId, userId, (current) => ({
-      ...current,
-      jobs: { ...(current.jobs || {}), [stateKey]: { queueJobId: queued.jobId, status: queued.status, queuedAt: new Date().toISOString() } }
-    }));
-    return res.status(202).json({ success: true, queueJobId: queued.jobId, missing: missing.length });
-  } catch (error) {
-    return responseError(res, error, 'Could not start rendering');
-  }
-});
+// (the POST /renderMissing route is registered near the end of this file, after the rate limiters it uses)
 
 
 videoGenerationQueue.registerHandler('generate_content', async (payload, { update, log }) => {
@@ -3963,6 +3916,55 @@ router.post('/mergeAudio', protect, checkTrial, videoAiWriteLimiter, async (req,
     return res.json(result);
   } catch (error) {
     return responseError(res, error, 'Failed to merge audio');
+  }
+});
+
+// POST /renderMissing { jobId, kind: 'images' | 'clips', castImageUrl?, aspectRatio? }
+router.post('/renderMissing', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const { jobId, kind, castImageUrl = '', aspectRatio } = req.body || {};
+    if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
+    if (!['images', 'clips'].includes(kind)) return res.status(400).json({ success: false, message: 'kind must be images or clips' });
+    const userId = toUserId(req.user);
+    const draft = await loadDraftForUser(jobId, userId);
+    const missing = missingIndexes(kind, draft);
+    if (missing.length === 0) {
+      return res.json({ success: true, nothingToDo: true, message: kind === 'images' ? 'Every scene already has an image.' : 'Every scene already has a clip.' });
+    }
+
+    const jobType = kind === 'images' ? 'render_missing_scene_images' : 'render_missing_clips';
+    const stateKey = kind === 'images' ? 'missingImages' : 'missingClips';
+    // One job per draft and kind: a double click, a second tab or a refresh gets the running job back.
+    const existingId = draft?.jobs?.[stateKey]?.queueJobId;
+    if (existingId) {
+      const existing = await videoGenerationQueue.getJob(existingId, userId);
+      if (existing && ['queued', 'processing'].includes(existing.status)) {
+        return res.status(202).json({ success: true, alreadyRunning: true, queueJobId: existing.jobId, missing: missing.length });
+      }
+    }
+
+    // Read-only check so the job does not start when the balance cannot cover what is missing.
+    const unit = Number(CREDIT_COSTS[kind === 'images' ? 'video_scene_image' : 'video_scene_clip']) || 0;
+    const owner = await User.findById(userId).select('credits.balance').lean();
+    const balance = Number(owner?.credits?.balance ?? 0);
+    if (unit > 0 && balance < unit) {
+      return res.status(403).json({ success: false, creditsExhausted: true, message: `You need at least ${unit} Quarks to make the next ${kind === 'images' ? 'image' : 'clip'}. Add Quarks and try again.` });
+    }
+
+    const aspect = ['9:16', '16:9', '1:1', '4:5'].includes(String(aspectRatio)) ? String(aspectRatio) : (draft?.input?.aspectRatio || '9:16');
+    const queued = await videoGenerationQueue.enqueue({
+      userId,
+      jobType,
+      payload: { jobId, userId, baseUrl: reqBaseUrl(req), aspectRatio: aspect, castImageUrl: String(castImageUrl || draft?.castImageUrl || draft?.characterImage || '') },
+      metadata: { perSceneCharging: true }
+    });
+    await updateDraft(jobId, userId, (current) => ({
+      ...current,
+      jobs: { ...(current.jobs || {}), [stateKey]: { queueJobId: queued.jobId, status: queued.status, queuedAt: new Date().toISOString() } }
+    }));
+    return res.status(202).json({ success: true, queueJobId: queued.jobId, missing: missing.length });
+  } catch (error) {
+    return responseError(res, error, 'Could not start rendering');
   }
 });
 
