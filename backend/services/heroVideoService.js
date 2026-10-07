@@ -192,6 +192,22 @@ function extractVideoUrl(result) {
   return typeof url === 'string' && url ? url : null;
 }
 
+// The provider's own explanation of a refusal lives in the error body (`detail`), not in `message`,
+// which only says "Unprocessable Entity". Keep it so the reason can be seen in the log.
+function describeFalError(err) {
+  const base = (err && err.message) || 'fal request failed';
+  const body = err && err.body;
+  let detail = '';
+  if (body && Array.isArray(body.detail)) {
+    detail = body.detail.map((d) => [Array.isArray(d && d.loc) ? d.loc.join('.') : '', d && (d.msg || d.message)].filter(Boolean).join(': ')).filter(Boolean).join('; ');
+  } else if (body && typeof body.detail === 'string') {
+    detail = body.detail;
+  } else if (body && typeof body.message === 'string') {
+    detail = body.message;
+  }
+  return detail ? `${base}: ${detail}`.slice(0, 500) : base;
+}
+
 async function getHeroClipStatus(model, requestId, fal) {
   const client = fal || await getFalClient();
   const st = await client.queue.status(model, { requestId });
@@ -210,7 +226,7 @@ async function getHeroClipStatus(model, requestId, fal) {
     // transient and retries on the next poll (bounded by the flow's max job age).
     const code = err && typeof err.status === 'number' ? err.status : null;
     if (code === null || code >= 500 || code === 429 || code < 400) throw err;
-    return { state: 'failed', error: (err && err.message) || 'fal result fetch failed' };
+    return { state: 'failed', error: describeFalError(err) };
   }
 }
 
@@ -239,5 +255,5 @@ async function copyClipToStorage(remoteUrl, deps = {}) {
 module.exports = {
   HERO_RESOLUTION, HERO_MAX_REFS, isPublicHttpsUrl, isPublicIp, buildHeroInput, validateRefUrls,
   heroMonthlyLimit, monthStartUTC, nextMonthStartUTC, getHeroQuota,
-  submitHeroClip, getHeroClipStatus, copyClipToStorage
+  submitHeroClip, getHeroClipStatus, copyClipToStorage, describeFalError
 };
