@@ -402,6 +402,15 @@ const HeroVideoInner: React.FC = () => {
     }
   };
 
+  // A quick idea is already chosen, so the prompt is built once, automatically, as soon as the idea is ready.
+  const autoBuiltRef = useRef(false);
+  useEffect(() => {
+    if (!brief || !brief.quick || plan || planning || autoBuiltRef.current) return;
+    autoBuiltRef.current = true;
+    buildPrompt();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brief, plan, planning]);
+
   const quotaUsedUp = !!quota && quota.used >= quota.limit;
   // Affordability preflight: with a known price and balance, an unaffordable clip never calls /generate.
   const cannotAfford = price !== undefined && balance !== undefined && balance < price;
@@ -1033,7 +1042,7 @@ const HeroVideoInner: React.FC = () => {
             </p>
           )}
           {!plan && !cannotAfford && (
-            <p className="text-[12px] text-[var(--gv-text-muted)]">Build the prompt first, then generate.</p>
+            <p className="text-[12.5px] font-semibold text-[var(--gv-text-primary)]">{planning ? 'Building your prompt…' : 'Build your prompt in step 7 first, then Generate turns on.'}</p>
           )}
           {genError && <p role="alert" className="text-[12.5px] text-[var(--gv-text-primary)]">{genError}</p>}
         </div>
