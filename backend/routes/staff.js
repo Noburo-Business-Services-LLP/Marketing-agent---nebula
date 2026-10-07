@@ -9,7 +9,7 @@ const { addMember, changeRole, removeMember } = require('../services/staff/teamA
 const { recordStaffAction } = require('../services/staff/activityLog');
 const { buildList, loadClientData, displayName, platformsOf } = require('../services/staff/clientList');
 const { classifyClient } = require('../services/staff/clientStatus');
-const { buildHome, loadDailyActive } = require('../services/staff/home');
+const { buildHome, loadDailyActive, activityIds } = require('../services/staff/home');
 const { buildHealth } = require('../services/staff/health');
 const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
@@ -95,7 +95,7 @@ router.get('/home', requireStaff('view_home'), async (req, res) => {
     const models = { User, FeatureEvent, Draft: require('../models/Draft') };
     const data = await loadClientData({ viewer: req.staff, models });
     let dailyActive = [];
-    try { dailyActive = await loadDailyActive({ FeatureEvent, ids: data.users.map((u) => u._id) }); } catch (error) { console.error('[staff] daily activity failed:', error.message); }
+    try { dailyActive = await loadDailyActive({ FeatureEvent, ids: activityIds(data.users) }); } catch (error) { console.error('[staff] daily activity failed:', error.message); }
     const home = buildHome({ viewer: req.staff, ...data, dailyActive });
 
     const snapshot = require('../services/opsAlerts').snapshot();

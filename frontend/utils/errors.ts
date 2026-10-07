@@ -13,5 +13,7 @@ export function isSafeCustomerMessage(text: unknown): boolean {
 
 // Shows a server message as is only when it is safe; otherwise a plain sentence.
 export function customerMessage(text: unknown, fallback: string = GENERIC_ERROR_MESSAGE): string {
-  return isSafeCustomerMessage(text) ? (text as string).trim() : fallback;
+  // A caught Error (or any object with a message) is read through its message.
+  const value = text && typeof text === 'object' && 'message' in (text as object) ? (text as { message: unknown }).message : text;
+  return isSafeCustomerMessage(value) ? (value as string).trim() : fallback;
 }

@@ -1,5 +1,6 @@
 import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft } from '../types';
 import { apiErrorFrom } from '../utils/plans';
+import { serverRejectedSession } from '../utils/sessionErrors';
 import type { BlueprintView } from '../utils/blueprint';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
@@ -412,6 +413,8 @@ export const apiService = {
 
       return { user: response.user };
     } catch (error) {
+      // The server being stopped, restarting or slow must not delete the saved login; only a "no" from the server does.
+      if (!serverRejectedSession(error)) return { user: null };
       // A CSM whose pass into a client ended goes back to their own account, not to the login page.
       const own = localStorage.getItem('csmReturnToken');
       if (own && own !== getToken()) {
@@ -538,6 +541,7 @@ export const apiService = {
   logout: (): void => {
     localStorage.removeItem('csmReturnToken');
     localStorage.removeItem('csmActingClient');
+    localStorage.removeItem('csmReturnTo');
     removeToken();
     // Clear user-specific caches so next user doesn't see stale data
     Object.keys(localStorage).forEach(key => {
@@ -1365,6 +1369,7 @@ export const apiService = {
       const own = getToken();
       if (own && !localStorage.getItem('csmReturnToken')) localStorage.setItem('csmReturnToken', own);
       localStorage.setItem('csmActingClient', res.client?.name || '');
+      localStorage.setItem('csmReturnTo', '#/staff/clients');
       setToken(res.token);
     }
     return res;
@@ -1381,6 +1386,7 @@ export const apiService = {
       const own = getToken();
       if (own && !localStorage.getItem('csmReturnToken')) localStorage.setItem('csmReturnToken', own);
       localStorage.setItem('csmActingClient', res.client?.name || '');
+      localStorage.setItem('csmReturnTo', '#/clients');
       setToken(res.token);
     }
     return res;
@@ -1392,6 +1398,7 @@ export const apiService = {
     setToken(own);
     localStorage.removeItem('csmReturnToken');
     localStorage.removeItem('csmActingClient');
+    localStorage.removeItem('csmReturnTo');
     return true;
   },
 

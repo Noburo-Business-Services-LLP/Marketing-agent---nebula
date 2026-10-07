@@ -35,3 +35,12 @@ test('customerMessage falls back to a plain sentence', () => {
   assert.equal(customerMessage('Quota exceeded', 'Custom.'), 'Custom.');
   assert.equal(customerMessage('Try again.'), 'Try again.');
 });
+
+// Found by trying the staff screens against the real server: they pass the caught Error itself, so every
+// plain server message ("Enter a whole number of Quarks, 1 or more.") was replaced by the generic sentence.
+test('an Error object is read through its message', () => {
+  assert.equal(customerMessage(new Error('Enter a whole number of Quarks, 1 or more.')), 'Enter a whole number of Quarks, 1 or more.');
+  assert.equal(customerMessage(new Error('Ayrshare rejected the request')), GENERIC_ERROR_MESSAGE);
+  assert.equal(customerMessage({ message: 'Your role cannot do this.' }), 'Your role cannot do this.');
+  assert.equal(customerMessage(new Error(''), 'Could not add.'), 'Could not add.');
+});

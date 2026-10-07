@@ -91,3 +91,11 @@ test('hidden test accounts and staff never count as growth', () => {
   assert.strictEqual(h.growth.signups.week.now, 1);
   assert.strictEqual(h.growth.totalClients, 1);
 });
+
+// Found by running Home against seeded data: the daily-active chart counted hidden test accounts,
+// while every other Home number leaves them out.
+test('the clients counted for daily activity leave out hidden test accounts', () => {
+  const { activityIds } = require('../services/staff/home');
+  const users = [mk('a'), mk('b', { isHidden: true }), mk('c')];
+  assert.deepStrictEqual(activityIds(users).map(String), ['a', 'c']);
+});

@@ -34,7 +34,7 @@ import { User } from '../types';
 import NotificationBell from './NotificationBell';
 import AppSwitcher from './AppSwitcher';
 import { apiService } from '../services/api';
-import { staffMenuEntry } from '../utils/staffHome';
+import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
 
 interface TrialData {
   creditsBalance: number;
@@ -464,7 +464,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   You are working in <strong>{localStorage.getItem('csmActingClient') || 'a client'}</strong>'s account. Payments, plans and passwords stay with the client.
                 </p>
                 <button
-                  onClick={() => { if (apiService.returnToCsmAccount()) { window.location.hash = '#/clients'; window.location.reload(); } }}
+                  onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}
                   className="px-3 py-1.5 rounded-lg bg-[#F5A623] text-[#070A12] text-sm font-bold"
                 >
                   Back to my clients

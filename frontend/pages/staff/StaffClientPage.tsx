@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Check, Minus, AlertTriangle } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
 import PlatformIcon from '../../components/PlatformIcon';
 import { ACCESS_LABEL, ATTENTION_LABEL, TIER_LABEL, whenLabel } from './staffLabels';
+import { platformLabel } from '../../utils/platforms';
 
 const Card: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -33,6 +34,9 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  const noteRef = useRef<HTMLParagraphElement>(null);
+  // The result of an action is shown at the top of the page; bring it into view when the button was far below.
+  useEffect(() => { if (note && noteRef.current) noteRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [note]);
 
   const load = () => apiService.getStaffClient(id).then(setData).catch((e) => setError(customerMessage(e)));
   useEffect(() => { load(); }, [id]);
@@ -77,7 +81,7 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
           )}
         </div>
       </div>
-      {note && <p className="text-sm text-slate-700">{note}</p>}
+      {note && <p ref={noteRef} role="status" className="text-sm font-semibold text-slate-800">{note}</p>}
 
       {c.attention.length > 0 && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
@@ -121,7 +125,7 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
 
         <Card title="Connected accounts">
           {c.connections.length === 0 ? <p className="text-sm text-slate-500">No social account is connected.</p> : (
-            <div className="flex flex-wrap gap-3">{c.connections.map((p: string) => <span key={p} className="inline-flex items-center gap-2 text-sm text-slate-800"><PlatformIcon platform={p} className="w-4 h-4" /> {p === 'x' ? 'X' : p.charAt(0).toUpperCase() + p.slice(1)}</span>)}</div>
+            <div className="flex flex-wrap gap-3">{c.connections.map((p: string) => <span key={p} className="inline-flex items-center gap-2 text-sm text-slate-800"><PlatformIcon platform={p} className="w-4 h-4" /> {platformLabel(p)}</span>)}</div>
           )}
         </Card>
 
@@ -152,7 +156,7 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
           <Card title="Money">
             {c.money.subscriptions.length > 0 && <p className="text-sm mb-2 text-slate-700">Subscriptions: {c.money.subscriptions.map((s: any) => `${s.key || s.kind}${s.active ? '' : ' (not active)'}`).join(', ')}</p>}
             {c.money.payments.length === 0 ? <p className="text-sm text-slate-500">No payments yet.</p> : (
-              <ul className="space-y-1 text-sm">{c.money.payments.map((p: any, i: number) => <li key={i} className="flex justify-between"><span className="text-slate-700">{p.item || 'Payment'} · {p.status}</span><span className="tabular-nums text-slate-900">{p.currency || 'INR'} {p.amount} · {whenLabel(p.at)}</span></li>)}</ul>
+              <ul className="space-y-1 text-sm">{c.money.payments.map((p: any, i: number) => <li key={i} className="flex justify-between"><span className="text-slate-700">{p.item || 'Payment'} · {p.status}</span><span className="tabular-nums text-slate-900">{p.currency || 'INR'} {Number(p.amount || 0).toLocaleString('en-IN')} · {whenLabel(p.at)}</span></li>)}</ul>
             )}
           </Card>
         )}

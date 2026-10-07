@@ -102,3 +102,17 @@ test('the menu entry says Staff home for Owner and Admin and Staff area for a CS
   assert.equal(staffMenuEntry({}, false), null);
   assert.equal(staffMenuEntry({ staffRole: 'owner' }, true), null);
 });
+
+// Found by opening a client as the Owner: "Back to my clients" landed on the old CSM page, which tells
+// an Owner "This area is for customer success managers." Staff who opened the client from the staff
+// area go back to the staff client list.
+import { returnHashAfterActing } from '../utils/staffHome.ts';
+
+test('after working in a client account, staff go back to where they opened it', () => {
+  assert.equal(returnHashAfterActing('#/staff/clients'), '#/staff/clients');
+  assert.equal(returnHashAfterActing('#/clients'), '#/clients');
+  assert.equal(returnHashAfterActing(null), '#/clients');
+  assert.equal(returnHashAfterActing(''), '#/clients');
+  assert.equal(returnHashAfterActing('https://elsewhere.example/'), '#/clients');
+  assert.equal(returnHashAfterActing('#/staff/clients/<script>'), '#/clients');
+});

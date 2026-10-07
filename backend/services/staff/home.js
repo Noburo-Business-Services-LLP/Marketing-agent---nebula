@@ -86,6 +86,11 @@ function buildHome({ viewer, users, extras = {}, csmNames = {}, dailyActive = []
   };
 }
 
+/** Ids of the clients whose activity counts on Home: hidden test accounts stay out, as in every other Home number. */
+function activityIds(users) {
+  return users.filter((u) => !u.isHidden).map((u) => u._id);
+}
+
 /** Distinct clients using the product per day over the last 30 days (feature events). */
 async function loadDailyActive({ FeatureEvent, ids, now = Date.now() }) {
   const rows = await FeatureEvent.aggregate([
@@ -96,4 +101,4 @@ async function loadDailyActive({ FeatureEvent, ids, now = Date.now() }) {
   return rows.map((r) => ({ day: r._id, n: r.n }));
 }
 
-module.exports = { buildHome, loadDailyActive, signupStats, series30, dayKey, startOfDay, pct };
+module.exports = { buildHome, loadDailyActive, activityIds, signupStats, series30, dayKey, startOfDay, pct };

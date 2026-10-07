@@ -4,6 +4,8 @@ import { Loader2, Search, Check, Minus, AlertTriangle, Download } from 'lucide-r
 import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
 import PlatformIcon from '../../components/PlatformIcon';
+import { toCsv, STATUS_TEXT } from '../../utils/staffCsv';
+import { platformLabel } from '../../utils/platforms';
 import { FILTER_LABEL, TIER_LABEL, ACCESS_LABEL, whenLabel, attentionText } from './staffLabels';
 
 type Row = {
@@ -17,19 +19,11 @@ const STATUS_STYLE: Record<string, string> = {
   inactive: 'bg-amber-100 text-amber-800',
   disabled: 'bg-slate-200 text-slate-600'
 };
-const STATUS_TEXT: Record<string, string> = { active: 'Active', inactive: 'Inactive', disabled: 'Switched off' };
 
 const SORTABLE: Array<{ key: string; label: string }> = [
   { key: 'name', label: 'Client' }, { key: 'plan', label: 'Plan' }, { key: 'quarks', label: 'Quarks' },
   { key: 'lastActive', label: 'Last active' }, { key: 'status', label: 'Status' }
 ];
-
-function toCsv(rows: Row[]): string {
-  const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const head = ['Name', 'Email', 'Plan', 'Paying', 'Quarks', 'Connected accounts', 'CSM', 'Last active', 'Status'];
-  const lines = rows.map((r) => [r.name, r.email, TIER_LABEL[r.tier] || r.tier, r.paying ? 'Yes' : 'No', r.quarks, r.platforms.join(' '), r.csm?.name || '', r.lastActiveAt || '', STATUS_TEXT[r.status]].map(esc).join(','));
-  return [head.map(esc).join(','), ...lines].join('\n');
-}
 
 /** The client list: filters with counts, search, sorting, paging, and what each client can use. */
 const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
@@ -88,7 +82,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
         all = all.concat(res.rows || []);
         if (p >= (res.pages || 1)) break;
       }
-      const url = URL.createObjectURL(new Blob([toCsv(all)], { type: 'text/csv' }));
+      const url = URL.createObjectURL(new Blob([toCsv(all, { tier: TIER_LABEL, platform: platformLabel })], { type: 'text/csv' }));
       const a = document.createElement('a'); a.href = url; a.download = 'clients.csv'; a.click(); URL.revokeObjectURL(url);
     } catch (e) { setNote(customerMessage(e)); }
   };
@@ -124,7 +118,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
         )}
       </div>
       {note && <p className="text-sm text-slate-700">{note}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600">{error} <button onClick={() => load()} className="underline font-semibold">Try again</button></p>}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
@@ -144,7 +138,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
           </thead>
           <tbody>
             {loading && <tr><td colSpan={9} className="px-3 py-10 text-center"><Loader2 className="w-5 h-5 animate-spin inline text-[#F5A623]" /></td></tr>}
-            {!loading && rows.length === 0 && <tr><td colSpan={9} className="px-3 py-10 text-center text-slate-500">No clients match this view.</td></tr>}
+            {!loading && !error && rows.length === 0 && <tr><td colSpan={9} className="px-3 py-10 text-center text-slate-500">No clients match this view.</td></tr>}
             {!loading && rows.map((r) => (
               <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/staff/clients/${r.id}`)}>
                 {can.assign_csm && (

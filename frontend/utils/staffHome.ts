@@ -115,3 +115,8 @@ export function staffMenuEntry(user: Who, acting: boolean): { path: string; labe
   if (user.staffRole === 'csm' || user.isCsm) return { path: '/staff', label: 'Staff area', primary: false };
   return null;
 }
+
+/** Where "Back to my clients" goes: the staff client list when the client was opened from the staff area, else the CSM list. */
+export function returnHashAfterActing(stored: string | null | undefined): string {
+  return stored === '#/staff/clients' ? '#/staff/clients' : '#/clients';
+}
