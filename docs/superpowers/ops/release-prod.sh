@@ -28,6 +28,8 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 SHA="$(git rev-parse --short HEAD)"
 TAG="$ENV_NAME-$SHA"
+# However this run ends, tidy Docker afterwards (keeps the images just built, so a retry stays fast).
+trap 'KEEP_TAG="$TAG" bash "$(dirname "$0")/docker-cleanup.sh" || true' EXIT
 BACKEND_IMAGE="$REGISTRY/$ENV_NAME/nebulaa_gravity_backend:$TAG"
 FRONTEND_IMAGE="$REGISTRY/$ENV_NAME/nebulaa_gravity_frontend:$TAG"
 
@@ -35,6 +37,18 @@ echo "Environment: $ENV_NAME   commit: $SHA ($(git log -1 --format=%s | cut -c1-
 echo "Backend image : $BACKEND_IMAGE"
 echo "Frontend image: $FRONTEND_IMAGE"
 docker info >/dev/null 2>&1 || { echo "Docker is not running. Open Docker Desktop and try again."; exit 1; }
+
+# Builds need several GB of working space; running out corrupts the build cache (it happened once).
+MIN_FREE_GB="${MIN_FREE_GB:-6}"
+FREE_GB="$(df -g / | awk 'NR==2 {print $4}')"
+if [ "$FREE_GB" -lt "$MIN_FREE_GB" ]; then
+  echo "Only $FREE_GB GB free on this Mac. Cleaning up Docker leftovers first..."
+  bash "$(dirname "$0")/docker-cleanup.sh"
+  FREE_GB="$(df -g / | awk 'NR==2 {print $4}')"
+  if [ "$FREE_GB" -lt "$MIN_FREE_GB" ]; then
+    echo "Still only $FREE_GB GB free. Free up at least $MIN_FREE_GB GB (Trash, Downloads, old files) and run this again. Nothing was built."; exit 1
+  fi
+fi
 
 echo; echo "== Building the backend image (linux/amd64)"
 docker buildx build $CACHE_FLAG --platform linux/amd64 --load -f Dockerfile.backend -t "$BACKEND_IMAGE" .

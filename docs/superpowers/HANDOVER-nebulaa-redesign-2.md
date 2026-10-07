@@ -271,3 +271,8 @@ Deploy everything since the last release with `bash docs/superpowers/ops/release
 ## Update 34 (2026-10-07): platform icons explain themselves
 - `components/PlatformPicker.tsx`: one icon row with a pop-up on hover and keyboard focus ("Post to Instagram"; "Videos cannot be sent to Google Business yet"; "X: coming soon"). The pop-up sits on the wrapper so it shows for disabled icons too. Wording lives in `utils/platforms.ts` (`platformHint`, tests `tests/platforms.test.mjs`).
 - Used on Create content (`GravityCreate.tsx`, keys stay `x` and `gmb`) and on the first step of the video flow (`ReelGenerator.tsx`, "Posting to" row, shares `selectedPlatforms` with the last two steps so the choice carries through). The video Final Output screen and the platform step still use their labelled chips.
+
+## Update 35 (2026-10-07): Docker cleanup in the release
+- The owner's Mac had a local copy of every release image ever built (17 backend and as many frontend tags) plus build cache; free disk fell to 3.1 GB and a build corrupted its cache. `docs/superpowers/ops/docker-cleanup.sh` removes old local copies of our own release images (ECR keeps every release, so rollback is unaffected), untagged images, and build cache older than 24 h; `DRY_RUN=1` lists what it would remove; `KEEP_TAG` keeps one release.
+- `release-prod.sh` now (a) checks free disk before building (`MIN_FREE_GB`, default 6): if low it runs the cleanup, and refuses to build if still low; (b) runs the cleanup on exit, keeping the images just built.
+- Product data is not on the Mac (MongoDB Atlas, Cloudinary, AWS).
