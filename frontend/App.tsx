@@ -21,6 +21,7 @@ import CalendarHome from './pages/CalendarHome';
 import IdeaInbox from './pages/IdeaInbox';
 import SocialInbox from './pages/SocialInbox';
 import CsmClients from './pages/CsmClients';
+import StaffLayout from './pages/staff/StaffLayout';
 import ReelGenerator from './pages/ReelGenerator';
 import HeroVideo from './pages/HeroVideo';
 import AdCampaigns from './pages/AdCampaigns';
@@ -282,6 +283,8 @@ const App: React.FC = () => {
                     <Route path="/connect-socials" element={<ConnectSocials />} />
                     <Route path="/inbox" element={<SocialInbox />} />
                     <Route path="/clients" element={<CsmClients />} />
+                    <Route path="/staff" element={<StaffLayout />} />
+                    <Route path="/staff/:section" element={<StaffLayout />} />
                     <Route path="/connect-socials/inbox" element={<Navigate to="/inbox" replace />} />
                     <Route path="/brand-assets" element={<BrandAssets />} />
                     {/* Products & Services now lives inside Brand Assets. The old route is

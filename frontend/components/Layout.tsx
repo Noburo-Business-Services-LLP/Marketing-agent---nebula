@@ -27,7 +27,8 @@ import {
   Plus,
   Lightbulb,
   FileText,
-  Inbox
+  Inbox,
+  Shield
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
@@ -133,6 +134,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // navigation. Their routes and pages are left intact so nothing breaks and
   // they can be restored by adding entries here.
   const secondaryNav = [
+    ...((user?.staffRole || user?.isCsm) && !localStorage.getItem('csmReturnToken') ? [{ path: '/staff', label: 'Staff area', icon: Shield }] : []),
     { path: '/blueprint',        label: 'Growth Blueprint',  icon: FileText },
     { path: '/brand-assets',      label: 'Brand assets',      icon: Palette },
     { path: '/connect-socials',   label: 'Connected accounts', icon: Link2 },
@@ -145,6 +147,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     if (pathname.startsWith('/reels')) return { title: 'Videos', crumb: '' };
     if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };
     if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
+    if (pathname.startsWith('/staff')) return { title: 'Staff area', crumb: '' };
     if (pathname.startsWith('/clients')) return { title: 'My clients', crumb: '' };
     if (pathname.startsWith('/inbox')) return { title: 'Inbox', crumb: '' };
     if (pathname.startsWith('/connect-socials')) return { title: 'Connected accounts', crumb: '' };
@@ -453,7 +456,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             {localStorage.getItem('csmReturnToken') && (
               // A CSM working inside a client's account: always visible, always one click back.
               <div className="mb-4 rounded-xl border border-[#F5A623]/50 bg-[#F5A623]/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-[var(--gv-text)]">
+                <p className="text-sm text-[var(--gv-text-primary)]">
                   You are working in <strong>{localStorage.getItem('csmActingClient') || 'a client'}</strong>'s account. Payments, plans and passwords stay with the client.
                 </p>
                 <button

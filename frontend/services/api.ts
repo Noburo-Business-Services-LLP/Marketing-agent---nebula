@@ -1336,6 +1336,10 @@ export const apiService = {
     return apiCall('/social/inbox/summary', { method: 'GET' }, true);
   },
 
+  getStaffMe: async (): Promise<{ success: boolean; staff: { id: string; name: string; email: string; role: 'owner' | 'admin' | 'csm' }; can: Record<string, boolean> }> => {
+    return apiCall('/staff/me', { method: 'GET' }, true);
+  },
+
   getCsmClients: async (): Promise<{ success: boolean; clients: Array<{ id: string; name: string; email: string; industry: string; quarks: number; connectedAccounts: number; onboardingCompleted: boolean; draftsWaiting: number; lastLoginAt: string | null; isActive: boolean }> }> => {
     return apiCall('/csm/clients', { method: 'GET' }, true);
   },

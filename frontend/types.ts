@@ -46,6 +46,7 @@ export interface BusinessProfile {
 export interface User {
   _id: string;
   isCsm?: boolean;
+  staffRole?: 'owner' | 'admin' | 'csm' | null;
   email: string;
   firstName: string;
   lastName: string;
