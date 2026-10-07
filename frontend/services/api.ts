@@ -1347,6 +1347,11 @@ export const apiService = {
     return apiCall(`/staff/clients?${qs.toString()}`, { method: 'GET' }, true);
   },
   getStaffHome: async (): Promise<any> => apiCall('/staff/home', { method: 'GET' }, true),
+  // ---- Staff area: team ----
+  getStaffTeam: async (): Promise<any> => apiCall('/staff/team', { method: 'GET' }, true),
+  staffAddTeamMember: async (body: { email: string; firstName: string; lastName?: string; role: string }): Promise<any> => apiCall('/staff/team', { method: 'POST', body: JSON.stringify(body) }, true),
+  staffChangeRole: async (id: string, role: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'PATCH', body: JSON.stringify({ role }) }, true),
+  staffRemoveTeamMember: async (id: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'DELETE' }, true),
   getStaffClient: async (id: string): Promise<any> => apiCall(`/staff/clients/${id}`, { method: 'GET' }, true),
   getStaffCsms: async (): Promise<{ success: boolean; csms: Array<{ id: string; name: string }> }> => apiCall('/staff/csms', { method: 'GET' }, true),
   staffAddQuarks: async (id: string, amount: number): Promise<any> => apiCall(`/staff/clients/${id}/quarks`, { method: 'POST', body: JSON.stringify({ amount }) }, true),

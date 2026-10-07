@@ -6,6 +6,7 @@ import { customerMessage } from '../../utils/errors';
 import StaffHome from './StaffHome';
 import StaffClients from './StaffClients';
 import StaffClientPage from './StaffClientPage';
+import StaffTeam from './StaffTeam';
 
 const SECTIONS = [
   { id: 'home', label: 'Home', icon: Home, needs: 'view_home' },
@@ -16,7 +17,6 @@ const SECTIONS = [
 ] as const;
 
 const NEXT_STEP: Record<string, string> = {
-  team: 'Team management arrives in a later release.',
   money: 'Revenue, payments and renewals arrive in a later release.',
   usage: 'Feature use and the sign-up funnel arrive in a later release.'
 };
@@ -56,7 +56,7 @@ const StaffLayout: React.FC = () => {
           );
         })}
       </nav>
-      {current?.id === 'home' ? <StaffHome role={me.staff.role} can={me.can} /> : current?.id === 'clients' ? (id ? <StaffClientPage id={id} /> : <StaffClients can={me.can} />) : <p className="py-16 text-center text-[var(--gv-text-muted)]">{NEXT_STEP[current?.id || ''] || ''}</p>}
+      {current?.id === 'home' ? <StaffHome role={me.staff.role} can={me.can} /> : current?.id === 'clients' ? (id ? <StaffClientPage id={id} /> : <StaffClients can={me.can} />) : current?.id === 'team' ? <StaffTeam /> : <p className="py-16 text-center text-[var(--gv-text-muted)]">{NEXT_STEP[current?.id || ''] || ''}</p>}
     </div>
   );
 };

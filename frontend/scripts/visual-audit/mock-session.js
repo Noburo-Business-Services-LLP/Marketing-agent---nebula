@@ -230,6 +230,16 @@
     ['GET', /^\/brand-assets/, ok({ assets: logos, logos: logos, templates: [], environments: [] })],
     // Staff area (made-up people, only for the visual audit and the preview)
     ['GET', /^\/staff\/me/, ok({ staff: { id: 'owner-1', name: 'Dinesh Kannaa', email: 'owner@example.test', role: 'owner' }, can: { view_home: true, view_clients: true, open_client: true, add_quarks: true, toggle_client: true, assign_csm: true, add_csm: true, manage_admins: true, reset_accounts: true, view_money: true, view_usage_full: true, view_usage_summary: true, manage_coupons: true, export_csv: true, view_activity_all: true } })],
+    ['GET', /^\/staff\/team$/, ok({ me: 'owner-1', grantable: ['owner', 'admin', 'csm'], maxClients: 12, owners: 1, rows: [
+      { id: 'owner-1', name: 'Dinesh Kannaa', email: 'owner@example.test', role: 'owner', status: 'active', lastActiveAt: iso(0), clients: null, draftsWaiting: null, needAttention: null },
+      { id: 'admin-1', name: 'Meera Nair', email: 'meera@example.test', role: 'admin', status: 'active', lastActiveAt: iso(-1), clients: null, draftsWaiting: null, needAttention: null },
+      { id: 'csm-1', name: 'Priya Raman', email: 'priya@example.test', role: 'csm', status: 'active', lastActiveAt: iso(-1), clients: 12, draftsWaiting: 9, needAttention: 3 },
+      { id: 'csm-2', name: 'Arun Kumar', email: 'arun@example.test', role: 'csm', status: 'active', lastActiveAt: iso(-9), clients: 5, draftsWaiting: 1, needAttention: 0 },
+      { id: 'csm-3', name: 'Lakshmi Venkataraman-Subramaniam', email: 'lakshmi.venkataraman-subramaniam@example.test', role: 'csm', status: 'switched_off', lastActiveAt: null, clients: 0, draftsWaiting: 0, needAttention: 0 }
+    ] })],
+    ['POST', /^\/staff\/team$/, ok({ member: { id: 'csm-9', name: 'New Person', email: 'new@example.test', role: 'csm' }, converted: false, emailed: true })],
+    ['PATCH', /^\/staff\/team\/[^/]+$/, ok({ member: { id: 'csm-1', name: 'Priya Raman', email: 'priya@example.test', role: 'admin' }, unassigned: { count: 12, clients: [{ id: 'c1', name: 'Sunrise Bakery' }, { id: 'c2', name: 'Green Leaf Cafe' }, { id: 'c6', name: 'Meera Jewellers' }] } })],
+    ['DELETE', /^\/staff\/team\/[^/]+$/, ok({ removed: true, unassigned: { count: 5, clients: [{ id: 'c1', name: 'Sunrise Bakery' }, { id: 'c2', name: 'Green Leaf Cafe' }, { id: 'c6', name: 'Meera Jewellers' }] } })],
     ['GET', /^\/staff\/home/, ok({
       health: { since: iso(-1), cards: [
         { key: 'images', label: 'Images', status: 'green', note: 'Image creation is working.', lastHour: 0, lastDay: 1, latest: [{ at: iso(-0.5), detail: 'Image request timed out after 60 seconds (sample)' }] },
