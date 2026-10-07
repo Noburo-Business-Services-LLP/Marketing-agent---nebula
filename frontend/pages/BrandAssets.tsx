@@ -18,7 +18,9 @@ import {
   X
 } from 'lucide-react';
 import { brandAssetsAPI } from '../services/api';
-import { isPlaceholderColorPair } from '../utils/brandColors';
+import { isPlaceholderColorPair, canAutoApplyLogoColors, normalizeHexColor } from '../utils/brandColors';
+import { readImageColors } from '../utils/imageColors';
+import BrandColorField, { COLOR_ERROR } from '../components/BrandColorField';
 import { useConfirm } from '../context/ConfirmContext';
 import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 // Rendered as a tab panel rather than merged in: Inventory is ~1,150 lines and
@@ -169,6 +171,12 @@ const BrandAssets: React.FC = () => {
   const [secondaryColor, setSecondaryColor] = useState('');
   const [colorsNote, setColorsNote] = useState<string | null>(null);
   const [readingLogoColors, setReadingLogoColors] = useState(false);
+  const [paletteColors, setPaletteColors] = useState<string[]>([]);
+  const [screenColors, setScreenColors] = useState<string[]>([]);
+  const [chosenSwatch, setChosenSwatch] = useState<string | null>(null);
+  const [canPickFromScreen] = useState(() => typeof window !== 'undefined' && 'EyeDropper' in window);
+  const [otherImageUrls, setOtherImageUrls] = useState<string[]>([]);
+  const savedColorsRef = React.useRef<{ primary: string; secondary: string }>({ primary: '', secondary: '' });
   const [fontType, setFontType] = useState('');
   const [enforcementMode, setEnforcementMode] = useState<'strict' | 'adaptive' | 'off'>('strict');
   const [customTone, setCustomTone] = useState('');
@@ -195,6 +203,7 @@ const BrandAssets: React.FC = () => {
     if (!p) return;
     setBrandName(p.brandName || '');
     setBrandDescription(p.brandDescription || '');
+    savedColorsRef.current = { primary: p.assets?.primaryColor || '', secondary: p.assets?.secondaryColor || '' };
     setPrimaryColor(p.assets?.primaryColor || '');
     setSecondaryColor(p.assets?.secondaryColor || '');
     setFontType(p.assets?.fontType || '');
@@ -246,6 +255,30 @@ const BrandAssets: React.FC = () => {
   }, [error]);
 
   useEffect(() => {
+    let live = true;
+    brandAssetsAPI.getAll().then((res: any) => {
+      if (!live || !Array.isArray(res?.assets)) return;
+      setOtherImageUrls(res.assets.filter((a: any) => a?.type !== 'logo' && a?.url).slice(0, 6).map((a: any) => a.url));
+    }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+
+  // Colours found in the logos and in the other uploaded brand images. Images that cannot be read are skipped.
+  const paletteSourceKey = [...logos.map((l) => l.url), ...otherImageUrls].join('|');
+  useEffect(() => {
+    let live = true;
+    const urls = paletteSourceKey ? paletteSourceKey.split('|') : [];
+    Promise.all(urls.map((u, i) => readImageColors(u, i < logos.length ? 4 : 3))).then((lists) => {
+      if (!live) return;
+      const seen: string[] = [];
+      lists.flat().forEach((c) => { if (!seen.includes(c)) seen.push(c); });
+      setPaletteColors(seen.slice(0, 12));
+    });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paletteSourceKey]);
+
+  useEffect(() => {
     if (!success) return;
     const t = setTimeout(() => setSuccess(null), 3000);
     return () => clearTimeout(t);
@@ -295,6 +328,8 @@ const BrandAssets: React.FC = () => {
       return;
     }
 
+    const colorsBefore = { primary: primaryColor, secondary: secondaryColor };
+    const logoPixels = logoPreview;
     try {
       setUploadingLogo(true);
       setError(null);
@@ -318,7 +353,7 @@ const BrandAssets: React.FC = () => {
       setLogoPreview(null);
       setLogoName('');
       setIsPrimaryLogo(false);
-      await loadData(true);
+      await captureColorsAround(colorsBefore, logoPixels, !!response.colorsFromLogo?.primary);
     } catch (err: any) {
       setError(err?.message || 'The logo could not be uploaded.');
     } finally {
@@ -334,7 +369,8 @@ const BrandAssets: React.FC = () => {
         return;
       }
       setSuccess('Primary logo updated');
-      await loadData(true);
+      const colorsBefore = { primary: primaryColor, secondary: secondaryColor };
+      await captureColorsAround(colorsBefore, logos.find((l) => l._id === logoId)?.url, false);
     } catch (err: any) {
       setError(err?.message || 'The primary logo could not be set.');
     }
@@ -380,6 +416,58 @@ const BrandAssets: React.FC = () => {
     }
   };
 
+  const LOGO_COLORS_NOTE = 'We took these colours from your logo. You can change them at any time. Select Save profile to keep them.';
+
+  // Reloads the page data when the logo changes, then puts colours from the new logo into the
+  // colour fields, but only when the fields were empty or the old placeholder colours. Colours
+  // the customer chose, or edited and has not saved yet, are put back and never overwritten.
+  // Nothing is saved here: the customer reviews the colours and selects Save profile.
+  const captureColorsAround = async (
+    before: { primary: string; secondary: string },
+    source: string | null | undefined,
+    serverAlreadyApplied: boolean
+  ) => {
+    const mayApply = canAutoApplyLogoColors(before.primary, before.secondary);
+    const found = mayApply && source ? await readImageColors(source, 6) : [];
+    await loadData(true);
+    if (!mayApply) {
+      setPrimaryColor(before.primary);
+      setSecondaryColor(before.secondary);
+      return;
+    }
+    if (serverAlreadyApplied) {
+      setColorsNote(LOGO_COLORS_NOTE.replace(' Select Save profile to keep them.', ''));
+      return;
+    }
+    const saved = savedColorsRef.current;
+    if (found.length && canAutoApplyLogoColors(saved.primary, saved.secondary)) {
+      setPrimaryColor(found[0]);
+      setSecondaryColor(found[1] || '');
+      setColorsNote(LOGO_COLORS_NOTE);
+    }
+  };
+
+  const useSwatchAs = (hex: string, target: 'primary' | 'secondary') => {
+    if (target === 'primary') setPrimaryColor(hex);
+    else setSecondaryColor(hex);
+    setChosenSwatch(null);
+    setColorsNote(`${hex} is now your ${target} colour. Select Save profile to keep it.`);
+  };
+
+  const pickFromScreen = async () => {
+    try {
+      const Dropper = (window as any).EyeDropper;
+      const result = await new Dropper().open();
+      const hex = normalizeHexColor(result?.sRGBHex);
+      if (hex) {
+        setScreenColors((prev) => (prev.includes(hex) ? prev : [hex, ...prev].slice(0, 4)));
+        setChosenSwatch(hex);
+      }
+    } catch {
+      // The customer cancelled the picker. Nothing to report.
+    }
+  };
+
   const useColorsFromLogo = async () => {
     try {
       setReadingLogoColors(true);
@@ -399,20 +487,27 @@ const BrandAssets: React.FC = () => {
     }
   };
 
+  const paletteSwatches = [...screenColors, ...paletteColors.filter((c) => !screenColors.includes(c))];
+
   const savedColorsArePlaceholder = isPlaceholderColorPair(
     profile?.assets?.primaryColor,
     profile?.assets?.secondaryColor
   );
 
   const saveProfile = async () => {
+    const colorsOk = [primaryColor, secondaryColor].every((c) => !c.trim() || normalizeHexColor(c));
+    if (!colorsOk) {
+      setError(COLOR_ERROR);
+      return;
+    }
     try {
       setSavingProfile(true);
       setError(null);
       const response = await brandAssetsAPI.updateIntelligenceProfile({
         brandName,
         brandDescription,
-        primaryColor,
-        secondaryColor,
+        primaryColor: normalizeHexColor(primaryColor) || '',
+        secondaryColor: normalizeHexColor(secondaryColor) || '',
         fontType,
         enforcementMode,
         customProfile: {
@@ -828,38 +923,8 @@ const BrandAssets: React.FC = () => {
                   )}
                 </select>
               </div>
-              <div className="space-y-3">
-                <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Primary Color</label>
-                <div className="flex items-center gap-2">
-                  <input type="color" value={primaryColor || '#ffffff'} onChange={(e) => setPrimaryColor(e.target.value)} className="h-10 w-12 p-1 rounded border bg-transparent" />
-                  <input
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    placeholder="#RRGGBB"
-                    className={`flex-1 px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                      }`}
-                  />
-                </div>
-                {!primaryColor && (
-                  <p className="text-xs" style={{ color: 'var(--gv-text-tertiary)' }}>Not set yet</p>
-                )}
-              </div>
-              <div className="space-y-3">
-                <label className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Secondary Color</label>
-                <div className="flex items-center gap-2">
-                  <input type="color" value={secondaryColor || '#ffffff'} onChange={(e) => setSecondaryColor(e.target.value)} className="h-10 w-12 p-1 rounded border bg-transparent" />
-                  <input
-                    value={secondaryColor}
-                    onChange={(e) => setSecondaryColor(e.target.value)}
-                    placeholder="#RRGGBB"
-                    className={`flex-1 px-3 py-2 rounded-lg border ${isDarkMode ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                      }`}
-                  />
-                </div>
-                {!secondaryColor && (
-                  <p className="text-xs" style={{ color: 'var(--gv-text-tertiary)' }}>Not set yet</p>
-                )}
-              </div>
+              <BrandColorField label="Primary Color" value={primaryColor} onChange={setPrimaryColor} isDarkMode={isDarkMode} />
+              <BrandColorField label="Secondary Color" value={secondaryColor} onChange={setSecondaryColor} isDarkMode={isDarkMode} />
             </div>
 
             <div className="mt-4 space-y-2">
@@ -881,6 +946,48 @@ const BrandAssets: React.FC = () => {
                 >
                   {readingLogoColors ? 'Reading your logo' : 'Use colours from my logo'}
                 </button>
+              )}
+              {(paletteSwatches.length > 0 || canPickFromScreen) && (
+                <div className="space-y-2" data-testid="brand-palette">
+                  {paletteSwatches.length > 0 && (
+                    <p className="text-sm font-medium" style={{ color: 'var(--gv-text-primary)' }}>Colours from your logo and brand images</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {paletteSwatches.map((hex) => (
+                      <button
+                        key={hex}
+                        type="button"
+                        title={hex}
+                        aria-label={`Colour ${hex}`}
+                        aria-pressed={chosenSwatch === hex}
+                        onClick={() => setChosenSwatch(chosenSwatch === hex ? null : hex)}
+                        className="brand-swatch h-8 w-8 rounded-full border"
+                        style={{
+                          background: hex,
+                          borderColor: 'var(--gv-border-subtle)',
+                          boxShadow: chosenSwatch === hex ? '0 0 0 2px var(--gv-text-primary)' : 'none'
+                        }}
+                      />
+                    ))}
+                    {canPickFromScreen && (
+                      <button
+                        type="button"
+                        onClick={pickFromScreen}
+                        className="text-sm font-medium rounded-lg px-3 py-1.5"
+                        style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-primary)' }}
+                      >
+                        Pick from screen
+                      </button>
+                    )}
+                  </div>
+                  {chosenSwatch && (
+                    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Use ${chosenSwatch}`}>
+                      <span className="text-sm" style={{ color: 'var(--gv-text-secondary)' }}>{chosenSwatch}</span>
+                      <button type="button" onClick={() => useSwatchAs(chosenSwatch, 'primary')} className="text-sm font-medium rounded-lg px-3 py-1.5" style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-primary)' }}>Use as primary</button>
+                      <button type="button" onClick={() => useSwatchAs(chosenSwatch, 'secondary')} className="text-sm font-medium rounded-lg px-3 py-1.5" style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-primary)' }}>Use as secondary</button>
+                    </div>
+                  )}
+                </div>
               )}
               {colorsNote && (
                 <p className="text-sm" role="status" style={{ color: 'var(--gv-text-secondary)' }}>{colorsNote}</p>
