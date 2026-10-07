@@ -22,7 +22,7 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 
 - The page never talks to a backend. Every request whose path starts with `/api`, `/audio` or
   `/generated-media`, on any host (including the `http://localhost:5000` hard-coded in
-  `services/api.ts`, `GravityCreate.tsx`, `AdminLogin.tsx` and `Campaigns.tsx`), is answered inside
+  `services/api.ts`, `GravityCreate.tsx` and `Campaigns.tsx`), is answered inside
   the page from `ROUTES` in `mock-session.js`. Writes (POST/PUT/PATCH/DELETE) get a canned
   "audit stub" answer and go nowhere. Any other host is refused in the page (503) and listed in
   `window.__AUDIT.blocked`. Only same-origin, non-API requests (Vite modules, `/assets`) reach
@@ -54,7 +54,7 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 2. In the Browser pane (or any Chromium), open `http://127.0.0.1:3100/?audit=normal#/dashboard`.
    The `audit` query sets the session mode for this tab:
    `normal` (signed in, onboarding done), `logged-out` (landing, sign-in), `onboarding` (signed in,
-   onboarding not done), `admin` (fake admin token for `/admin`). Set the viewport (e.g. 1280x800
+   onboarding not done), `staff` (a signed-in Owner). Set the viewport (e.g. 1280x800
    or 375x812) **before** starting, and re-check `innerWidth`: the pane may drop the emulation.
 
 3. Check the stub is in: `typeof window.__auditRoute === 'function'` and `window.__AUDIT.mode`.

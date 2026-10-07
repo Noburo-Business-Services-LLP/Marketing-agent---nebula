@@ -46,7 +46,7 @@
     localStorage.setItem('nebulaa_tour_completed', 'true');
     localStorage.setItem('onboardingTourCompleted', 'true');
   } catch (e) { /* ignore */ }
-  // Session mode: ?audit=logged-out | onboarding | admin | normal (remembered for the tab in sessionStorage).
+  // Session mode: ?audit=logged-out | onboarding | staff | normal (remembered for the tab in sessionStorage).
   var params = new URLSearchParams(location.search);
   if (params.get('audit')) sessionStorage.setItem('audit-mode', params.get('audit'));
   var MODE = sessionStorage.getItem('audit-mode') || 'normal';
@@ -55,8 +55,6 @@
   var STAFF = MODE === 'staff'; // a signed-in Owner, so the staff area and its menu entry show
   AUDIT.mode = MODE;
   if (LOGGED_OUT) { localStorage.removeItem('authToken'); localStorage.removeItem('token'); }
-  // Admin pages check their own token; 'admin' mode gives them a fake one.
-  try { if (MODE === 'admin') localStorage.setItem('adminToken', 'audit-fake-admin-token'); else localStorage.removeItem('adminToken'); } catch (e) { /* ignore */ }
 
   // ---- 2. canned data -------------------------------------------------------------------
   var svg = function (bg, label) {
@@ -230,7 +228,7 @@
     ['GET', /^\/brand-assets/, ok({ assets: logos, logos: logos, templates: [], environments: [] })],
     // Staff area (made-up people, only for the visual audit and the preview)
     ['GET', /^\/staff\/me/, ok({ staff: { id: 'owner-1', name: 'Dinesh Kannaa', email: 'owner@example.test', role: 'owner' }, can: { view_home: true, view_clients: true, open_client: true, add_quarks: true, toggle_client: true, assign_csm: true, add_csm: true, manage_admins: true, reset_accounts: true, view_money: true, view_usage_full: true, view_usage_summary: true, manage_coupons: true, export_csv: true, view_activity_all: true } })],
-    ['GET', /^\/staff\/team$/, ok({ me: 'owner-1', grantable: ['owner', 'admin', 'csm'], maxClients: 12, owners: 1, rows: [
+    ['GET', /^\/staff\/team$/, ok({ me: 'owner-1', grantable: ['owner', 'admin', 'csm'], can: { reset_accounts: true }, maxClients: 12, owners: 1, rows: [
       { id: 'owner-1', name: 'Dinesh Kannaa', email: 'owner@example.test', role: 'owner', status: 'active', lastActiveAt: iso(0), clients: null, draftsWaiting: null, needAttention: null },
       { id: 'admin-1', name: 'Meera Nair', email: 'meera@example.test', role: 'admin', status: 'active', lastActiveAt: iso(-1), clients: null, draftsWaiting: null, needAttention: null },
       { id: 'csm-1', name: 'Priya Raman', email: 'priya@example.test', role: 'csm', status: 'active', lastActiveAt: iso(-1), clients: 12, draftsWaiting: 9, needAttention: 3 },
@@ -238,6 +236,13 @@
       { id: 'csm-3', name: 'Lakshmi Venkataraman-Subramaniam', email: 'lakshmi.venkataraman-subramaniam@example.test', role: 'csm', status: 'switched_off', lastActiveAt: null, clients: 0, draftsWaiting: 0, needAttention: 0 }
     ] })],
     ['POST', /^\/staff\/team$/, ok({ member: { id: 'csm-9', name: 'New Person', email: 'new@example.test', role: 'csm' }, converted: false, emailed: true })],
+    ['POST', /^\/staff\/team\/[^/]+\/reset-account$/, ok({ archivedDrafts: 3 })],
+    ['POST', /^\/staff\/ayrshare\/reset-ids$/, ok({ cleared: 14 })],
+    ['POST', /^\/staff\/clients\/[^/]+\/hidden$/, ok({ hidden: true })],
+    ['GET', /^\/staff\/coupons$/, ok({ coupons: [{ code: 'WELCOME5000', discountedAmount: 5000, maxUses: 3, usedCount: 1, isActive: true, note: 'For early clients' }, { code: 'OLDONE', discountedAmount: 4000, maxUses: 1, usedCount: 1, isActive: false, note: '' }] })],
+    ['POST', /^\/staff\/coupons$/, ok({ coupon: { code: 'NEWCODE', discountedAmount: 5000, maxUses: 1, usedCount: 0, isActive: true, note: '' } })],
+    ['POST', /^\/staff\/coupons\/[^/]+\/deactivate$/, ok({ coupon: { code: 'WELCOME5000', isActive: false } })],
+    ['DELETE', /^\/staff\/coupons\/[^/]+$/, ok({})],
     ['PATCH', /^\/staff\/team\/[^/]+$/, ok({ member: { id: 'csm-1', name: 'Priya Raman', email: 'priya@example.test', role: 'admin' }, unassigned: { count: 12, clients: [{ id: 'c1', name: 'Sunrise Bakery' }, { id: 'c2', name: 'Green Leaf Cafe' }, { id: 'c6', name: 'Meera Jewellers' }] } })],
     ['DELETE', /^\/staff\/team\/[^/]+$/, ok({ removed: true, unassigned: { count: 5, clients: [{ id: 'c1', name: 'Sunrise Bakery' }, { id: 'c2', name: 'Green Leaf Cafe' }, { id: 'c6', name: 'Meera Jewellers' }] } })],
     ['GET', /^\/staff\/money\/payments/, ok({ total: 12, page: 2, pages: 2, pageSize: 10, rows: [
@@ -324,7 +329,7 @@
     })],
     ['POST', /^\/staff\/clients\/[^/]+\/quarks$/, ok({ balance: 562 })],
     ['GET', /^\/staff\/csms/, ok({ csms: [{ id: 'csm-1', name: 'Priya Raman' }, { id: 'csm-2', name: 'Arun Kumar' }] })],
-    ['GET', /^\/staff\/clients\/[^/?]+$/, ok({ client: { id: 'c1', name: 'Sunrise Bakery', email: 'owner@sunrise-bakery.example', mobile: '9876543210', business: { name: 'Sunrise Bakery', industry: 'Food & Beverage', website: 'https://sunrise-bakery.example', location: 'Chennai' }, signedUpAt: iso(-40), lastActiveAt: iso(-1), onboardingCompleted: true, csm: { id: 'csm-1', name: 'Priya Raman' }, status: 'active', tier: 'managed', addons: [], paying: true, trial: false, access: { publish: true, schedule: true, inbox: true, autoReply: true, video: true, blueprint: true }, attention: ['quarks_low', 'drafts_waiting'], quarks: 62, connections: ['instagram', 'facebook'], recentQuarks: [{ action: 'staff_grant', amount: 500, description: 'Nebulaa staff added 500 Quarks', at: iso(-6) }], featureUse30d: [{ feature: 'post_generated', count: 24 }, { feature: 'campaign_created', count: 3 }], drafts30d: { published: 12, draft: 4, failed: 1 }, money: { payments: [{ item: 'Quark pack 500', amount: 999, currency: 'INR', status: 'paid', at: iso(-12) }], subscriptions: [] }, history: [{ action: 'add_quarks', by: 'Dinesh Kannaa', at: iso(-6), details: { amount: 500 } }] }, can: { open_client: true, add_quarks: true, toggle_client: true, assign_csm: true, view_money: true } })],
+    ['GET', /^\/staff\/clients\/[^/?]+$/, ok({ client: { id: 'c1', name: 'Sunrise Bakery', email: 'owner@sunrise-bakery.example', mobile: '9876543210', business: { name: 'Sunrise Bakery', industry: 'Food & Beverage', website: 'https://sunrise-bakery.example', location: 'Chennai' }, hidden: false, signedUpAt: iso(-40), lastActiveAt: iso(-1), onboardingCompleted: true, csm: { id: 'csm-1', name: 'Priya Raman' }, status: 'active', tier: 'managed', addons: [], paying: true, trial: false, access: { publish: true, schedule: true, inbox: true, autoReply: true, video: true, blueprint: true }, attention: ['quarks_low', 'drafts_waiting'], quarks: 62, connections: ['instagram', 'facebook'], recentQuarks: [{ action: 'staff_grant', amount: 500, description: 'Nebulaa staff added 500 Quarks', at: iso(-6) }], featureUse30d: [{ feature: 'post_generated', count: 24 }, { feature: 'campaign_created', count: 3 }], drafts30d: { published: 12, draft: 4, failed: 1 }, money: { payments: [{ item: 'Quark pack 500', amount: 999, currency: 'INR', status: 'paid', at: iso(-12) }], subscriptions: [] }, history: [{ action: 'add_quarks', by: 'Dinesh Kannaa', at: iso(-6), details: { amount: 500 } }] }, can: { open_client: true, add_quarks: true, toggle_client: true, assign_csm: true, hide_client: true, view_money: true } })],
     ['GET', /^\/staff\/clients/, ok({ counts: { all: 6, active: 3, inactive: 1, disabled: 1, trial: 2, paying: 2, attention: 3, no_csm: 2, hidden: 1 }, total: 6, page: 1, pages: 1, rows: [
       { id: 'c1', name: 'Sunrise Bakery', email: 'owner@sunrise-bakery.example', tier: 'managed', addons: [], paying: true, trial: false, status: 'active', quarks: 62, platforms: ['instagram', 'facebook'], access: { publish: true, schedule: true, inbox: true, autoReply: true, video: true }, csm: { id: 'csm-1', name: 'Priya Raman' }, lastActiveAt: iso(-1), attention: ['quarks_low', 'drafts_waiting'] },
       { id: 'c2', name: 'Green Leaf Cafe', email: 'hello@greenleaf.example', tier: 'starter', addons: ['publish'], paying: true, trial: false, status: 'active', quarks: 1240, platforms: ['instagram', 'x', 'linkedin'], access: { publish: true, schedule: true, inbox: false, autoReply: false, video: true }, csm: { id: 'csm-2', name: 'Arun Kumar' }, lastActiveAt: iso(-2), attention: [] },
@@ -401,12 +406,6 @@
     ['GET', /^\/reachouts\//, ok({ leads: [], campaigns: [], sequences: [], integrations: [] })],
     ['GET', /^\/trends/, ok({ trends: [] })],
     ['GET', /^\/accounts/, ok({ accounts: [] })],
-    // Internal admin dashboard (mode=admin). Users list empty; trial funnel left out (its tab is not opened).
-    ['GET', /^\/admin\/overview/, ok({ data: { totalUsers: 12, newToday: 1, newThisWeek: 3, newThisMonth: 7, dau: 4, wau: 8, mau: 11, activeTrials: 5, expiringSoon: 1, expiredTrials: 2, totalCreditsUsed: 5400 } })],
-    ['GET', /^\/admin\/users/, ok({ data: [] })],
-    ['GET', /^\/admin\/content-stats/, ok({ data: { generated: 40, published: 22, publishRate: 55, topGenerators: [] } })],
-    ['GET', /^\/admin\/(coupons)/, ok({ data: [] })],
-    ['GET', /^\/admin\/(trial-funnel|ayrshare-usage)/, { success: false }],
   ];
 
   var GENERIC_GET = function () {

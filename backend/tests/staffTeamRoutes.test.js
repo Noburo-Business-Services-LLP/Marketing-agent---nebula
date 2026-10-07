@@ -90,6 +90,8 @@ test('GET /team: the Owner sees the team with CSM workload; an Admin sees it but
   assert.deepStrictEqual(o.body.grantable, ['owner', 'admin', 'csm']);
   const a = await call('get', '/team', { as: ADMIN });
   assert.deepStrictEqual(a.body.grantable, ['csm']);
+  assert.strictEqual(o.body.can.reset_accounts, true);
+  assert.strictEqual(a.body.can.reset_accounts, false);
   assert.ok(!JSON.stringify(o.body).includes('password'));
 });
 

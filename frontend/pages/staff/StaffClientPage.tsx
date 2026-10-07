@@ -6,6 +6,7 @@ import { customerMessage } from '../../utils/errors';
 import PlatformIcon from '../../components/PlatformIcon';
 import { ACCESS_LABEL, ATTENTION_LABEL, TIER_LABEL, whenLabel } from './staffLabels';
 import { platformLabel } from '../../utils/platforms';
+import { hideConfirm, hideNotice } from '../../utils/staffTools';
 
 const Card: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -22,7 +23,8 @@ const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, valu
 
 const ACTION_LABEL: Record<string, string> = {
   add_quarks: 'Added Quarks', disable_client: 'Switched the account off', enable_client: 'Switched the account on',
-  assign_csm: 'Changed the CSM', bulk_assign_csm: 'Changed the CSM', open_client: 'Opened the account', role_change: 'Changed a role'
+  assign_csm: 'Changed the CSM', bulk_assign_csm: 'Changed the CSM', open_client: 'Opened the account', role_change: 'Changed a role',
+  hide_client: 'Left the client out of the numbers', show_client: 'Counted the client in the numbers again'
 };
 
 /** One client on one page: summary, access, activity, connections, Quarks, money (Owner) and history. */
@@ -79,6 +81,18 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
               {c.status === 'disabled' ? 'Switch on' : 'Switch off'}
             </button>
           )}
+          {can.hide_client && (
+            <button disabled={busy} onClick={async () => {
+              const hide = !c.hidden;
+              if (!window.confirm(hideConfirm(c.name, hide))) return;
+              setBusy(true); setNote('');
+              try { const res = await apiService.staffSetHidden(id, hide); setNote(hideNotice(res)); if (res.success) await load(); }
+              catch (e) { setNote(customerMessage(e)); }
+              setBusy(false);
+            }} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 disabled:opacity-50">
+              {c.hidden ? 'Count in the numbers' : 'Leave out of the numbers'}
+            </button>
+          )}
         </div>
       </div>
       {note && <p ref={noteRef} role="status" className="text-sm font-semibold text-slate-800">{note}</p>}
@@ -93,6 +107,7 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="Summary">
           <Row label="Status" value={statusText} />
+          {c.hidden && <Row label="Numbers" value="Left out of the numbers" />}
           <Row label="Business" value={c.business?.name} />
           <Row label="Industry" value={c.business?.industry} />
           <Row label="Website" value={c.business?.website} />

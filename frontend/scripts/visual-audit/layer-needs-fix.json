@@ -16,11 +16,6 @@
    "ink": 4.15,
    "choice": "white"
   },
-  "bg-violet-500": {
-   "white": 4.23,
-   "ink": 4.37,
-   "choice": "ink"
-  },
   "from-black to-pink-500": {
    "white": 3.53,
    "ink": 1.13,

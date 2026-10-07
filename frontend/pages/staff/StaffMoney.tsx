@@ -5,6 +5,8 @@ import { customerMessage } from '../../utils/errors';
 import { niceMax } from '../../utils/staffHome';
 import { FAILURE_KIND, PAYMENT_STATUS, formatInr, formatInrShort, formatUsd, gaugeShape, pageLabel, revenueSummary, shapeRevenueSeries, whenIst } from '../../utils/staffMoney';
 import type { MoneySeries } from '../../utils/staffMoney';
+import { ayrshareResetConfirm, ayrshareResetNotice, couponLine, validateCouponForm } from '../../utils/staffTools';
+import type { CouponRow } from '../../utils/staffTools';
 
 const LOAD_ERROR = 'We could not load the Money numbers. Please try again.';
 
@@ -157,6 +159,87 @@ const StatusPill: React.FC<{ status: string }> = ({ status }) => (
   <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${status === 'paid' ? 'border-emerald-300 text-emerald-800' : status === 'failed' ? 'border-red-400 text-red-800' : 'border-amber-400 text-amber-900'}`}>{PAYMENT_STATUS[status] || status}</span>
 );
 
+
+const FIELD = 'w-full rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] px-3 py-2 text-sm text-[var(--gv-text-primary)]';
+const BTN = 'inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 py-2 text-sm font-semibold text-[var(--gv-text-secondary)] disabled:opacity-50';
+
+/** Reset Ayrshare IDs (Owner): after switching to a different Ayrshare account, forget every stored profile ID. */
+const AyrshareReset: React.FC<{ profiles?: number; onDone: () => void }> = ({ profiles, onDone }) => {
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const run = async () => {
+    if (!window.confirm(ayrshareResetConfirm(profiles))) return;
+    setBusy(true); setNotice('');
+    try {
+      const res = await apiService.staffResetAyrshareIds();
+      setNotice(ayrshareResetNotice(res));
+      if (res && res.success) onDone();
+    } catch (e) { setNotice(customerMessage(e, 'We could not reset the profile IDs. Please try again.')); }
+    setBusy(false);
+  };
+  return (
+    <div className="mt-4 border-t border-[var(--gv-border-subtle)] pt-4">
+      <button type="button" onClick={run} disabled={busy} className={BTN}>{busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} Reset Ayrshare IDs</button>
+      <p className="mt-2 text-xs text-[var(--gv-text-tertiary)]">Use only after switching to a different Ayrshare account. Clears every client's stored profile ID; posts, drafts and Quarks stay.</p>
+      {notice && <p role="status" aria-live="polite" className="mt-2 text-sm font-semibold text-[var(--gv-text-primary)]">{notice}</p>}
+    </div>
+  );
+};
+
+/** Coupons (Owner): customers still enter these at checkout; here the Owner creates, switches off and deletes them. */
+const Coupons: React.FC = () => {
+  const [rows, setRows] = useState<CouponRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ code: '', discountedAmount: '5000', maxUses: '1', note: '' });
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const load = useCallback(() => apiService.getStaffCoupons()
+    .then((res) => { if (res && res.success === false) throw new Error(res.message); setRows(res.coupons || []); setError(''); })
+    .catch((e) => setError(customerMessage(e, 'We could not load the coupons. Please try again.'))), []);
+  useEffect(() => { load(); }, [load]);
+
+  const act = async (work: () => Promise<any>, ok: string) => {
+    setBusy(true); setNotice('');
+    try { const res = await work(); if (res && res.success === false) throw new Error(res.message); setNotice(ok); await load(); return true; }
+    catch (e) { setNotice(customerMessage(e, 'That did not work. Please try again.')); return false; }
+    finally { setBusy(false); }
+  };
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const checked = validateCouponForm(form);
+    if (checked.ok === false) { setNotice(checked.message); return; }
+    const done = await act(() => apiService.staffCreateCoupon(checked.payload), `Coupon ${checked.payload.code} was created.`);
+    if (done) setForm({ code: '', discountedAmount: '5000', maxUses: '1', note: '' });
+  };
+
+  return (
+    <div>
+      <form onSubmit={create} className="grid grid-cols-1 gap-3 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-4 min-[560px]:grid-cols-2 lg:grid-cols-5" noValidate>
+        <label className="text-sm font-semibold text-[var(--gv-text-primary)]">Code<input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} autoComplete="off" className={`${FIELD} mt-1 font-normal`} /></label>
+        <label className="text-sm font-semibold text-[var(--gv-text-primary)]">Discounted price (INR)<input value={form.discountedAmount} onChange={(e) => setForm({ ...form, discountedAmount: e.target.value })} inputMode="numeric" className={`${FIELD} mt-1 font-normal`} /></label>
+        <label className="text-sm font-semibold text-[var(--gv-text-primary)]">Times it can be used<input value={form.maxUses} onChange={(e) => setForm({ ...form, maxUses: e.target.value })} inputMode="numeric" className={`${FIELD} mt-1 font-normal`} /></label>
+        <label className="text-sm font-semibold text-[var(--gv-text-primary)] lg:col-span-1">Note<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className={`${FIELD} mt-1 font-normal`} /></label>
+        <div className="flex items-end"><button type="submit" disabled={busy} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#F5A623] px-4 py-2 text-sm font-bold text-black disabled:opacity-50">Create coupon</button></div>
+      </form>
+      {notice && <p role="status" aria-live="polite" className="mt-3 text-sm font-semibold text-[var(--gv-text-primary)]">{notice}</p>}
+      {error && <p role="alert" className="mt-3 text-sm text-red-800">{error} <button type="button" onClick={() => load()} className="font-semibold underline">Try again</button></p>}
+      {rows && (rows.length === 0 ? <p className="mt-3 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-5 text-sm text-[var(--gv-text-secondary)]">No coupons yet.</p> : (
+        <ul className="mt-3 divide-y divide-[var(--gv-border-subtle)] overflow-hidden rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)]">
+          {rows.map((c) => (
+            <li key={c.code} className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="min-w-0"><p className="font-mono text-sm font-semibold text-[var(--gv-text-primary)]">{c.code}</p><p className="text-xs text-[var(--gv-text-secondary)]">{couponLine(c)}</p></div>
+              <div className="flex gap-2">
+                {c.isActive && <button type="button" disabled={busy} onClick={() => { if (window.confirm(`Switch off coupon ${c.code}? Clients can no longer use it.`)) act(() => apiService.staffDeactivateCoupon(c.code), `Coupon ${c.code} is switched off.`); }} className={BTN}>Switch off</button>}
+                <button type="button" disabled={busy} onClick={() => { if (window.confirm(`Delete coupon ${c.code}? This cannot be undone.`)) act(() => apiService.staffDeleteCoupon(c.code), `Coupon ${c.code} was deleted.`); }} className="rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-800 disabled:opacity-50">Delete</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ))}
+    </div>
+  );
+};
+
 /** Staff Money (Owner only): what was collected, who pays for what, what is coming and what failed. */
 const StaffMoney: React.FC = () => {
   const [data, setData] = useState<any>(null);
@@ -275,8 +358,14 @@ const StaffMoney: React.FC = () => {
               {ay.extra > 0 ? `Extra profiles: ${ay.extra} at ${formatUsd(ay.perExtraProfileUsdCents)} each, about ${formatUsd(ay.extraUsdCents)} a month on top of the plan.` : `No extra cost: the next profile past ${ay.included} costs ${formatUsd(ay.perExtraProfileUsdCents)} a month.`}
             </p>
             {ay.note && <Note>{ay.note}</Note>}
+            <AyrshareReset profiles={ay.profiles} onDone={() => load(true)} />
           </div>
         )}
+        {!ay.available && <div className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-4"><AyrshareReset onDone={() => load(true)} /></div>}
+      </Section>
+
+      <Section title="Coupons" hint="Owner only">
+        <Coupons />
       </Section>
 
       <Section title="Payments" hint={pageLabel(pay.page, pay.pages, pay.total)}>

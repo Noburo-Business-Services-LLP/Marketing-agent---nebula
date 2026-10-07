@@ -1367,6 +1367,14 @@ export const apiService = {
   staffToggleClient: async (id: string, active: boolean): Promise<any> => apiCall(`/staff/clients/${id}/toggle`, { method: 'POST', body: JSON.stringify({ active }) }, true),
   staffAssignCsm: async (id: string, csmId: string | null): Promise<any> => apiCall(`/staff/clients/${id}/assign-csm`, { method: 'POST', body: JSON.stringify({ csmId }) }, true),
   staffBulkAssign: async (ids: string[], csmId: string | null): Promise<any> => apiCall('/staff/clients/bulk-assign', { method: 'POST', body: JSON.stringify({ ids, csmId }) }, true),
+  // Owner tools (the Owner-only ones are refused by the server for everyone else).
+  staffResetAyrshareIds: async (): Promise<any> => apiCall('/staff/ayrshare/reset-ids', { method: 'POST', body: JSON.stringify({ confirm: true }) }, true),
+  staffResetStaffAccount: async (id: string): Promise<any> => apiCall(`/staff/team/${id}/reset-account`, { method: 'POST', body: JSON.stringify({ confirm: true }) }, true),
+  staffSetHidden: async (id: string, hidden: boolean): Promise<any> => apiCall(`/staff/clients/${id}/hidden`, { method: 'POST', body: JSON.stringify({ hidden }) }, true),
+  getStaffCoupons: async (): Promise<any> => apiCall('/staff/coupons', { method: 'GET' }, true),
+  staffCreateCoupon: async (body: { code: string; discountedAmount: number; maxUses: number; note: string }): Promise<any> => apiCall('/staff/coupons', { method: 'POST', body: JSON.stringify(body) }, true),
+  staffDeactivateCoupon: async (code: string): Promise<any> => apiCall(`/staff/coupons/${encodeURIComponent(code)}/deactivate`, { method: 'POST' }, true),
+  staffDeleteCoupon: async (code: string): Promise<any> => apiCall(`/staff/coupons/${encodeURIComponent(code)}`, { method: 'DELETE' }, true),
   // Opens a client's account for a staff member; keeps their own login aside so "Back to my clients" can restore it.
   staffOpenClient: async (id: string): Promise<any> => {
     const res = await apiCall<any>(`/staff/clients/${id}/open`, { method: 'POST' }, true);

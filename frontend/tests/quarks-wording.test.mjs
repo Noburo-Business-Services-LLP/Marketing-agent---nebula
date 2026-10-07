@@ -20,13 +20,13 @@ import { fileURLToPath } from 'node:url';
  *  - the Meta ad category "Credit, loans, financial services" (BoostPostModal)
  *  - analytics windows, e.g. "Last 7 days", "previous 7 days", "Reach (7 days)"
  *  - lucide icon names (CreditCard) are identifiers, not text
- *  - files excluded below: the admin console is staff-only, and the legal
+ *  - files excluded below: the staff area is staff-only, and the legal
  *    pages (Terms, Privacy) are contract text that needs a lawyer's edit
  *  - console.* lines (developer logs)
  */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'tests', 'public', 'scripts', 'scratch']);
-const SKIP_FILES = [/^pages\/Admin/, /^pages\/staff\//, /^pages\/TermsAndConditions\.tsx$/, /^pages\/PrivacyPolicy\.tsx$/];
+const SKIP_FILES = [/^pages\/staff\//, /^pages\/TermsAndConditions\.tsx$/, /^pages\/PrivacyPolicy\.tsx$/];
 const WORDS = /\bcredits?\b|\btrials?\b|\b7[- ]days?\b/i;
 const ALLOWED_PHRASES = [/(last|previous) 7 days/i, /\(7 days\)/i, /Credit, loans/];
 

@@ -8,6 +8,7 @@ import {
   unassignedNote, validateAddForm, workloadShare, workloadText
 } from '../../utils/staffTeam';
 import type { TeamRow } from '../../utils/staffTeam';
+import { canResetAccount, resetAccountConfirm, resetAccountNotice } from '../../utils/staffTools';
 
 const LOAD_ERROR = 'We could not load the team. Please try again.';
 const ROLE_STYLE: Record<string, string> = {
@@ -19,7 +20,7 @@ const FIELD = 'w-full rounded-lg border border-[var(--gv-border-subtle)] bg-[var
 const BTN = 'inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] px-3 py-2 text-sm font-semibold text-[var(--gv-text-primary)] disabled:opacity-50';
 const BTN_MAIN = 'inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5A623] px-4 py-2 text-sm font-bold text-black disabled:opacity-50';
 
-type Team = { me: string; grantable: string[]; rows: TeamRow[]; maxClients: number; owners: number };
+type Team = { me: string; grantable: string[]; rows: TeamRow[]; maxClients: number; owners: number; can?: Record<string, boolean> };
 
 /** A plain dialog: Escape closes it, focus starts inside it, and the page behind stays put. */
 const Dialog: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => {
@@ -157,6 +158,9 @@ const StaffTeam: React.FC = () => {
   const [adding, setAdding] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [note, setNote] = useState('');
+  const [resetting, setResetting] = useState<string | null>(null);
+  const noteRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (note && noteRef.current) noteRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [note]);
 
   const load = useCallback((quiet = false) => {
     if (!quiet) setLoading(true);
@@ -167,6 +171,14 @@ const StaffTeam: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const resetAccount = async (row: TeamRow) => {
+    if (!window.confirm(resetAccountConfirm({ name: row.name, email: row.email }))) return;
+    setResetting(row.id); setNote('');
+    try { setNote(resetAccountNotice(row.name, await apiService.staffResetStaffAccount(row.id))); }
+    catch (e: any) { setNote(customerMessage(e && e.message, 'We could not reset this account. Please try again.')); }
+    setResetting(null);
+  };
 
   const done = (text: string) => { setAdding(false); setPending(null); setNote(text); load(true); };
 
@@ -190,7 +202,7 @@ const StaffTeam: React.FC = () => {
         <button type="button" onClick={() => { setNote(''); setAdding(true); }} className={BTN_MAIN}><UserPlus className="h-4 w-4" /> Add team member</button>
       </div>
 
-      {note && <p role="status" aria-live="polite" className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{note}</p>}
+      {note && <p ref={noteRef} role="status" aria-live="polite" className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{note}</p>}
       {error && <p role="alert" className="mb-4 text-sm text-red-700">{error}</p>}
 
       {rows.length === 0 ? (
@@ -223,6 +235,9 @@ const StaffTeam: React.FC = () => {
                         <option value="">Change role</option>
                         {roles.map((role) => <option key={role} value={role}>Make {roleLabel(role)}</option>)}
                       </select>
+                    )}
+                    {canResetAccount(team.can) && (
+                      <button type="button" disabled={resetting === r.id} onClick={() => resetAccount(r)} className="rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] px-3 py-1.5 text-sm font-semibold text-[var(--gv-text-primary)] disabled:opacity-50">{resetting === r.id ? 'Resetting…' : 'Reset account'}</button>
                     )}
                     {removal.ok
                       ? <button type="button" onClick={() => { setNote(''); setPending({ kind: 'remove', row: r }); }} className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-semibold text-red-800">Remove</button>

@@ -67,7 +67,7 @@ router.get('/team', requireStaff('add_csm'), async (req, res) => {
     const models = { User, FeatureEvent: require('../models/FeatureEvent'), Draft: require('../models/Draft') };
     const data = await loadTeamData({ models });
     const team = buildTeam(data);
-    res.json({ success: true, me: String(req.staff._id), grantable: grantableRoles(req.staff), ...team });
+    res.json({ success: true, me: String(req.staff._id), grantable: grantableRoles(req.staff), can: { reset_accounts: can(req.staff, 'reset_accounts') }, ...team });
   } catch (error) {
     console.error('[staff] team list failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the team. Please try again.' });
@@ -266,7 +266,7 @@ router.get('/clients/:id', requireStaff('view_clients'), async (req, res) => {
       client: {
         id: String(client._id), name: displayName(client), email: client.email, mobile: client.mobileNumber || '',
         business: { name: client.businessProfile && client.businessProfile.name, industry: client.businessProfile && client.businessProfile.industry, website: client.businessProfile && client.businessProfile.website, location: client.businessProfile && client.businessProfile.businessLocation, languages: client.businessProfile && client.businessProfile.additionalLanguages },
-        signedUpAt: client.createdAt, lastActiveAt: status.lastActiveAt, onboardingCompleted: Boolean(client.onboardingCompleted),
+        hidden: Boolean(client.isHidden), signedUpAt: client.createdAt, lastActiveAt: status.lastActiveAt, onboardingCompleted: Boolean(client.onboardingCompleted),
         csm: csm ? { id: String(csm._id), name: [csm.firstName, csm.lastName].filter(Boolean).join(' ') || csm.email } : null,
         status: status.status, tier: status.tier, addons: status.addons, paying: status.paying, trial: status.trial,
         access: status.access, attention: status.attention, quarks: status.quarks,
@@ -277,7 +277,7 @@ router.get('/clients/:id', requireStaff('view_clients'), async (req, res) => {
         money: owner ? { payments: (client.payments || []).slice(-20).reverse().map((p) => ({ item: p.item, amount: p.amount, currency: p.currency, status: p.status, at: p.paidAt })), subscriptions: (client.plan && client.plan.subscriptions || []).map((x) => ({ kind: x.kind, key: x.key, active: x.active, since: x.createdAt })) } : null,
         history: (can(req.staff, 'view_activity_all') ? history : history.filter((h) => String(h.actor && h.actor._id) === String(req.staff._id))).map((h) => ({ action: h.action, by: h.actor ? ([h.actor.firstName, h.actor.lastName].filter(Boolean).join(' ') || h.actor.email) : '', at: h.at, details: h.details }))
       },
-      can: Object.fromEntries(['open_client', 'add_quarks', 'toggle_client', 'assign_csm', 'view_money'].map((a) => [a, can(req.staff, a, client)]))
+      can: Object.fromEntries(['open_client', 'add_quarks', 'toggle_client', 'assign_csm', 'hide_client', 'view_money'].map((a) => [a, can(req.staff, a, client)]))
     });
   } catch (error) {
     console.error('[staff] client page failed:', error.message);

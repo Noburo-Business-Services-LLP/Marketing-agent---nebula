@@ -285,3 +285,18 @@ test('the Ayrshare reset definition only touches Ayrshare fields', () => {
   assert.ok(keys.length > 0 && keys.every((k) => k.startsWith('ayrshare.')));
   assert.strictEqual(AYRSHARE_RESET.update.$set['ayrshare.profileKey'], '');
 });
+
+test('the client page tells staff whether the client is hidden and whether this role may change it', async () => {
+  seed();
+  stub('models/FeatureEvent', { aggregate: async () => [], findOne: () => chain(null) });
+  stub('models/Draft', { aggregate: async () => [], findOne: () => chain(null), updateMany: async () => ({ modifiedCount: 0 }) });
+  const history = chain([]); history.populate = () => history; history.limit = () => history;
+  stub('models/StaffAction', { create: async (row) => { actions.push(row); }, find: () => history });
+  docs.find((d) => d._id === CLIENT).isHidden = true;
+  const asAdmin = await call('get', '/clients/:id', { as: ADMIN, params: { id: CLIENT } });
+  assert.strictEqual(asAdmin.statusCode, 200);
+  assert.strictEqual(asAdmin.body.client.hidden, true);
+  assert.strictEqual(asAdmin.body.can.hide_client, true);
+  const asCsm = await call('get', '/clients/:id', { as: CSM, params: { id: CLIENT } });
+  assert.strictEqual(asCsm.body.can.hide_client, false);
+});

@@ -44,8 +44,6 @@ import InfluencerAnalytics from './pages/InfluencerAnalytics';
 import InfluencerProfile from './pages/InfluencerProfile';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
-import AdminLogin from './pages/AdminLogin';
-import AdminDashboard from './pages/AdminDashboard';
 import BlueprintRoutes from './pages/BlueprintRoutes';
 import { postAuthTarget, BLUEPRINT_SIGNUP_PATH } from './utils/blueprint';
 import { ThemeProvider } from './context/ThemeContext';
@@ -208,9 +206,9 @@ const App: React.FC = () => {
           element={user ? <BlueprintRoutes user={user} onLogout={handleLogout} /> : <Navigate to={BLUEPRINT_SIGNUP_PATH} replace />}
         />
 
-        {/* Admin routes — completely separate from user auth */}
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+        {/* The old shared-login admin pages are gone. Staff sign in like everyone else and use the Staff area. */}
+        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
+        <Route path="/admin" element={<Navigate to="/login" replace />} />
 
         {/* Development only: look at the sign-up steps without an account. Not part of a production build. */}
         {(import.meta as any).env?.DEV && <Route path="/__onboarding-preview" element={<Onboarding onComplete={() => {}} />} />}
