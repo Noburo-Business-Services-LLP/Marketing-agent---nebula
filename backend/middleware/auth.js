@@ -69,7 +69,7 @@ const protect = async (req, res, next) => {
     // A CSM working inside a client's account: re-check the assignment on every request.
     if (decoded.actingCsm) {
       const { canActFor, isBlockedWhileActing } = require('../services/csmAccess');
-      const csm = await User.findById(decoded.actingCsm).select('isCsm isActive firstName lastName email').lean();
+      const csm = await User.findById(decoded.actingCsm).select('isCsm staffRole isActive firstName lastName email').lean();
       if (!canActFor(csm, user)) {
         return res.status(401).json({ success: false, message: 'Your access to this client has ended. Please open it again from your client list.' });
       }

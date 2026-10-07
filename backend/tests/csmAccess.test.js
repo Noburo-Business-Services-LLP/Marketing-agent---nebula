@@ -45,3 +45,12 @@ test('the Ayrshare reset only touches Ayrshare fields and needs RESET typed', ()
   assert.ok(keys.length > 0 && keys.every((k) => k.startsWith('ayrshare.')));
   assert.strictEqual(c.AYRSHARE_RESET.update.$set['ayrshare.profileKey'], '');
 });
+
+test('owners and admins can open any client; a staff account is never opened this way', () => {
+  const client = { _id: 'u1', assignedCsm: 'c9' };
+  assert.strictEqual(c.canActFor({ _id: 'o1', staffRole: 'owner' }, client), true);
+  assert.strictEqual(c.canActFor({ _id: 'a1', staffRole: 'admin' }, client), true);
+  assert.strictEqual(c.canActFor({ _id: 'c1', staffRole: 'csm' }, client), false);
+  assert.strictEqual(c.canActFor({ _id: 'o1', staffRole: 'owner' }, { _id: 's', staffRole: 'csm' }), false);
+  assert.strictEqual(c.canActFor({ _id: 'o1', staffRole: 'owner', isActive: false }, client), false);
+});

@@ -22,10 +22,11 @@ function idOf(value) {
   return String(value._id || value.id || value);
 }
 
-function canActFor(csm, client) {
-  if (!csm || !client) return false;
-  if (!csm.isCsm || csm.isActive === false) return false;
-  return idOf(client.assignedCsm) !== '' && idOf(client.assignedCsm) === idOf(csm);
+function canActFor(staff, client) {
+  if (!staff || !client || staff.isActive === false) return false;
+  if (client.staffRole || client.isCsm) return false; // staff accounts are never opened this way
+  // The permission table decides: Owners and Admins may open any client, a CSM only their own.
+  return require('./staff/permissions').can(staff, 'open_client', client);
 }
 
 function isBlockedWhileActing(url) {
