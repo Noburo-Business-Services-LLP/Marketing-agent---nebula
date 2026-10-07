@@ -37,6 +37,18 @@ Use Claude Code with the superpowers plugin, from a clean worktree of `dev-dk`. 
 
 The SDD ledger and briefs from the previous run are git-ignored (`.superpowers/`) and are not in the repo; the status table above is the source of truth.
 
+## Known provider rule (people photos are refused)
+
+Seedance 2.0 on fal refuses reference images that may show a real person's likeness: "The images or videos provided may contain likenesses of real people or other private information that cannot be processed." The job is accepted, then fails after about 2 minutes (seen 4 times on 7 Oct 2026 with cast portraits, wizard scene stills and client photos). A text-only clip, with no references, works.
+
+How the default works now:
+- `selectReferences` leaves out `cast` (portraits and cast sheet) and `keyframe` (scene stills) images unless the client opts in (`includePeople`: `true` or a list of image links). Those refs carry `mayShowPeople: true`. Product, logo and location (`environment`) images stay in; a location photo that shows people is the client's call (remove it in step 5).
+- `/hero-video/brief` returns the default `references` plus `peoplePhotos` (the opt-in candidates). `/hero-video/plan` accepts `includePeoplePhotos` (a list of links, only ones the server itself selected are honoured) and the page shows them unchecked with "Use these photos too (the video model may refuse photos of people)".
+- With no cast reference, the planner's CAST block describes every person in words (age, looks, hair, clothing, manner), says to repeat the same clothing in every beat and never to tag a person; the template's REFS example no longer tags a person. Tags still work for product, logo and location.
+- An empty final set sends no `image_urls`, so `buildHeroInput` picks the text-to-video model.
+- If the provider still refuses, `customerFailureMessage` (in `heroVideoService.js`) shows customers "The video model cannot use photos that show people. We have refunded your Quarks. Try again without the people photos, or use the default setting." The stored job and the staff log keep the provider's raw text; the refund-once logic is unchanged.
+- Unproven until one owner-approved real run: that the default (words-only cast, no people photos) generates, and how well identity holds across shots without portraits.
+
 ## Hard rules and gotchas learned the hard way
 
 - **Money**: every real fal generation costs about **US$4.55** (0.3034/s x 15 s) plus 729 Quarks on the account. Never trigger one (UI Generate button, scripts, curl) without the owner's explicit OK for that specific run. Tests use fakes; no task in the plan calls fal.

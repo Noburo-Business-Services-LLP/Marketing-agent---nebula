@@ -107,18 +107,26 @@ function hasUnsupportedImageType(url) {
   try { return UNSUPPORTED_IMAGE_EXT.test(new URL(String(url)).pathname); } catch (_) { return false; }
 }
 
+// Cast portraits and scene stills can show a person's face; the video model refuses those. They are
+// left out unless the client opts in (opts.includePeople: true for all, or a list of image links).
+const PEOPLE_KINDS = ['cast', 'keyframe'];
+
 function selectReferences(brief, brand, opts = {}) {
   if (!isObj(brief)) return [];
+  const ip = opts.includePeople;
+  const peopleAllowed = (url) => ip === true || (Array.isArray(ip) && ip.includes(url));
   const b = isObj(brand) ? brand : {};
   const out = [];
   const seen = new Set();
   const counts = { cast: 0, environment: 0, brand: 0, keyframe: 0 };
   const add = (kind, label, url, source, dataUrl) => {
     const key = url || dataUrl;
+    if (PEOPLE_KINDS.includes(kind) && !peopleAllowed(url)) return;
     if (!key || (url && hasUnsupportedImageType(url)) || seen.has(key) || out.length >= MAX_REFS || counts[kind] >= CAPS[kind]) return;
     seen.add(key); counts[kind]++;
     const ref = { tag: '', kind, label: String(label || kind), url: url || '', source };
     if (!url && dataUrl) ref.dataUrl = dataUrl;
+    if (PEOPLE_KINDS.includes(kind)) ref.mayShowPeople = true;
     out.push(ref);
   };
   const scenes = Array.isArray(brief.scenes) ? brief.scenes : [];

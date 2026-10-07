@@ -716,7 +716,7 @@ AUDIO: {{audioMode}} AUDIO overrides STYLE RULES on music.
 ## STEP 2: THE PROMPT, 11 BLOCKS IN THIS ORDER (no commentary inside)
 01 LOOK: one paragraph: camera and lens, frame rate and shutter, the real light source and direction (imperfect practical light), natural colour, grain, realism (visible pores, flyaway hairs), refusals (no beauty filter, no plastic skin, no HDR). One register, from STYLE RULES. Language, accent, duration.
 02 CONTEXT: who, where, what they want, in two or three sentences, ending "it should feel like X, not Y".
-03 REFS: one line per reference with its tag and role as listed, e.g. "@image1 - MAYA. Appearance only: preserve face, hair, build and wardrobe in every cut; ignore its background." Every reference gets a role. With none: "REFS: none".
+03 REFS: one line per reference with its tag and role as listed, e.g. "@image1 - PRODUCT. Appearance only: exact shape, colour and packaging; ignore its background." Every reference gets a role. People are never tagged: describe them in words. With none: "REFS: none".
 04 HEADCOUNT: exactly who is on screen, by name. No beat may add people beyond the declared cast; nobody is duplicated; the camera operator is never seen.
 05 CAMERA: who holds the camera and how it moves, per the style; hard cuts, each instantaneous, no morphing between setups.
 06 STAGING: positions at the first frame in the PLACE, where light falls, concrete background objects that stay consistent.

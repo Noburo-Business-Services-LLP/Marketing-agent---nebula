@@ -46,6 +46,8 @@ const MAX_HERO_CUT = 12;
 const MAX_CTA = 60;
 const STYLE_BLOCK_MAX = 1200; // an edited style prompt longer than this is clipped, keeping the planner under 14,000 characters
 const CAST_BUDGET = 1000; // all cast lines together
+const CAST_BUDGET_WORDS = 1300; // when no cast photo is sent, the words carry the whole identity
+const WORDS_ONLY_NOTE = 'No person photos are sent: describe each person fully in the prompt (age, looks, hair, clothing, manner), repeat the same clothing in every beat, and never give a person an image tag.';
 const AUDIO_MODES = ['native', 'sfx_only'];
 const AUDIO_DIRECTIONS = {
   native: 'Music and effects both come from the video model. In 10 SFX write an actual music line: genre, two or three instruments, tempo, starting quiet under the setup, lifting at the discovery and resolving on the final held frame, always under the dialogue. Add a specific diegetic sound for every meaningful action.',
@@ -98,8 +100,10 @@ function referencesBlockFrom(refs) {
 }
 
 function castBlockFrom(cast, refs) {
+  const wordsOnly = !refs.some((r) => r.kind === 'cast');
+  const budget = wordsOnly ? CAST_BUDGET_WORDS : CAST_BUDGET;
   const tagOf = (url) => (url && (refs.find((r) => r.url === url && r.kind === 'cast') || {}).tag) || '';
-  const k = cast.length > 2 ? 2 / cast.length : 1; // 4 people get half the detail each
+  const k = (cast.length > 2 ? 2 / cast.length : 1) * (wordsOnly ? 1.4 : 1); // 4 people get half the detail each
   const cap = (n) => Math.round(n * k);
   const lines = cast.map((c) => {
     const tag = tagOf(c.portraitUrl);
@@ -111,10 +115,11 @@ function castBlockFrom(cast, refs) {
       c.clothing && `Wears: ${clip(c.clothing, cap(80))}.`,
       c.personality && `Manner: ${clip(c.personality, cap(60))}.`
     ];
-    return cut(parts.filter(Boolean).join(' '), Math.floor(CAST_BUDGET / Math.max(1, cast.length)) - 1);
+    return cut(parts.filter(Boolean).join(' '), Math.floor((budget - (wordsOnly ? WORDS_ONLY_NOTE.length + 1 : 0)) / Math.max(1, cast.length)) - 1);
   });
   const sheet = refs.find((r) => r.source === 'cast-sheet');
   if (sheet) lines.push(`Cast sheet: ${sheet.tag} shows the cast together.`);
+  if (wordsOnly) lines.unshift(WORDS_ONLY_NOTE);
   return lines.join('\n');
 }
 
@@ -227,10 +232,12 @@ function readPlanOptions(body) {
   if (body.references != null && !Array.isArray(body.references)) return { error: 'references must be a list of image links.' };
   if (body.keptSceneIds != null && !Array.isArray(body.keptSceneIds)) return { error: 'keptSceneIds must be a list of scene ids.' };
   const references = body.references == null ? null : [...new Set(strList(body.references))].slice(0, 50);
+  if (body.includePeoplePhotos != null && !Array.isArray(body.includePeoplePhotos)) return { error: 'includePeoplePhotos must be a list of image links.' };
+  const includePeople = [...new Set(strList(body.includePeoplePhotos))].slice(0, 12);
   const keptSceneIds = body.keptSceneIds == null ? null : [...new Set(strList(body.keptSceneIds))].slice(0, 12);
   const rawAspect = isObj(body.brief) ? body.brief.aspectRatio : undefined;
   if (rawAspect != null && rawAspect !== '' && !ASPECTS.includes(rawAspect)) return { error: `aspectRatio must be one of ${ASPECTS.join(', ')}` };
-  return { style, audioMode, ctaText, references, keptSceneIds: keptSceneIds && keptSceneIds.length ? keptSceneIds : null };
+  return { style, audioMode, ctaText, references, includePeople, keptSceneIds: keptSceneIds && keptSceneIds.length ? keptSceneIds : null };
 }
 
 const isCastError = (e) => e && (e.name === 'CastError' || e.name === 'BSONError' || e.name === 'BSONTypeError');
@@ -318,6 +325,11 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       const candidates = selectReferences(brief, brand).map((r) => (r.dataUrl && !r.url ? { ...r, _src: r.dataUrl } : r));
       const staged = await planDeps.stageReferences(candidates);
       const uploaded = new Map(staged.refs.filter((r) => r._src).map((r) => [r._src, r.url]));
+      // Photos that could show people are not in the default set; they are offered for an explicit opt-in.
+      const defaultUrls = new Set(staged.refs.map((r) => r.url));
+      const peoplePhotos = selectReferences(brief, brand, { includePeople: true })
+        .filter((r) => r.mayShowPeople && r.url && !defaultUrls.has(r.url))
+        .map((r) => ({ ...publicRef(r), tag: '', mayShowPeople: true }));
       brief.environment.images = brief.environment.images
         .map((im) => (im.url ? { url: im.url, alt: im.alt } : uploaded.has(im.dataUrl) ? { url: uploaded.get(im.dataUrl), alt: im.alt } : null))
         .filter(Boolean);
@@ -326,6 +338,7 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
         brief,
         brand: brandSummary(brand || {}),
         references: staged.refs.map(publicRef),
+        peoplePhotos,
         dropped: staged.dropped || []
       });
     } catch (err) {
@@ -348,7 +361,7 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       const userId = toUserId(req.user);
       // Brand and references are recomputed here; the client's list can only select from them.
       const brand = (await planDeps.loadBrand(userId)) || {};
-      let candidates = selectReferences(brief, brand, { keptSceneIds: opts.keptSceneIds || undefined });
+      let candidates = selectReferences(brief, brand, { keptSceneIds: opts.keptSceneIds || undefined, includePeople: opts.includePeople });
       if (opts.references) {
         const order = opts.references;
         candidates = candidates

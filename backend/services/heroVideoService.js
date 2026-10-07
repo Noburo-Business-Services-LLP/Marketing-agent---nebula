@@ -212,6 +212,15 @@ function describeFalError(err) {
   return detail ? `${base}: ${detail}`.slice(0, 500) : base;
 }
 
+// The provider refuses reference images that may show a real person's likeness. Customers get a plain
+// message with no vendor names; the stored job and the staff log keep the provider's own text.
+const PEOPLE_REFUSAL_MESSAGE = 'The video model cannot use photos that show people. We have refunded your Quarks. Try again without the people photos, or use the default setting.';
+const PEOPLE_REFUSAL_RE = /likenesses? of real people|private information that cannot be processed/i;
+function customerFailureMessage(raw) {
+  const text = typeof raw === 'string' ? raw : '';
+  return PEOPLE_REFUSAL_RE.test(text) ? PEOPLE_REFUSAL_MESSAGE : raw;
+}
+
 async function getHeroClipStatus(model, requestId, fal) {
   const client = fal || await getFalClient();
   const st = await client.queue.status(model, { requestId });
@@ -259,5 +268,6 @@ async function copyClipToStorage(remoteUrl, deps = {}) {
 module.exports = {
   HERO_RESOLUTION, HERO_MAX_REFS, isPublicHttpsUrl, isPublicIp, buildHeroInput, validateRefUrls,
   heroMonthlyLimit, monthStartUTC, nextMonthStartUTC, getHeroQuota,
-  submitHeroClip, getHeroClipStatus, copyClipToStorage, describeFalError
+  submitHeroClip, getHeroClipStatus, copyClipToStorage, describeFalError,
+  customerFailureMessage, PEOPLE_REFUSAL_MESSAGE
 };

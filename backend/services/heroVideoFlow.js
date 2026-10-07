@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { customerFailureMessage, PEOPLE_REFUSAL_MESSAGE } = require('./heroVideoService');
 const { normalizeFinishOptions, finishHeroClip: realFinishHeroClip } = require('./heroVideoFinish');
 
 const MAX_PROMPT_CHARS = 6000;
@@ -312,7 +313,8 @@ async function startHeroGeneration(deps, { userId, body }) {
     console.error(`Hero submit failed: status=${falStatus} detail=${detail}`);
     await failJob(deps, jobId, 'Video generation could not be started', 'failed').catch(() => {});
     await refundOnce(deps, jobId, userId, 'Refund: hero submit failed');
-    return { status: 500, json: { success: false, message: 'Could not start video generation. Your Quarks were refunded.' } };
+    const refused = customerFailureMessage(detail) === PEOPLE_REFUSAL_MESSAGE;
+    return { status: 500, json: { success: false, message: refused ? PEOPLE_REFUSAL_MESSAGE : 'Could not start video generation. Your Quarks were refunded.' } };
   }
 
   return { status: 200, json: { success: true, jobId } };
@@ -325,7 +327,7 @@ function terminalResponse(job) {
     if (job.result.rawVideoUrl) json.rawVideoUrl = job.result.rawVideoUrl;
     if (job.result.finishError) json.finishError = job.result.finishError;
   }
-  if (job.status !== 'completed') json.error = (job.error && job.error.message) || (job.status === 'cancelled' ? 'Cancelled' : 'Generation failed');
+  if (job.status !== 'completed') json.error = customerFailureMessage((job.error && job.error.message) || (job.status === 'cancelled' ? 'Cancelled' : 'Generation failed'));
   return { status: 200, json };
 }
 
@@ -392,7 +394,7 @@ async function pollHeroJob(deps, { userId, jobId }) {
     console.error(`Hero job ${jobId} failed at the video provider: ${String(message).slice(0, 400)}`);
     await failJob(deps, jobId, message, 'failed');
     await refundOnce(deps, jobId, userId, 'Refund: hero clip failed');
-    return { status: 200, json: { success: true, status: 'failed', error: message } };
+    return { status: 200, json: { success: true, status: 'failed', error: customerFailureMessage(message) } };
   }
 
   if (st.state === 'completed') {

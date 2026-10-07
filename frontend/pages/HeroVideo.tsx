@@ -18,6 +18,8 @@ interface QuotaInfo { used: number; limit: number; resetsOn: string }
 const POLL_MS = 5000;
 // Server fails any job older than 60 min; stop client polling a little after that.
 const MAX_POLL_MS = 65 * 60 * 1000;
+// Matches the sentence the server sends when the video model refuses photos of people.
+const PEOPLE_REFUSAL_COPY = 'The video model cannot use photos that show people. We have refunded your Quarks. Try again without the people photos, or use the default setting.';
 const SLOW_COPY = 'This is taking longer than usual. Check back in a few minutes; it will appear in your history.';
 const FAILED_COPY =
   "We couldn't finish this video. Your Quarks have been returned and this one doesn't count toward your monthly limit. Please try again.";
@@ -119,6 +121,9 @@ const HeroVideo: React.FC = () => {
   const [brief, setBrief] = useState<HeroBrief | null>(null);
   const [brand, setBrand] = useState<HeroBrandSummary | null>(null);
   const [refs, setRefs] = useState<HeroReference[]>([]);
+  // Photos that could show people (cast, scene frames) are offered, never sent unless chosen.
+  const [peoplePhotos, setPeoplePhotos] = useState<HeroReference[]>([]);
+  const [optedIn, setOptedIn] = useState<string[]>([]);
   const [dropped, setDropped] = useState<Array<{ label?: string; reason?: string }>>([]);
   const [aspectRatio, setAspectRatio] = useState<HeroAspectRatio>(
     incomingBrief && ASPECTS.includes(incomingBrief.aspectRatio) ? incomingBrief.aspectRatio : '9:16'
@@ -246,7 +251,7 @@ const HeroVideo: React.FC = () => {
         }
         if (j?.status === 'failed' || j?.status === 'cancelled') {
           if (j.error) console.warn('[HeroVideo] job failed:', j.error);
-          giveUp(j.status === 'cancelled' ? 'This video was cancelled. Please try again.' : FAILED_COPY);
+          giveUp(j.status === 'cancelled' ? 'This video was cancelled. Please try again.' : j.error === PEOPLE_REFUSAL_COPY ? PEOPLE_REFUSAL_COPY : FAILED_COPY);
           return;
         }
       } catch (e: any) {
@@ -302,6 +307,7 @@ const HeroVideo: React.FC = () => {
         setBrief(r.brief);
         setBrand(r.brand || null);
         setRefs(retag(r.references || []));
+        setPeoplePhotos(Array.isArray(r.peoplePhotos) ? r.peoplePhotos : []);
         setDropped(Array.isArray(r.dropped) ? r.dropped : []);
         setKeptIds(r.brief.scenes.map((s) => s.sceneId));
         setWebsite(r.brand?.website || '');
@@ -337,8 +343,8 @@ const HeroVideo: React.FC = () => {
 
   // What the current prompt was written from; any change makes it out of date.
   const inputsKey = useMemo(
-    () => JSON.stringify({ refs: refs.map((r) => r.url), kept: cutTouched ? keptIds : null, audioMode, aspectRatio, style }),
-    [refs, keptIds, cutTouched, audioMode, aspectRatio, style]
+    () => JSON.stringify({ refs: refs.map((r) => r.url), people: optedIn, kept: cutTouched ? keptIds : null, audioMode, aspectRatio, style }),
+    [refs, optedIn, keptIds, cutTouched, audioMode, aspectRatio, style]
   );
   const planStale = !!plan && planKey !== inputsKey;
 
@@ -346,7 +352,11 @@ const HeroVideo: React.FC = () => {
     setCutTouched(true);
     setKeptIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
-  const removeRef = (url: string) => setRefs((prev) => retag(prev.filter((r) => r.url !== url)));
+  const removeRef = (url: string) => {
+    setRefs((prev) => retag(prev.filter((r) => r.url !== url)));
+    setOptedIn((prev) => prev.filter((u) => u !== url));
+  };
+  const togglePeople = (url: string) => setOptedIn((prev) => (prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]));
 
   const buildPrompt = async () => {
     if (!brief) return;
@@ -363,7 +373,8 @@ const HeroVideo: React.FC = () => {
         style,
         audioMode,
         ctaText: ctaEdited ? ctaText.trim() : undefined,
-        references: refs.map((x) => x.url),
+        references: [...refs.map((x) => x.url), ...optedIn.filter((u) => !refs.some((x) => x.url === u))],
+        includePeoplePhotos: optedIn,
         keptSceneIds: cutTouched ? keptInOrder : undefined,
       });
       if (!mountedRef.current) return;
@@ -378,7 +389,7 @@ const HeroVideo: React.FC = () => {
       setRefs(nextRefs);
       setKeptIds(nextKept);
       setCutTouched(nextTouched);
-      setPlanKey(JSON.stringify({ refs: nextRefs.map((x) => x.url), kept: nextTouched ? nextKept : null, audioMode, aspectRatio, style }));
+      setPlanKey(JSON.stringify({ refs: nextRefs.map((x) => x.url), people: optedIn, kept: nextTouched ? nextKept : null, audioMode, aspectRatio, style }));
     } catch (e: any) {
       if (mountedRef.current) setPlanError(e?.message || 'The prompt could not be built. Please try again.');
     } finally {
@@ -776,6 +787,9 @@ const HeroVideo: React.FC = () => {
           <p className="text-[12px] text-[var(--gv-text-tertiary)] mb-3">
             The images the video is built from. Remove any that should not be used, then rebuild the prompt.
           </p>
+          <p className="text-[12px] text-[var(--gv-text-tertiary)] mb-3">
+            Characters are described in words by default. The video model often refuses photos that show people, so cast portraits and scene frames are not sent unless you choose them below.
+          </p>
           {refs.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
               {refs.map((r) => (
@@ -798,7 +812,30 @@ const HeroVideo: React.FC = () => {
               ))}
             </div>
           ) : (
-            <p className="text-[13px] text-[var(--gv-text-tertiary)]">No reference images. The prompt will describe the people, place and product in words.</p>
+            <p className="text-[13px] text-[var(--gv-text-tertiary)]">No reference images are sent. The prompt describes the people, place and product in words.</p>
+          )}
+          {peoplePhotos.length > 0 && (
+            <fieldset className="mt-4" disabled={inFlight || planning}>
+              <legend className="text-[13px] font-semibold text-[var(--gv-text-primary)] mb-2">
+                Use these photos too (the video model may refuse photos of people)
+              </legend>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                {peoplePhotos.map((r) => (
+                  <label key={r.url} className="rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] overflow-hidden cursor-pointer block">
+                    <img src={r.url} alt={roleLabel(r)} className="w-full aspect-square object-cover" loading="lazy" />
+                    <span className="flex items-center gap-2 px-2 py-1.5">
+                      <input
+                        type="checkbox"
+                        checked={optedIn.includes(r.url)}
+                        onChange={() => togglePeople(r.url)}
+                        className="w-4 h-4 flex-shrink-0 accent-[var(--gv-accent)]"
+                      />
+                      <span className="text-[11.5px] text-[var(--gv-text-secondary)] truncate" title={roleLabel(r)}>{roleLabel(r)}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           )}
           {dropped.length > 0 && (
             <ul className="mt-3 space-y-1 text-[12px] text-[var(--gv-text-tertiary)]">

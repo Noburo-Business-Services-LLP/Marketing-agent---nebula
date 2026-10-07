@@ -106,6 +106,7 @@ function mkDeps(over = {}) {
     }
   };
 }
+const PEOPLE = [`${CDN}/maya.png`, `${CDN}/kf1.png`, `${CDN}/kf2.png`];
 const reqOf = (body) => ({ user: { id: 'u1' }, body });
 
 test('/brief: missing cast -> 400 with the plain message, no staging', async () => {
@@ -131,7 +132,8 @@ test('/brief: staged references numbered @image1.. and a whitelisted brand summa
   assert.ok(!JSON.stringify(res.body).includes('evil.example'));
   const refs = res.body.references;
   assert.deepStrictEqual(refs.map((r) => r.tag), refs.map((_, i) => `@image${i + 1}`));
-  assert.deepStrictEqual(refs.map((r) => r.kind), ['cast', 'environment', 'brand', 'brand', 'keyframe', 'keyframe']);
+  assert.deepStrictEqual(refs.map((r) => r.kind), ['environment', 'brand', 'brand']);
+  assert.deepStrictEqual(res.body.peoplePhotos.map((r) => [r.kind, r.url, r.mayShowPeople]), [['cast', `${CDN}/maya.png`, true], ['keyframe', `${CDN}/kf1.png`, true], ['keyframe', `${CDN}/kf2.png`, true]]);
   for (const r of refs) assert.deepStrictEqual(Object.keys(r).sort(), ['kind', 'label', 'source', 'tag', 'url']);
   assert.deepStrictEqual(res.body.dropped, []);
   assert.strictEqual(res.body.brief.cast[0].name, 'Maya');
@@ -202,7 +204,7 @@ test('/plan LLM throws -> 500', async () => {
 test('/plan happy path: blocks, style, audio and references reach buildPrompt', async () => {
   const { deps, calls } = mkDeps();
   const res = mkRes();
-  await planHandler(deps)(reqOf({ brief: mkBrief(), style: 'daily-life-vlog', audioMode: 'sfx_only', ctaText: ' Visit tonight ' }), res);
+  await planHandler(deps)(reqOf({ brief: mkBrief(), style: 'daily-life-vlog', audioMode: 'sfx_only', ctaText: ' Visit tonight ', includePeoplePhotos: PEOPLE }), res);
   assert.strictEqual(res.code, 200);
   assert.strictEqual(res.body.success, true);
   assert.strictEqual(res.body.plan.prompt, 'Shot');
@@ -264,7 +266,7 @@ test('/plan reference selection can only choose from the server-staged set', asy
   const { deps, calls } = mkDeps();
   const res = mkRes();
   const references = [`${CDN}/product.png`, 'https://attacker.example/x.png', `${CDN}/maya.png`, `${CDN}/maya.png`, 'not a url'];
-  await planHandler(deps)(reqOf({ brief: mkBrief(), references }), res);
+  await planHandler(deps)(reqOf({ brief: mkBrief(), references, includePeoplePhotos: PEOPLE }), res);
   assert.strictEqual(res.code, 200);
   // only the two staged URLs the user kept, in the user's order, re-tagged from @image1
   assert.deepStrictEqual(res.body.references.map((r) => [r.tag, r.url]), [['@image1', `${CDN}/product.png`], ['@image2', `${CDN}/maya.png`]]);
@@ -282,7 +284,7 @@ test('/plan reference selection can only choose from the server-staged set', asy
 test('/plan keptSceneIds limit keyframes to the kept scenes and mark them in the scenes block', async () => {
   const { deps, calls } = mkDeps();
   const res = mkRes();
-  await planHandler(deps)(reqOf({ brief: mkBrief(), keptSceneIds: ['scene-2'] }), res);
+  await planHandler(deps)(reqOf({ brief: mkBrief(), keptSceneIds: ['scene-2'], includePeoplePhotos: PEOPLE }), res);
   assert.strictEqual(res.code, 200);
   const kf = res.body.references.filter((r) => r.kind === 'keyframe').map((r) => r.url);
   assert.deepStrictEqual(kf, [`${CDN}/kf2.png`]);
@@ -300,7 +302,7 @@ test('/plan heroCut maps S-labels back to real scene ids and drops unknown ones'
 test('/plan ignores keptSceneIds that are not in the brief; none left means no preference', async () => {
   const { deps, calls } = mkDeps();
   const res = mkRes();
-  await planHandler(deps)(reqOf({ brief: mkBrief(), keptSceneIds: ['ghost', 'other'] }), res);
+  await planHandler(deps)(reqOf({ brief: mkBrief(), keptSceneIds: ['ghost', 'other'], includePeoplePhotos: PEOPLE }), res);
   assert.strictEqual(res.code, 200);
   assert.doesNotMatch(calls.build.vars.scenesBlock, /KEEP|\(dropped\)/);
   assert.deepStrictEqual(res.body.references.filter((r) => r.kind === 'keyframe').map((r) => r.url), [`${CDN}/kf1.png`, `${CDN}/kf2.png`]);
@@ -463,4 +465,20 @@ test('POST /generate forwards refImageUrls and references untouched and relays a
   assert.deepStrictEqual(seen.body, body);
   assert.strictEqual(res.code, 400);
   assert.strictEqual(res.body.message, 'At most 9 reference images allowed');
+});
+
+test('/plan default sends no people photos; an opt-in list adds only the staged ones asked for', async () => {
+  const { deps, calls } = mkDeps();
+  const res = mkRes();
+  await planHandler(deps)(reqOf({ brief: mkBrief() }), res);
+  assert.deepStrictEqual(res.body.references.map((r) => r.kind), ['environment', 'brand', 'brand']);
+  assert.doesNotMatch(calls.build.vars.castBlock, /@image/);
+  assert.match(calls.build.vars.castBlock, /Maya/);
+  const { deps: d2 } = mkDeps();
+  const res2 = mkRes();
+  await planHandler(d2)(reqOf({ brief: mkBrief(), includePeoplePhotos: [`${CDN}/maya.png`, 'https://attacker.example/x.png'] }), res2);
+  assert.deepStrictEqual(res2.body.references.filter((r) => r.mayShowPeople !== undefined || r.kind === 'cast' || r.kind === 'keyframe').map((r) => r.url), [`${CDN}/maya.png`]);
+  const bad = mkRes();
+  await planHandler(mkDeps().deps)(reqOf({ brief: mkBrief(), includePeoplePhotos: 'yes' }), bad);
+  assert.strictEqual(bad.code, 400);
 });

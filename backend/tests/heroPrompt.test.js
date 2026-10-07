@@ -177,7 +177,7 @@ test('prompt at every input cap stays under 14,000 characters, with and without 
   const brand = rawCapBrand();
   const style = longestStyleBlock() + ' ' + 'S'.repeat(2000);
   for (const keptSceneIds of [undefined, [n.brief.scenes[0].sceneId, n.brief.scenes[11].sceneId]]) {
-    const refs = selectReferences(n.brief, brand, { keptSceneIds });
+    const refs = selectReferences(n.brief, brand, { keptSceneIds, includePeople: true });
     assert.equal(refs.length, 9);
     const vars = buildPlanVars({ brief: n.brief, brand, refs, styleBlock: style, audioMode: 'native', ctaText: 'C'.repeat(60), keptSceneIds });
     const out = await buildPrompt(null, ID, vars);
@@ -186,6 +186,22 @@ test('prompt at every input cap stays under 14,000 characters, with and without 
     for (let p = 1; p <= 4; p++) assert.ok(out.includes(`Person${p}`), `Person${p}`);
     for (let sc = 1; sc <= 12; sc++) assert.match(vars.scenesBlock, new RegExp(`\\[S${sc}\\]`), `S${sc}`);
     if (keptSceneIds) assert.match(vars.scenesBlock, /\[S12\] KEEP/);
+  }
+});
+
+test('default (no people photos) prompt at every input cap stays under 14,000 characters and tags no person', async () => {
+  const n = normalizeHeroBrief(rawCapBrief());
+  const brand = rawCapBrand();
+  const style = longestStyleBlock() + ' ' + 'S'.repeat(2000);
+  for (const keptSceneIds of [undefined, [n.brief.scenes[0].sceneId, n.brief.scenes[11].sceneId]]) {
+    const refs = selectReferences(n.brief, brand, { keptSceneIds });
+    assert.ok(refs.length > 0 && refs.every((r) => r.kind === 'environment' || r.kind === 'brand'));
+    const vars = buildPlanVars({ brief: n.brief, brand, refs, styleBlock: style, audioMode: 'native', ctaText: 'C'.repeat(60), keptSceneIds });
+    const out = await buildPrompt(null, ID, vars);
+    assert.ok(out.length < 14000, `rendered length ${out.length} (kept: ${!!keptSceneIds})`);
+    assert.doesNotMatch(vars.castBlock, /@image/);
+    for (let p = 1; p <= 4; p++) assert.ok(vars.castBlock.includes(`Person${p}`), `Person${p}`);
+    assert.match(vars.castBlock, /Wears:/);
   }
 });
 

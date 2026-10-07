@@ -3928,6 +3928,8 @@ export interface HeroReference {
   label: string;
   url: string;
   source?: string;
+  /** Cast portraits and scene frames: the video model may refuse photos of people, so these are opt-in. */
+  mayShowPeople?: boolean;
 }
 export interface HeroBrandSummary { name: string; website: string; logoUrl: string; colors: string[]; heroProduct: string }
 export interface HeroPlan {
@@ -3973,7 +3975,7 @@ export const heroVideoAPI = {
 
   // Validates the wizard brief, loads the brand and stages the reference images. No charge.
   brief: async (brief: HeroBrief): Promise<{
-    success: boolean; brief?: HeroBrief; brand?: HeroBrandSummary; references?: HeroReference[];
+    success: boolean; brief?: HeroBrief; brand?: HeroBrandSummary; references?: HeroReference[]; peoplePhotos?: HeroReference[];
     dropped?: Array<{ label?: string; reason?: string }>; message?: string;
   }> => {
     return apiCall('/hero-video/brief', { method: 'POST', body: JSON.stringify({ brief }) }, true);
@@ -3985,6 +3987,7 @@ export const heroVideoAPI = {
     audioMode?: HeroAudioMode;
     ctaText?: string;
     references?: string[];
+    includePeoplePhotos?: string[];
     keptSceneIds?: string[];
   }): Promise<{ success: boolean; plan?: HeroPlan; references?: HeroReference[]; message?: string }> => {
     return apiCall('/hero-video/plan', { method: 'POST', body: JSON.stringify(payload) }, true);

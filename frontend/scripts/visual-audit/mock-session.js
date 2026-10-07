@@ -370,6 +370,22 @@
     ['POST', /^\/blueprint\/[^/]+\/continue$/, { __status: 202, body: { success: true, id: 'audit-processing', status: 'queued' } }],
     ['POST', /^\/blueprint\/?$/, { __status: 202, body: { success: true, id: 'audit-processing', status: 'queued' } }],
     ['GET', /^\/hero-video\/quota/, ok({ quota: { used: 1, limit: 4, remaining: 3 }, used: 1, limit: 4, remaining: 3 })],
+    ['POST', /^\/hero-video\/brief/, (function () {
+      var img = function (c) { return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"><rect width="240" height="240" fill="' + c + '"/></svg>'); };
+      var r = function (kind, source, label, c, p) { return { tag: p ? '' : '@image', kind: kind, source: source, label: label, url: img(c), mayShowPeople: !!p || undefined }; };
+      var refs = [r('environment', 'environment', 'Cafe corner', '#c9b79c'), r('brand', 'brand-product', 'Tumbler', '#9aa7b5'), r('brand', 'brand-logo', 'Logo', '#d8c27a')];
+      refs.forEach(function (x, i) { x.tag = '@image' + (i + 1); });
+      return ok({
+        brief: { concept: { title: 'Late shift', storySummary: 'A tired student finds the cafe.', coreEmotion: 'relief', visualStyle: 'warm night' }, aspectRatio: '9:16', language: 'English',
+          cast: [{ id: 'cast-1', name: 'Maya', age: '22', gender: 'female', role: 'student', appearance: 'tall', clothing: 'hoodie', portraitUrl: img('#e0a') }],
+          environment: { enabled: true, notes: 'corner seat', images: [] },
+          scenes: [{ sceneId: 'scene-1', title: 'Hook', script: 'Yawn', visual: 'desk', durationSeconds: 5, charactersRequired: ['cast-1'], imageUrl: img('#0ae') }] },
+        brand: { name: 'Gravity Cafe', website: 'https://gravity.example', logoUrl: '', colors: [], heroProduct: 'Filter coffee' },
+        references: refs,
+        peoplePhotos: [r('cast', 'cast-portrait', 'Maya', '#e0a', 1), r('keyframe', 'scene-keyframe', 'Hook', '#0ae', 1)],
+        dropped: []
+      });
+    })()],
     ['GET', /^\/hero-video\/styles/, ok({ styles: [] })],
     ['GET', /^\/hero-video\/jobs/, ok({ jobs: [] })],
     ['GET', /^\/video-generation\/drafts/, ok({ drafts: [] })],

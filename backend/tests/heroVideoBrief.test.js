@@ -100,7 +100,7 @@ test('selectReferences priority, caps, tags', () => {
   b.environment.images = [1, 2, 3].map((i) => ({ url: U('e' + i) }));
   b.scenes = [1, 2, 3, 4, 5].map((i) => scene(i));
   const brand = { ...emptyBrand, logoUrl: U('logo'), productImages: [{ url: U('pr1') }, { url: U('pr2') }] };
-  const refs = brief.selectReferences(b, brand);
+  const refs = brief.selectReferences(b, brand, { includePeople: true });
   assert.equal(refs.length, 9);
   assert.deepEqual(refs.map((r) => r.kind), ['cast', 'cast', 'cast', 'environment', 'environment', 'brand', 'brand', 'keyframe', 'keyframe']);
   assert.deepEqual(refs.map((r) => r.tag), Array.from({ length: 9 }, (_, i) => '@image' + (i + 1)));
@@ -111,17 +111,17 @@ test('selectReferences: required cast first, dupes skipped, sheet fallback, kept
   const b = valid();
   b.cast = [1, 2, 3, 4].map(member);
   b.scenes = [scene(1, { charactersRequired: ['c4'], imageUrl: '' }), scene(2, { charactersRequired: [], imageUrl: U('k2') }), scene(3, { charactersRequired: ['c4'], imageUrl: U('k3') })];
-  let refs = brief.selectReferences(b, emptyBrand, { keptSceneIds: ['s3'] });
+  let refs = brief.selectReferences(b, emptyBrand, { keptSceneIds: ['s3'], includePeople: true });
   assert.equal(refs[0].url, U('p4'));
   assert.equal(refs.filter((r) => r.kind === 'keyframe').length, 1);
   assert.equal(refs.find((r) => r.kind === 'keyframe').url, U('k3'));
 
   const d = valid(); d.cast = [member(1), { ...member(2), portraitUrl: U('p1') }]; d.scenes = [scene(1, { imageUrl: U('p1') })];
-  refs = brief.selectReferences(d, emptyBrand);
+  refs = brief.selectReferences(d, emptyBrand, { includePeople: true });
   assert.equal(refs.filter((r) => r.url === U('p1')).length, 1);
 
   const s = valid(); s.cast = [member(1)]; s.cast[0].portraitUrl = '';
-  refs = brief.selectReferences(s, emptyBrand);
+  refs = brief.selectReferences(s, emptyBrand, { includePeople: true });
   assert.equal(refs[0].url, U('sheet')); assert.equal(refs[0].kind, 'cast');
 
   assert.deepEqual(brief.selectReferences({}, emptyBrand), []);
@@ -164,7 +164,7 @@ test('selectReferences skips unsupported image types so the next candidate fills
   ], scenes: [], environment: { enabled: false } };
   const brand = { productImages: ['gif', 'avif', 'heic', 'heif', 'bmp', 'tif', 'tiff', 'svg'].map((e) => ({ url: `https://res.cloudinary.com/x/p.${e}?x=1.jpg`, alt: e })).concat([{ url: U('ok.png'), alt: 'ok' }]),
     logoUrl: 'https://res.cloudinary.com/x/logo.svg' };
-  const refs = brief.selectReferences(b, brand);
+  const refs = brief.selectReferences(b, brand, { includePeople: true });
   assert.deepEqual(refs.map((r) => r.url), [U('b'), U('ok.png')]);
 });
 
