@@ -4453,6 +4453,11 @@ setCharacterAge(nextDraft?.characterAge || '');
                     );
                   })}
                 </div>
+                {!hasSceneImages && !busy && (
+                  <p className={`text-sm ${theme.textSecondary}`}>
+                    You can continue once every scene has an image. {scenes.filter((sc) => !sc.imageUrl).length} {scenes.filter((sc) => !sc.imageUrl).length === 1 ? 'scene is' : 'scenes are'} still empty. Use Regenerate on each one, or Regenerate all scene images. If they stay empty, image creation is temporarily unavailable, so please try again in a little while.
+                  </p>
+                )}
                 <button onClick={() => setStep(6)} disabled={!canStep3Next} className={primaryButtonClass(!canStep3Next)}>Next</button>
               </div>
             )}
