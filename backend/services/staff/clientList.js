@@ -109,7 +109,7 @@ async function loadClientData({ viewer, models, now = Date.now() }) {
   const scope = { staffRole: null, isCsm: { $ne: true } }; // null also matches accounts that never had a role
   if (roleOf(viewer) === 'csm') scope.assignedCsm = viewer._id;
   const users = await User.find(scope, {
-    email: 1, firstName: 1, lastName: 1, companyName: 1, mobileNumber: 1, isActive: 1, isHidden: 1, lastLoginAt: 1,
+    email: 1, firstName: 1, lastName: 1, companyName: 1, mobileNumber: 1, createdAt: 1, isActive: 1, isHidden: 1, lastLoginAt: 1,
     onboardingCompleted: 1, 'credits.balance': 1, connectedSocials: 1, 'ayrshare.activeSocialAccounts': 1,
     plan: 1, trial: 1, 'payments.status': 1, assignedCsm: 1, staffRole: 1, isCsm: 1, 'businessProfile.name': 1
   }).lean();

@@ -78,6 +78,13 @@ function classifyClient(user, now = Date.now(), extra = {}) {
   };
 }
 
+// Higher means look at this client sooner.
+const URGENCY = { failed_posts: 5, quarks_low: 4, drafts_waiting: 3, inactive: 2, no_social: 2, onboarding_unfinished: 1 };
+function urgency(reasons, quarks) {
+  const base = (reasons || []).reduce((sum, r) => sum + (URGENCY[r] || 0), 0);
+  return base + (reasons && reasons.includes('quarks_low') && Number(quarks) <= 0 ? 3 : 0);
+}
+
 function matchesFilter(filter, user, c) {
   switch (filter) {
     case 'active': return c.status === 'active';
@@ -92,4 +99,4 @@ function matchesFilter(filter, user, c) {
   }
 }
 
-module.exports = { FILTERS, ACTIVE_DAYS, QUARKS_LOW, DRAFT_WAIT_DAYS, classifyClient, matchesFilter, isPaying, lastActiveAt, connectedCount };
+module.exports = { urgency, FILTERS, ACTIVE_DAYS, QUARKS_LOW, DRAFT_WAIT_DAYS, classifyClient, matchesFilter, isPaying, lastActiveAt, connectedCount };

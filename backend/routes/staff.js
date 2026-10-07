@@ -8,6 +8,8 @@ const { planRoleChange } = require('../services/staff/roles');
 const { recordStaffAction } = require('../services/staff/activityLog');
 const { buildList, loadClientData, displayName, platformsOf } = require('../services/staff/clientList');
 const { classifyClient } = require('../services/staff/clientStatus');
+const { buildHome, loadDailyActive } = require('../services/staff/home');
+const { buildHealth } = require('../services/staff/health');
 const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
 
@@ -42,6 +44,29 @@ router.post('/team/:id/role', requireStaff('add_csm'), async (req, res) => {
   } catch (error) {
     console.error('[staff] role change failed:', error.message);
     res.status(500).json({ success: false, message: 'Could not change the role.' });
+  }
+});
+
+// GET /api/staff/home: health, clients that need attention, growth. A CSM sees only their own clients;
+// error details are shown to Owners and Admins only.
+router.get('/home', requireStaff('view_home'), async (req, res) => {
+  try {
+    const FeatureEvent = require('../models/FeatureEvent');
+    const models = { User, FeatureEvent, Draft: require('../models/Draft') };
+    const data = await loadClientData({ viewer: req.staff, models });
+    let dailyActive = [];
+    try { dailyActive = await loadDailyActive({ FeatureEvent, ids: data.users.map((u) => u._id) }); } catch (error) { console.error('[staff] daily activity failed:', error.message); }
+    const home = buildHome({ viewer: req.staff, ...data, dailyActive });
+
+    const snapshot = require('../services/opsAlerts').snapshot();
+    let breaker = { tripped: false };
+    try { breaker = require('../services/socialMediaAPI').getAyrshareCircuitBreakerState(); } catch (_) { /* leave as not tripped */ }
+    const seeErrors = roleOf(req.staff) !== 'csm';
+    const cards = buildHealth({ snapshot, breaker }).map((c) => (seeErrors ? c : { ...c, latest: [] }));
+    res.json({ success: true, health: { since: snapshot.since, cards }, attention: home.attention, growth: home.growth });
+  } catch (error) {
+    console.error('[staff] home failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not load the Home numbers. Please try again.' });
   }
 });
 
