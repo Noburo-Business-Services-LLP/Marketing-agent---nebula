@@ -509,7 +509,9 @@ router.post('/users/:id/csm', adminAuth, async (req, res) => {
   try {
     // Staff are kept out of the customer numbers (overview, trial funnel) by marking them hidden.
     const makeCsm = Boolean(req.body?.isCsm);
-    const user = await User.findByIdAndUpdate(req.params.id, { $set: makeCsm ? { isCsm: true, isHidden: true, onboardingCompleted: true } : { isCsm: false } }, { new: true }).select('email isCsm isHidden');
+    const current = await User.findById(req.params.id).select('staffRole').lean();
+    if (current && ['owner', 'admin'].includes(current.staffRole)) return res.status(400).json({ success: false, message: 'Owners and Admins are managed from the Staff area.' });
+    const user = await User.findByIdAndUpdate(req.params.id, { $set: makeCsm ? { isCsm: true, staffRole: 'csm', isHidden: true, onboardingCompleted: true } : { isCsm: false, staffRole: null } }, { new: true }).select('email isCsm isHidden');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     if (!user.isCsm) await User.updateMany({ assignedCsm: user._id }, { $set: { assignedCsm: null } });
     res.json({ success: true, data: user });
@@ -532,6 +534,7 @@ router.post('/csm-accounts', adminAuth, async (req, res) => {
     if (user) {
       // An existing account (for example one used to test the product) becomes a staff account.
       user.isCsm = true;
+      if (!['owner', 'admin'].includes(user.staffRole)) user.staffRole = 'csm';
       user.isHidden = true;
       user.onboardingCompleted = true;
       await user.save();
@@ -543,6 +546,7 @@ router.post('/csm-accounts', adminAuth, async (req, res) => {
         isVerified: true,
         onboardingCompleted: true,
         isCsm: true,
+        staffRole: 'csm',
         isHidden: true,
         companyName: 'Nebulaa'
       });
@@ -603,6 +607,27 @@ router.post('/ayrshare/reset-profile-keys', adminAuth, async (req, res) => {
   } catch (error) {
     console.error('[admin] ayrshare reset failed:', error.message);
     res.status(500).json({ success: false, message: 'Could not reset the connections.' });
+  }
+});
+
+// One-time door: the shared admin login makes one account the Owner. Refused once an Owner exists.
+router.post('/make-owner', adminAuth, async (req, res) => {
+  try {
+    const { canBootstrapOwner } = require('../services/staff/roles');
+    const ownerCount = await User.countDocuments({ staffRole: 'owner' });
+    if (!canBootstrapOwner(ownerCount)) return res.status(409).json({ success: false, message: 'An Owner already exists. The Owner can add more people from the Staff area.' });
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ success: false, message: 'No account uses that email. Sign up with it first.' });
+    user.staffRole = 'owner';
+    user.isCsm = false;
+    user.isHidden = true;
+    user.onboardingCompleted = true;
+    await user.save();
+    res.json({ success: true, data: { email: user.email } });
+  } catch (error) {
+    console.error('[admin] make owner failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not make the Owner.' });
   }
 });
 

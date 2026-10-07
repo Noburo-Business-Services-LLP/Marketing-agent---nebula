@@ -173,6 +173,15 @@ const AdminDashboard: React.FC = () => {
   };
 
   // CSM set-up: mark someone as a CSM, or assign this client to a CSM.
+  const makeOwner = async () => {
+    const email = window.prompt('Enter the email of the account that should become the Owner. This works only once, while no Owner exists.');
+    if (!email) return;
+    try {
+      const res = await adminFetch('/make-owner', { method: 'POST', body: JSON.stringify({ email }) });
+      setAdminActionMsg(res.success ? `${res.data.email} is now the Owner. Sign in with it to open the Staff area.` : (res.message || 'Could not make the Owner.'));
+    } catch { setAdminActionMsg('Could not make the Owner.'); }
+  };
+
   const resetAyrshare = async () => {
     const typed = window.prompt('Use this only after switching to a different Ayrshare account. It clears every customer\'s stored connection ID so each one gets a new profile the next time they connect. Posts and drafts are not touched.\n\nType RESET to continue:');
     if (typed === null) return;
@@ -640,6 +649,9 @@ const AdminDashboard: React.FC = () => {
                             className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/55 outline-none focus:border-[#ffcc29]/40 transition-colors"
                           />
                         </div>
+                        <button onClick={makeOwner} className="flex-shrink-0 px-3 py-2.5 rounded-xl text-xs font-medium bg-white/[0.04] text-white/70 border border-white/[0.06] hover:text-white">
+                          Make Owner
+                        </button>
                         <button
                           onClick={resetAyrshare}
                           className="flex-shrink-0 px-3 py-2.5 rounded-xl text-xs font-medium bg-white/[0.04] text-white/70 border border-white/[0.06] hover:text-white"
