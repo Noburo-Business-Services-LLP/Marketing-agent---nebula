@@ -4577,7 +4577,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {!hasSceneClips && !busy && (
                   <p className={`text-sm ${theme.textSecondary}`}>
-                    You can continue once the clips have been made. Select Generate all clips to create them.
+                    You can continue once every scene has a clip. {scenes.some((sc) => sc.clipUrl) ? `Select Resume to make the ${scenes.filter((sc) => !sc.clipUrl).length} missing ${scenes.filter((sc) => !sc.clipUrl).length === 1 ? 'clip' : 'clips'}.` : 'Select Generate all clips to create them.'} Stay on this page while they are made: leaving or reloading stops the rest.
                   </p>
                 )}
                 <button onClick={() => setStep(7)} disabled={!canStep4Next} className={primaryButtonClass(!canStep4Next)}>Next</button>
