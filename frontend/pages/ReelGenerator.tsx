@@ -1,4 +1,5 @@
 import PlatformPicker from '../components/PlatformPicker';
+import GenerationTimer from '../components/GenerationTimer';
 import PlatformIcon from '../components/PlatformIcon';
 import { choicesFor, platformLabel } from '../utils/platforms';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -2810,6 +2811,10 @@ setCharacterAge(nextDraft?.characterAge || '');
                     style={{ width: `${activeJobProgress}%` }}
                   />
                 </div>
+
+                {activeJobStatus !== 'failed' && activeJobStatus !== 'completed' && (
+                  <GenerationTimer key={activeQueueJobId} minSeconds={120} maxSeconds={300} />
+                )}
 
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-xs font-bold px-2 py-0.5 rounded ${isDarkMode ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'

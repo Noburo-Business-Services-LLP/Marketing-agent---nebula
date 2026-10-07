@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ImageGeneration from './ui/image-generation';
+import GenerationTimer from './GenerationTimer';
 
 const PHASES = ['Reading your brief', 'Composing the frame', 'Painting it', 'Finishing touches'];
 
@@ -27,11 +28,16 @@ const GeneratingFill: React.FC<{ label?: string; prompt?: string; resolution?: s
   }, [label]);
 
   return (
-    <ImageGeneration
-      label={label || PHASES[phase]}
-      prompt={prompt || ''}
-      resolution={resolution || ''}
-    />
+    <div className="relative w-full h-full">
+      <ImageGeneration
+        label={label || PHASES[phase]}
+        prompt={prompt || ''}
+        resolution={resolution || ''}
+      />
+      <div className="absolute inset-x-3 bottom-2 pointer-events-none">
+        <GenerationTimer minSeconds={20} maxSeconds={60} />
+      </div>
+    </div>
   );
 };
 

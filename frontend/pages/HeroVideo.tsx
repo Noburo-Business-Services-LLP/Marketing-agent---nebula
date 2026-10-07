@@ -6,6 +6,7 @@ import {
   HeroStyleOption,
 } from '../services/api';
 import HeroStylePicker from '../components/HeroStylePicker';
+import GenerationTimer from '../components/GenerationTimer';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 
 // Hero Studio: one premium 15-second clip built from the Reels wizard's story, cast and place,
@@ -488,9 +489,17 @@ const HeroVideo: React.FC = () => {
       ) : jobError ? (
         <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{jobError}</p>
       ) : (
-        <div className="flex items-center gap-3 text-[13px] text-[var(--gv-text-secondary)]">
-          <Loader2 className="w-4 h-4 animate-spin text-[var(--gv-accent)] flex-shrink-0" />
-          <span>{STATUS_LABEL[jobStatus] || 'Working'}… this usually takes a few minutes. You can leave this page; it will keep going.</span>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 text-[13px] text-[var(--gv-text-secondary)]">
+            <Loader2 className="w-4 h-4 animate-spin text-[var(--gv-accent)] flex-shrink-0" />
+            <span>{STATUS_LABEL[jobStatus] || 'Working'}… You can leave this page; it will keep going.</span>
+          </div>
+          <GenerationTimer
+            key={jobId || 'job'}
+            minSeconds={300}
+            maxSeconds={600}
+            startedAt={(() => { const t = new Date(history.find((h) => h.jobId === jobId)?.createdAt || '').getTime(); return Number.isFinite(t) ? t : undefined; })()}
+          />
         </div>
       )}
     </GravityPanel>
