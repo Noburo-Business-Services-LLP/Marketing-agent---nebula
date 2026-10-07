@@ -1834,6 +1834,74 @@ setCharacterAge(nextDraft?.characterAge || '');
   // in the UI the moment Nano Banana returns it — no big-batch wait, and
   // the user can see progress live. The cast image from Step 2 is passed
   // as an identity anchor so every face matches the approved characters.
+  // Server-side rendering of what is missing. The server does the work scene by scene and saves each one,
+  // so reloading or leaving the page does not stop it and finished scenes are never made again.
+  const [serverRun, setServerRun] = useState<{ kind: 'images' | 'clips'; total: number; done: number; failed: number } | null>(null);
+  const serverWatchRef = useRef<string | null>(null);
+
+  const watchServerRun = async (queueJobId: string, kind: 'images' | 'clips') => {
+    if (serverWatchRef.current === queueJobId) return;
+    serverWatchRef.current = queueJobId;
+    setBusy(true);
+    try {
+      for (let ticks = 0; ticks < 360; ticks++) {
+        let job: any = null;
+        try { job = await videoGenerationAPI.getJobStatus(queueJobId); } catch (_) { job = null; }
+        const meta = job?.metadata || {};
+        setServerRun({ kind, total: Number(meta.total) || 0, done: Number(meta.done) || 0, failed: Number(meta.failed) || 0 });
+        await refreshDraft(jobId, { syncStep: false });
+        const status = String(job?.status || '').toLowerCase();
+        if (status === 'completed') break;
+        if (status === 'failed' || status === 'cancelled') {
+          setError(job?.error?.message || 'Some scenes could not be made. Press the button again to try the missing ones.');
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+    } finally {
+      serverWatchRef.current = null;
+      setServerRun(null);
+      setBusy(false);
+    }
+  };
+
+  const runMissingOnServer = async (kind: 'images' | 'clips') => {
+    if (!jobId) { setError('The draft could not be found. Please start again from step 1.'); return; }
+    const missing = kind === 'images'
+      ? scenes.filter((s) => !s.imageUrl).length
+      : scenes.filter((s) => !s.clipUrl && s.imageUrl).length;
+    if (missing === 0) return;
+    const unit = kind === 'images' ? (quarkCosts.video_scene_image || 0) : (quarkCosts.video_scene_clip || 0);
+    const label = `${missing} ${kind === 'images' ? 'scene image' : 'clip'}${missing === 1 ? '' : 's'}`;
+    if (!(await confirmRegenerateCost(missing, unit, label))) return;
+    setError('');
+    try {
+      const resp: any = await videoGenerationAPI.renderMissing({
+        jobId,
+        kind,
+        castImageUrl: castImageUrl || characterImage || '',
+        aspectRatio
+      });
+      if (resp?.queueJobId) await watchServerRun(resp.queueJobId, kind);
+      else await refreshDraft(jobId, { syncStep: false });
+    } catch (e: any) {
+      setError(e?.message || 'Something went wrong. Please try again.');
+    }
+  };
+
+  // After a reload, pick up a render the server is already running instead of starting another.
+  useEffect(() => {
+    const active = (draft as any)?.jobs?.missingImages || (draft as any)?.jobs?.missingClips;
+    const kind: 'images' | 'clips' = (draft as any)?.jobs?.missingImages?.queueJobId ? 'images' : 'clips';
+    const queueJobId = active?.queueJobId;
+    if (!queueJobId || serverWatchRef.current) return;
+    if (!['queued', 'processing'].includes(String(active?.status || ''))) return;
+    videoGenerationAPI.getJobStatus(queueJobId)
+      .then((job: any) => { if (['queued', 'processing'].includes(String(job?.status || '').toLowerCase())) watchServerRun(queueJobId, kind); })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(draft as any)?.jobs?.missingImages?.queueJobId, (draft as any)?.jobs?.missingClips?.queueJobId]);
+
   const generateSceneImages = async () => {
     if (!Array.isArray(scenes) || scenes.length === 0) return;
     if (!(await confirmRegenerateCost(scenes.length, quarkCosts.video_scene_image || 0, `${scenes.length} scene image${scenes.length === 1 ? '' : 's'}`))) return;
@@ -1852,7 +1920,8 @@ setCharacterAge(nextDraft?.characterAge || '');
           jobId,
           sceneIndex: i,
           castImageUrl: anchor,
-          aspectRatio
+          aspectRatio,
+          force: true
         } as any);
         if (resp?.success && resp?.scene) {
           setScenes((prev) => prev.map((s, idx) => idx === i ? { ...s, ...resp.scene } : s));
@@ -1935,7 +2004,8 @@ setCharacterAge(nextDraft?.characterAge || '');
         jobId,
         sceneIndex: sceneIdx,
         castImageUrl: anchor,
-        aspectRatio
+        aspectRatio,
+        force: true
       } as any);
       if (!resp?.success) throw new Error(resp?.message || 'Image regeneration failed');
       if (resp?.scene) {
@@ -1997,7 +2067,8 @@ setCharacterAge(nextDraft?.characterAge || '');
         const resp: any = await videoGenerationAPI.generateSingleVideoClip({
           jobId,
           sceneIndex: i,
-          aspectRatio
+          aspectRatio,
+          force: true
         });
         if (resp?.success && resp?.scene) {
           setScenes((prev) => prev.map((sc, idx) => idx === i ? { ...sc, ...resp.scene } : sc));
@@ -2029,7 +2100,8 @@ setCharacterAge(nextDraft?.characterAge || '');
         jobId,
         sceneIndex: sceneIdx,
         regenTweak: tweak,
-        aspectRatio
+        aspectRatio,
+        force: true
       });
       if (!resp?.success) throw new Error(resp?.message || 'Clip regeneration failed');
       if (resp.scene) {
@@ -4298,6 +4370,17 @@ setCharacterAge(nextDraft?.characterAge || '');
                   </span>
                 </div>
 
+                {serverRun && (
+                  <div className="rounded-xl border border-[#F5A623]/40 bg-[#F5A623]/5 px-4 py-3 flex items-center gap-3">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" />
+                    <div className="flex-1">
+                      <p className={`text-sm font-semibold ${theme.text}`}>
+                        {serverRun.kind === 'images' ? 'Making the scene images' : 'Making the video clips'}: {serverRun.done} of {serverRun.total} done{serverRun.failed ? `, ${serverRun.failed} could not be made` : ''}
+                      </p>
+                      <p className={`text-xs ${theme.textSecondary}`}>This keeps going on our side. You can close this page and come back.</p>
+                    </div>
+                  </div>
+                )}
                 {/* Sequential progress banner while gen loop is running */}
                 {pendingSceneIndex !== null && totalScenesForRun > 0 && (
                   <div className={`rounded-xl border border-[#F5A623]/40 bg-[#F5A623]/5 px-4 py-3 flex items-center gap-3`}>
@@ -4317,9 +4400,14 @@ setCharacterAge(nextDraft?.characterAge || '');
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.imageUrl) ? 'Regenerate all scene images' : 'Generate all scene images')}
+                  <button onClick={() => runMissingOnServer('images')} disabled={busy || scenes.every((s) => s.imageUrl)} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-50">
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.every((s) => s.imageUrl) ? 'All scene images are ready' : (scenes.some((s) => s.imageUrl) ? 'Make the missing images' : 'Generate all scene images'))}
                   </button>
+                  {scenes.some((s) => s.imageUrl) && (
+                    <button onClick={generateSceneImages} disabled={busy} className="px-4 py-2 rounded-xl border border-slate-400 text-slate-600 font-semibold disabled:opacity-50">
+                      Redo all scene images
+                    </button>
+                  )}
                   {scenes.some((s) => s.imageUrl) && (
                     <>
                       <button
@@ -4455,7 +4543,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 </div>
                 {!hasSceneImages && !busy && (
                   <p className={`text-sm ${theme.textSecondary}`}>
-                    You can continue once every scene has an image. {scenes.filter((sc) => !sc.imageUrl).length} {scenes.filter((sc) => !sc.imageUrl).length === 1 ? 'scene is' : 'scenes are'} still empty. Use Regenerate on each one, or Regenerate all scene images. If they stay empty, image creation is temporarily unavailable, so please try again in a little while.
+                    You can continue once every scene has an image. {scenes.filter((sc) => !sc.imageUrl).length} {scenes.filter((sc) => !sc.imageUrl).length === 1 ? 'scene is' : 'scenes are'} still empty. Select Make the missing images, or use Regenerate on a single scene. If they stay empty, image creation is temporarily unavailable, so please try again in a little while.
                   </p>
                 )}
                 <button onClick={() => setStep(6)} disabled={!canStep3Next} className={primaryButtonClass(!canStep3Next)}>Next</button>
@@ -4472,6 +4560,17 @@ setCharacterAge(nextDraft?.characterAge || '');
                 </div>
 
                 {/* Sequential progress banner */}
+                {serverRun && (
+                  <div className="rounded-xl border border-[#F5A623]/40 bg-[#F5A623]/5 px-4 py-3 flex items-center gap-3">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" />
+                    <div className="flex-1">
+                      <p className={`text-sm font-semibold ${theme.text}`}>
+                        {serverRun.kind === 'images' ? 'Making the scene images' : 'Making the video clips'}: {serverRun.done} of {serverRun.total} done{serverRun.failed ? `, ${serverRun.failed} could not be made` : ''}
+                      </p>
+                      <p className={`text-xs ${theme.textSecondary}`}>This keeps going on our side. You can close this page and come back.</p>
+                    </div>
+                  </div>
+                )}
                 {pendingSceneIndex !== null && totalScenesForRun > 0 && (
                   <div className={`rounded-xl border border-[#F5A623]/40 bg-[#F5A623]/5 px-4 py-3 flex items-center gap-3`}>
                     <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]" />
@@ -4487,8 +4586,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                 )}
 
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={generateClips} disabled={busy} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold">
-                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.clipUrl) ? 'Resume' : 'Generate all clips')}
+                  <button onClick={() => runMissingOnServer('clips')} disabled={busy || scenes.every((s) => s.clipUrl || !s.imageUrl)} className="px-4 py-2 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-50">
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin inline" /> : (scenes.some((s) => s.clipUrl) ? 'Make the missing clips' : 'Generate all clips')}
                   </button>
                   {scenes.some((s) => s.clipUrl) && (
                     <button
@@ -4577,7 +4676,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
                 {!hasSceneClips && !busy && (
                   <p className={`text-sm ${theme.textSecondary}`}>
-                    You can continue once every scene has a clip. {scenes.some((sc) => sc.clipUrl) ? `Select Resume to make the ${scenes.filter((sc) => !sc.clipUrl).length} missing ${scenes.filter((sc) => !sc.clipUrl).length === 1 ? 'clip' : 'clips'}.` : 'Select Generate all clips to create them.'} Stay on this page while they are made: leaving or reloading stops the rest.
+                    You can continue once every scene has a clip. {scenes.some((sc) => sc.clipUrl) ? `Select Make the missing clips for the ${scenes.filter((sc) => !sc.clipUrl).length} that are left.` : 'Select Generate all clips to create them.'} The work continues on our side, so you can close this page and come back.
                   </p>
                 )}
                 <button onClick={() => setStep(7)} disabled={!canStep4Next} className={primaryButtonClass(!canStep4Next)}>Next</button>

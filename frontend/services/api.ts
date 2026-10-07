@@ -3650,7 +3650,12 @@ export const videoGenerationAPI = {
 
   // Sequential per-scene image generation. Uses cast image as identity
   // anchor so scene faces match the approved characters from Step 2.
-  generateSingleSceneImage: async (payload: { jobId: string; sceneIndex: number; castImageUrl?: string }): Promise<any> => {
+  // Server-side: renders only the missing scene images or clips, and keeps going if the page is closed.
+  renderMissing: async (payload: { jobId: string; kind: 'images' | 'clips'; castImageUrl?: string; aspectRatio?: string }): Promise<any> => {
+    return apiCall('/video-generation/renderMissing', { method: 'POST', body: JSON.stringify(payload) }, true);
+  },
+
+  generateSingleSceneImage: async (payload: { jobId: string; sceneIndex: number; castImageUrl?: string; force?: boolean }): Promise<any> => {
     return apiCall('/video-generation/generateSingleSceneImage', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -3689,6 +3694,7 @@ export const videoGenerationAPI = {
   generateSingleVideoClip: async (payload: {
     jobId: string;
     sceneIndex: number;
+    force?: boolean;
     regenTweak?: string;
     aspectRatio?: string;
   }): Promise<any> => {

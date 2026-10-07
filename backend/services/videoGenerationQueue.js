@@ -18,6 +18,8 @@ const PUBLIC_STEP_MESSAGES = {
   missing_handler: 'Retrying video generation...',
   failed: 'Retrying video generation...',
   generate_clips: 'Generating video clips...',
+  render_missing_scene_images: 'Making the missing scene images...',
+  render_missing_clips: 'Making the missing video clips...',
   generateVideoClips: 'Generating video clips...',
   downloading_clips: 'Generating video clips...',
   saving_clips: 'Finalizing your video...',
@@ -158,7 +160,7 @@ class PersistentVideoGenerationQueue {
         }
       );
 
-      if (job.userId) {
+      if (job.userId && !job.metadata?.perSceneCharging) {
         try {
           const { refundCredits } = require('../middleware/trialGuard');
           await refundCredits(
@@ -231,8 +233,9 @@ class PersistentVideoGenerationQueue {
           }
         );
 
-        // Refund credits to user on stale failure
-        if (job.userId) {
+        // Refund credits to user on stale failure. Per-scene jobs charge each scene as it renders and refund
+        // that scene themselves, so a fixed refund here would hand out free Quarks.
+        if (job.userId && !job.metadata?.perSceneCharging) {
           try {
             const { refundCredits } = require('../middleware/trialGuard');
             await refundCredits(

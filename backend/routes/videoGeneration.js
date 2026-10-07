@@ -172,6 +172,110 @@ videoGenerationQueue.registerHandler('generate_clips', async (payload, { update,
   };
 });
 
+// ---------------------------------------------------------------------------
+// Render only the MISSING scene images / clips of a draft, on the server.
+// Each scene goes through the same handler as the per-scene button, so charging (one scene at a
+// time, just before it renders), refunds and saving to the draft are identical. Finished scenes
+// are never touched, so closing or reloading the page neither stops the job nor re-spends credit.
+// ---------------------------------------------------------------------------
+const { missingIndexes, runMissing } = require('../services/missingMediaJob');
+
+function asInternalRequest({ userId, body, baseUrl }) {
+  let proto = 'http';
+  let host = 'localhost:5000';
+  try { const u = new URL(baseUrl); proto = u.protocol.replace(':', ''); host = u.host; } catch (_) { /* keep defaults */ }
+  const headers = { 'x-forwarded-proto': proto, host };
+  return { user: { _id: userId, id: userId }, body, query: {}, headers, protocol: proto, ip: '', get: (name) => headers[String(name).toLowerCase()] };
+}
+
+function asCapturingResponse() {
+  const res = { statusCode: 200, body: null };
+  res.status = (code) => { res.statusCode = code; return res; };
+  res.json = (payload) => { res.body = payload; return res; };
+  res.set = () => res; res.setHeader = () => res;
+  return res;
+}
+
+function registerMissingMediaHandler(jobType, kind, sceneHandler, buildBody) {
+  videoGenerationQueue.registerHandler(jobType, async (payload, { update, log }) => {
+    const { jobId, userId, baseUrl } = payload;
+    await update({ progress: 5, currentStep: jobType });
+    const result = await runMissing({
+      kind,
+      loadDraft: () => loadDraftForUser(jobId, userId),
+      runScene: async (sceneIndex) => {
+        const res = asCapturingResponse();
+        await sceneHandler(asInternalRequest({ userId, baseUrl, body: buildBody(payload, sceneIndex) }), res);
+        const ok = res.statusCode < 400 && res.body?.success !== false;
+        if (!ok) await log(`Scene ${sceneIndex + 1} did not render: ${res.body?.message || res.statusCode}`);
+        return { ok, creditsExhausted: Boolean(res.body?.creditsExhausted), message: res.body?.message };
+      },
+      onProgress: async (p) => update({
+        progress: p.total ? Math.min(95, 5 + Math.round((90 * (p.done + p.failed + p.skipped)) / p.total)) : 95,
+        currentStep: jobType,
+        metadata: { total: p.total, done: p.done, failed: p.failed }
+      })
+    });
+    await log(`Finished: ${result.done} made, ${result.failed} failed, ${result.skipped} already done${result.stoppedFor ? `, stopped: ${result.stoppedFor}` : ''}`);
+    if (result.stoppedFor === 'quarks') throw new Error('You ran out of Quarks before every scene was made. Add Quarks and press the button again to make the rest.');
+    if (result.total > 0 && result.done === 0) throw new Error('None of the scenes could be made right now. Please try again in a little while.');
+  });
+}
+
+registerMissingMediaHandler('render_missing_scene_images', 'images', (req, res) => handleGenerateSingleSceneImage(req, res),
+  (p, sceneIndex) => ({ jobId: p.jobId, sceneIndex, castImageUrl: p.castImageUrl || '', aspectRatio: p.aspectRatio }));
+registerMissingMediaHandler('render_missing_clips', 'clips', (req, res) => handleGenerateSingleVideoClip(req, res),
+  (p, sceneIndex) => ({ jobId: p.jobId, sceneIndex, aspectRatio: p.aspectRatio }));
+
+// POST /renderMissing { jobId, kind: 'images' | 'clips', castImageUrl?, aspectRatio? }
+router.post('/renderMissing', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+  try {
+    const { jobId, kind, castImageUrl = '', aspectRatio } = req.body || {};
+    if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
+    if (!['images', 'clips'].includes(kind)) return res.status(400).json({ success: false, message: 'kind must be images or clips' });
+    const userId = toUserId(req.user);
+    const draft = await loadDraftForUser(jobId, userId);
+    const missing = missingIndexes(kind, draft);
+    if (missing.length === 0) {
+      return res.json({ success: true, nothingToDo: true, message: kind === 'images' ? 'Every scene already has an image.' : 'Every scene already has a clip.' });
+    }
+
+    const jobType = kind === 'images' ? 'render_missing_scene_images' : 'render_missing_clips';
+    const stateKey = kind === 'images' ? 'missingImages' : 'missingClips';
+    // One job per draft and kind: a double click, a second tab or a refresh gets the running job back.
+    const existingId = draft?.jobs?.[stateKey]?.queueJobId;
+    if (existingId) {
+      const existing = await videoGenerationQueue.getJob(existingId, userId);
+      if (existing && ['queued', 'processing'].includes(existing.status)) {
+        return res.status(202).json({ success: true, alreadyRunning: true, queueJobId: existing.jobId, missing: missing.length });
+      }
+    }
+
+    // Read-only check so the job does not start when the balance cannot cover what is missing.
+    const unit = Number(CREDIT_COSTS[kind === 'images' ? 'video_scene_image' : 'video_scene_clip']) || 0;
+    const owner = await User.findById(userId).select('credits.balance').lean();
+    const balance = Number(owner?.credits?.balance ?? 0);
+    if (unit > 0 && balance < unit) {
+      return res.status(403).json({ success: false, creditsExhausted: true, message: `You need at least ${unit} Quarks to make the next ${kind === 'images' ? 'image' : 'clip'}. Add Quarks and try again.` });
+    }
+
+    const aspect = ['9:16', '16:9', '1:1', '4:5'].includes(String(aspectRatio)) ? String(aspectRatio) : (draft?.input?.aspectRatio || '9:16');
+    const queued = await videoGenerationQueue.enqueue({
+      userId,
+      jobType,
+      payload: { jobId, userId, baseUrl: reqBaseUrl(req), aspectRatio: aspect, castImageUrl: String(castImageUrl || draft?.castImageUrl || draft?.characterImage || '') },
+      metadata: { perSceneCharging: true }
+    });
+    await updateDraft(jobId, userId, (current) => ({
+      ...current,
+      jobs: { ...(current.jobs || {}), [stateKey]: { queueJobId: queued.jobId, status: queued.status, queuedAt: new Date().toISOString() } }
+    }));
+    return res.status(202).json({ success: true, queueJobId: queued.jobId, missing: missing.length });
+  } catch (error) {
+    return responseError(res, error, 'Could not start rendering');
+  }
+});
+
 
 videoGenerationQueue.registerHandler('generate_content', async (payload, { update, log }) => {
   const { jobId, userId, selectedPlatforms, baseUrl } = payload;
@@ -2367,14 +2471,14 @@ router.post('/generateSingleScene', protect, checkTrial, videoAiWriteLimiter, as
 // scenes calling this one-by-one so each image appears as soon as
 // it's rendered rather than waiting for all N to finish.
 // ============================================================
-router.post('/generateSingleSceneImage', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+const handleGenerateSingleSceneImage = async (req, res) => {
   const _t0 = Date.now();
   // Declared out here so both the explicit failure return below and the
   // catch block can refund — same pattern as /generate-image-bg in
   // routes/drafts.js.
   let creditsDeducted = false;
   try {
-    const { jobId, sceneIndex, castImageUrl: castUrlFromReq } = req.body || {};
+    const { jobId, sceneIndex, castImageUrl: castUrlFromReq, force = false } = req.body || {};
     console.log(`[singleSceneImage] IN jobId=${jobId} sceneIndex=${sceneIndex} castUrl=${castUrlFromReq ? 'present' : 'missing'}`);
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
     if (!Number.isInteger(sceneIndex) || sceneIndex < 0) {
@@ -2389,6 +2493,13 @@ router.post('/generateSingleSceneImage', protect, checkTrial, videoAiWriteLimite
       return res.status(404).json({ success: false, message: `Scene at index ${sceneIndex} not found` });
     }
     console.log(`[singleSceneImage] scene ok · draft has ${scenesArr.length} scenes · scene.imageUrl already? ${!!scene.imageUrl}`);
+
+    // Safety net: an image that already exists is only replaced when the caller says so (force: true,
+    // sent by the Regenerate and Redo buttons). Nothing else can re-render, and re-charge for, finished work.
+    if (scene.imageUrl && force !== true) {
+      console.log(`[singleSceneImage] scene ${sceneIndex} already has an image and force was not set: skipped, not charged`);
+      return res.json({ success: true, skipped: true, scene, draft });
+    }
 
     // Regenerating one scene's still re-runs one real Nano Banana call —
     // this used to be free (the same class of gap fixed for post/campaign
@@ -2577,7 +2688,8 @@ Match the reference's wall colors, floor materials, ceiling, lighting fixtures, 
     }
     return responseError(res, error, 'Failed to generate scene image');
   }
-});
+};
+router.post('/generateSingleSceneImage', protect, checkTrial, videoAiWriteLimiter, handleGenerateSingleSceneImage);
 
 // ============================================================
 // POST /applySceneLogo — pixel-exact logo overlay via sharp.
@@ -2743,13 +2855,13 @@ router.post('/applySceneLogo', protect, videoJobReadLimiter, async (req, res) =>
 // user-supplied `regenTweak` so characters actually perform
 // rather than just posing.
 // ============================================================
-router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+const handleGenerateSingleVideoClip = async (req, res) => {
   // Declared out here so the catch block can refund — same pattern as
   // /generate-image-bg in routes/drafts.js.
   let creditsDeducted = false;
   let creditUserId = null;
   try {
-    const { jobId, sceneIndex, regenTweak = '', aspectRatio: aspectFromReq } = req.body || {};
+    const { jobId, sceneIndex, regenTweak = '', aspectRatio: aspectFromReq, force = false } = req.body || {};
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
     if (!Number.isInteger(sceneIndex) || sceneIndex < 0) {
       return res.status(400).json({ success: false, message: 'sceneIndex (0-based integer) is required' });
@@ -2774,6 +2886,12 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
       message: `Scene at index ${sceneIndex} not found (draft has ${scenesArr.length} scene${scenesArr.length === 1 ? '' : 's'})`
     });
     if (!scene.imageUrl) return res.status(400).json({ success: false, message: 'Scene image must be generated first' });
+
+    // Safety net: a clip that already exists is only replaced when the caller says so (force: true).
+    if (scene.clipUrl && force !== true) {
+      console.log(`[generateSingleVideoClip] scene ${sceneIndex} already has a clip and force was not set: skipped, not charged`);
+      return res.json({ success: true, skipped: true, scene, draft });
+    }
 
     // Regenerating one scene's clip re-runs one real Kling call — this used
     // to be free (the same class of gap fixed for post/campaign Regenerate
@@ -2944,7 +3062,8 @@ router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter
     }
     return responseError(res, error, 'Failed to generate scene clip');
   }
-});
+};
+router.post('/generateSingleVideoClip', protect, checkTrial, videoAiWriteLimiter, handleGenerateSingleVideoClip);
 
 router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
   // Declared out here so the catch block can refund whatever this request
