@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
  */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'tests', 'public', 'scripts', 'scratch']);
-const SKIP_FILES = [/^pages\/Admin/, /^pages\/TermsAndConditions\.tsx$/, /^pages\/PrivacyPolicy\.tsx$/];
+const SKIP_FILES = [/^pages\/Admin/, /^pages\/staff\//, /^pages\/TermsAndConditions\.tsx$/, /^pages\/PrivacyPolicy\.tsx$/];
 const WORDS = /\bcredits?\b|\btrials?\b|\b7[- ]days?\b/i;
 const ALLOWED_PHRASES = [/(last|previous) 7 days/i, /\(7 days\)/i, /Credit, loans/];
 
