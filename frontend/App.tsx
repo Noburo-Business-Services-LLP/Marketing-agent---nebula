@@ -188,7 +188,7 @@ const App: React.FC = () => {
         {/* Landing Page - shown when not logged in */}
         <Route 
           path="/" 
-          element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} 
+          element={!user ? <LandingPage /> : <Navigate to={user.isCsm && !localStorage.getItem('csmReturnToken') ? '/clients' : '/dashboard'} replace />} 
         />
         
         <Route 

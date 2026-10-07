@@ -353,6 +353,7 @@ userSchema.methods.toPublicJSON = function () {
     mobileNumber: this.mobileNumber,
     isVerified: this.isVerified,
     onboardingCompleted: this.onboardingCompleted,
+    isCsm: Boolean(this.isCsm),
     businessProfile: this.businessProfile,
     connectedSocials: this.connectedSocials?.map(s => ({
       platform: s.platform,

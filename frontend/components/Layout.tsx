@@ -115,6 +115,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // it was previously under a "More" heading, below Insights, which ranked a
   // headline feature under a junk drawer.
   const primaryNav = [
+    ...(user?.isCsm && !localStorage.getItem('csmReturnToken') ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),
     { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
@@ -132,7 +133,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // navigation. Their routes and pages are left intact so nothing breaks and
   // they can be restored by adding entries here.
   const secondaryNav = [
-    ...(user?.isCsm && !localStorage.getItem('csmReturnToken') ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),
     { path: '/blueprint',        label: 'Growth Blueprint',  icon: FileText },
     { path: '/brand-assets',      label: 'Brand assets',      icon: Palette },
     { path: '/connect-socials',   label: 'Connected accounts', icon: Link2 },
