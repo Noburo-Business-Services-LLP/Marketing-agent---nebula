@@ -284,3 +284,6 @@ Deploy everything since the last release with `bash docs/superpowers/ops/release
 - Routes (`routes/staff.js`): `GET /clients`, `GET /clients/:id`, `GET /csms`, `POST /clients/:id/quarks` (Owner), `/toggle` and `/assign-csm` and `/bulk-assign` (Owner, Admin), `/open` (acting token; Owner and Admin any client, CSM own). Every action goes through `requireStaff` plus the permission table and writes a `StaffAction`. `csmAccess.canActFor` now uses the permission table, so the acting-token check in `middleware/auth.js` honours Owners and Admins.
 - Screens: `pages/staff/StaffClients.tsx` (filters with counts, search, sort, paging, bulk assign, CSV export for the Owner), `StaffClientPage.tsx` (summary, plan and access, connections, Quarks with grant, activity, money for the Owner, history), `staffLabels.ts` (plain wording), route `/staff/clients/:id`.
 - Not done: the old `/admin` actions (Quarks, disable) still work in parallel with these; no per-client notes yet; the "paying" count only knows payments recorded on the user (Razorpay-only events not recorded on the user are not counted). Not run against the real database; the sample-data preview shows the screens.
+
+
+> **2026-10-07, end of session: a consolidated hand-over for the next developer is `HANDOVER-nebulaa-redesign-3.md`. Read that first.**
