@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Check } from 'lucide-react';
+import { Loader2, Check, CalendarDays } from 'lucide-react';
+import CalendarIdeaPicker from './CalendarIdeaPicker';
 import { GravityPanel, GravityLabel, GravityButton } from './gravity';
 import GenerationTimer from './GenerationTimer';
 import { heroVideoAPI, type HeroBrief } from '../services/api';
@@ -43,6 +44,8 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
   const [aspect, setAspect] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [language, setLanguage] = useState('english');
   const [cta, setCta] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [fromPlan, setFromPlan] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [concepts, setConcepts] = useState<Concept[]>([]);
@@ -63,13 +66,28 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
     } finally { setBusy(false); }
   };
 
+  const applyPlanIdea = (i: any) => {
+    setIdea(String(i.creativeConcept || i.headline || '').slice(0, 600));
+    setFromPlan(String(i.headline || ''));
+    setConcepts([]);
+    setPickerOpen(false);
+  };
+
   return (
     <div className="space-y-6">
+      <CalendarIdeaPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onPick={applyPlanIdea} type="reel" />
       <GravityPanel>
         <GravityLabel className="mb-3">1 · What is it about?</GravityLabel>
         <div className="space-y-4">
           <div>
-            <label htmlFor="hq-idea" className="block text-[13px] font-semibold text-[var(--gv-text-primary)] mb-1.5">Your idea</label>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+              <label htmlFor="hq-idea" className="block text-[13px] font-semibold text-[var(--gv-text-primary)]">Your idea</label>
+              <button type="button" onClick={() => setPickerOpen(true)}
+                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)] underline underline-offset-2">
+                <CalendarDays className="w-4 h-4" /> Pull an idea from your content plan
+              </button>
+            </div>
+            {fromPlan && <p className="text-[12.5px] text-[var(--gv-text-tertiary)] mb-1.5">Loaded from your plan: {fromPlan}. Edit it if you like.</p>}
             <textarea id="hq-idea" rows={3} maxLength={600} value={idea} onChange={(e) => setIdea(e.target.value)} className={field}
               placeholder="For example: launching our new festive collection, or why small shops should plan a month of posts in one sitting" />
           </div>
