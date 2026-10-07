@@ -52,6 +52,7 @@ const brandIntelligenceProfileSchema = new mongoose.Schema(
       trim: true,
       maxlength: 120
     },
+    lastRefreshedAt: { type: Date, default: null },
     brandDescription: {
       type: String,
       default: '',

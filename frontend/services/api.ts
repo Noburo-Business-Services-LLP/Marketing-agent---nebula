@@ -3198,6 +3198,11 @@ export const brandAssetsAPI = {
     );
   },
 
+  // Re-read the website and bring the saved brand profile in line with Settings (free)
+  refreshBrand: async (): Promise<{ success: boolean; changed: string[]; siteRead: boolean; hasWebsite: boolean }> => {
+    return await apiCall<any>('/brand-assets/refresh', { method: 'POST' }, true);
+  },
+
   // Get the computed brand intelligence profile
   getIntelligenceProfile: async (): Promise<any> => {
     return await apiCall<any>('/brand-assets/intelligence-profile', {}, true);

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
 import { tierLabel } from '../utils/plans';
 import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { buildStrategyPdf } from '../utils/strategyPdf';
-import { apiService } from '../services/api';
+import { apiService, brandAssetsAPI } from '../services/api';
 import { CONTENT_LANGUAGES } from '../constants/languages';
 import AdditionalLanguagePicker from '../components/AdditionalLanguagePicker';
 import { cleanSelection } from '../utils/languages';
@@ -93,6 +93,23 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   const [bizStatus, setBizStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [bizError, setBizError] = useState('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [refreshState, setRefreshState] = useState<'idle' | 'working' | 'done' | 'error'>('idle');
+  const [refreshNote, setRefreshNote] = useState('');
+  const handleRefreshBrand = async () => {
+    setRefreshState('working');
+    try {
+      const r = await brandAssetsAPI.refreshBrand();
+      const parts: string[] = [];
+      if (r.changed?.length) parts.push('Your saved brand details now match what you wrote here.');
+      else parts.push('Your saved brand details already matched what you wrote here.');
+      if (r.hasWebsite) parts.push(r.siteRead ? 'Your website was read again.' : 'We could not read your website this time.');
+      setRefreshNote(parts.join(' '));
+      setRefreshState('done');
+    } catch {
+      setRefreshNote('We could not refresh your brand details. Please try again.');
+      setRefreshState('error');
+    }
+  };
 
   // Fetch billing data when Billing tab is active
   useEffect(() => {
@@ -643,6 +660,27 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                           >
                             {isGeneratingPDF ? (<><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>) : (<><Download className="w-4 h-4" /> Content Strategy PDF</>)}
                           </button>
+                        </div>
+
+                        <div className={`mt-6 rounded-xl border p-4 ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                          <p className="font-bold text-[15px]">Changed something about your business?</p>
+                          <p className="text-[13px] opacity-70 mt-1">Save your business profile first, then refresh. Nebulaa re-reads your website and updates what it remembers about your brand. It is free. Then rebuild your plans from the new details.</p>
+                          <div className="flex flex-wrap items-center gap-3 mt-3">
+                            <button
+                              onClick={handleRefreshBrand}
+                              disabled={refreshState === 'working'}
+                              className={`px-5 py-2 rounded-lg font-bold flex items-center gap-2 border ${isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-300 hover:bg-slate-50'}`}
+                            >
+                              {refreshState === 'working' ? (<><Loader2 className="w-4 h-4 animate-spin" /> Refreshing...</>) : (<><RefreshCw className="w-4 h-4" /> Refresh my brand details</>)}
+                            </button>
+                            {refreshState === 'done' && (
+                              <>
+                                <Link to="/content-calendar" className="text-[13px] font-semibold underline underline-offset-2">Regenerate your calendar</Link>
+                                <Link to="/blueprint/new" className="text-[13px] font-semibold underline underline-offset-2">Run your Growth Blueprint again</Link>
+                              </>
+                            )}
+                          </div>
+                          {refreshNote && <p role="status" className="text-[13px] mt-2">{refreshNote}</p>}
                         </div>
                       </div>
                     );

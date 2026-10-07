@@ -5,6 +5,7 @@ const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const { alignProfileToSettings } = require('../services/brandRefresh');
 const { uploadBase64Image, deleteImage } = require('../services/imageUploader');
 const { deepScrapeWebsite } = require('../services/scraper');
 const {
@@ -883,6 +884,45 @@ router.get('/primary-logo', protect, async (req, res) => {
   } catch (error) {
     console.error('Error fetching primary logo:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch primary logo' });
+  }
+});
+
+/**
+ * @route   POST /api/brand-assets/refresh
+ * @desc    Re-read the website and bring the saved brand profile in line with Settings. Free; no AI call.
+ * @access  Private
+ */
+router.post('/refresh', protect, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const user = await User.findById(userId).select('companyName businessProfile');
+    const bp = user?.businessProfile || {};
+
+    let site = null;
+    let siteRead = false;
+    const website = String(bp.website || '').trim();
+    if (website) {
+      try {
+        const url = /^https?:\/\//i.test(website) ? website : `https://${website}`;
+        const scraped = await deepScrapeWebsite(new URL(url).origin, { forceRefresh: true });
+        if (scraped?.success) {
+          site = { description: scraped.parsed?.description || '' };
+          siteRead = true;
+        }
+      } catch (_) { /* the website is optional; Settings alone is enough */ }
+    }
+
+    let profile = await BrandIntelligenceProfile.findOne({ userId });
+    if (!profile) profile = new BrandIntelligenceProfile({ userId });
+    const changed = alignProfileToSettings(profile, { bp, user }, site);
+    profile.lastRefreshedAt = new Date();
+    profile.hasBrandAssets = computeHasBrandAssets(profile);
+    await profile.save();
+
+    res.json({ success: true, changed, siteRead, hasWebsite: Boolean(website) });
+  } catch (error) {
+    console.error('Error refreshing brand profile:', error);
+    res.status(500).json({ success: false, message: 'We could not refresh your brand details. Please try again.' });
   }
 });
 
