@@ -766,7 +766,7 @@ async function executeRegeneratePostImage({
   const strictBrandMode = isStrictBrandLockEnabled(brandCtx);
   const strictBrandText = strictBrandMode ? buildStrictBrandLockText(brandCtx) : '';
   const autoBrandContext = buildBrandContextForImages(brandCtx, {
-    companyName: bp?.companyName || user?.companyName || '',
+    companyName: bp?.name || bp?.companyName || user?.companyName || '',
     industry: bp?.industry || '',
     description: bp?.description || '',
     targetAudience: bp?.targetAudience || '',
