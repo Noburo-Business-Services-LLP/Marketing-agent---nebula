@@ -1,3 +1,4 @@
+import PlatformPicker from '../components/PlatformPicker';
 import PlatformIcon from '../components/PlatformIcon';
 import { choicesFor, platformLabel } from '../utils/platforms';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -3024,6 +3025,17 @@ setCharacterAge(nextDraft?.characterAge || '');
                       onChange={(e) => onInputImage(e.target.files?.[0])}
                     />
                   </div>
+                </div>
+
+                {/* Where this video will go. Chosen here so the later steps already know; it can be changed on the last screen. */}
+                <div className="flex items-center justify-center gap-4 py-1">
+                  <span className="gravity-label">Posting to</span>
+                  <PlatformPicker
+                    kind="video"
+                    items={choicesFor('video').map(({ key, label, soon, video }) => ({ key, label, soon, blocked: !video }))}
+                    selected={selectedPlatforms}
+                    onToggle={togglePlatform}
+                  />
                 </div>
 
                 {/* Top row. Once concepts exist, Regenerate and Next move

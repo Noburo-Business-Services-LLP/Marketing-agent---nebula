@@ -267,3 +267,7 @@ Deploy everything since the last release with `bash docs/superpowers/ops/release
 - Posting: `PLATFORM_CHOICES.gmb` is selectable for images (`video: false`: videos cannot go to Google). Not tested against a real Google profile; first connect and post should use a test business profile. Google must also accept the profile (the customer must own a verified Google Business Profile); that approval is Google's and Ayrshare's, not ours.
 - Look: `PlatformIcon` shows Google Business as a line "store" icon (inherits colour); Connected accounts tile uses the product's deep amber (`bg-[#9A5B0F]`) instead of Google blue.
 - Preview mock (`scripts/visual-audit/mock-session.js`) now returns capitalised platform names plus X, LinkedIn, YouTube and Google Business, like the real server.
+
+## Update 34 (2026-10-07): platform icons explain themselves
+- `components/PlatformPicker.tsx`: one icon row with a pop-up on hover and keyboard focus ("Post to Instagram"; "Videos cannot be sent to Google Business yet"; "X: coming soon"). The pop-up sits on the wrapper so it shows for disabled icons too. Wording lives in `utils/platforms.ts` (`platformHint`, tests `tests/platforms.test.mjs`).
+- Used on Create content (`GravityCreate.tsx`, keys stay `x` and `gmb`) and on the first step of the video flow (`ReelGenerator.tsx`, "Posting to" row, shares `selectedPlatforms` with the last two steps so the choice carries through). The video Final Output screen and the platform step still use their labelled chips.

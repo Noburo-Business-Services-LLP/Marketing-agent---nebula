@@ -1,3 +1,4 @@
+import PlatformPicker from '../components/PlatformPicker';
 import PlatformIcon from '../components/PlatformIcon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -1221,26 +1222,7 @@ const GravityCreate: React.FC = () => {
       {mode !== 'linkedin' && (
       <div className="flex items-center justify-center gap-4 py-4 mb-2">
         <span className="gravity-label">Platforms</span>
-        <div className="flex items-center gap-2">
-          {PLATFORMS.map(({ key, label, Icon, soon }) => {
-            const active = selectedPlatforms.includes(key);
-            return (
-              <button
-                key={key}
-                onClick={() => !soon && togglePlatform(key)}
-                disabled={Boolean(soon)}
-                title={label}
-                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${soon ? 'opacity-40 cursor-not-allowed ' : ''}${
-                  active
-                    ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)] border border-[var(--gv-border-strong)]'
-                    : 'bg-transparent text-[var(--gv-text-muted)] border border-[var(--gv-border-subtle)] hover:text-[var(--gv-text-secondary)]'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-              </button>
-            );
-          })}
-        </div>
+        <PlatformPicker items={PLATFORMS.map(({ key, label, soon }) => ({ key, label, soon }))} selected={selectedPlatforms} onToggle={togglePlatform} kind="image" />
         {mode === 'campaign' && (
           <div className="ml-2 text-[12px] text-[var(--gv-text-tertiary)]">
             <span className="tabular-nums font-semibold text-[var(--gv-text-primary)]">~{estimate.total} posts</span>

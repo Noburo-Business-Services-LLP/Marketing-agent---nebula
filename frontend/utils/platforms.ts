@@ -32,3 +32,19 @@ export function platformLabel(key: string): string {
 export function choicesFor(kind: 'image' | 'video'): PlatformChoice[] {
   return PLATFORM_CHOICES.filter((p) => (kind === 'video' ? true : p.key !== 'youtube'));
 }
+
+export interface PickerItem {
+  key: string;
+  label: string;
+  /** shown but not selectable yet */
+  soon?: boolean;
+  /** cannot take this kind of post (for example a video on Google) */
+  blocked?: boolean;
+}
+
+/** The sentence shown when you point at a platform icon. */
+export function platformHint(item: PickerItem, kind: 'image' | 'video'): string {
+  if (item.soon) return `${item.label}: coming soon`;
+  if (item.blocked) return `${kind === 'video' ? 'Videos' : 'Posts'} cannot be sent to ${item.label} yet`;
+  return `Post to ${item.label}`;
+}
