@@ -546,7 +546,8 @@ router.post('/csm-accounts', adminAuth, async (req, res) => {
     try {
       if (process.env.RESEND_API_KEY) {
         const { Resend } = require('resend');
-        const site = process.env.FRONTEND_URL || 'https://gravity.nebulaa.ai';
+        // Not FRONTEND_URL: in production that holds the internal load-balancer address.
+        const site = process.env.APP_PUBLIC_URL || 'https://gravity.nebulaa.ai';
         const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
           from: process.env.RESEND_FROM_EMAIL || 'noreply@nebulaa.ai',
           to: email,
