@@ -35,3 +35,13 @@ test('reset needs a CSM account and the exact email typed', () => {
   assert.strictEqual(c.canResetStaffAccount({ isCsm: true, email: 'A@x.com' }, ' a@X.com ').ok, true);
   assert.strictEqual(c.canResetStaffAccount(null, 'a@x.com').ok, false);
 });
+
+test('the Ayrshare reset only touches Ayrshare fields and needs RESET typed', () => {
+  assert.strictEqual(c.confirmsAyrshareReset('RESET'), true);
+  assert.strictEqual(c.confirmsAyrshareReset(' RESET '), true);
+  assert.strictEqual(c.confirmsAyrshareReset('reset'), false);
+  assert.strictEqual(c.confirmsAyrshareReset(''), false);
+  const keys = Object.keys(c.AYRSHARE_RESET.update.$set);
+  assert.ok(keys.length > 0 && keys.every((k) => k.startsWith('ayrshare.')));
+  assert.strictEqual(c.AYRSHARE_RESET.update.$set['ayrshare.profileKey'], '');
+});

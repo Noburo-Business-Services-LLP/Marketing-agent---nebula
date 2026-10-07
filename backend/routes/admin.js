@@ -593,6 +593,19 @@ router.post('/users/:id/reset-staff-account', adminAuth, async (req, res) => {
   }
 });
 
+// After moving to a different Ayrshare account: forget the old account's profile ids (see csmAccess.AYRSHARE_RESET).
+router.post('/ayrshare/reset-profile-keys', adminAuth, async (req, res) => {
+  try {
+    const { AYRSHARE_RESET, confirmsAyrshareReset } = require('../services/csmAccess');
+    if (!confirmsAyrshareReset(req.body?.confirm)) return res.status(400).json({ success: false, message: 'Type RESET to confirm.' });
+    const result = await User.updateMany(AYRSHARE_RESET.filter, AYRSHARE_RESET.update);
+    res.json({ success: true, cleared: result.modifiedCount || 0 });
+  } catch (error) {
+    console.error('[admin] ayrshare reset failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not reset the connections.' });
+  }
+});
+
 router.post('/users/:id/assign-csm', adminAuth, async (req, res) => {
   try {
     const csmId = req.body?.csmId || null;

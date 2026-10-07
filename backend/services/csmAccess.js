@@ -50,3 +50,14 @@ function canResetStaffAccount(user, confirmEmail) {
 }
 
 module.exports.canResetStaffAccount = canResetStaffAccount;
+
+// After switching to a different Ayrshare account, stored profile ids belong to the old one and
+// would be refused. Clearing them makes the app create a fresh profile on the new account the
+// next time each customer connects. Only the Ayrshare fields are touched.
+const AYRSHARE_RESET = {
+  filter: { 'ayrshare.profileKey': { $exists: true, $nin: ['', null] } },
+  update: { $set: { 'ayrshare.profileKey': '', 'ayrshare.refId': '', 'ayrshare.title': '', 'ayrshare.activeSocialAccounts': [], 'ayrshare.displayNames': [], 'ayrshare.lastCheckedAt': null } }
+};
+
+module.exports.AYRSHARE_RESET = AYRSHARE_RESET;
+module.exports.confirmsAyrshareReset = (text) => String(text || '').trim() === 'RESET';
