@@ -2679,7 +2679,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Want something quick? Create a Hero video</div>
                   <div className="text-[12px] text-[var(--gv-text-tertiary)]">
-                    One crisp 15-second clip, UGC style or a simple brand film. For a longer step-by-step video of 30 to 60 seconds, carry on below.
+                    One crisp 15-second clip in any style, from a polished brand ad to a casual creator video. For a longer step-by-step video of 30 to 60 seconds, carry on below.
                   </div>
                 </div>
                 <button

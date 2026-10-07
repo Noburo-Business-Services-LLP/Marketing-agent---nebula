@@ -1,15 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { normaliseQuickConcepts, conceptToBrief, QUICK_STYLES } = require('../services/heroQuick');
+const { normaliseQuickConcepts, conceptToBrief, DIALOGUE_MODES } = require('../services/heroQuick');
 const { normalizeHeroBrief } = require('../services/heroVideoBrief');
 
 const good = (t) => ({ title: t, emotion: 'Warm', hook: 'A phone buzzes face down.', beats: ['She looks up.', 'She smiles.', 'She taps the screen.'], dialogue: ['One', 'Two', 'Three'], cta: 'Try it today' });
 
-test('ideas are kept short: three beats, at most two spoken lines, three ideas', () => {
+test('ideas are kept short: three beats, spoken lines limited by the choice, three ideas', () => {
   const out = normaliseQuickConcepts({ concepts: [good('A'), good('B'), good('C'), good('D')] });
   assert.equal(out.length, 3);
   assert.equal(out[0].beats.length, 3);
   assert.equal(out[0].dialogue.length, 2);
+  assert.equal(normaliseQuickConcepts({ concepts: [good('A')] }, 'none')[0].dialogue.length, 0);
+  const many = { ...good('A'), dialogue: ['1', '2', '3', '4', '5', '6', '7'] };
+  assert.equal(normaliseQuickConcepts({ concepts: [many] }, 'full')[0].dialogue.length, DIALOGUE_MODES.full.max);
 });
 
 test('long text is cut and ideas without three beats are dropped', () => {
@@ -30,11 +33,6 @@ test('the brief made from an idea passes the existing brief check without a cast
   assert.equal(normalizeHeroBrief({ ...brief, quick: false }).ok, false);
 });
 
-test('both styles map to a real hero style', () => {
-  const { isHeroStyle } = require('../services/heroVideoStyles');
-  for (const s of Object.values(QUICK_STYLES)) assert.ok(isHeroStyle(s.slug));
-});
-
 test('POST /concepts: refuses a missing idea, writes ideas, never charges', async () => {
   const { createHeroVideoRouter } = require('../routes/heroVideo');
   const calls = [];
@@ -53,10 +51,13 @@ test('POST /concepts: refuses a missing idea, writes ideas, never charges', asyn
   };
   assert.equal((await call({ idea: '' })).code, 400);
   assert.equal((await call({ idea: 'Launch our new feature', style: 'weird' })).code, 400);
-  const ok = await call({ idea: 'Launch our new feature', style: 'ugc' });
+  assert.equal((await call({ idea: 'Launch our new feature', dialogue: 'loud' })).code, 400);
+  const ok = await call({ idea: 'Launch our new feature', style: 'luxury-advertisement', dialogue: 'full', lookNote: 'like a premium saree store festive ad' });
   assert.equal(ok.code, 200);
   assert.equal(ok.body.concepts.length, 3);
-  assert.equal(ok.body.style, 'social-media-reel');
+  assert.equal(ok.body.style, 'luxury-advertisement');
+  assert.equal(calls[0][1].styleName, 'Luxury Advertisement');
+  assert.match(calls[0][1].lookNote, /saree/);
   assert.equal(ok.body.concepts[0].brief.quick, true);
   assert.equal(calls[0][0], 'hero_quick.concepts');
 });

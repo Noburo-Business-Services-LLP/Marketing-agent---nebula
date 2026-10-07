@@ -5,7 +5,7 @@ const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');
 const { normalizeHeroBrief, selectReferences } = require('../services/heroVideoBrief');
-const { QUICK_STYLES, isQuickStyle, normaliseQuickConcepts, conceptToBrief } = require('../services/heroQuick');
+const { DIALOGUE_MODES, isDialogueMode, normaliseQuickConcepts, conceptToBrief } = require('../services/heroQuick');
 const fs = require('fs');
 const path = require('path');
 const { DEFAULT_STYLE, HERO_STYLES, isHeroStyle } = require('../services/heroVideoStyles');
@@ -354,20 +354,25 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       const body = req.body || {};
       const idea = clip(body.idea, 600);
       if (idea.length < 5) return res.status(400).json({ success: false, message: 'Tell us in a sentence or two what the video is about.' });
-      const styleKey = body.style == null || body.style === '' ? 'brand-film' : body.style;
-      if (!isQuickStyle(styleKey)) return res.status(400).json({ success: false, message: 'Choose UGC or Brand film.' });
+      const styleKey = body.style == null || body.style === '' ? DEFAULT_STYLE : body.style;
+      if (!isHeroStyle(styleKey)) return res.status(400).json({ success: false, message: 'Choose one of the listed video styles.' });
+      const dialogueMode = body.dialogue == null || body.dialogue === '' ? 'little' : body.dialogue;
+      if (!isDialogueMode(dialogueMode)) return res.status(400).json({ success: false, message: 'Choose how much speech you want.' });
+      const lookNote = clip(body.lookNote, 240);
       const aspectRatio = body.aspectRatio == null || body.aspectRatio === '' ? '9:16' : body.aspectRatio;
       if (!ASPECTS.includes(aspectRatio)) return res.status(400).json({ success: false, message: `aspectRatio must be one of ${ASPECTS.join(', ')}` });
       const language = clip(body.language, 40) || 'English';
       const cta = clip(body.ctaText, MAX_CTA);
       const userId = toUserId(req.user);
       const brand = (await planDeps.loadBrand(userId)) || {};
-      const st = QUICK_STYLES[styleKey];
+      const st = HERO_STYLES.find((x) => x.slug === styleKey) || { label: styleKey, blurb: '' };
       const prompt = await planDeps.buildPrompt(userId, 'hero_quick.concepts', {
         brandContextBlock: brandContextFrom(brand),
         idea,
-        styleName: st.name,
-        styleRules: st.rules,
+        styleName: st.label,
+        styleRules: st.blurb,
+        lookNote: lookNote || 'None given; choose what suits the style and the brand.',
+        dialogueRule: DIALOGUE_MODES[dialogueMode].rule,
         language,
         ctaText: cta ? `"${cta}"` : 'one short, honest call to action that fits the brand',
         brandName: clip(brand.name, 80) || 'the brand'
@@ -377,13 +382,13 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
         const raw = await planDeps.callTextLLM(prompt, { jsonMode: true, maxTokens: 2500 });
         let parsed = null;
         try { parsed = planDeps.parseGeminiJSON(raw); } catch (_) { parsed = null; }
-        const got = normaliseQuickConcepts(parsed);
+        const got = normaliseQuickConcepts(parsed, dialogueMode);
         if (got.length > concepts.length) concepts = got;
       }
       if (!concepts.length) return res.status(502).json({ success: false, message: 'We could not come up with ideas this time. Please try again.' });
       return res.json({
         success: true,
-        style: st.slug,
+        style: styleKey,
         concepts: concepts.map((c) => ({ ...c, cta: c.cta || cta, brief: conceptToBrief(c, { aspectRatio, language }) }))
       });
     } catch (err) {

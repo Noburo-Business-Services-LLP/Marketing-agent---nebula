@@ -749,13 +749,15 @@ STRICT JSON only, no markdown; "prompt" is a single-line string (escape line bre
   'hero_quick.concepts': {
     label: 'Hero video — three quick ideas',
     summary:
-      'Writes three crisp 15-second ideas for the quick Hero flow: a hook, three short beats, at most two short spoken lines and one closing call to action. Change this if the ideas feel long, generic or off-brand. The length limits are enforced in code as well.',
+      'Writes three crisp 15-second ideas for the quick Hero flow in any of the video styles: a hook, three short beats, spoken lines only as the client wants them, and one closing call to action. Change this if the ideas feel long, generic or off-brand. The length limits are enforced in code as well.',
     stage: 'hero-video',
     variables: {
       brandContextBlock: 'Real brand facts loaded for the signed-in client — the only product and brand facts the idea may use',
       idea: 'What the video is about, in the client\'s words',
-      styleName: 'UGC (a real-feeling person to camera) or Brand film (a short simple cinematic film)',
+      styleName: 'The video style the client chose, e.g. Cinematic Commercial or Daily Life Vlog',
       styleRules: 'What that style means for the ideas',
+      lookNote: 'Any look or reference the client described, or a note that none was given',
+      dialogueRule: 'How much speech the client wants: none, a little, or a lot',
       language: 'Language spoken in the video',
       ctaText: 'The call to action, or a request to propose one',
       brandName: 'The brand name'
@@ -770,11 +772,13 @@ STRICT JSON only, no markdown; "prompt" is a single-line string (escape line bre
 
 ## STYLE: {{styleName}}
 {{styleRules}}
+Look the client asked for: {{lookNote}}
+Make it genuinely impressive for this style: confident camera, strong light, memorable transitions, effects that fit the story. Think of a polished ad from a well-known brand in this kind of business.
 
 ## RULES
 1. A hook in the first two seconds: a visual surprise or a line that starts mid-thought. Never a logo, a title or a slow establishing shot.
 2. Exactly three beats of about five seconds each. One short sentence per beat, saying what the camera sees.
-3. Minimal dialogue: at most two short spoken lines in total, in {{language}}, each under twelve words. Silence and sound effects are welcome.
+3. Dialogue: {{dialogueRule}} Spoken lines are in {{language}}.
 4. The last beat is the call to action: {{ctaText}}. It sits on a calm, held frame.
 5. Show, do not explain. No long stories, no lists of features, no more than two people.
 6. Never invent prices, offers, numbers, awards, customer counts or product names that are not in the brand context. Write the brand name only as it is given.
@@ -782,7 +786,7 @@ STRICT JSON only, no markdown; "prompt" is a single-line string (escape line bre
 8. The three ideas must differ in situation and emotion.
 
 Return ONLY JSON:
-{ "concepts": [ { "title": "", "emotion": "", "hook": "", "beats": ["", "", ""], "dialogue": ["", ""], "cta": "", "look": "" } ] }`
+{ "concepts": [ { "title": "", "emotion": "", "hook": "", "beats": ["", "", ""], "dialogue": [""], "cta": "", "look": "" } ] }`
   },
 
   'hero_video.style.cinematic': {

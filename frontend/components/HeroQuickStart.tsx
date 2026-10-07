@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Loader2, Check } from 'lucide-react';
 import { GravityPanel, GravityLabel, GravityButton } from './gravity';
 import GenerationTimer from './GenerationTimer';
@@ -7,10 +7,13 @@ import { CONTENT_LANGUAGES } from '../constants/languages';
 
 type Concept = { title: string; emotion: string; hook: string; beats: string[]; dialogue: string[]; cta: string; look: string; brief: HeroBrief };
 
-const STYLES: { value: 'ugc' | 'brand-film'; label: string; blurb: string }[] = [
-  { value: 'ugc', label: 'UGC', blurb: 'A real-feeling person on a phone: handheld, casual, honest.' },
-  { value: 'brand-film', label: 'Brand film', blurb: 'A short, simple, cinematic film with almost no dialogue.' },
+const DIALOGUE: { value: 'none' | 'little' | 'full'; label: string }[] = [
+  { value: 'little', label: 'A little' },
+  { value: 'none', label: 'None, music and visuals only' },
+  { value: 'full', label: 'Let them talk' },
 ];
+const FALLBACK_STYLES = [{ slug: 'cinematic-commercial', label: 'Cinematic Commercial', blurb: 'Filmic grade, shallow depth, dramatic light' }];
+type StyleCard = { slug: string; label: string; blurb: string };
 const ASPECTS: { value: '9:16' | '16:9' | '1:1'; label: string }[] = [
   { value: '9:16', label: 'Vertical (Reels, Shorts)' },
   { value: '1:1', label: 'Square' },
@@ -26,7 +29,17 @@ const field =
  */
 const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, cta: string) => void }> = ({ onPick }) => {
   const [idea, setIdea] = useState('');
-  const [style, setStyle] = useState<'ugc' | 'brand-film'>('brand-film');
+  const [styles, setStyles] = useState<StyleCard[]>(FALLBACK_STYLES);
+  const [style, setStyle] = useState('cinematic-commercial');
+  const [dialogue, setDialogue] = useState<'none' | 'little' | 'full'>('little');
+  const [lookNote, setLookNote] = useState('');
+  useEffect(() => {
+    let live = true;
+    heroVideoAPI.styles().then((r: any) => {
+      if (live && r?.success && Array.isArray(r.styles) && r.styles.length) setStyles(r.styles);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, []);
   const [aspect, setAspect] = useState<'9:16' | '16:9' | '1:1'>('9:16');
   const [language, setLanguage] = useState('english');
   const [cta, setCta] = useState('');
@@ -41,7 +54,7 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
     setBusy(true); setError(''); setConcepts([]);
     try {
       const label = CONTENT_LANGUAGES.find((l) => l.value === language)?.label || 'English';
-      const r = await heroVideoAPI.concepts({ idea: idea.trim(), style, language: label, aspectRatio: aspect, ctaText: cta.trim() || undefined });
+      const r = await heroVideoAPI.concepts({ idea: idea.trim(), style, dialogue, lookNote: lookNote.trim() || undefined, language: label, aspectRatio: aspect, ctaText: cta.trim() || undefined });
       if (!r?.success || !r.concepts?.length) throw new Error(r?.message || 'We could not come up with ideas this time. Please try again.');
       setConcepts(r.concepts);
       setStyleSlug(r.style || '');
@@ -62,16 +75,26 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
           </div>
           <div>
             <p className="text-[13px] font-semibold text-[var(--gv-text-primary)] mb-1.5">Style</p>
-            <div className="grid sm:grid-cols-2 gap-3">
-              {STYLES.map((s) => (
-                <button key={s.value} type="button" onClick={() => setStyle(s.value)} aria-pressed={style === s.value}
-                  className={`text-left rounded-xl border px-4 py-3 ${style === s.value ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)]'}`}>
-                  <span className="block text-[14px] font-semibold text-[var(--gv-text-primary)]">{s.label}</span>
-                  <span className="block text-[12.5px] text-[var(--gv-text-tertiary)] mt-0.5">{s.blurb}</span>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {styles.map((s) => (
+                <button key={s.slug} type="button" onClick={() => setStyle(s.slug)} aria-pressed={style === s.slug}
+                  className={`text-left rounded-xl border px-3.5 py-2.5 ${style === s.slug ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)]'}`}>
+                  <span className="block text-[13.5px] font-semibold text-[var(--gv-text-primary)]">{s.label}</span>
+                  <span className="block text-[12px] text-[var(--gv-text-tertiary)] mt-0.5">{s.blurb}</span>
                 </button>
               ))}
             </div>
           </div>
+          <div>
+            <label htmlFor="hq-look" className="block text-[13px] font-semibold text-[var(--gv-text-primary)] mb-1.5">Any look or reference? (optional)</label>
+            <input id="hq-look" value={lookNote} maxLength={240} onChange={(e) => setLookNote(e.target.value)} className={field}
+              placeholder="For example: a premium festive saree-store ad, or a classic suiting ad with a family moment" />
+          </div>
+          <label className="block text-[13px] font-semibold text-[var(--gv-text-primary)] sm:max-w-[320px]">Dialogue
+            <select value={dialogue} onChange={(e) => setDialogue(e.target.value as any)} className={`${field} mt-1.5`}>
+              {DIALOGUE.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+          </label>
           <div className="grid sm:grid-cols-3 gap-3">
             <label className="block text-[13px] font-semibold text-[var(--gv-text-primary)]">Language
               <select value={language} onChange={(e) => setLanguage(e.target.value)} className={`${field} mt-1.5`}>
