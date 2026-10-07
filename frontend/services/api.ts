@@ -1346,6 +1346,7 @@ export const apiService = {
     Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') qs.set(k, String(v)); });
     return apiCall(`/staff/clients?${qs.toString()}`, { method: 'GET' }, true);
   },
+  getStaffHome: async (): Promise<any> => apiCall('/staff/home', { method: 'GET' }, true),
   getStaffClient: async (id: string): Promise<any> => apiCall(`/staff/clients/${id}`, { method: 'GET' }, true),
   getStaffCsms: async (): Promise<{ success: boolean; csms: Array<{ id: string; name: string }> }> => apiCall('/staff/csms', { method: 'GET' }, true),
   staffAddQuarks: async (id: string, amount: number): Promise<any> => apiCall(`/staff/clients/${id}/quarks`, { method: 'POST', body: JSON.stringify({ amount }) }, true),

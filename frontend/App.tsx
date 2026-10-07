@@ -22,6 +22,7 @@ import IdeaInbox from './pages/IdeaInbox';
 import SocialInbox from './pages/SocialInbox';
 import CsmClients from './pages/CsmClients';
 import StaffLayout from './pages/staff/StaffLayout';
+import { landingPath } from './utils/staffHome';
 import ReelGenerator from './pages/ReelGenerator';
 import HeroVideo from './pages/HeroVideo';
 import AdCampaigns from './pages/AdCampaigns';
@@ -189,7 +190,7 @@ const App: React.FC = () => {
         {/* Landing Page - shown when not logged in */}
         <Route 
           path="/" 
-          element={!user ? <LandingPage /> : <Navigate to={user.isCsm && !localStorage.getItem('csmReturnToken') ? '/clients' : '/dashboard'} replace />} 
+          element={!user ? <LandingPage /> : <Navigate to={landingPath(user, Boolean(localStorage.getItem('csmReturnToken')))} replace />} 
         />
         
         <Route 

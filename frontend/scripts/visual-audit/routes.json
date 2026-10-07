@@ -63,6 +63,7 @@
     { "label": "blueprint-checkpoint-1", "path": "/blueprint/audit-checkpoint1", "mode": "normal", "group": "shell" },
     { "label": "blueprint-stopped", "path": "/blueprint/audit-stopped", "mode": "normal", "group": "shell" },
     { "label": "blueprint-new-onboarding", "path": "/blueprint/new", "mode": "onboarding", "group": "onboarding" },
+    { "label": "staff-home", "path": "/staff/home", "mode": "staff", "group": "shell", "note": "Owner view of staff Home with sample numbers (mock /staff/home)" },
     { "label": "landing", "otherSession": true, "path": "/", "mode": "logged-out", "group": "public" },
     { "label": "login", "otherSession": true, "path": "/login", "mode": "logged-out", "group": "auth" },
     { "label": "signup", "otherSession": true, "path": "/login?mode=signup", "mode": "logged-out", "group": "auth" },

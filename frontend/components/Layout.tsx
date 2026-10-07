@@ -34,6 +34,7 @@ import { User } from '../types';
 import NotificationBell from './NotificationBell';
 import AppSwitcher from './AppSwitcher';
 import { apiService } from '../services/api';
+import { staffMenuEntry } from '../utils/staffHome';
 
 interface TrialData {
   creditsBalance: number;
@@ -115,7 +116,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // did. Videos sits beside Create because it is the other thing you make —
   // it was previously under a "More" heading, below Insights, which ranked a
   // headline feature under a junk drawer.
+  const staffEntry = staffMenuEntry(user, Boolean(localStorage.getItem('csmReturnToken')));
   const primaryNav = [
+    ...(staffEntry?.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
     ...(user?.isCsm && !localStorage.getItem('csmReturnToken') ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),
     { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
@@ -134,7 +137,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // navigation. Their routes and pages are left intact so nothing breaks and
   // they can be restored by adding entries here.
   const secondaryNav = [
-    ...((user?.staffRole || user?.isCsm) && !localStorage.getItem('csmReturnToken') ? [{ path: '/staff', label: 'Staff area', icon: Shield }] : []),
+    ...(staffEntry && !staffEntry.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
     { path: '/blueprint',        label: 'Growth Blueprint',  icon: FileText },
     { path: '/brand-assets',      label: 'Brand assets',      icon: Palette },
     { path: '/connect-socials',   label: 'Connected accounts', icon: Link2 },
@@ -166,6 +169,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   const topBarMeta = resolveTopBarMeta(location.pathname);
   const isActive = (path: string) =>
+    path === '/staff/home' ? location.pathname.startsWith('/staff') :
     location.pathname === path || (path !== '/dashboard' && location.pathname.startsWith(path));
 
   const handleLogout = () => {

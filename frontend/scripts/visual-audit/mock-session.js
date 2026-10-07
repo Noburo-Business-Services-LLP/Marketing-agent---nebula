@@ -52,6 +52,7 @@
   var MODE = sessionStorage.getItem('audit-mode') || 'normal';
   var LOGGED_OUT = MODE === 'logged-out';
   var NEEDS_ONBOARDING = MODE === 'onboarding';
+  var STAFF = MODE === 'staff'; // a signed-in Owner, so the staff area and its menu entry show
   AUDIT.mode = MODE;
   if (LOGGED_OUT) { localStorage.removeItem('authToken'); localStorage.removeItem('token'); }
   // Admin pages check their own token; 'admin' mode gives them a fake one.
@@ -82,7 +83,7 @@
     contentLanguage: 'english', additionalLanguages: ['kannada', 'telugu'], contentCadence: { postsPerDay: 1, reelsPerWeek: 2 },
   };
   var user = {
-    _id: 'audit-user-1', id: 'audit-user-1', email: 'owner@sunrise-bakery.example', firstName: 'Asha', lastName: 'Kumar',
+    _id: 'audit-user-1', id: 'audit-user-1', staffRole: STAFF ? 'owner' : null, email: 'owner@sunrise-bakery.example', firstName: 'Asha', lastName: 'Kumar',
     name: 'Asha Kumar', isVerified: true, onboardingCompleted: !NEEDS_ONBOARDING, businessProfile: businessProfile,
     trial: { startDate: iso(-3), expiresAt: iso(4), isExpired: false },
     subscription: { plan: 'pro', status: 'active', expiresAt: iso(27) },
@@ -229,6 +230,28 @@
     ['GET', /^\/brand-assets/, ok({ assets: logos, logos: logos, templates: [], environments: [] })],
     // Staff area (made-up people, only for the visual audit and the preview)
     ['GET', /^\/staff\/me/, ok({ staff: { id: 'owner-1', name: 'Dinesh Kannaa', email: 'owner@example.test', role: 'owner' }, can: { view_home: true, view_clients: true, open_client: true, add_quarks: true, toggle_client: true, assign_csm: true, add_csm: true, manage_admins: true, reset_accounts: true, view_money: true, view_usage_full: true, view_usage_summary: true, manage_coupons: true, export_csv: true, view_activity_all: true } })],
+    ['GET', /^\/staff\/home/, ok({
+      health: { since: iso(-1), cards: [
+        { key: 'images', label: 'Images', status: 'green', note: 'Image creation is working.', lastHour: 0, lastDay: 1, latest: [{ at: iso(-0.5), detail: 'Image request timed out after 60 seconds (sample)' }] },
+        { key: 'publishing', label: 'Publishing', status: 'amber', note: 'Posting to social networks failed 2 times in the last hour.', lastHour: 2, lastDay: 5, latest: [{ at: iso(-0.02), detail: 'Instagram refused the post: image too large (sample)' }, { at: iso(-0.04), detail: 'Facebook page token expired (sample)' }] },
+        { key: 'social', label: 'Social accounts', status: 'green', note: 'Connecting social accounts is working.', lastHour: 0, lastDay: 0, latest: [] },
+        { key: 'payments', label: 'Payments', status: 'red', note: 'Payments and subscriptions failed 3 times in the last hour.', lastHour: 3, lastDay: 3, latest: [{ at: iso(-0.01), detail: 'Payment signature did not match (sample)' }] },
+        { key: 'video', label: 'Video', status: 'green', note: 'Video creation is working.', lastHour: 0, lastDay: 0, latest: [] },
+        { key: 'writing', label: 'AI writing', status: 'green', note: 'Writing captions and scripts is working.', lastHour: 0, lastDay: 0, latest: [] }
+      ] },
+      attention: { total: 4, items: [
+        { id: 'c4', name: 'Kumar Hardware', email: 'kumar@hardware.example', quarks: 0, reasons: ['quarks_low', 'inactive'], csm: null, lastActiveAt: iso(-15) },
+        { id: 'c1', name: 'Sunrise Bakery', email: 'owner@sunrise-bakery.example', quarks: 62, reasons: ['quarks_low', 'drafts_waiting'], csm: { id: 'csm-1', name: 'Priya Raman' }, lastActiveAt: iso(-1) },
+        { id: 'c3', name: 'Studio Nine Salon', email: 'bookings@studionine.example', quarks: 100, reasons: ['no_social'], csm: null, lastActiveAt: iso(0) },
+        { id: 'c7', name: 'A Very Long Business Name For Narrow Screens Private Limited', email: 'accounts.department.with.a.long.address@very-long-company-domain.example', quarks: 480, reasons: ['onboarding_unfinished'], csm: { id: 'csm-2', name: 'Arun Kumar' }, lastActiveAt: null }
+      ] },
+      growth: {
+        signups: { today: { now: 2, before: 0, change: null }, week: { now: 9, before: 6, change: 50 }, month: { now: 21, before: 28, change: -25 } },
+        activeThisWeek: 3, totalClients: 6, trialToPaid: { signedUp: 21, paid: 3, percent: 14 },
+        series: Array.from({ length: 30 }, function (_, i) { var d = new Date(Date.now() + 19800000 - (29 - i) * 86400000).toISOString().slice(0, 10); return { day: d, signups: (i * 7) % 4 + (i === 29 ? 2 : 0), active: 2 + ((i * 5) % 6) + Math.floor(i / 6) }; })
+      }
+    })],
+    ['POST', /^\/staff\/clients\/[^/]+\/quarks$/, ok({ balance: 562 })],
     ['GET', /^\/staff\/csms/, ok({ csms: [{ id: 'csm-1', name: 'Priya Raman' }, { id: 'csm-2', name: 'Arun Kumar' }] })],
     ['GET', /^\/staff\/clients\/[^/?]+$/, ok({ client: { id: 'c1', name: 'Sunrise Bakery', email: 'owner@sunrise-bakery.example', mobile: '9876543210', business: { name: 'Sunrise Bakery', industry: 'Food & Beverage', website: 'https://sunrise-bakery.example', location: 'Chennai' }, signedUpAt: iso(-40), lastActiveAt: iso(-1), onboardingCompleted: true, csm: { id: 'csm-1', name: 'Priya Raman' }, status: 'active', tier: 'managed', addons: [], paying: true, trial: false, access: { publish: true, schedule: true, inbox: true, autoReply: true, video: true, blueprint: true }, attention: ['quarks_low', 'drafts_waiting'], quarks: 62, connections: ['instagram', 'facebook'], recentQuarks: [{ action: 'staff_grant', amount: 500, description: 'Nebulaa staff added 500 Quarks', at: iso(-6) }], featureUse30d: [{ feature: 'post_generated', count: 24 }, { feature: 'campaign_created', count: 3 }], drafts30d: { published: 12, draft: 4, failed: 1 }, money: { payments: [{ item: 'Quark pack 500', amount: 999, currency: 'INR', status: 'paid', at: iso(-12) }], subscriptions: [] }, history: [{ action: 'add_quarks', by: 'Dinesh Kannaa', at: iso(-6), details: { amount: 500 } }] }, can: { open_client: true, add_quarks: true, toggle_client: true, assign_csm: true, view_money: true } })],
     ['GET', /^\/staff\/clients/, ok({ counts: { all: 6, active: 3, inactive: 1, disabled: 1, trial: 2, paying: 2, attention: 3, no_csm: 2, hidden: 1 }, total: 6, page: 1, pages: 1, rows: [

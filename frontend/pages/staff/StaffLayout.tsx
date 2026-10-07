@@ -56,7 +56,7 @@ const StaffLayout: React.FC = () => {
           );
         })}
       </nav>
-      {current?.id === 'home' ? <StaffHome role={me.staff.role} /> : current?.id === 'clients' ? (id ? <StaffClientPage id={id} /> : <StaffClients can={me.can} />) : <p className="py-16 text-center text-[var(--gv-text-muted)]">{NEXT_STEP[current?.id || ''] || ''}</p>}
+      {current?.id === 'home' ? <StaffHome role={me.staff.role} can={me.can} /> : current?.id === 'clients' ? (id ? <StaffClientPage id={id} /> : <StaffClients can={me.can} />) : <p className="py-16 text-center text-[var(--gv-text-muted)]">{NEXT_STEP[current?.id || ''] || ''}</p>}
     </div>
   );
 };
