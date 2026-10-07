@@ -8,6 +8,9 @@
 #   bash docs/superpowers/ops/docker-cleanup.sh                    # clean up
 #   DRY_RUN=1 bash docs/superpowers/ops/docker-cleanup.sh          # only show what would be removed
 #   KEEP_TAG=prod-abc1234 bash docs/superpowers/ops/docker-cleanup.sh   # also keep this release's images
+#   ASSUME_YES=1 bash docs/superpowers/ops/docker-cleanup.sh       # no question (the release script uses this)
+#
+# Run on its own it asks first, because with no KEEP_TAG it removes EVERY local release image.
 
 set -uo pipefail
 
@@ -20,6 +23,13 @@ KEEP_TAG="${KEEP_TAG:-}"
 docker info >/dev/null 2>&1 || { echo "Docker is not running, nothing to clean."; exit 0; }
 
 free_gb() { df -g / | awk 'NR==2 {print $4}'; }
+
+if [ "$DRY_RUN" != "1" ] && [ -z "$KEEP_TAG" ] && [ "${ASSUME_YES:-0}" != "1" ]; then
+  echo "This will remove EVERY local copy of our release images, plus Docker's untagged images and build cache older than a day."
+  echo "They are all stored in AWS, so you can always get them back, and releases and rollbacks still work."
+  read -r -p "Remove them? Type YES to continue: " ANSWER
+  [ "$ANSWER" = "YES" ] || { echo "Cancelled. Nothing was removed."; exit 0; }
+fi
 echo "== Docker cleanup. Free disk space before: $(free_gb) GB"
 
 for ENV_NAME in prod test; do

@@ -29,7 +29,7 @@ fi
 SHA="$(git rev-parse --short HEAD)"
 TAG="$ENV_NAME-$SHA"
 # However this run ends, tidy Docker afterwards (keeps the images just built, so a retry stays fast).
-trap 'KEEP_TAG="$TAG" bash "$(dirname "$0")/docker-cleanup.sh" || true' EXIT
+trap 'ASSUME_YES=1 KEEP_TAG="$TAG" bash "$(dirname "$0")/docker-cleanup.sh" || true' EXIT
 BACKEND_IMAGE="$REGISTRY/$ENV_NAME/nebulaa_gravity_backend:$TAG"
 FRONTEND_IMAGE="$REGISTRY/$ENV_NAME/nebulaa_gravity_frontend:$TAG"
 
@@ -43,7 +43,7 @@ MIN_FREE_GB="${MIN_FREE_GB:-6}"
 FREE_GB="$(df -g / | awk 'NR==2 {print $4}')"
 if [ "$FREE_GB" -lt "$MIN_FREE_GB" ]; then
   echo "Only $FREE_GB GB free on this Mac. Cleaning up Docker leftovers first..."
-  bash "$(dirname "$0")/docker-cleanup.sh"
+  ASSUME_YES=1 bash "$(dirname "$0")/docker-cleanup.sh"
   FREE_GB="$(df -g / | awk 'NR==2 {print $4}')"
   if [ "$FREE_GB" -lt "$MIN_FREE_GB" ]; then
     echo "Still only $FREE_GB GB free. Free up at least $MIN_FREE_GB GB (Trash, Downloads, old files) and run this again. Nothing was built."; exit 1
