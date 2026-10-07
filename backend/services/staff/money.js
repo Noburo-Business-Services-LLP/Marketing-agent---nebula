@@ -277,4 +277,4 @@ async function loadMoneyData({ models }) {
   return { users, ayrshareProfiles };
 }
 
-module.exports = { buildMoney, buildPayments, describePayment, monthStart, quarkTotals, loadMoneyData };
+module.exports = { buildMoney, buildPayments, describePayment, monthStart, quarkTotals, loadMoneyData, HISTORY_CAP_WARN };

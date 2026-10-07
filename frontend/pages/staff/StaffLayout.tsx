@@ -8,6 +8,7 @@ import StaffClients from './StaffClients';
 import StaffClientPage from './StaffClientPage';
 import StaffTeam from './StaffTeam';
 import StaffMoney from './StaffMoney';
+import StaffUsage from './StaffUsage';
 
 const SECTIONS = [
   { id: 'home', label: 'Home', icon: Home, needs: 'view_home' },
@@ -16,10 +17,6 @@ const SECTIONS = [
   { id: 'money', label: 'Money', icon: Wallet, needs: 'view_money' },
   { id: 'usage', label: 'Usage', icon: BarChart3, needs: 'view_usage_summary' }
 ] as const;
-
-const NEXT_STEP: Record<string, string> = {
-  usage: 'Feature use and the sign-up funnel arrive in a later release.'
-};
 
 /** The Nebulaa staff area: its own menu, shown only to the Owner, Admins and CSMs. */
 const StaffLayout: React.FC = () => {
@@ -56,7 +53,7 @@ const StaffLayout: React.FC = () => {
           );
         })}
       </nav>
-      {current?.id === 'home' ? <StaffHome role={me.staff.role} can={me.can} /> : current?.id === 'clients' ? (id ? <StaffClientPage id={id} /> : <StaffClients can={me.can} />) : current?.id === 'team' ? <StaffTeam /> : current?.id === 'money' ? <StaffMoney /> : <p className="py-16 text-center text-[var(--gv-text-muted)]">{NEXT_STEP[current?.id || ''] || ''}</p>}
+      {current?.id === 'home' ? <StaffHome role={me.staff.role} can={me.can} /> : current?.id === 'clients' ? (id ? <StaffClientPage id={id} /> : <StaffClients can={me.can} />) : current?.id === 'team' ? <StaffTeam /> : current?.id === 'money' ? <StaffMoney /> : current?.id === 'usage' ? <StaffUsage /> : null}
     </div>
   );
 };

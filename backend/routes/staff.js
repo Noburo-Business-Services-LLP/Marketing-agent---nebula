@@ -12,6 +12,7 @@ const { classifyClient } = require('../services/staff/clientStatus');
 const { buildHome, loadDailyActive, activityIds } = require('../services/staff/home');
 const { buildHealth } = require('../services/staff/health');
 const { buildMoney, buildPayments, loadMoneyData } = require('../services/staff/money');
+const { buildUsage, loadUsageData, parseWindow } = require('../services/staff/usage');
 const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
 
@@ -132,6 +133,26 @@ router.get('/money/payments', requireStaff('view_money'), async (req, res) => {
   } catch (error) {
     console.error('[staff] payments page failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the payments. Please try again.' });
+  }
+});
+
+// GET /api/staff/usage?window=30|90: feature use, sign-up funnel, Quark spending by group, top feature per plan.
+// Owner sees everything; an Admin gets the summary (no Quark spending); a CSM is refused. The level comes from the
+// signed-in person's stored role, never from anything the caller sends.
+router.get('/usage', requireStaff('view_usage_summary'), async (req, res) => {
+  const w = parseWindow((req.query || {}).window);
+  if (!w.ok) return res.status(400).json({ success: false, message: w.message });
+  try {
+    const models = {
+      User, Draft: require('../models/Draft'), Campaign: require('../models/Campaign'), VideoJob: require('../models/VideoJob'),
+      HeroVideoJob: require('../models/HeroVideoJob'), Blueprint: require('../models/Blueprint'), SocialInboxMessage: require('../models/SocialInboxMessage')
+    };
+    const data = await loadUsageData({ models, window: w.days });
+    const level = can(req.staff, 'view_usage_full') ? 'full' : 'summary';
+    res.json({ success: true, ...buildUsage({ ...data, window: w.days, level }) });
+  } catch (error) {
+    console.error('[staff] usage failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not load the Usage numbers. Please try again.' });
   }
 });
 

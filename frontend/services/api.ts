@@ -1354,6 +1354,8 @@ export const apiService = {
   // ---- Staff area: money (Owner only) ----
   getStaffMoney: async (): Promise<any> => apiCall('/staff/money', { method: 'GET' }, true),
   getStaffPayments: async (page: number): Promise<any> => apiCall(`/staff/money/payments?page=${encodeURIComponent(String(page))}`, { method: 'GET' }, true),
+  // ---- Staff area: usage (Owner full, Admin summary) ----
+  getStaffUsage: async (days: number): Promise<any> => apiCall(`/staff/usage?window=${encodeURIComponent(String(days))}`, { method: 'GET' }, true),
   // ---- Staff area: team ----
   getStaffTeam: async (): Promise<any> => apiCall('/staff/team', { method: 'GET' }, true),
   staffAddTeamMember: async (body: { email: string; firstName: string; lastName?: string; role: string }): Promise<any> => apiCall('/staff/team', { method: 'POST', body: JSON.stringify(body) }, true),

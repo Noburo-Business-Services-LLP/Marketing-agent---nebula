@@ -3,7 +3,7 @@
  * real routes. Every name is fake and every email ends in @example.test.
  *
  * SAFETY: refuses to run unless MONGODB_URI points at a LOCAL host and a database whose name starts
- * with `nebulaa_seed_`. It empties the users, drafts, featureevents and staffactions collections of
+ * with `nebulaa_seed_`. It empties the users, drafts, featureevents, staffactions, campaigns, video, hero video, blueprint and inbox-message collections of
  * that database first. Never point it at a real database.
  *
  *   MONGODB_URI=mongodb://127.0.0.1:27018/nebulaa_seed_staff node scripts/seed-staff-demo.js
@@ -11,7 +11,7 @@
  * Sign-in for the seeded team: the emails and password printed at the end (password below, invented).
  * The data is deterministic (fixed random seed) except that dates are relative to the moment you run it.
  */
-const { PLANS, ADDONS, TOPUP_PACKS, gstPaise, chargePaise } = require('../config/apiCosts');
+const { PLANS, ADDONS, TOPUP_PACKS, QUARK_COSTS, gstPaise, chargePaise } = require('../config/apiCosts');
 const SEED_PASSWORD = process.env.SEED_PASSWORD || 'SeedDemo-Staff-2026';
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 const DB_PREFIX = 'nebulaa_seed_';
@@ -77,12 +77,16 @@ function planFor(i) {
   return { plan: { tier: 'professional', addons: i % 2 === 0 ? ['bundle', 'publish', 'competitors', 'inbox'] : ['publish'] }, tier: 'professional' };
 }
 
+// Actions the app really charges for, in a mix: mostly posts and images, some captions and video, a little of the rest.
+const SPEND_ACTIONS = ['campaign_full', 'image_generated', 'campaign_text', 'campaign_full', 'video_generated', 'carousel_generated', 'image_edit', 'campaign_text', 'blueprint', 'chat_message', 'hero_video_clip', 'video_base'];
+
 const PAYING = (i) => (i >= 0 && i <= 9) || (i >= 30 && i <= 37) || (i >= 45 && i <= 54);
 const ACTIVE_SUB = (i) => (i >= 30 && i <= 34) || (i >= 45 && i <= 54);
 
 /** Builds every document in memory (no database), so the plan can be inspected or tested. */
 function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
   const rand = rng(20261007);
+  const rand2 = rng(777); // a second stream for the usage data, so adding it never changes the numbers drawn above
   const between = (a, b) => a + rand() * (b - a);
   const pick = (arr) => arr[Math.floor(rand() * arr.length)];
   const ago = (days) => new Date(now - days * DAY);
@@ -108,7 +112,9 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
 
   const clients = [];
   const events = []; // { client index, feature, at }
-  const drafts = []; // { client index, status, createdAt, updatedAt }
+  const drafts = []; // { client index, status, createdAt, updatedAt, imageUrl?, slides?, variant? }
+  const campaigns = []; // posts that reached a social account
+  const videoJobs = []; const heroJobs = []; const blueprints = []; const inbox = [];
 
   for (let i = 0; i < 62; i++) {
     const hiddenTest = i >= 60;
@@ -226,7 +232,10 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
     const make = (status, minDays, maxDays) => {
       const d = Math.min(between(minDays, maxDays), Math.max(0.02, ageDays - 0.02));
       const at = ago(d);
-      drafts.push({ index: i, status, createdAt: at, updatedAt: status === 'draft' ? at : new Date(at.getTime() + DAY / 4 > now ? now : at.getTime() + DAY / 4) });
+      const updatedAt = status === 'draft' ? at : new Date(at.getTime() + DAY / 4 > now ? now : at.getTime() + DAY / 4);
+      const r = rand2();
+      drafts.push({ index: i, status, createdAt: at, updatedAt, ...(r < 0.12 ? { slides: 3 + Math.floor(rand2() * 3) } : r < 0.82 ? { imageUrl: 'https://example.test/demo-image.jpg' } : {}) });
+      if (status === 'published') campaigns.push({ index: i, status: 'posted', publishedAt: updatedAt, createdAt: at });
     };
     if (TRAITS.draftsWaiting.has(i)) { make('draft', 4.2, 12); make('draft', 0.1, 3); }
     else if (i % 3 !== 0) make('draft', 0.1, 2.5);
@@ -234,16 +243,41 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
     for (let k = 0; k < published; k++) make('published', 0.5, 20);
     if (TRAITS.failedRecent.has(i)) {
       const n = 1 + (i % 3);
-      for (let k = 0; k < n; k++) { const at = ago(between(0.1, 6.5)); drafts.push({ index: i, status: 'failed', createdAt: new Date(Math.min(at.getTime(), createdAt.getTime() + 1)), updatedAt: at }); }
+      for (let k = 0; k < n; k++) { const at = ago(between(0.1, 6.5)); drafts.push({ index: i, status: 'failed', createdAt: new Date(createdAt.getTime() + 1), updatedAt: new Date(Math.max(at.getTime(), createdAt.getTime() + 2)) }); }
     }
-    if (TRAITS.failedOld.has(i)) { const at = ago(between(10, 20)); drafts.push({ index: i, status: 'failed', createdAt: at, updatedAt: at }); }
+    if (TRAITS.failedOld.has(i)) { const at = ago(Math.min(between(10, 20), Math.max(0.1, ageDays - 0.1))); drafts.push({ index: i, status: 'failed', createdAt: at, updatedAt: at }); }
   }
+
+  // More realistic usage for the Usage page. Everything here uses the second random stream.
+  clients.forEach((c) => {
+    const i = c.index; const age = (now - c.createdAt.getTime()) / DAY;
+    const at = (minD, maxD) => ago(Math.min(minD + rand2() * (maxD - minD), Math.max(0.03, age - 0.03)));
+    if (age < 0.5) return;
+    // extra drafts over the last 30 days for clients who work in the product
+    if (i % 12 !== 0 && !TRAITS.inactive.has(i)) {
+      const n = Math.floor(rand2() * 7);
+      for (let k = 0; k < n; k++) { const when = at(0.1, 29); const r = rand2(); drafts.push({ index: i, status: r < 0.25 ? 'published' : 'draft', createdAt: when, updatedAt: when, ...(rand2() < 0.8 ? { imageUrl: 'https://example.test/demo-image.jpg' } : {}) }); if (r < 0.25) campaigns.push({ index: i, status: 'posted', publishedAt: when, createdAt: when }); }
+    }
+    // a translated copy of a draft now and then (the Usage page does not count these twice)
+    if (i % 9 === 5) { const when = at(0.2, 20); drafts.push({ index: i, status: 'draft', createdAt: when, updatedAt: when, imageUrl: 'https://example.test/demo-image.jpg', variant: true }); }
+    // video: some clients make finished videos, a few fail
+    if (i % 5 === 0 || i === 61) {
+      const n = 1 + Math.floor(rand2() * 3);
+      for (let k = 0; k < n; k++) videoJobs.push({ index: i, status: k === 2 ? 'failed' : 'completed', createdAt: at(0.2, 28) });
+    }
+    if (i % 17 === 3 || i === 61) { heroJobs.push({ index: i, status: 'completed', createdAt: at(0.3, 25) }); if (i % 2) heroJobs.push({ index: i, status: 'failed', createdAt: at(0.3, 25) }); }
+    if (i % 9 === 2 || i === 60) { blueprints.push({ index: i, status: 'completed', createdAt: at(0.3, 27) }); if (i % 2) blueprints.push({ index: i, status: 'stopped', createdAt: at(0.3, 27) }); }
+    // reply suggestions for clients that have the inbox
+    const hasInbox = tier2(c).includes('inbox') || (c.plan && c.plan.tier === 'managed' && i % 4 === 1);
+    if (hasInbox) { const n = 3 + Math.floor(rand2() * 12); for (let k = 0; k < n; k++) inbox.push({ index: i, generatedAt: at(0.05, 29) }); }
+  });
+  function tier2(c) { const a = (c.plan && c.plan.addons) || []; return a.includes('bundle') ? [...a, 'inbox'] : a; }
 
   // A few Quark history lines so the client page has something to show.
   clients.slice(0, 12).forEach((c, n) => {
     c.credits.history = [
-      { action: 'purchase', amount: 5000, description: 'Quark pack', balanceAfter: 5000, createdAt: new Date(c.createdAt.getTime() + 3600000), timestamp: new Date(c.createdAt.getTime() + 3600000) },
-      { action: 'image', amount: -(10 + n), description: 'Image created', balanceAfter: c.credits.balance, createdAt: ago(1 + n * 0.2), timestamp: ago(1 + n * 0.2) }
+      { action: 'purchase', amount: 5000, description: 'Quark pack', balanceAfter: 5000, createdAt: new Date(c.createdAt.getTime() + 60000), timestamp: new Date(c.createdAt.getTime() + 60000) },
+      { action: 'image_generated', amount: -QUARK_COSTS.image_generated, description: 'Image created', balanceAfter: c.credits.balance, createdAt: new Date(Math.max(ago(1 + n * 0.2).getTime(), c.createdAt.getTime() + 120000)), timestamp: new Date(Math.max(ago(1 + n * 0.2).getTime(), c.createdAt.getTime() + 120000)) }
     ];
   });
 
@@ -253,13 +287,28 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
     const n = c.index === 45 ? 62 : 3 + (c.index % 5);
     for (let k = 0; k < n; k++) {
       const at = ago(Math.min(between(0.05, 6), Math.max(0.05, (now - c.createdAt.getTime()) / DAY - 0.05)));
-      const spend = 8 + Math.floor(between(0, 60));
-      c.credits.history.push({ action: k % 2 ? 'image' : 'video', amount: -spend, description: 'Made something', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });
-      if (k === 1) c.credits.history.push({ action: 'image_refund', amount: spend, description: 'Refund', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });
+      between(0, 60); // keeps the earlier random numbers where they were
+      const action = SPEND_ACTIONS[(k + c.index) % SPEND_ACTIONS.length];
+      const spend = QUARK_COSTS[action];
+      c.credits.history.push({ action, amount: -spend, description: 'Made something', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });
+      if (k === 1) c.credits.history.push({ action: `${action}_refund`, amount: spend, description: 'Refund', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });
     }
   });
 
-  return { staff, clients, events, drafts, csmOf };
+  // Free-plan and trial clients spend a few Quarks too (this month only).
+  clients.forEach((c) => {
+    if (c.payments.some((p) => p.status === 'paid') || c.isHidden) return;
+    const age = (now - c.createdAt.getTime()) / DAY;
+    if (age < 0.3) return;
+    const n = 1 + Math.floor(rand2() * 4);
+    for (let k = 0; k < n; k++) {
+      const at = ago(Math.min(0.05 + rand2() * 6, Math.max(0.05, age - 0.05)));
+      const action = SPEND_ACTIONS[Math.floor(rand2() * 4)];
+      c.credits.history.push({ action, amount: -QUARK_COSTS[action], description: 'Made something', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });
+    }
+  });
+
+  return { staff, clients, events, drafts, csmOf, campaigns, videoJobs, heroJobs, blueprints, inbox };
 }
 
 async function main() {
@@ -271,6 +320,11 @@ async function main() {
   const Draft = require('../models/Draft');
   const FeatureEvent = require('../models/FeatureEvent');
   const StaffAction = require('../models/StaffAction');
+  const Campaign = require('../models/Campaign');
+  const VideoJob = require('../models/VideoJob');
+  const HeroVideoJob = require('../models/HeroVideoJob');
+  const Blueprint = require('../models/Blueprint');
+  const SocialInboxMessage = require('../models/SocialInboxMessage');
 
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
   if (mongoose.connection.name !== db) throw new Error('Connected database does not match the checked name; stopping.');
@@ -280,7 +334,7 @@ async function main() {
   const hash = await bcrypt.hash(SEED_PASSWORD, 10);
   const data = buildData(now, hash);
 
-  await Promise.all([User.deleteMany({}), Draft.deleteMany({}), FeatureEvent.deleteMany({}), StaffAction.deleteMany({})]);
+  await Promise.all([User, Draft, FeatureEvent, StaffAction, Campaign, VideoJob, HeroVideoJob, Blueprint, SocialInboxMessage].map((m) => m.deleteMany({})));
 
   const staffDocs = await User.insertMany(data.staff);
   const byKey = Object.fromEntries(data.staff.map((s, n) => [s.key, staffDocs[n]._id]));
@@ -288,7 +342,18 @@ async function main() {
   const idOf = (index) => clientDocs[index]._id;
 
   await FeatureEvent.insertMany(data.events.map((e) => ({ userId: idOf(e.index), feature: e.feature, feature_module: 'content', timestamp: e.at })));
-  await Draft.insertMany(data.drafts.map((d, n) => ({ userId: idOf(d.index), title: `Demo post ${n + 1}`, caption: 'Made-up caption for the staff demo.', sourceType: 'post', contentType: 'post', status: d.status, createdAt: d.createdAt, updatedAt: d.updatedAt })), { lean: false });
+  await Draft.insertMany(data.drafts.map((d, n) => ({
+    userId: idOf(d.index), title: `Demo post ${n + 1}`, caption: 'Made-up caption for the staff demo.', sourceType: d.slides ? 'carousel' : 'post', contentType: d.slides ? 'carousel' : 'post', status: d.status, createdAt: d.createdAt, updatedAt: d.updatedAt,
+    ...(d.imageUrl ? { imageUrl: d.imageUrl } : {}),
+    ...(d.slides ? { carouselSlides: Array.from({ length: d.slides }, (_, k) => ({ order: k + 1, role: k === 0 ? 'hook' : 'build', headline: `Slide ${k + 1}`, imageUrl: 'https://example.test/demo-slide.jpg' })) } : {}),
+    ...(d.variant ? { languageVariantOf: new mongoose.Types.ObjectId(), language: 'tamil' } : {})
+  })), { lean: false });
+  await Campaign.insertMany(data.campaigns.map((c, n) => ({ userId: idOf(c.index), name: `Demo campaign ${n + 1}`, platforms: ['instagram'], status: 'posted', ayrshareStatus: 'success', publishedAt: c.publishedAt, createdAt: c.createdAt, updatedAt: c.publishedAt })));
+  const stamp = (j) => ({ createdAt: j.createdAt, updatedAt: j.createdAt, ...(j.status === 'completed' ? { completedAt: j.createdAt } : {}) });
+  await VideoJob.insertMany(data.videoJobs.map((j, n) => ({ jobId: `demo-video-${n}`, userId: idOf(j.index), status: j.status, ...stamp(j) })));
+  await HeroVideoJob.insertMany(data.heroJobs.map((j, n) => ({ jobId: `demo-hero-${n}`, userId: idOf(j.index), status: j.status, ...stamp(j) })));
+  await Blueprint.insertMany(data.blueprints.map((j, n) => ({ blueprintId: `demo-blueprint-${n}`, userId: idOf(j.index), emailKey: `demo-${n}@example.test`, tierAtStart: data.clients[j.index].plan ? data.clients[j.index].plan.tier : 'managed', status: j.status, createdAt: j.createdAt, updatedAt: j.createdAt })));
+  await SocialInboxMessage.insertMany(data.inbox.map((m, n) => ({ userId: idOf(m.index), conversationId: new mongoose.Types.ObjectId(), platform: 'instagram', providerMessageId: `demo-msg-${n}`, direction: 'inbound', messageType: 'comment', body: 'Made-up comment.', ai: { suggestedReplies: ['Thank you for writing to us.'], autoReplyStatus: 'suggested', generatedAt: m.generatedAt }, createdAt: m.generatedAt })));
 
   await StaffAction.insertMany([
     { actor: byKey.owner, actorRole: 'owner', action: 'add_quarks', client: idOf(10), details: { amount: 500, balanceAfter: 1500 }, at: new Date(now - 2 * DAY) },
@@ -299,7 +364,7 @@ async function main() {
     { actor: byKey.owner, actorRole: 'owner', action: 'team_add', client: byKey.csm3, details: { role: 'csm', converted: false, emailed: false }, at: new Date(now - 9 * DAY) }
   ]);
 
-  const counts = { users: await User.countDocuments(), drafts: await Draft.countDocuments(), events: await FeatureEvent.countDocuments(), actions: await StaffAction.countDocuments() };
+  const counts = { users: await User.countDocuments(), drafts: await Draft.countDocuments(), events: await FeatureEvent.countDocuments(), actions: await StaffAction.countDocuments(), campaigns: await Campaign.countDocuments(), videos: await VideoJob.countDocuments(), hero: await HeroVideoJob.countDocuments(), blueprints: await Blueprint.countDocuments(), inbox: await SocialInboxMessage.countDocuments() };
   console.log('Done:', JSON.stringify(counts));
   console.log('Team sign-in emails: aarav.owner@example.test (Owner), bhavna.admin@example.test (Admin), chitra.csm@example.test, dev.csm@example.test, esha.csm@example.test (CSMs). Password: see SEED_PASSWORD in this script.');
   await mongoose.disconnect();

@@ -270,6 +270,37 @@
       quarks: { available: true, monthStart: iso(-6), sold: 8400, spent: 5120, refunded: 240, grantedByStaff: 500, possiblyIncompleteClients: 1, usdPerQuark: 0.02, spentValueUsdCents: 10240, note: 'Sold is the Quarks on paid payments this month. Spent is counted from each client\'s recent Quark history (the app keeps only the last 50 to 100 entries per client), so a very busy client can be undercounted. Quarks added by staff are shown apart and are not sold.' },
       ayrshare: { available: true, estimate: true, profiles: 34, included: 30, extra: 4, maxProfiles: 100, perExtraProfileUsdCents: 899, extraUsdCents: 3596, planUsdPerMonth: 599, note: 'Estimate: accounts that have a social profile, against the profiles the plan includes. The extra-profile rate is from our own config, not from an invoice.' }
     })],
+    ['GET', /^\/staff\/usage/, ok({
+      level: 'full',
+      featureUse: { days: 30, customers: 6, items: [
+        { key: 'images', label: 'Images generated', definition: 'Sample', available: true, count: 148, clients: 5 },
+        { key: 'postsDrafted', label: 'Posts drafted', definition: 'Sample', available: true, count: 96, clients: 5 },
+        { key: 'postsPublished', label: 'Posts published', definition: 'Sample', available: true, count: 61, clients: 4 },
+        { key: 'videos', label: 'Videos', definition: 'Sample', available: true, count: 9, clients: 3 },
+        { key: 'heroVideos', label: 'Hero videos', definition: 'Sample', available: true, count: 2, clients: 1 },
+        { key: 'blueprints', label: 'Blueprints', definition: 'Sample', available: true, count: 4, clients: 4 },
+        { key: 'repliesDrafted', label: 'Replies drafted', definition: 'Sample', available: false, reason: 'We could not read the inbox right now.' }
+      ], note: 'Counted from what the app stores about each client\'s work in the last 30 days.' },
+      funnel: { available: true, days: 30, signedUp: 21, steps: [
+        { key: 'signedUp', label: 'Signed up', available: true, count: 21, reached: 21, fromPrevious: null, fromStart: 100 },
+        { key: 'onboarded', label: 'Finished onboarding', available: true, count: 15, reached: 15, fromPrevious: 71, fromStart: 71 },
+        { key: 'firstContent', label: 'Created first content', available: true, count: 12, reached: 13, fromPrevious: 80, fromStart: 57 },
+        { key: 'connected', label: 'Connected a social account', available: true, count: 7, reached: 9, fromPrevious: 58, fromStart: 33 },
+        { key: 'published', label: 'Published first post', available: true, count: 5, reached: 6, fromPrevious: 71, fromStart: 24 },
+        { key: 'paid', label: 'Paid', available: true, count: 3, reached: 5, fromPrevious: 60, fromStart: 14 }
+      ], note: 'Clients who signed up in the last 30 days. Each step counts only clients who also passed every step before it.' },
+      quarks: { available: true, total: 5120, totalValueUsdCents: 10240, possiblyIncompleteClients: 1, categories: [
+        { key: 'images', label: 'Images and posts', quarks: 2800, percent: 55 }, { key: 'captions', label: 'Captions', quarks: 200, percent: 4 },
+        { key: 'video', label: 'Video', quarks: 1500, percent: 29 }, { key: 'hero', label: 'Hero video', quarks: 400, percent: 8 },
+        { key: 'blueprint', label: 'Blueprint', quarks: 120, percent: 2 }, { key: 'other', label: 'Other', quarks: 100, percent: 2 }
+      ], note: 'Counted from each client\'s recent Quark history (the app keeps only the last 50 to 100 entries per client), so a very busy client can be undercounted.' },
+      topByTier: { available: true, tiers: [
+        { id: 'free', label: 'Free', clients: 2, top: { key: 'images', label: 'Images generated', count: 12, clients: 2 } },
+        { id: 'starter', label: 'Starter', clients: 1, top: { key: 'postsDrafted', label: 'Posts drafted', count: 20, clients: 1 } },
+        { id: 'professional', label: 'Professional', clients: 0, top: null },
+        { id: 'managed', label: 'Managed', clients: 3, top: { key: 'images', label: 'Images generated', count: 130, clients: 3 } }
+      ], note: 'The feature with the most items made in the last 30 days by clients on that plan.' }
+    })],
     ['GET', /^\/staff\/home/, ok({
       health: { since: iso(-1), cards: [
         { key: 'images', label: 'Images', status: 'green', note: 'Image creation is working.', lastHour: 0, lastDay: 1, latest: [{ at: iso(-0.5), detail: 'Image request timed out after 60 seconds (sample)' }] },
