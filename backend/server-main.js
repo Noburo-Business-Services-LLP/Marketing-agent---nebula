@@ -112,6 +112,7 @@ const influencerAnalyticsRoutes = require('./routes/analyticsRoutes');
 // Admin routes
 const adminRoutes = require('./routes/admin');
 const csmRoutes = require('./routes/csm');
+const staffRoutes = require('./routes/staff');
 
 // Event tracking utility
 const trackEvent = require('./utils/trackEvent');
@@ -406,6 +407,7 @@ app.use((req, res, next) => {
 // Routes - Admin (no trial/credit guard)
 app.use('/api/admin', adminRoutes);
 app.use('/api/csm', csmRoutes);
+app.use('/api/staff', staffRoutes);
 
 // Routes - Core (with specific rate limiters on sensitive routes)
 app.use('/api/auth', authLimiter, authRoutes);
