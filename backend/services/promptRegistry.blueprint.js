@@ -55,7 +55,7 @@ RULES
 4. Do not create, redraw or rename a logo, a business name or a tagline.
 5. Write complete, plain, professional sentences. No exclamation marks, no emoji, no dashes used as pauses, no slang, no questions.
 6. The territory must work for the whole business, not one product, one festival, one season or one city.
-7. Allowed formats: {{formats}}. Allowed channels: {{channels}}. Use between three and five pillars. Every calendar item names one of your pillars.
+7. Allowed formats: {{formats}}. Allowed channels: {{channels}}. Use between three and five pillars. Every calendar item names one of your pillars. The calendar must hold one item for every day from 1 to 30, so thirty items in total, each with its own day number; one item is not enough. The example below shows the shape of a single item only.
 8. If the information basis is limited, say less, not more.
 
 Return ONLY JSON in exactly this shape:
