@@ -1,3 +1,4 @@
+import PlatformIcon from '../components/PlatformIcon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle, X, Pencil, LayoutGrid, Rows } from 'lucide-react';
@@ -22,6 +23,9 @@ const PLATFORM_META: Record<string, { label: string; Icon: React.ComponentType<{
   facebook:  { label: 'Facebook',  Icon: Facebook },
   linkedin:  { label: 'LinkedIn',  Icon: Linkedin },
   youtube:   { label: 'YouTube',   Icon: Youtube },
+  twitter:   { label: 'X',         Icon: ({ className }) => <PlatformIcon platform="twitter" className={className} /> },
+  x:         { label: 'X',         Icon: ({ className }) => <PlatformIcon platform="twitter" className={className} /> },
+  gmb:       { label: 'Google Business', Icon: ({ className }) => <PlatformIcon platform="gmb" className={className} /> },
 };
 
 const formatScheduleDate = (d?: string | null) => {

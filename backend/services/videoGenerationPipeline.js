@@ -3852,7 +3852,8 @@ async function generateThumbnail({
   // Try AI thumbnail first.
   try {
     const result = await generateCampaignImageNanoBanana(plan.thumbnailPrompt || input.description, {
-      aspectRatio: '16:9',
+      // Same shape as the video (a vertical reel gets a vertical thumbnail).
+      aspectRatio: ['9:16', '16:9', '1:1', '4:5'].includes(String(input.aspectRatio)) ? String(input.aspectRatio) : '9:16',
       linkedProduct: product ? {
         name: product.name,
         description: product.description,

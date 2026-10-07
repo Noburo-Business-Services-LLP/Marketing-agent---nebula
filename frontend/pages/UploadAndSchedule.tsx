@@ -3,14 +3,16 @@ import { UploadCloud, Loader2, Sparkles, Calendar, Send, X, Instagram, Facebook,
 import { draftsAPI, apiService } from '../services/api';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import UpgradePrompt from '../components/UpgradePrompt';
+import PlatformIcon from '../components/PlatformIcon';
+import { choicesFor } from '../utils/platforms';
 import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
-const PLATFORMS = [
-  { key: 'instagram', label: 'Instagram', Icon: Instagram },
-  { key: 'facebook',  label: 'Facebook',  Icon: Facebook },
-  { key: 'linkedin',  label: 'LinkedIn',  Icon: Linkedin },
-  { key: 'twitter',   label: 'X',         Icon: Twitter },
-];
+const PLATFORMS = choicesFor('image').map((p) => ({
+  key: p.key,
+  label: p.label,
+  soon: Boolean(p.soon),
+  Icon: ({ className }: { className?: string }) => <PlatformIcon platform={p.key} className={className} />
+}));
 
 /**
  * Upload & Schedule — bring your own image or video, let AI write the
@@ -195,20 +197,22 @@ const UploadAndSchedule: React.FC = () => {
             <div>
               <label className="gravity-label block mb-2">Posting to</label>
               <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map(({ key, label, Icon }) => {
+                {PLATFORMS.map(({ key, label, Icon, soon }) => {
                   const active = platforms.includes(key);
                   return (
                     <button
                       key={key}
+                      disabled={soon}
+                      title={soon ? 'Coming soon' : undefined}
                       onClick={() => togglePlatform(key)}
                       className={`inline-flex items-center gap-2 h-10 pl-3 pr-3.5 rounded-full border text-[12.5px] font-semibold transition-all ${
                         active
                           ? 'bg-[#F5A623] border-[#F5A623] text-black'
                           : 'bg-white/[0.03] border-white/[0.10] text-white/55 hover:text-white/85 hover:border-white/25'
-                      }`}
+                      } ${soon ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <Icon className="w-4 h-4" />
-                      {label}
+                      {label}{soon ? ' (soon)' : ''}
                     </button>
                   );
                 })}

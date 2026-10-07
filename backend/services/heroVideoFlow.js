@@ -389,6 +389,7 @@ async function pollHeroJob(deps, { userId, jobId }) {
 
   if (st.state === 'failed' || (st.state === 'completed' && !st.videoUrl)) {
     const message = st.error || 'fal completed without a video URL';
+    console.error(`Hero job ${jobId} failed at the video provider: ${String(message).slice(0, 400)}`);
     await failJob(deps, jobId, message, 'failed');
     await refundOnce(deps, jobId, userId, 'Refund: hero clip failed');
     return { status: 200, json: { success: true, status: 'failed', error: message } };

@@ -5,6 +5,8 @@ const g = require('../services/googleReviews');
 test('every spelling of Google Business Profile maps to gmb', () => {
   for (const n of ['gmb', 'google', 'GoogleBusiness', 'google business profile', 'google_business']) assert.strictEqual(g.toAyrsharePlatform(n), 'gmb');
   assert.strictEqual(g.toAyrsharePlatform('Instagram'), 'instagram');
+  assert.strictEqual(g.toAyrsharePlatform('X'), 'twitter');
+  assert.strictEqual(g.toAyrsharePlatform('twitter'), 'twitter');
 });
 
 test('reviews are normalised from number and word ratings and reply state', () => {

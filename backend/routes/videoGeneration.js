@@ -873,12 +873,13 @@ router.get('/music-tracks', protect, videoJobReadLimiter, async (req, res) => {
 });
 
 function normalizePlatforms(rawPlatforms) {
-  const allowed = new Set(['instagram', 'facebook', 'linkedin', 'youtube']);
+  const allowed = new Set(['instagram', 'facebook', 'linkedin', 'youtube', 'twitter']);
   const input = Array.isArray(rawPlatforms) ? rawPlatforms : [];
   return Array.from(
     new Set(
       input
         .map((item) => String(item || '').trim().toLowerCase())
+        .map((item) => (item === 'x' ? 'twitter' : item))
         .filter((item) => allowed.has(item))
     )
   );
@@ -1394,7 +1395,8 @@ async function generateThumbnailFromDraft({ draft, baseUrl, userId = null }) {
   let generatedUrl = null;
   try {
     const result = await generateCampaignImageNanoBanana(prompt, {
-      aspectRatio: '16:9',
+      // The thumbnail must have the same shape as the video (a vertical reel gets a vertical thumbnail).
+      aspectRatio: ['9:16', '16:9', '1:1', '4:5'].includes(String(draft?.input?.aspectRatio)) ? String(draft.input.aspectRatio) : '9:16',
       linkedProduct: draft?.input?.product || null,
       productReferenceImage: draft?.input?.sourceImage?.url || draft?.input?.product?.imageUrl || null,
       // Carry the video's cast and look into the thumbnail.
@@ -3851,6 +3853,27 @@ router.post('/schedulePost', protect, checkTrial, videoAiWriteLimiter, async (re
     }
 
     const userId = toUserId(req.user);
+
+    // Actually send the video to the networks (now, or at the chosen time). Until now this route only
+    // recorded the choice, so a published video never reached any network.
+    const draftNow = await loadDraftForUser(jobId, userId);
+    const { publishVideoDraft } = require('../services/videoPublish');
+    const { postToSocialMedia } = require('../services/socialMediaAPI');
+    const sent = await publishVideoDraft({
+      post: postToSocialMedia,
+      profileKey: req.user?.ayrshare?.profileKey || '',
+      platforms,
+      caption: draftNow?.content?.caption || '',
+      hashtags: draftNow?.content?.hashtags || [],
+      videoUrl: draftNow?.merge?.finalOutputUrl || draftNow?.merge?.finalVideoUrl || '',
+      scheduledAt: when,
+      publishNow: Boolean(publishNow)
+    });
+    if (!sent.ok) {
+      if (sent.providerError) console.error('[schedulePost] provider refused the video:', String(sent.providerError).slice(0, 300));
+      return res.status(sent.code === 'provider' ? 502 : 400).json({ success: false, message: sent.message });
+    }
+
     const updated = await updateDraft(jobId, userId, (current) => ({
       ...current,
       currentStep: Math.max(Number(current.currentStep || 1), 10),
@@ -3860,7 +3883,8 @@ router.post('/schedulePost', protect, checkTrial, videoAiWriteLimiter, async (re
       schedule: {
         publishNow: Boolean(publishNow),
         scheduledAt: when,
-        status: publishNow ? 'published_pending_provider' : 'scheduled',
+        status: sent.status,
+        providerId: sent.providerId || null,
         updatedAt: new Date().toISOString()
       }
     }));
@@ -3883,7 +3907,7 @@ router.post('/schedulePost', protect, checkTrial, videoAiWriteLimiter, async (re
 
     return res.json({
       success: true,
-      message: publishNow ? 'Post queued for immediate publish' : 'Post scheduled',
+      message: publishNow ? 'Your video is being posted now.' : 'Your video is scheduled.',
       jobId,
       draft: updated
     });

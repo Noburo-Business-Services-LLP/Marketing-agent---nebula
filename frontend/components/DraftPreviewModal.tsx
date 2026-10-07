@@ -1,3 +1,5 @@
+import PlatformIcon from './PlatformIcon';
+import { choicesFor } from '../utils/platforms';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
 import { Draft } from '../types';
@@ -40,7 +42,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  const availablePlatforms = ['instagram', 'facebook', 'linkedin', 'twitter'];
+  const platformChoices = choicesFor('image');
 
   useEffect(() => {
     if (draft.scheduledDate) {
@@ -274,20 +276,6 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
         setIsDeleting(false);
       }
     }
-  };
-
-  const getPlatformIcon = (platform: string) => {
-    switch (platform) {
-      case 'instagram': return <Instagram className="w-4 h-4" />;
-      case 'facebook': return <Facebook className="w-4 h-4" />;
-      case 'linkedin': return <Linkedin className="w-4 h-4" />;
-      case 'twitter': return <Twitter className="w-4 h-4" />;
-      default: return null;
-    }
-  };
-
-  const PLATFORM_LABEL: Record<string, string> = {
-    instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', twitter: 'X'
   };
 
   const statusTone = (s: string) => {
@@ -532,21 +520,23 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             <div>
               <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Posting to</label>
               <div className="flex flex-wrap gap-2">
-                {availablePlatforms.map((platform) => {
+                {platformChoices.map(({ key: platform, label, soon }) => {
                   const active = platforms.includes(platform);
                   return (
                     <button
                       key={platform}
                       type="button"
+                      disabled={Boolean(soon)}
+                      title={soon ? 'Coming soon' : undefined}
                       onClick={() => togglePlatform(platform)}
                       className={`inline-flex items-center gap-2 h-10 pl-3 pr-3.5 rounded-full border text-[12.5px] font-semibold transition-all ${
                         active
                           ? 'bg-[#F5A623] border-[#F5A623] text-black'
                           : 'bg-white/[0.03] border-white/[0.10] text-white/55 hover:text-white/85 hover:border-white/25'
-                      }`}
+                      } ${soon ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      {getPlatformIcon(platform)}
-                      {PLATFORM_LABEL[platform] || platform}
+                      <PlatformIcon platform={platform} />
+                      {label}{soon ? ' (soon)' : ''}
                     </button>
                   );
                 })}

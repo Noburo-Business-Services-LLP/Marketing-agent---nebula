@@ -12,6 +12,7 @@ const AYRSHARE_REVIEWS_URL = 'https://api.ayrshare.com/api/reviews';
 function toAyrsharePlatform(name) {
   const value = String(name || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
   if (['gmb', 'google', 'googlebusiness', 'googlebusinessprofile'].includes(value)) return 'gmb';
+  if (value === 'x') return 'twitter';
   return String(name || '').trim().toLowerCase();
 }
 

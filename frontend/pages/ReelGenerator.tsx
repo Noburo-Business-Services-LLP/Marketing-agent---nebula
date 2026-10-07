@@ -1,3 +1,5 @@
+import PlatformIcon from '../components/PlatformIcon';
+import { choicesFor, platformLabel } from '../utils/platforms';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2,
@@ -5121,20 +5123,23 @@ setCharacterAge(nextDraft?.characterAge || '');
               <div className={`${panelClass} gravity-glow p-6 space-y-4`}>
                 <GravityHero size="md" align="left" eyebrow="Videos" headline="Platform Selection" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {['instagram', 'facebook', 'linkedin', 'youtube'].map((platform) => {
+                  {choicesFor('video').map(({ key: platform, label, soon, video }) => {
                     const active = selectedPlatforms.includes(platform);
+                    const blocked = Boolean(soon) || !video;
                     return (
                       <button
                         key={platform}
+                        disabled={blocked}
+                        title={blocked ? 'Videos cannot be posted here yet' : undefined}
                         onClick={() => togglePlatform(platform)}
                         className={`px-4 py-3 rounded-xl border text-sm font-semibold ${active
                           ? 'bg-[#F5A623] text-black border-[#F5A623]'
                           : isDarkMode
                             ? 'bg-slate-900 border-slate-700 text-slate-200'
                             : 'bg-white border-slate-300 text-slate-700'
-                          }`}
+                          } ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                        <span className="inline-flex items-center gap-2"><PlatformIcon platform={platform} />{label}{blocked ? ' (soon)' : ''}</span>
                       </button>
                     );
                   })}
@@ -5194,7 +5199,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                     </div>
                     <div>
                       <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Platforms</p>
-                      <p className={`text-sm mt-1 ${theme.text}`}>{selectedPlatforms.join(', ') || 'None'}</p>
+                      <p className={`text-sm mt-1 ${theme.text}`}>{selectedPlatforms.map(platformLabel).join(', ') || 'None'}</p>
                     </div>
                     <div>
                       <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Status</p>
@@ -5211,9 +5216,35 @@ setCharacterAge(nextDraft?.characterAge || '');
                   </div>
                 </div>
 
-                <div className="flex gap-3">
-                  <button onClick={() => schedulePost(true)} disabled={busy} className="px-6 py-3 rounded-xl bg-[#F5A623] text-black font-bold">
-                    Publish
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-wide ${theme.textMuted}`}>Where to post</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {choicesFor('video').map(({ key: platform, label, soon, video }) => {
+                      const active = selectedPlatforms.includes(platform);
+                      const blocked = Boolean(soon) || !video;
+                      return (
+                        <button
+                          key={platform}
+                          type="button"
+                          disabled={blocked}
+                          title={blocked ? 'Videos cannot be posted here yet' : undefined}
+                          onClick={() => togglePlatform(platform)}
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold ${active ? 'bg-[#F5A623] text-black border-[#F5A623]' : 'bg-white border-slate-300 text-slate-700'} ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <PlatformIcon platform={platform} />{label}{blocked ? ' (soon)' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedPlatforms.length === 0 && <p className={`mt-2 text-sm ${theme.textSecondary}`}>Choose at least one place to post.</p>}
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={() => schedulePost(true)} disabled={busy || selectedPlatforms.length === 0} className="px-6 py-3 rounded-xl bg-[#F5A623] text-black font-bold disabled:opacity-50">
+                    Publish now
+                  </button>
+                  <button onClick={() => setStep(12)} disabled={busy || selectedPlatforms.length === 0} className="px-6 py-3 rounded-xl border border-[#F5A623] text-[#F5A623] font-semibold disabled:opacity-50">
+                    Schedule for later
                   </button>
                   <button
                     onClick={() => resetWizard()}
