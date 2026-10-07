@@ -15,6 +15,7 @@ const { buildMoney, buildPayments, loadMoneyData } = require('../services/staff/
 const { buildUsage, loadUsageData, parseWindow } = require('../services/staff/usage');
 const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
+const tools = require('../services/staff/tools');
 
 router.use(protect);
 
@@ -88,6 +89,58 @@ router.post('/team/:id/role', requireStaff('add_csm'), (req, res) =>
 // DELETE /api/staff/team/:id: take staff access away; a CSM's clients are unassigned and listed.
 router.delete('/team/:id', requireStaff('add_csm'), (req, res) =>
   runTeam(res, 'remove team member', () => removeMember({ actor: req.staff, targetId: req.params.id, ...teamDeps() })));
+
+// The database wiring for the Owner tools (the rules are in services/staff/tools.js).
+function toolsRepo() {
+  const mongoose = require('mongoose');
+  const valid = (v) => mongoose.Types.ObjectId.isValid(v);
+  const Coupon = () => require('../models/Coupon');
+  return {
+    findById: (id) => (valid(id) ? User.findById(id).select('email staffRole isCsm').lean() : null),
+    resetAyrshareProfileKeys: async () => (await User.updateMany(tools.AYRSHARE_RESET.filter, tools.AYRSHARE_RESET.update)).modifiedCount || 0,
+    clearTestProfile: async (id) => {
+      await User.updateOne({ _id: id }, { $unset: { businessProfile: '' }, $set: { connectedSocials: [], onboardingCompleted: true } });
+      const result = await require('../models/Draft').updateMany({ userId: id, status: { $ne: 'archived' } }, { $set: { status: 'archived' } });
+      return result.modifiedCount || 0;
+    },
+    setHidden: (id, hidden) => User.updateOne({ _id: id }, { $set: { isHidden: hidden } }),
+    create: async (doc) => { const row = await Coupon().create(doc); return couponRow(row.toObject ? row.toObject() : row); },
+    deactivate: async (code) => { const row = await Coupon().findOneAndUpdate({ code }, { isActive: false }, { new: true }).lean(); return row ? couponRow(row) : null; },
+    remove: async (code) => Boolean(await Coupon().findOneAndDelete({ code }))
+  };
+}
+const couponRow = (c) => ({ code: c.code, discountedAmount: c.discountedAmount, maxUses: c.maxUses, usedCount: c.usedCount || 0, isActive: c.isActive !== false, note: c.note || '', createdAt: c.createdAt });
+const toolDeps = () => ({ repo: toolsRepo(), record: recordStaffAction });
+
+// POST /api/staff/ayrshare/reset-ids { confirm: true }: forget every customer's stored social profile id after
+// switching to a different Ayrshare account (Owner only). Nothing is sent to Ayrshare.
+router.post('/ayrshare/reset-ids', requireStaff('reset_accounts'), (req, res) =>
+  runTeam(res, 'ayrshare reset', () => tools.resetAyrshareIds({ actor: req.staff, confirm: req.body && req.body.confirm, ...toolDeps() })));
+
+// POST /api/staff/team/:id/reset-account { confirm: true }: clean a staff member's old test business profile (Owner only).
+router.post('/team/:id/reset-account', requireStaff('reset_accounts'), (req, res) =>
+  runTeam(res, 'staff account reset', () => tools.resetStaffAccount({ actor: req.staff, targetId: req.params.id, confirm: req.body && req.body.confirm, ...toolDeps() })));
+
+// POST /api/staff/clients/:id/hidden { hidden }: leave a client out of (or back in) the staff numbers (Owner, Admin).
+router.post('/clients/:id/hidden', requireStaff('hide_client'), (req, res) =>
+  runTeam(res, 'hide client', () => tools.setHidden({ actor: req.staff, targetId: req.params.id, hidden: req.body && req.body.hidden, ...toolDeps() })));
+
+// Coupons (Owner only). Customers still redeem them through /api/payment.
+router.get('/coupons', requireStaff('manage_coupons'), async (req, res) => {
+  try {
+    const rows = await require('../models/Coupon').find().sort({ createdAt: -1 }).lean();
+    res.json({ success: true, coupons: rows.map(couponRow) });
+  } catch (error) {
+    console.error('[staff] coupons failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not load the coupons. Please try again.' });
+  }
+});
+router.post('/coupons', requireStaff('manage_coupons'), (req, res) =>
+  runTeam(res, 'coupon create', () => tools.createCoupon({ actor: req.staff, input: req.body || {}, ...toolDeps() })));
+router.post('/coupons/:code/deactivate', requireStaff('manage_coupons'), (req, res) =>
+  runTeam(res, 'coupon deactivate', () => tools.deactivateCoupon({ actor: req.staff, code: req.params.code, ...toolDeps() })));
+router.delete('/coupons/:code', requireStaff('manage_coupons'), (req, res) =>
+  runTeam(res, 'coupon delete', () => tools.deleteCoupon({ actor: req.staff, code: req.params.code, ...toolDeps() })));
 
 // GET /api/staff/home: health, clients that need attention, growth. A CSM sees only their own clients;
 // error details are shown to Owners and Admins only.

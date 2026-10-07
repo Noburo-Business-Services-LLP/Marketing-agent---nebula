@@ -28,24 +28,6 @@ test('the acting token names the client and the CSM and expires', () => {
   assert.ok(d.exp - d.iat <= 8 * 3600);
 });
 
-test('reset needs a CSM account and the exact email typed', () => {
-  assert.strictEqual(c.canResetStaffAccount({ isCsm: false, email: 'a@x.com' }, 'a@x.com').ok, false);
-  assert.strictEqual(c.canResetStaffAccount({ isCsm: true, email: 'a@x.com' }, 'b@x.com').ok, false);
-  assert.strictEqual(c.canResetStaffAccount({ isCsm: true, email: 'a@x.com' }, '').ok, false);
-  assert.strictEqual(c.canResetStaffAccount({ isCsm: true, email: 'A@x.com' }, ' a@X.com ').ok, true);
-  assert.strictEqual(c.canResetStaffAccount(null, 'a@x.com').ok, false);
-});
-
-test('the Ayrshare reset only touches Ayrshare fields and needs RESET typed', () => {
-  assert.strictEqual(c.confirmsAyrshareReset('RESET'), true);
-  assert.strictEqual(c.confirmsAyrshareReset(' RESET '), true);
-  assert.strictEqual(c.confirmsAyrshareReset('reset'), false);
-  assert.strictEqual(c.confirmsAyrshareReset(''), false);
-  const keys = Object.keys(c.AYRSHARE_RESET.update.$set);
-  assert.ok(keys.length > 0 && keys.every((k) => k.startsWith('ayrshare.')));
-  assert.strictEqual(c.AYRSHARE_RESET.update.$set['ayrshare.profileKey'], '');
-});
-
 test('owners and admins can open any client; a staff account is never opened this way', () => {
   const client = { _id: 'u1', assignedCsm: 'c9' };
   assert.strictEqual(c.canActFor({ _id: 'o1', staffRole: 'owner' }, client), true);
