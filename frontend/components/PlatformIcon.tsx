@@ -1,5 +1,5 @@
 import React from 'react';
-import { Instagram, Facebook, Linkedin, Youtube } from 'lucide-react';
+import { Instagram, Facebook, Linkedin, Youtube, Store } from 'lucide-react';
 
 /** Brand marks for every network, so no picker falls back to a generic icon. */
 const PlatformIcon: React.FC<{ platform: string; className?: string }> = ({ platform, className = 'w-4 h-4' }) => {
@@ -18,9 +18,8 @@ const PlatformIcon: React.FC<{ platform: string; className?: string }> = ({ plat
       );
     case 'gmb':
     case 'google':
-      return (
-        <span className={`inline-flex items-center justify-center rounded-sm bg-[#4285F4] text-white font-bold leading-none ${className}`} style={{ fontSize: '0.7em' }} aria-label="Google Business">G</span>
-      );
+    case 'google business':
+      return <Store className={className} aria-label="Google Business" />;
     default:
       return <span className={`inline-flex items-center justify-center font-bold ${className}`}>{key.charAt(0).toUpperCase() || '?'}</span>;
   }

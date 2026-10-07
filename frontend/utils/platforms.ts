@@ -19,7 +19,7 @@ export const PLATFORM_CHOICES: PlatformChoice[] = [
   { key: 'linkedin', label: 'LinkedIn', video: true },
   { key: 'twitter', label: 'X', video: true },
   { key: 'youtube', label: 'YouTube', video: true },
-  { key: 'gmb', label: 'Google Business', video: false, soon: true, soonNote: 'Coming soon' }
+  { key: 'gmb', label: 'Google Business', video: false }
 ];
 
 export function platformLabel(key: string): string {

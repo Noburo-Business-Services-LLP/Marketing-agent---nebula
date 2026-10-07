@@ -18,7 +18,7 @@ const campaignSchema = new mongoose.Schema({
   },
   platforms: [{
     type: String,
-    enum: ['instagram', 'facebook', 'twitter', 'linkedin', 'youtube', 'pinterest']
+    enum: ['instagram', 'facebook', 'twitter', 'linkedin', 'youtube', 'pinterest', 'gmb']
   }],
   status: {
     type: String,

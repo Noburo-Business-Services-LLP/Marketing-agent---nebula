@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { SocialConnection } from '../types';
-import { Loader2, RefreshCw, Check, X, Instagram, Facebook, Linkedin, Youtube, Video, AlertCircle, ShieldCheck, MessageCircle, Pin, ExternalLink, Inbox, Lock, Bell, Sparkles, Tag, Activity, KeyRound, RadioTower, ArrowRight, CheckCircle2, Clock3 } from 'lucide-react';
+import { Loader2, RefreshCw, Check, X, Instagram, Facebook, Linkedin, Youtube, Video, AlertCircle, ShieldCheck, MessageCircle, Pin, ExternalLink, Inbox, Store, Lock, Bell, Sparkles, Tag, Activity, KeyRound, RadioTower, ArrowRight, CheckCircle2, Clock3 } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import {
   GravityHero,
@@ -493,6 +493,7 @@ const ConnectSocials: React.FC = () => {
           case 'facebook': return <Facebook className="w-6 h-6 text-white" />;
           case 'x': return <XLogo className="w-5 h-5 text-white" />;
           case 'linkedin': return <Linkedin className="w-6 h-6 text-white" />;
+          case 'google business': return <Store className="w-6 h-6 text-white" />;
           case 'youtube': return <Youtube className="w-6 h-6 text-white" />;
           case 'pinterest': return <Pin className="w-6 h-6 text-white" />;
           case 'reddit': return <MessageCircle className="w-6 h-6 text-white" />;
@@ -506,6 +507,7 @@ const ConnectSocials: React.FC = () => {
         case 'facebook': return 'bg-[#1877F2]';
         case 'x': return 'bg-black';
         case 'linkedin': return 'bg-[#0A66C2]';
+        case 'google business': return 'bg-[#9A5B0F]';
         case 'youtube': return 'bg-[#FF0000]';
         case 'pinterest': return 'bg-[#BD081C]';
         case 'reddit': return 'bg-[#FF4500]';
@@ -731,18 +733,6 @@ const ConnectSocials: React.FC = () => {
                   </div>
               </div>
           ))}
-          <div className="rounded-xl p-5 border border-white/[0.06] bg-white/[0.02] relative">
-            <div className="absolute top-0 right-0 bg-slate-500/80 text-white text-[9px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-bl-lg">Coming soon</div>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-[#4285F4] flex items-center justify-center text-white font-bold text-lg">G</div>
-              <div>
-                <p className="font-semibold">Google Business Profile</p>
-                <p className="text-xs opacity-70">Not connected</p>
-              </div>
-            </div>
-            <p className="mt-3 text-sm opacity-80">Post your updates to Google and reply to reviews. We are finishing this, and it will appear here as soon as it can be connected.</p>
-            <button disabled className="mt-4 w-full py-2.5 rounded-lg bg-slate-300 text-slate-600 text-sm font-semibold cursor-not-allowed">Coming soon</button>
-          </div>
       </div>
 
       <div className={`mt-8 rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>

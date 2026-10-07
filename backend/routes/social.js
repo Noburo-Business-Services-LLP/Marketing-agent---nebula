@@ -201,7 +201,10 @@ const AYRSHARE_PLATFORM_MAP = {
   'linkedin': 'linkedin',
   'pinterest': 'pinterest',
   'reddit': 'reddit',
-  'youtube': 'youtube'
+  'youtube': 'youtube',
+  'gmb': 'gmb',
+  'googlebusiness': 'gmb',
+  'google business': 'gmb'
 };
 
 const INBOX_SUPPORTED_PLATFORMS = ['Instagram', 'Facebook', 'LinkedIn', 'X', 'YouTube'];
@@ -214,6 +217,7 @@ function normalizeDisplayPlatform(platform = '') {
   if (value === 'linkedin') return 'LinkedIn';
   if (value === 'facebook') return 'Facebook';
   if (value === 'instagram') return 'Instagram';
+  if (value === 'gmb') return 'Google Business';
   return platform;
 }
 
@@ -509,7 +513,7 @@ router.get('/:platform/auth', protect, requireFeature('social_connect'), async (
       const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
       
       // Configure which social networks to show
-      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads'];
+      const disableSocial = ['snapchat', 'telegram', 'threads'];
       
       const createResult = await createAyrshareProfile(profileTitle, {
         hideTopHeader: false,
@@ -1290,7 +1294,7 @@ router.get('/status', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     
     // Build status for all platforms (removed TikTok and Snapchat, renamed Twitter to X)
-    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn', 'YouTube'];
+    const platforms = ['Instagram', 'Facebook', 'X', 'LinkedIn', 'YouTube', 'Google Business'];
     
     let ayrshareAccounts = [];
     let ayrshareDisplayNames = [];
@@ -1366,7 +1370,7 @@ router.get('/status', protect, async (req, res) => {
     if (!hasProfileKey) {
       console.log(`[Social Status] Creating new Ayrshare profile for user: ${user.email}`);
       const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
-      const disableSocial = ['gmb', 'snapchat', 'telegram', 'threads'];
+      const disableSocial = ['snapchat', 'telegram', 'threads'];
       
       const createResult = await createAyrshareProfile(profileTitle, {
          hideTopHeader: false,
@@ -1440,7 +1444,8 @@ router.get('/status', protect, async (req, res) => {
         'LinkedIn': 'linkedin',
         'YouTube': 'youtube',
         'Pinterest': 'pinterest',
-        'Reddit': 'reddit'
+        'Reddit': 'reddit',
+        'Google Business': 'gmb'
       };
       
       const ayrshareKey = ayrshareMapping[platform];
@@ -1774,7 +1779,7 @@ router.get('/connect/:platform', protect, requireFeature('social_connect'), asyn
       const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
       const createResult = await createAyrshareProfile(profileTitle, { 
         hideTopHeader: false, 
-        disableSocial: ['gmb', 'snapchat', 'telegram', 'threads'] 
+        disableSocial: ['snapchat', 'telegram', 'threads'] 
       });
       if (createResult.success) {
         user.ayrshare = {
@@ -1969,7 +1974,7 @@ router.get('/ayrshare/connect-url/:platform', protect, requireFeature('social_co
       const profileTitle = `Nebula-${user._id.toString().slice(-8)}-${user.email.split('@')[0]}`;
       const createResult = await createAyrshareProfile(profileTitle, { 
         hideTopHeader: false, 
-        disableSocial: ['gmb', 'snapchat', 'telegram', 'threads'] 
+        disableSocial: ['snapchat', 'telegram', 'threads'] 
       });
       if (createResult.success) {
         user.ayrshare = {

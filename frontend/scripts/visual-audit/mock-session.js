@@ -185,8 +185,12 @@
   };
   var credits = { balance: 4200, totalUsed: 800, history: [] };
   var socialConnections = [
-    { platform: 'instagram', connected: true, username: 'sunrisebakery', accountName: 'Sunrise Bakery', connectedAt: iso(-10) },
-    { platform: 'facebook', connected: false },
+    { platform: 'Instagram', connected: true, username: 'sunrisebakery', accountName: 'Sunrise Bakery', connectedAt: iso(-10) },
+    { platform: 'Facebook', connected: false },
+    { platform: 'X', connected: false },
+    { platform: 'LinkedIn', connected: false },
+    { platform: 'YouTube', connected: false },
+    { platform: 'Google Business', connected: false },
   ];
 
   var ok = function (extra) { var o = { success: true }; for (var k in extra) o[k] = extra[k]; return o; };

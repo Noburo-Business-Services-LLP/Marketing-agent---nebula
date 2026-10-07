@@ -54,7 +54,7 @@ const PLATFORMS: Array<{ key: string; label: string; Icon: React.ComponentType<{
   { key: 'facebook',  label: 'Facebook',  Icon: platformIcon('facebook') },
   { key: 'x',         label: 'X',         Icon: platformIcon('x') },
   { key: 'linkedin',  label: 'LinkedIn',  Icon: platformIcon('linkedin') },
-  { key: 'gmb',       label: 'Google Business (coming soon)', Icon: platformIcon('gmb'), soon: true },
+  { key: 'gmb',       label: 'Google Business', Icon: platformIcon('gmb') },
 ];
 
 const MetaBox: React.FC<{
