@@ -74,3 +74,12 @@ test('quark summary names the largest group and total', () => {
   assert.match(s, /Images and posts 70%/);
   assert.equal(quarksSummary({ available: true, total: 0, categories: [] }), 'No Quarks spent this month.');
 });
+
+test('the window shown is the one the numbers on screen were counted for, even after a failed switch', async () => {
+  const { shownWindow } = await import('../utils/staffUsage.ts');
+  assert.equal(shownWindow({ funnel: { days: 30 } }, 90), 30);
+  assert.equal(shownWindow({ funnel: { days: 90 } }, 30), 90);
+  assert.equal(shownWindow(null, 90), 90);
+  assert.equal(shownWindow({ funnel: {} }, 30), 30);
+  assert.equal(shownWindow({ funnel: { days: 7 } }, 30), 30);
+});

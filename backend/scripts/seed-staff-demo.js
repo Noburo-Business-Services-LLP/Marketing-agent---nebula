@@ -288,7 +288,8 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
     for (let k = 0; k < n; k++) {
       const at = ago(Math.min(between(0.05, 6), Math.max(0.05, (now - c.createdAt.getTime()) / DAY - 0.05)));
       between(0, 60); // keeps the earlier random numbers where they were
-      const action = SPEND_ACTIONS[(k + c.index) % SPEND_ACTIONS.length];
+      let action = SPEND_ACTIONS[(k + c.index) % SPEND_ACTIONS.length];
+      if (c.index % 10 === 0 && k === 0) action = 'hero_video_clip'; else if (action === 'hero_video_clip') action = 'image_generated'; // hero clips are rare and expensive: only a few clients make one
       const spend = QUARK_COSTS[action];
       c.credits.history.push({ action, amount: -spend, description: 'Made something', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });
       if (k === 1) c.credits.history.push({ action: `${action}_refund`, amount: spend, description: 'Refund', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });

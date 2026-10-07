@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
-import { WINDOWS, barPercent, featureSummary, funnelSummary, percentText, quarksSummary, shapeFeatures } from '../../utils/staffUsage';
+import { WINDOWS, barPercent, shownWindow, featureSummary, funnelSummary, percentText, quarksSummary, shapeFeatures } from '../../utils/staffUsage';
 import type { FeatureItem, FunnelStep, QuarkCategory } from '../../utils/staffUsage';
 
 const LOAD_ERROR = 'We could not load the Usage numbers. Please try again.';
@@ -100,13 +100,15 @@ const StaffUsage: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const dataRef = useRef<any>(null);
+  useEffect(() => { dataRef.current = data; }, [data]);
 
   const load = useCallback((d: number, quiet = false) => {
     if (!quiet) setLoading(true);
     setError('');
     return apiService.getStaffUsage(d)
       .then((res) => { if (res && res.success === false) throw new Error(res.message); setData(res); })
-      .catch((e) => setError(customerMessage(e, LOAD_ERROR)))
+      .catch((e) => { setError(customerMessage(e, LOAD_ERROR)); setDays((cur) => (cur === d ? shownWindow(dataRef.current, d) : cur)); })
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { load(days, !!data); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [days, load]);
@@ -127,6 +129,7 @@ const StaffUsage: React.FC = () => {
   const q = data.quarks || { available: false };
   const tiers = data.topByTier || { available: false };
   const none = fu.customers === 0;
+  const fdays = shownWindow(data, days);
   const get = (k: string) => (fu.items as FeatureItem[]).find((i) => i.key === k);
   const tile = (k: string, label: string) => { const i = get(k); return <Tile key={k} label={label} value={i && i.available ? (i.count || 0).toLocaleString('en-IN') : '—'} sub={i && i.available ? `${i.clients} ${i.clients === 1 ? 'client' : 'clients'}` : 'could not be counted'} />; };
 
@@ -160,11 +163,11 @@ const StaffUsage: React.FC = () => {
             {fu.note && <Note>{fu.note}</Note>}
           </Section>
 
-          <Section title="Sign-up funnel" hint={`Clients who signed up in the last ${days} days`}>
+          <Section title="Sign-up funnel" hint={`Clients who signed up in the last ${fdays} days`}>
             {!fn.available ? <Unavailable reason={fn.reason} /> : fn.signedUp === 0 ? (
-              <p className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-5 text-sm text-[var(--gv-text-secondary)]">No clients signed up in the last {days} days.</p>
+              <p className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-5 text-sm text-[var(--gv-text-secondary)]">No clients signed up in the last {fdays} days.</p>
             ) : (
-              <Card><FunnelChart steps={fn.steps} days={days} /></Card>
+              <Card><FunnelChart steps={fn.steps} days={fdays} /></Card>
             )}
             {fn.available && fn.note && <Note>{fn.note}</Note>}
           </Section>

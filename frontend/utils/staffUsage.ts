@@ -60,3 +60,9 @@ export function quarksSummary(q: { available?: boolean; total?: number; categori
   const parts = (q.categories || []).filter((c) => c.quarks > 0).map((c) => `${c.label} ${percentText(c.percent)}`);
   return `${q.total.toLocaleString('en-IN')} Quarks spent this month: ${parts.join(', ')}.`;
 }
+
+/** The window the numbers on screen were counted for. After a failed switch the old numbers stay, so the switch must follow them. */
+export function shownWindow(data: { funnel?: { days?: number } } | null | undefined, wanted: number): number {
+  const d = data && data.funnel && data.funnel.days;
+  return d === 30 || d === 90 ? d : wanted;
+}
