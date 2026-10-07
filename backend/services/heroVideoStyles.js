@@ -1,5 +1,5 @@
 /**
- * Hero video styles: the 13 wizard style slugs, grouped into four rule sets the planner receives as
+ * Hero video styles: the wizard style slugs, grouped into four rule sets the planner receives as
  * `styleBlock`. Each group's rules are an editable prompt-registry entry (hero_video.style.<group>,
  * stage hero-video, no variables), so Prompt Studio edits apply. The built-in text below is the
  * shipped default and the synchronous fallback when the registry lookup fails.
@@ -25,7 +25,16 @@ const HERO_STYLES = [
   { slug: 'product-showcase', label: 'Product Showcase', group: 'product', blurb: 'Hero product on a lit stage' },
   { slug: 'news-update', label: 'News Update', group: 'explainer', blurb: 'Broadcast framing with lower-third titling' },
   { slug: 'social-media-reel', label: 'Social Media Reel', group: 'ugc', blurb: 'Fast cuts, vertical-first, punchy hooks' },
-  { slug: 'luxury-advertisement', label: 'Luxury Advertisement', group: 'cinematic', blurb: 'Restrained, premium, gold and black' }
+  { slug: 'luxury-advertisement', label: 'Luxury Advertisement', group: 'cinematic', blurb: 'Restrained, premium, gold and black' },
+  { slug: 'unboxing', label: 'UGC Unboxing', group: 'ugc', blurb: 'Someone opens it for the first time, on a phone', hint: 'One person opens the package for the first time on a phone: real reactions, hands and product close-ups, honest first impressions, never scripted-sounding praise.' },
+  { slug: 'fashion-lookbook', label: 'Fashion Lookbook', group: 'cinematic', blurb: 'Fabric, fit and movement, styled like a campaign', hint: 'The garments are the hero: fabric movement, fit and detail close-ups, confident unposed walking and turning, a clean or street location, a steady stylish rhythm.' },
+  { slug: 'festive-campaign', label: 'Festive Campaign', group: 'cinematic', blurb: 'Warm celebration, family and gifting', hint: 'Warm celebration: lamps, colour, family and togetherness, gifting moments, rich festive light; the product sits inside the moment and is never shouted.' },
+  { slug: 'behind-the-scenes', label: 'Behind the Scenes', group: 'ugc', blurb: 'The making: hands, tools and craft', hint: 'Show the making: hands at work, tools, materials, the workshop or kitchen in real light; craft and care; candid and unstaged.' },
+  { slug: 'founder-story', label: 'Founder Story', group: 'ugc', blurb: 'Why the business exists, in plain words', hint: 'A founder-style character says why the business exists in plain words, at their own place of work; sincere and specific; never presented as a real person.' },
+  { slug: 'before-and-after', label: 'Before and After', group: 'product', blurb: 'A clear change, shown not told', hint: 'A clear transformation in two states of the same subject, same angle and light, the change shown not told; never promise results.' },
+  { slug: 'get-ready-with-me', label: 'Get Ready With Me', group: 'ugc', blurb: 'A relaxed routine, step by step', hint: 'A casual routine filmed close, at a mirror or desk: steps in order, products used for real, chatty and relaxed.' },
+  { slug: 'myth-busting', label: 'Myth Busting Q&A', group: 'explainer', blurb: 'One common question, answered plainly', hint: 'One person answers a common question or busts one myth: the question first, a plain answer in two or three beats, one thing demonstrated as proof.' },
+  { slug: 'comedy-skit', label: 'Comedy Skit', group: 'ugc', blurb: 'A relatable moment with a funny turn', hint: 'A short relatable situation with a funny turn: two characters at most, a comic beat in the middle, the brand appearing naturally in the punchline.' }
 ];
 
 const DEFAULT_STYLE = 'cinematic-commercial';
@@ -86,7 +95,7 @@ function isHeroStyle(slug) {
 }
 
 const styleFor = (slug) => BY_SLUG.get(slug) || BY_SLUG.get(DEFAULT_STYLE);
-const header = (style) => `Style: ${style.label} (${style.group}).`;
+const header = (style) => `Style: ${style.label} (${style.group}).${style.hint ? ` ${style.hint}` : ''}`;
 
 function groupForStyle(slug) {
   return styleFor(slug).group;
@@ -115,7 +124,13 @@ async function getStyleBlock(slug, userId = null, deps = {}) {
   return `${header(style)}\n${rules || GROUP_BLOCKS[style.group]}`;
 }
 
+/** The extra direction for a style by its wizard label, or '' when it has none. */
+function hintForLabel(label) {
+  const s = HERO_STYLES.find((x) => x.label === label);
+  return (s && s.hint) || '';
+}
+
 module.exports = {
-  HERO_STYLES, DEFAULT_STYLE, STYLE_PROMPT_KEYS, GROUP_BLOCKS,
+  hintForLabel, HERO_STYLES, DEFAULT_STYLE, STYLE_PROMPT_KEYS, GROUP_BLOCKS,
   isHeroStyle, groupForStyle, getStyleBlock, getBuiltInStyleBlock
 };

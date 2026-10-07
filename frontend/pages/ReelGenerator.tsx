@@ -74,7 +74,16 @@ const VIDEO_STYLES: { value: string; slug: string; blurb: string }[] = [
   { value: 'Product Showcase', slug: 'product-showcase', blurb: 'The product shown prominently on a lit set' },
   { value: 'News Update', slug: 'news-update', blurb: 'News-broadcast framing with lower-third titles' },
   { value: 'Social Media Reel', slug: 'social-media-reel', blurb: 'Fast cuts, vertical format and a strong opening moment' },
-  { value: 'Luxury Advertisement', slug: 'luxury-advertisement', blurb: 'A restrained, premium look in gold and black' }
+  { value: 'Luxury Advertisement', slug: 'luxury-advertisement', blurb: 'A restrained, premium look in gold and black' },
+  { value: 'UGC Unboxing', slug: 'unboxing', blurb: 'Someone opens it for the first time, on a phone' },
+  { value: 'Fashion Lookbook', slug: 'fashion-lookbook', blurb: 'Fabric, fit and movement, styled like a campaign' },
+  { value: 'Festive Campaign', slug: 'festive-campaign', blurb: 'Warm celebration, family and gifting' },
+  { value: 'Behind the Scenes', slug: 'behind-the-scenes', blurb: 'The making: hands, tools and craft' },
+  { value: 'Founder Story', slug: 'founder-story', blurb: 'Why the business exists, in plain words' },
+  { value: 'Before and After', slug: 'before-and-after', blurb: 'A clear change, shown not told' },
+  { value: 'Get Ready With Me', slug: 'get-ready-with-me', blurb: 'A relaxed routine, step by step' },
+  { value: 'Myth Busting Q&A', slug: 'myth-busting', blurb: 'One common question, answered plainly' },
+  { value: 'Comedy Skit', slug: 'comedy-skit', blurb: 'A relatable moment with a funny turn' }
 ];
 
 const FINAL_OUTPUT_STEP = 13;

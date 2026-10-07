@@ -884,7 +884,9 @@ ${usageRules}`;
 - Use: cinematic camera movement, premium lighting, shallow depth of field, commercial composition, smooth transitions.`;
     } else if (input.videoStyle === 'Product Advertisement') {
       videoStyleContext += `
-- Character becomes optional unless explicitly enabled.`;
+- Character becomes optional unless explicitly enabled.`;    } else {
+      const hint = require('./heroVideoStyles').hintForLabel(input.videoStyle);
+      if (hint) videoStyleContext += `\n- ${hint}`;
     }
   }
 

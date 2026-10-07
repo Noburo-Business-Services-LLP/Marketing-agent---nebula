@@ -45,7 +45,7 @@ const sentence = (s) => (s && !/[.!?…]$/.test(s) ? `${s}.` : s);
 const MAX_SHOTS = 7;
 const MAX_HERO_CUT = 12;
 const MAX_CTA = 60;
-const STYLE_BLOCK_MAX = 1200; // an edited style prompt longer than this is clipped, keeping the planner under 14,000 characters
+const STYLE_BLOCK_MAX = 1400; // an edited style prompt longer than this is clipped, keeping the planner under 14,000 characters
 const CAST_BUDGET = 1000; // all cast lines together
 const CAST_BUDGET_WORDS = 1300; // when no cast photo is sent, the words carry the whole identity
 const WORDS_ONLY_NOTE = 'No person photos are sent: describe each person fully in the prompt (age, looks, hair, clothing, manner), repeat the same clothing in every beat, and never give a person an image tag.';

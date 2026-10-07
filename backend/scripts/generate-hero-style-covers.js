@@ -31,7 +31,16 @@ const SCENES = {
   'product-showcase': 'an unbranded ceramic mug on a small round plinth, a single soft spotlight, gentle reflection on the glazed surface, deep charcoal backdrop',
   'news-update': 'a woman stands on a city street at blue hour holding a plain microphone, traffic lights blurred behind her, steady composed framing',
   'social-media-reel': 'friends laughing on a rooftop at sunset, one turning toward the camera mid-motion, natural motion blur, vivid but natural colour',
-  'luxury-advertisement': 'an unbranded gold watch resting on black velvet, a narrow hard light raking across its face, deep shadow, restrained and premium'
+  'luxury-advertisement': 'an unbranded gold watch resting on black velvet, a narrow hard light raking across its face, deep shadow, restrained and premium',
+  unboxing: 'a young woman opens a plain cardboard parcel on a sofa, a hand lifting tissue paper aside, a delighted half smile, soft window light',
+  'fashion-lookbook': 'a model in a flowing cotton kurta walks through a sunlit courtyard, fabric lifting with the movement, shallow depth of field',
+  'festive-campaign': 'a family lights rows of small oil lamps on a doorstep at dusk, warm glow on smiling faces, marigold garlands, rich colour',
+  'behind-the-scenes': 'a tailor guides cloth through a sewing machine in a small workshop, thread spools and chalk marks on the table, window light on his hands',
+  'founder-story': 'a woman in her forties stands at the counter of her small shop at opening time, one hand resting on a stack of boxes, calm direct gaze',
+  'before-and-after': 'two identical shelves side by side in the same light, one cluttered and one neatly arranged, a hand resting on the tidy one',
+  'get-ready-with-me': 'a young woman faces a mirror with a phone propped beside it, small bottles on the dresser, morning light, a relaxed laugh',
+  'myth-busting': 'a man at a workshop bench holds up one simple object and speaks to a phone camera, an open notebook beside him, daylight from a window',
+  'comedy-skit': 'two friends at a kitchen table react with wide eyes to a phone screen, one mid laugh, one covering her mouth, warm evening light'
 };
 
 // Scenes with no person in them: the people-only wording would be wrong for these.

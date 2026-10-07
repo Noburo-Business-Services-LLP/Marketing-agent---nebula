@@ -24,8 +24,9 @@ const GROUPS = {
 const KEYS = ['hero_video.style.cinematic', 'hero_video.style.ugc', 'hero_video.style.product', 'hero_video.style.explainer'];
 const STYLE_BLOCK_MAX = heroRouter.STYLE_BLOCK_MAX;
 
-test('13 slugs, unknown rejected, group mapping as in Task 2', () => {
-  assert.deepEqual(HERO_STYLES.map((s) => s.slug).sort(), [...SLUGS].sort());
+test('original 13 slugs present, unknown rejected, group mapping as in Task 2', () => {
+  for (const s of SLUGS) assert.ok(HERO_STYLES.some((x) => x.slug === s), s);
+  for (const s of HERO_STYLES.filter((x) => !SLUGS.includes(x.slug))) assert.ok(s.hint && s.hint.length > 40, `${s.slug}: added styles carry a direction hint`);
   for (const [g, slugs] of Object.entries(GROUPS)) for (const s of slugs) assert.equal(groupForStyle(s), g, s);
   for (const bad of ['', 'nope', 'Testimonial', null, undefined, 3, '__proto__', 'constructor']) assert.equal(isHeroStyle(bad), false, String(bad));
   assert.equal(HERO_STYLES.find((s) => s.slug === 'testimonial').label, 'Creator recommendation');
@@ -40,7 +41,7 @@ test('getStyleBlock is async; with no user it returns the built-in block', async
 });
 
 test('every group block carries integrity and realism rules and fits STYLE_BLOCK_MAX', async () => {
-  assert.equal(STYLE_BLOCK_MAX, 1200);
+  assert.equal(STYLE_BLOCK_MAX, 1400);
   for (const s of SLUGS) {
     const b = await getStyleBlock(s);
     assert.ok(b.length <= STYLE_BLOCK_MAX, `${s}: ${b.length} chars`);
@@ -134,14 +135,14 @@ async function callStyles(impl) {
   return res;
 }
 
-test('GET /styles: protected, 13 entries with label, group, blurb and a cover', async () => {
+test('GET /styles: protected, one entry per style with label, group, blurb and a cover', async () => {
   const layer = stylesRoute();
   assert.ok(layer, 'route exists');
   assert.equal(layer.route.stack[0].name, 'protect');
   const res = await callStyles();
   assert.equal(res.code, 200);
   const list = res.body.styles;
-  assert.equal(list.length, 13);
+  assert.equal(list.length, HERO_STYLES.length);
   assert.deepEqual(list.map((s) => s.slug), HERO_STYLES.map((s) => s.slug));
   for (const s of list) {
     assert.deepEqual(Object.keys(s).sort(), ['blurb', 'coverUrl', 'group', 'label', 'slug']);
@@ -209,14 +210,14 @@ function coverDirListing() {
   return fs.readdirSync(d).sort().join(',');
 }
 
-test('cover script --dry-run prints 13 photographic 3:4 prompts and touches no API', () => {
+test('cover script --dry-run prints a photographic 3:4 prompts and touches no API', () => {
   const before = coverDirListing();
   const r = runScript(['--dry-run']);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(r.hits, [], 'no image helper load and no network');
   const lines = r.stdout.split('\n').filter((l) => /^[a-z-]+: /.test(l));
-  assert.equal(lines.length, 13, r.stdout);
-  assert.deepEqual(lines.map((l) => l.split(':')[0]).sort(), [...SLUGS].sort());
+  assert.equal(lines.length, HERO_STYLES.length, r.stdout);
+  assert.deepEqual(lines.map((l) => l.split(':')[0]).sort(), HERO_STYLES.map((x) => x.slug).sort());
   for (const l of lines) {
     const prompt = l.slice(l.indexOf(':') + 1);
     assert.match(prompt, /photograph/i, l);

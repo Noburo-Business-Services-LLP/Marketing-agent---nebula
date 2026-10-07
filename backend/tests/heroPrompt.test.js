@@ -243,8 +243,9 @@ const GROUPS = {
   explainer: ['educational', 'motivational', 'corporate-presentation', 'news-update']
 };
 
-test('HERO_STYLES lists the 13 wizard styles in the four groups', () => {
-  assert.deepEqual(HERO_STYLES.map((s) => s.slug).sort(), [...SLUGS].sort());
+test('HERO_STYLES lists the 13 original wizard styles and any added ones in the four groups', () => {
+  for (const s of SLUGS) assert.ok(HERO_STYLES.some((x) => x.slug === s), s);
+  for (const s of HERO_STYLES.filter((x) => !SLUGS.includes(x.slug))) assert.ok(s.hint && s.hint.length > 40, `${s.slug}: added styles carry a direction hint`);
   for (const s of HERO_STYLES) assert.ok(s.label && s.group, s.slug);
   for (const [g, slugs] of Object.entries(GROUPS)) for (const s of slugs) assert.equal(groupForStyle(s), g, s);
   for (const s of SLUGS) assert.equal(isHeroStyle(s), true, s);
