@@ -7,6 +7,7 @@ import {
 } from '../services/api';
 import HeroStylePicker from '../components/HeroStylePicker';
 import GenerationTimer from '../components/GenerationTimer';
+import HeroQuickStart from '../components/HeroQuickStart';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 
 // Hero Studio: one premium 15-second clip built from the Reels wizard's story, cast and place,
@@ -108,10 +109,11 @@ html:not(.dark) body.gravity-shell .hero-studio select {
 html:not(.dark) .hero-studio .gravity-label:not([class*="gv-accent-text"]) { color: var(--gv-text-tertiary); }
 `;
 
-const HeroVideo: React.FC = () => {
+const HeroVideoInner: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const incoming = (location.state || {}) as { brief?: unknown; style?: unknown };
+  const incoming = (location.state || {}) as { brief?: unknown; style?: unknown; cta?: unknown };
+  const incomingCta = typeof incoming.cta === 'string' ? incoming.cta.slice(0, 60) : '';
   const incomingBrief = isBrief(incoming.brief) ? incoming.brief : null;
   // The wizard's chosen style (a slug) is the starting pick; the list from /styles validates it.
   const incomingStyle = typeof incoming.style === 'string' && incoming.style ? incoming.style : DEFAULT_STYLE;
@@ -146,10 +148,12 @@ const HeroVideo: React.FC = () => {
   const [planError, setPlanError] = useState('');
 
   // ---- brand + finish options ----
-  const [ctaText, setCtaText] = useState('');
-  const [ctaEdited, setCtaEdited] = useState(false);
+  const [ctaText, setCtaText] = useState(incomingCta);
+  const [ctaEdited, setCtaEdited] = useState(!!incomingCta);
   const [website, setWebsite] = useState('');
   const [endCard, setEndCard] = useState(true);
+  // The logo on the moving clip is off unless asked for; the end card carries the logo cleanly.
+  const [logoOnVideo, setLogoOnVideo] = useState(false);
   const [captions, setCaptions] = useState(false);
   const [realism, setRealism] = useState(true);
   const [audioMode, setAudioMode] = useState<HeroAudioMode>('native');
@@ -429,6 +433,7 @@ const HeroVideo: React.FC = () => {
         finish: {
           realism,
           captions,
+          brandMark: logoOnVideo,
           endCard: { enabled: endCard, ctaText: ctaValue.trim(), website: website.trim() },
         },
         beatSheet: plan.beatSheet,
@@ -532,23 +537,21 @@ const HeroVideo: React.FC = () => {
     </div>
   ) : null;
 
-  // ---- no brief: explain where a Hero video comes from ----
+  // ---- no brief: the quick flow (three crisp ideas), or an error loading the chosen one ----
   if (!incomingBrief || prepError) {
     return (
-      <div className="hero-studio max-w-[760px] mx-auto pb-16 pt-6 space-y-8">
+      <div className="hero-studio max-w-[920px] mx-auto pb-16 pt-6 space-y-8">
         <style>{LIGHT_FIX}</style>
         <GravityHero
           eyebrow="Hero Studio"
-          headline={prepError ? <>We could not load this <GravityEmphasis>story</GravityEmphasis></> : <>Start from your <GravityEmphasis>Reels</GravityEmphasis> story</>}
-          subcopy={
-            prepError ||
-            'A Hero video is one 15-second clip made from the story you build in Reels: your concept, your cast and your place. Finish the cast and the script there, then press “Make this a Hero video”.'
-          }
+          headline={<>Create a <GravityEmphasis>Hero video</GravityEmphasis></>}
+          subcopy="One crisp 15-second clip: a hook, three short beats and a clear closing call to action. For a longer video of 30 to 60 seconds, use the step-by-step video in Videos."
           className="!mb-0"
         />
-        <div className="text-center">
-          <Link to="/reels" className={goldLinkBtn}>Go to Reels</Link>
-        </div>
+        {prepError && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{prepError}</p>}
+        <HeroQuickStart
+          onPick={(brief, styleSlug, cta) => navigate('/reels/hero', { state: { brief, style: styleSlug, cta } })}
+        />
         {jobPanel}
         {historyList}
       </div>
@@ -975,6 +978,7 @@ const HeroVideo: React.FC = () => {
           <SectionTitle n={8} title="Finish" />
           <div className="divide-y divide-[var(--gv-border-subtle)]">
             <Switch on={endCard} onChange={setEndCard} label="End card" hint="A closing card with your logo, call to action and website." />
+            <Switch on={logoOnVideo} onChange={setLogoOnVideo} label="Logo on the video" hint="Place your logo on the clip itself. Off by default; the end card already shows your logo." />
             <Switch on={captions} onChange={setCaptions} label="Captions" hint="Add the spoken lines to the video as on-screen text." />
             <Switch on={realism} onChange={setRealism} label="Realism grade" hint="A natural film look: softer contrast and fine grain." />
             <label className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2">
@@ -1039,6 +1043,12 @@ const HeroVideo: React.FC = () => {
       </div>
     </div>
   );
+};
+
+// A new idea means a new page state: remount so the brief, plan and options start fresh.
+const HeroVideo: React.FC = () => {
+  const location = useLocation();
+  return <HeroVideoInner key={location.key} />;
 };
 
 export default HeroVideo;

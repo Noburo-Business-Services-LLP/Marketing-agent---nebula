@@ -3922,6 +3922,7 @@ export interface HeroBrief {
   concept: { title?: string; storySummary?: string; coreEmotion?: string; visualStyle?: string };
   aspectRatio: HeroAspectRatio;
   language?: string;
+  quick?: boolean;
   cast: HeroBriefCastMember[];
   castSheetUrl?: string;
   environment: { enabled: boolean; notes?: string; images: Array<{ url?: string; dataUrl?: string; alt?: string }> };
@@ -3984,6 +3985,14 @@ export const heroVideoAPI = {
     dropped?: Array<{ label?: string; reason?: string }>; message?: string;
   }> => {
     return apiCall('/hero-video/brief', { method: 'POST', body: JSON.stringify({ brief }) }, true);
+  },
+
+  // Quick flow: three crisp 15-second ideas, each with a ready brief. No charge.
+  concepts: async (payload: { idea: string; style: 'ugc' | 'brand-film'; language?: string; aspectRatio?: HeroAspectRatio; ctaText?: string }): Promise<{
+    success: boolean; style?: string; message?: string;
+    concepts?: Array<{ title: string; emotion: string; hook: string; beats: string[]; dialogue: string[]; cta: string; look: string; brief: HeroBrief }>;
+  }> => {
+    return apiCall('/hero-video/concepts', { method: 'POST', body: JSON.stringify(payload) }, true);
   },
 
   plan: async (payload: {
