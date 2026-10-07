@@ -6,6 +6,7 @@
 #   bash docs/superpowers/ops/release-prod.sh                # production, tag prod-<git short sha>
 #   ENV=test bash docs/superpowers/ops/release-prod.sh       # test environment, tag test-<sha>
 #   DRY_RUN=1 bash docs/superpowers/ops/release-prod.sh      # builds and checks, pushes nothing, changes nothing
+#   NO_CACHE=1 bash docs/superpowers/ops/release-prod.sh     # rebuild from scratch (use after a disk-full or a corrupted build cache)
 #
 # Safety: it refuses to run with uncommitted changes (so the image matches a commit), prints what it
 # will do, and asks you to type DEPLOY before it pushes or changes anything (not in a dry run).
@@ -20,6 +21,7 @@ REGION="${REGION:-ap-south-1}"
 ACCOUNT="${ACCOUNT:-609665073007}"
 REGISTRY="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com"
 DRY_RUN="${DRY_RUN:-0}"
+CACHE_FLAG=""; [ "${NO_CACHE:-0}" = "1" ] && CACHE_FLAG="--no-cache"
 
 if [ -n "$(git status --porcelain)" ]; then
   echo "There are uncommitted changes. Commit or stash them first, so the image matches a commit."; git status --short | head -10; exit 1
@@ -35,9 +37,9 @@ echo "Frontend image: $FRONTEND_IMAGE"
 docker info >/dev/null 2>&1 || { echo "Docker is not running. Open Docker Desktop and try again."; exit 1; }
 
 echo; echo "== Building the backend image (linux/amd64)"
-docker buildx build --platform linux/amd64 --load -f Dockerfile.backend -t "$BACKEND_IMAGE" .
+docker buildx build $CACHE_FLAG --platform linux/amd64 --load -f Dockerfile.backend -t "$BACKEND_IMAGE" .
 echo; echo "== Building the frontend image (linux/amd64)"
-docker buildx build --platform linux/amd64 --load -f Dockerfile.frontend -t "$FRONTEND_IMAGE" .
+docker buildx build $CACHE_FLAG --platform linux/amd64 --load -f Dockerfile.frontend -t "$FRONTEND_IMAGE" .
 
 echo; echo "== Smoke test of the backend image (no network): native libraries and the new modules must load"
 docker run --rm --network none --platform linux/amd64 -e NODE_ENV=production "$BACKEND_IMAGE" node -e "
