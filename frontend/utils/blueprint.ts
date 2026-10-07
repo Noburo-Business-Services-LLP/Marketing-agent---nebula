@@ -51,6 +51,8 @@ export interface BlueprintInputForm {
   offers: BlueprintOfferForm[];
   colours: string[];
   logoDataUrl: string;
+  /** A logo already saved in the account; used when no new file is chosen. */
+  logoUrl?: string;
   mode: BlueprintMode;
 }
 
@@ -86,6 +88,17 @@ export function prefillFromProfile(user: any): Partial<BlueprintInputForm> {
   if (sell) out.whatYouSell = sell;
   if (text(p.targetAudience)) out.whoItsFor = text(p.targetAudience);
   if (text(p.businessLocation)) out.city = text(p.businessLocation);
+  return out;
+}
+
+/** Brand logo and colours already saved in the account (onboarding or Settings), so they are not asked for again. */
+export function prefillFromBrand(profile: any): Partial<BlueprintInputForm> {
+  const a = (profile && profile.assets) || {};
+  const out: Partial<BlueprintInputForm> = {};
+  const hex = (v: any) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim() : '');
+  const colours = [hex(a.primaryColor), hex(a.secondaryColor)].filter(Boolean);
+  if (colours.length) out.colours = colours;
+  if (typeof a.primaryLogoUrl === 'string' && /^https:\/\//i.test(a.primaryLogoUrl)) out.logoUrl = a.primaryLogoUrl;
   return out;
 }
 
@@ -196,6 +209,7 @@ export function buildStartBody(form: BlueprintInputForm, allowGuided: boolean): 
   if (offers.length) body.offers = offers;
   if (form.colours.length) body.colours = form.colours.slice(0, MAX_COLOURS);
   if (form.logoDataUrl) body.logoDataUrl = form.logoDataUrl;
+  else if (form.logoUrl) body.logoUrl = form.logoUrl;
   return body;
 }
 

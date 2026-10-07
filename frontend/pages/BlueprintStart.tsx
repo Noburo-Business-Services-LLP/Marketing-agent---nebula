@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, X as XIcon } from 'lucide-react';
 import { GravityPanel, GravityLabel, GravityButton, GravityFileInput } from '../components/gravity';
 import UpgradePrompt from '../components/UpgradePrompt';
-import { apiService } from '../services/api';
+import { apiService, brandAssetsAPI } from '../services/api';
 import { upgradeInfoOf } from '../utils/plans';
 import {
-  GOALS, MAX_COMPETITORS, MAX_OFFERS, MAX_COLOURS, emptyForm, prefillFromProfile, validateForm, buildStartBody, canChooseMode,
+  GOALS, MAX_COMPETITORS, MAX_OFFERS, MAX_COLOURS, emptyForm, prefillFromProfile, prefillFromBrand, validateForm, buildStartBody, canChooseMode,
   logoFileProblem, startFailureOf, quarksNote, BlueprintInputForm,
 } from '../utils/blueprint';
 import { BLUEPRINT_COPY } from '../constants/blueprintCopy';
@@ -42,6 +42,11 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
   useEffect(() => {
     let live = true;
     apiService.getCredits().then((r) => { if (live && typeof r?.costs?.blueprint === 'number') setCost(r.costs.blueprint); }).catch(() => {});
+    brandAssetsAPI.getIntelligenceProfile().then((r) => {
+      if (!live) return;
+      const brand = prefillFromBrand(r?.profile);
+      setForm((f) => ({ ...f, colours: f.colours.length ? f.colours : (brand.colours || []), logoUrl: f.logoUrl || brand.logoUrl }));
+    }).catch(() => {});
     return () => { live = false; };
   }, []);
 
@@ -196,11 +201,11 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
             <div className="space-y-2">
               <p className="text-[13px] font-semibold text-[var(--gv-text-primary)]">{C.logo}</p>
               <div className="flex items-center gap-3 flex-wrap">
-                <GravityFileInput accept="image/png,image/jpeg,image/webp" buttonText={C.logoButton} onFile={onLogo} fileName={form.logoDataUrl ? 'Logo selected' : undefined} />
-                {form.logoDataUrl && (
+                <GravityFileInput accept="image/png,image/jpeg,image/webp" buttonText={C.logoButton} onFile={onLogo} fileName={form.logoDataUrl ? 'Logo selected' : (form.logoUrl ? 'Saved logo' : undefined)} />
+                {(form.logoDataUrl || form.logoUrl) && (
                   <>
-                    <img src={form.logoDataUrl} alt="Your logo" className="h-12 w-12 rounded-md object-contain border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)]" />
-                    <button type="button" className="text-[13px] font-semibold text-[var(--gv-accent-text)] underline underline-offset-2" onClick={() => set('logoDataUrl', '')}>{C.removeLogo}</button>
+                    <img src={form.logoDataUrl || form.logoUrl} alt="Your logo" className="h-12 w-12 rounded-md object-contain border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)]" />
+                    <button type="button" className="text-[13px] font-semibold text-[var(--gv-accent-text)] underline underline-offset-2" onClick={() => { set('logoDataUrl', ''); set('logoUrl', ''); }}>{C.removeLogo}</button>
                   </>
                 )}
               </div>
