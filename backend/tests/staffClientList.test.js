@@ -73,13 +73,16 @@ test('loadClientData asks only for customers, scopes a CSM to their clients, and
   const asked = [];
   const User = { find: (q) => { asked.push(q); return { lean: async () => (q.$or ? [{ _id: 'c1', firstName: 'Priya' }] : [{ _id: 'u1', email: 'u@x.com' }]) }; } };
   const FeatureEvent = { aggregate: async () => [{ _id: 'u1', last: new Date('2026-10-06') }] };
-  const Draft = { aggregate: async (p) => (p[0].$match.status === 'failed' ? [{ _id: 'u1', n: 2 }] : [{ _id: 'u1', oldest: new Date('2026-10-01') }]) };
+  const Draft = { aggregate: async (p) => (p[0].$match.status === 'failed' ? [{ _id: 'u1', n: 2 }] : [{ _id: 'u1', oldest: new Date('2026-10-01'), n: 3 }]) };
   const out = await loadClientData({ viewer: { _id: 'c1', staffRole: 'csm' }, models: { User, FeatureEvent, Draft }, now: new Date('2026-10-07').getTime() });
   assert.strictEqual(asked[0].staffRole, null);
   assert.strictEqual(asked[0].assignedCsm, 'c1');
-  assert.deepStrictEqual(Object.keys(out.extras.u1).sort(), ['failedPosts7d', 'lastEventAt', 'oldestDraftAt']);
+  assert.deepStrictEqual(Object.keys(out.extras.u1).sort(), ['draftCount', 'failedPosts7d', 'lastEventAt', 'oldestDraftAt']);
+  assert.strictEqual(out.extras.u1.draftCount, 3);
   assert.strictEqual(out.csmNames.c1, 'Priya');
   const owner = await loadClientData({ viewer: { _id: 'o', staffRole: 'owner' }, models: { User, FeatureEvent, Draft } });
   assert.strictEqual(asked[asked.length - 2].assignedCsm, undefined);
   assert.ok(owner.users.length === 1);
+  await loadClientData({ viewer: { _id: 'o', staffRole: 'owner' }, models: { User, FeatureEvent, Draft }, assignedOnly: true });
+  assert.deepStrictEqual(asked[asked.length - 2].assignedCsm, { $ne: null }); // the Team page reads only clients that have a CSM
 });

@@ -552,21 +552,7 @@ router.post('/csm-accounts', adminAuth, async (req, res) => {
       });
     }
 
-    let emailed = false;
-    try {
-      if (process.env.RESEND_API_KEY) {
-        const { Resend } = require('resend');
-        // Not FRONTEND_URL: in production that holds the internal load-balancer address.
-        const site = process.env.APP_PUBLIC_URL || 'https://gravity.nebulaa.ai';
-        const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'noreply@nebulaa.ai',
-          to: email,
-          subject: 'Your Nebulaa account is ready',
-          text: `Hi ${firstName},\n\nYou have been added to Nebulaa as a customer success manager.\n\n1. Open ${site} and choose Sign in.\n2. Select Forgot password and enter this email address.\n3. Use the code we send you to set your own password.\n\nAfter you sign in, My clients appears in the left menu.`
-        });
-        emailed = !error;
-      }
-    } catch (_) { emailed = false; }
+    const emailed = await require('../services/staff/invite').sendInvite({ email, firstName: user.firstName || firstName, role: 'csm' });
 
     res.json({ success: true, data: { _id: user._id, email: user.email, isCsm: true }, emailed });
   } catch (error) {

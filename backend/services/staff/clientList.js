@@ -104,10 +104,11 @@ function buildList({ viewer, users, extras = {}, csmNames = {}, now = Date.now()
 }
 
 /** Reads what the list needs. `models` is injected for tests. */
-async function loadClientData({ viewer, models, now = Date.now() }) {
+async function loadClientData({ viewer, models, now = Date.now(), assignedOnly = false }) {
   const { User, FeatureEvent, Draft } = models;
   const scope = { staffRole: null, isCsm: { $ne: true } }; // null also matches accounts that never had a role
   if (roleOf(viewer) === 'csm') scope.assignedCsm = viewer._id;
+  else if (assignedOnly) scope.assignedCsm = { $ne: null }; // the Team page only needs clients that have a CSM
   const users = await User.find(scope, {
     email: 1, firstName: 1, lastName: 1, companyName: 1, mobileNumber: 1, createdAt: 1, isActive: 1, isHidden: 1, lastLoginAt: 1,
     onboardingCompleted: 1, 'credits.balance': 1, connectedSocials: 1, 'ayrshare.activeSocialAccounts': 1,
@@ -122,9 +123,9 @@ async function loadClientData({ viewer, models, now = Date.now() }) {
     events.forEach((e) => put(e._id, { lastEventAt: e.last }));
     const drafts = await Draft.aggregate([
       { $match: { userId: { $in: ids }, status: 'draft' } },
-      { $group: { _id: '$userId', oldest: { $min: '$createdAt' } } }
+      { $group: { _id: '$userId', oldest: { $min: '$createdAt' }, n: { $sum: 1 } } }
     ]);
-    drafts.forEach((d) => put(d._id, { oldestDraftAt: d.oldest }));
+    drafts.forEach((d) => put(d._id, { oldestDraftAt: d.oldest, draftCount: d.n }));
     const failed = await Draft.aggregate([
       { $match: { userId: { $in: ids }, status: 'failed', updatedAt: { $gte: new Date(now - 7 * 86400000) } } },
       { $group: { _id: '$userId', n: { $sum: 1 } } }

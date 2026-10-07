@@ -4,7 +4,8 @@ const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const requireStaff = require('../middleware/requireStaff');
 const { ACTIONS, can, roleOf } = require('../services/staff/permissions');
-const { planRoleChange } = require('../services/staff/roles');
+const { grantableRoles, buildTeam, loadTeamData } = require('../services/staff/team');
+const { addMember, changeRole, removeMember } = require('../services/staff/teamActions');
 const { recordStaffAction } = require('../services/staff/activityLog');
 const { buildList, loadClientData, displayName, platformsOf } = require('../services/staff/clientList');
 const { classifyClient } = require('../services/staff/clientStatus');
@@ -25,27 +26,66 @@ router.get('/me', requireStaff('view_home'), (req, res) => {
   });
 });
 
-// POST /api/staff/team/:id/role { role }: make someone Owner, Admin or CSM, or remove their role.
-router.post('/team/:id/role', requireStaff('add_csm'), async (req, res) => {
-  try {
-    const newRole = req.body?.role === undefined ? undefined : (req.body.role || null);
-    if (newRole === undefined) return res.status(400).json({ success: false, message: 'Choose a role.' });
-    const target = await User.findById(req.params.id).select('email staffRole isCsm').lean();
-    if (!target) return res.status(404).json({ success: false, message: 'That person was not found.' });
-    const ownerCount = await User.countDocuments({ staffRole: 'owner' });
-    const plan = planRoleChange({ actor: req.staff, target, newRole, ownerCount });
-    if (!plan.ok) return res.status(403).json({ success: false, message: plan.message });
-    await User.updateOne({ _id: target._id }, { $set: plan.update });
-    if (newRole !== 'csm' && roleOf(target) === 'csm') {
-      await User.updateMany({ assignedCsm: target._id }, { $set: { assignedCsm: null } });
+// The database and mail wiring for the Team actions (the rules are in services/staff/teamActions.js).
+function teamRepo() {
+  const mongoose = require('mongoose');
+  const ids = (v) => (mongoose.Types.ObjectId.isValid(v) ? v : null);
+  return {
+    findByEmail: (email) => User.findOne({ email }).select('email firstName lastName staffRole isCsm isActive payments.status plan.subscriptions').lean(),
+    findById: (id) => (ids(id) ? User.findById(id).select('email firstName lastName staffRole isCsm isActive').lean() : null),
+    countOwners: () => User.countDocuments({ staffRole: 'owner' }),
+    createUser: async (doc) => {
+      const user = await User.create({ ...doc, password: require('crypto').randomBytes(24).toString('hex') });
+      return user.toObject();
+    },
+    updateUser: (id, set) => User.updateOne({ _id: id }, { $set: set }),
+    unassignClients: async (csmId) => {
+      const mine = await User.find({ assignedCsm: csmId }).select('firstName lastName email companyName businessProfile.name').lean();
+      if (mine.length) await User.updateMany({ assignedCsm: csmId }, { $set: { assignedCsm: null } });
+      return { count: mine.length, clients: mine.slice(0, 50).map((c) => ({ id: String(c._id), name: displayName(c) })) };
     }
-    await recordStaffAction({ actor: req.staff, action: 'role_change', client: target._id, details: { from: roleOf(target), to: newRole } });
-    res.json({ success: true, data: { id: String(target._id), role: newRole } });
+  };
+}
+const teamDeps = () => ({ repo: teamRepo(), record: recordStaffAction, invite: (args) => require('../services/staff/invite').sendInvite(args) });
+
+async function runTeam(res, label, work) {
+  try {
+    const out = await work();
+    res.status(out.status).json(out.body);
   } catch (error) {
-    console.error('[staff] role change failed:', error.message);
-    res.status(500).json({ success: false, message: 'Could not change the role.' });
+    console.error(`[staff] ${label} failed:`, error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
+  }
+}
+
+// GET /api/staff/team: the team with role, status, last active and CSM workload (Owner, Admin).
+router.get('/team', requireStaff('add_csm'), async (req, res) => {
+  try {
+    const models = { User, FeatureEvent: require('../models/FeatureEvent'), Draft: require('../models/Draft') };
+    const data = await loadTeamData({ models });
+    const team = buildTeam(data);
+    res.json({ success: true, me: String(req.staff._id), grantable: grantableRoles(req.staff), ...team });
+  } catch (error) {
+    console.error('[staff] team list failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not load the team. Please try again.' });
   }
 });
+
+// POST /api/staff/team { email, firstName, lastName, role }: add a team member and email the invite.
+router.post('/team', requireStaff('add_csm'), (req, res) =>
+  runTeam(res, 'add team member', () => addMember({ actor: req.staff, input: req.body || {}, ...teamDeps() })));
+
+// PATCH /api/staff/team/:id { role }: change a team member's role.
+router.patch('/team/:id', requireStaff('add_csm'), (req, res) =>
+  runTeam(res, 'role change', () => changeRole({ actor: req.staff, targetId: req.params.id, role: req.body && req.body.role, ...teamDeps() })));
+
+// POST /api/staff/team/:id/role { role }: same as PATCH (kept for the old admin page).
+router.post('/team/:id/role', requireStaff('add_csm'), (req, res) =>
+  runTeam(res, 'role change', () => changeRole({ actor: req.staff, targetId: req.params.id, role: req.body && req.body.role, ...teamDeps() })));
+
+// DELETE /api/staff/team/:id: take staff access away; a CSM's clients are unassigned and listed.
+router.delete('/team/:id', requireStaff('add_csm'), (req, res) =>
+  runTeam(res, 'remove team member', () => removeMember({ actor: req.staff, targetId: req.params.id, ...teamDeps() })));
 
 // GET /api/staff/home: health, clients that need attention, growth. A CSM sees only their own clients;
 // error details are shown to Owners and Admins only.
