@@ -507,7 +507,9 @@ router.post('/users/:id/reset-trial', adminAuth, async (req, res) => {
 // CSM set-up: mark a user as a CSM, and assign a client to a CSM (or clear it with csmId null).
 router.post('/users/:id/csm', adminAuth, async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(req.params.id, { $set: { isCsm: Boolean(req.body?.isCsm) } }, { new: true }).select('email isCsm');
+    // Staff are kept out of the customer numbers (overview, trial funnel) by marking them hidden.
+    const makeCsm = Boolean(req.body?.isCsm);
+    const user = await User.findByIdAndUpdate(req.params.id, { $set: makeCsm ? { isCsm: true, isHidden: true, onboardingCompleted: true } : { isCsm: false } }, { new: true }).select('email isCsm isHidden');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     if (!user.isCsm) await User.updateMany({ assignedCsm: user._id }, { $set: { assignedCsm: null } });
     res.json({ success: true, data: user });
@@ -528,7 +530,10 @@ router.post('/csm-accounts', adminAuth, async (req, res) => {
 
     let user = await User.findOne({ email });
     if (user) {
+      // An existing account (for example one used to test the product) becomes a staff account.
       user.isCsm = true;
+      user.isHidden = true;
+      user.onboardingCompleted = true;
       await user.save();
     } else {
       const crypto = require('crypto');
@@ -538,6 +543,7 @@ router.post('/csm-accounts', adminAuth, async (req, res) => {
         isVerified: true,
         onboardingCompleted: true,
         isCsm: true,
+        isHidden: true,
         companyName: 'Nebulaa'
       });
     }
