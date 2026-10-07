@@ -39,4 +39,17 @@ function friendlyMessage(err, context) {
   return MESSAGES[context] || MESSAGES.default;
 }
 
-module.exports = { isProviderLimitError, friendlyMessage };
+// Plain reasons for the staff Money page. The key is OUR status word for what went wrong, never provider text;
+// anything else gets the generic line, so a stored provider message can never reach the screen.
+const PAYMENT_FAILURES = {
+  failed: 'The payment did not go through.',
+  halted: 'The monthly renewal failed several times, so the plan was stopped.',
+  cancelled: 'The plan was cancelled or ended.'
+};
+const PAYMENT_FAILURE_UNKNOWN = 'The reason was not recorded.';
+
+function paymentFailureMessage(kind) {
+  return (typeof kind === 'string' && Object.prototype.hasOwnProperty.call(PAYMENT_FAILURES, kind)) ? PAYMENT_FAILURES[kind] : PAYMENT_FAILURE_UNKNOWN;
+}
+
+module.exports = { isProviderLimitError, friendlyMessage, paymentFailureMessage };

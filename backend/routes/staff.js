@@ -11,6 +11,7 @@ const { buildList, loadClientData, displayName, platformsOf } = require('../serv
 const { classifyClient } = require('../services/staff/clientStatus');
 const { buildHome, loadDailyActive, activityIds } = require('../services/staff/home');
 const { buildHealth } = require('../services/staff/health');
+const { buildMoney, buildPayments, loadMoneyData } = require('../services/staff/money');
 const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
 
@@ -107,6 +108,30 @@ router.get('/home', requireStaff('view_home'), async (req, res) => {
   } catch (error) {
     console.error('[staff] home failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the Home numbers. Please try again.' });
+  }
+});
+
+// GET /api/staff/money: revenue, plan mix, payments, renewals, failures, Quarks, Ayrshare profiles (Owner only).
+router.get('/money', requireStaff('view_money'), async (req, res) => {
+  try {
+    const data = await loadMoneyData({ models: { User } });
+    const q = req.query || {};
+    res.json({ success: true, ...buildMoney({ ...data, page: q.page, pageSize: q.pageSize }) });
+  } catch (error) {
+    console.error('[staff] money failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not load the Money numbers. Please try again.' });
+  }
+});
+
+// GET /api/staff/money/payments?page=&pageSize=: one page of the payments table (Owner only).
+router.get('/money/payments', requireStaff('view_money'), async (req, res) => {
+  try {
+    const { users } = await loadMoneyData({ models: { User } });
+    const q = req.query || {};
+    res.json({ success: true, ...buildPayments({ users: users.filter((u) => !u.staffRole && !u.isCsm && !u.isHidden), page: q.page, pageSize: q.pageSize }) });
+  } catch (error) {
+    console.error('[staff] payments page failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not load the payments. Please try again.' });
   }
 });
 
