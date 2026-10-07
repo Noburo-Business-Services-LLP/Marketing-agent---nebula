@@ -5,7 +5,7 @@ import { User, BillingData, BusinessProfile } from '../types';
 import { tierLabel } from '../utils/plans';
 import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
-import { jsPDF } from 'jspdf';
+import { buildStrategyPdf } from '../utils/strategyPdf';
 import { apiService } from '../services/api';
 import { CONTENT_LANGUAGES } from '../constants/languages';
 import AdditionalLanguagePicker from '../components/AdditionalLanguagePicker';
@@ -154,46 +154,17 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
     try {
       const res = await apiService.getContentStrategy();
       if (!res.success || !res.html) throw new Error(res.error || 'The content strategy could not be generated.');
-      
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'a4'
-      });
 
-      const element = document.createElement('div');
-      element.innerHTML = res.html;
-      element.style.width = '550px';
-      element.style.padding = '20px';
-      element.style.fontFamily = 'Inter, sans-serif';
-      element.style.color = '#333';
-      element.style.position = 'absolute';
-      element.style.left = '-9999px';
-      
-      const styleTag = document.createElement('style');
-      styleTag.innerHTML = `
-        h1, h2 { color: #111; margin-bottom: 10px; font-family: 'Inter', sans-serif; }
-        p { margin-bottom: 15px; font-size: 14px; line-height: 1.5; font-family: 'Inter', sans-serif; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; font-family: 'Inter', sans-serif; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f5f5f5; font-weight: bold; }
-        ul { margin-bottom: 15px; padding-left: 20px; font-size: 14px; font-family: 'Inter', sans-serif; }
-      `;
-      element.appendChild(styleTag);
-      document.body.appendChild(element);
-
-      await doc.html(element, {
-        callback: function (doc) {
-          doc.save('Nebulaa_Content_Strategy.pdf');
-          document.body.removeChild(element);
-        },
-        x: 20,
-        y: 20,
-        width: 550,
-        windowWidth: 600,
-        autoPaging: 'text'
-      });
-      
+      // The AI's own styling is removed and the page is checked before it is saved (see utils/strategyPdf.ts).
+      const blob = await buildStrategyPdf(res.html);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Nebulaa_Content_Strategy.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err: any) {
       console.error('Strategy PDF failed:', err?.message);
       alert('The strategy PDF could not be created right now. Please try again later.');
