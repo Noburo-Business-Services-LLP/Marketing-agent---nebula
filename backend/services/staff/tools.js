@@ -72,6 +72,8 @@ async function createCoupon({ actor, input, repo, record }) {
   if (!mayCoupons(actor)) return refuse(403, 'Your role cannot do this.');
   const parsed = parseCoupon(input);
   if (!parsed.ok) return refuse(400, parsed.message);
+  // The database's unique index is the last line of defence; check first so a missing index cannot allow a duplicate.
+  if (await repo.exists(parsed.coupon.code)) return refuse(409, 'That coupon code already exists.');
   let created;
   try { created = await repo.create(parsed.coupon); } catch (error) {
     if (error && error.code === 11000) return refuse(409, 'That coupon code already exists.');

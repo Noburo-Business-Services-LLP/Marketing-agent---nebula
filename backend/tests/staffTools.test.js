@@ -70,8 +70,9 @@ stub('models/Draft', {
 });
 stub('models/Coupon', {
   find: () => chain(coupons.map((c) => ({ ...c }))),
+  // No unique index here on purpose: a database whose index was never built must still refuse a duplicate code.
+  findOne: (q) => chain(coupons.find((c) => c.code === q.code) ? { ...coupons.find((c) => c.code === q.code) } : null),
   create: async (doc) => {
-    if (coupons.some((c) => c.code === doc.code)) { const e = new Error('dup'); e.code = 11000; throw e; }
     const row = { isActive: true, usedCount: 0, ...doc }; coupons.push(row); return { ...row };
   },
   findOneAndUpdate: (q, u) => { const c = coupons.find((x) => x.code === q.code); if (c) Object.assign(c, u); return chain(c ? { ...c } : null); },

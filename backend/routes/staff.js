@@ -104,6 +104,7 @@ function toolsRepo() {
       return result.modifiedCount || 0;
     },
     setHidden: (id, hidden) => User.updateOne({ _id: id }, { $set: { isHidden: hidden } }),
+    exists: async (code) => Boolean(await Coupon().findOne({ code }).lean()),
     create: async (doc) => { const row = await Coupon().create(doc); return couponRow(row.toObject ? row.toObject() : row); },
     deactivate: async (code) => { const row = await Coupon().findOneAndUpdate({ code }, { isActive: false }, { new: true }).lean(); return row ? couponRow(row) : null; },
     remove: async (code) => Boolean(await Coupon().findOneAndDelete({ code }))
