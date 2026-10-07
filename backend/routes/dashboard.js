@@ -1776,7 +1776,8 @@ Ensure the table is an actual HTML <table> tag with borders.
       provider: 'gemini',
       taskType: 'content_strategy',
       prompt: prompt,
-      temperature: 0.7
+      temperature: 0.7,
+      textFallback: true // if no Gemini model works for this account, the router tries OpenAI (when a key is set)
     });
 
     res.json({

@@ -8,8 +8,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GROK_API_KEY = process.env.GROK_API_KEY;
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_FLASH_MODEL = 'gemini-2.5-flash';
-const GEMINI_FLASH_LITE_MODEL = 'gemini-2.5-flash-lite';
+const textModels = require('./geminiTextModels');
 const PRIMARY_UNAVAILABLE_MS = 10 * 60 * 1000;
 
 // Remembers for 10 minutes that the primary model has no quota, so repeated calls skip it.
@@ -17,15 +16,14 @@ let primaryUnavailableUntil = 0;
 let clock = () => Date.now();
 let fetchImpl = null; // tests inject a fake; production uses global fetch
 
-function getPrimaryModel() {
-  return process.env.GEMINI_PRO_MODEL || 'gemini-2.5-pro';
-}
+const getPrimaryModel = textModels.getPrimaryModel;
 
 // Test hooks: inject fetch/clock and clear the unavailable memory.
 function _setTestHooks({ fetch, now } = {}) {
   fetchImpl = fetch || null;
   clock = now || (() => Date.now());
   primaryUnavailableUntil = 0;
+  textModels._resetRetiredModels();
 }
 const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
@@ -144,14 +142,14 @@ function isModelUnavailableError(status, bodyText) {
   const text = String(bodyText || '');
   if (status === 429) return true;
   if (/RESOURCE_EXHAUSTED|Quota exceeded/i.test(text)) return true;
-  if (status === 404) return true;
+  // 404, "is not found", "no longer available to new users": the model is gone for this account.
+  if (textModels.isModelRetiredError(status, text)) return true;
   if (status === 403 && /PERMISSION_DENIED/i.test(text)) return true;
   return false;
 }
 
 function modelChain() {
-  const chain = [getPrimaryModel(), GEMINI_FLASH_MODEL, GEMINI_FLASH_LITE_MODEL];
-  return chain.filter((m, i) => chain.indexOf(m) === i);
+  return textModels.getTextModelChain();
 }
 
 async function callGeminiModel(model, prompt, options) {
@@ -176,6 +174,7 @@ async function callGeminiModel(model, prompt, options) {
     const err = new Error(data.error?.message || 'Gemini API error');
     err.status = response.status;
     err.modelUnavailable = isModelUnavailableError(response.status, JSON.stringify(data));
+    err.modelRetired = textModels.isModelRetiredError(response.status, JSON.stringify(data));
     throw err;
   }
 
@@ -198,8 +197,10 @@ async function callGemini(prompt, options = {}) {
   }
 
   let lastError = null;
+  const tried = [];
   for (let i = 0; i < chain.length; i++) {
     const model = chain[i];
+    tried.push(model);
     try {
       const text = await callGeminiModel(model, prompt, options);
       logLLMCall('gemini', options.taskType, true, Date.now() - startTime, null, model);
@@ -207,7 +208,9 @@ async function callGemini(prompt, options = {}) {
     } catch (error) {
       lastError = error;
       logLLMCall('gemini', options.taskType, false, Date.now() - startTime, error, model);
-      if (model === primary && error.modelUnavailable) {
+      if (error.modelRetired) {
+        textModels.markModelRetired(model); // gone for good: skip it on every later call
+      } else if (model === primary && error.modelUnavailable) {
         primaryUnavailableUntil = clock() + PRIMARY_UNAVAILABLE_MS;
       }
       const next = chain[i + 1];
@@ -222,7 +225,58 @@ async function callGemini(prompt, options = {}) {
       }));
     }
   }
+  if (lastError && typeof lastError === 'object') lastError.triedModels = tried;
   throw lastError;
+}
+
+/**
+ * Text fallback to OpenAI. Only used when a route asks for it (textFallback) and a key is configured.
+ * The key is read at call time and sent only in the Authorization header.
+ */
+const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions';
+async function callOpenAIText(prompt, options = {}) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error('OpenAI text fallback is not configured');
+  const startTime = Date.now();
+  const model = process.env.OPENAI_TEXT_MODEL || 'gpt-4.1-mini';
+  const doFetch = fetchImpl || fetch;
+  try {
+    const response = await doFetch(OPENAI_CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: options.temperature || 0.7,
+        max_completion_tokens: options.maxTokens || 8192
+      })
+    });
+    let data = {};
+    try { data = await response.json(); } catch (_) { data = {}; }
+    if (!response.ok) throw new Error(data.error?.message || 'OpenAI API error');
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) throw new Error('No response from OpenAI');
+    logLLMCall('openai', options.taskType, true, Date.now() - startTime, null, model);
+    return text;
+  } catch (error) {
+    logLLMCall('openai', options.taskType, false, Date.now() - startTime, error, model);
+    throw error;
+  }
+}
+
+/** Runs the chosen provider; when textFallback is set and a key exists, a failure is retried on OpenAI. */
+async function callProvider(provider, prompt, options) {
+  try {
+    return provider === 'grok' ? await callGrok(prompt, options) : await callGemini(prompt, options);
+  } catch (error) {
+    if (!options.textFallback || !process.env.OPENAI_API_KEY) throw error;
+    console.warn(`${provider} text failed, falling back to OpenAI`);
+    try {
+      return await callOpenAIText(prompt, options);
+    } catch (fallbackError) {
+      throw new Error(`${error.message} | OpenAI fallback failed: ${fallbackError.message}`);
+    }
+  }
 }
 
 /**
@@ -291,8 +345,8 @@ async function callGrok(prompt, options = {}) {
  * @param {number} params.maxTokens - Optional max tokens
  * @returns {Promise<object|string>} - Parsed JSON or raw text
  */
-async function generateWithLLM({ provider, taskType, prompt, jsonSchema, temperature, maxTokens }) {
-  const options = { taskType, temperature, maxTokens };
+async function generateWithLLM({ provider, taskType, prompt, jsonSchema, temperature, maxTokens, textFallback }) {
+  const options = { taskType, temperature, maxTokens, textFallback: Boolean(textFallback) };
   
   // Add JSON instruction if schema provided
   let finalPrompt = prompt;
@@ -303,9 +357,7 @@ async function generateWithLLM({ provider, taskType, prompt, jsonSchema, tempera
   // First attempt
   let response;
   try {
-    response = provider === 'grok' 
-      ? await callGrok(finalPrompt, options)
-      : await callGemini(finalPrompt, options);
+    response = await callProvider(provider, finalPrompt, options);
   } catch (error) {
     throw new Error(`LLM ${provider} failed: ${error.message}`);
   }
@@ -326,9 +378,7 @@ async function generateWithLLM({ provider, taskType, prompt, jsonSchema, tempera
     const retryPrompt = `${finalPrompt}\n\nPREVIOUS RESPONSE WAS INVALID JSON. Please return ONLY valid JSON, no markdown code blocks.`;
     
     try {
-      response = provider === 'grok'
-        ? await callGrok(retryPrompt, options)
-        : await callGemini(retryPrompt, options);
+      response = await callProvider(provider, retryPrompt, options);
       parsed = parseJSON(response);
     } catch (retryError) {
       throw new Error(`Failed to get valid JSON from ${provider} after retry: ${retryError.message}`);
@@ -747,6 +797,7 @@ module.exports = {
   // Export raw callers for advanced use
   callGemini,
   callGrok,
+  callOpenAIText,
   _setTestHooks,
   parseJSON,
   validateSchema

@@ -13,11 +13,9 @@ const fs = require('fs/promises');
 const path = require('path');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-// Cheap + reliable: Flash Lite primary, Flash as fallback
-const GEMINI_MODELS = [
-  'gemini-2.5-flash-lite', // Gemini 2.5 Flash Lite - Primary (cheapest, fast, reliable)
-  'gemini-2.5-flash',      // Gemini 2.5 Flash - Fallback (1K RPM)
-];
+// Text models come from the shared chain (services/geminiTextModels.js): GEMINI_TEXT_MODELS overrides it,
+// and the default starts with the current lite model, then the older 2.5 models for accounts that still have them.
+const textModels = require('./geminiTextModels');
 
 // Vertex AI Configuration for Image Generation (no daily rate limits!)
 const VERTEX_PROJECT_ID = process.env.VERTEX_PROJECT_ID || 'gen-lang-client-0148757433';
@@ -81,7 +79,7 @@ setInterval(() => {
       responseCache.delete(key);
     }
   }
-}, 10 * 60 * 1000);
+}, 10 * 60 * 1000).unref(); // unref: a cache sweeper must never keep a process (or test run) alive
 
 function getCacheKey(prompt) {
   // Use a proper hash of the full prompt to avoid cache collisions
@@ -154,7 +152,7 @@ async function callGemini(prompt, options = {}) {
 
   const models = Array.isArray(options.models) && options.models.length > 0
     ? options.models.map((m) => String(m || '').trim()).filter(Boolean)
-    : GEMINI_MODELS;
+    : textModels.getTextModelChain({ withPrimary: false });
 
   for (const model of models) {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -196,9 +194,10 @@ async function callGemini(prompt, options = {}) {
             await sleep(backoffMs);
             continue; // Retry same model
           }
-          // If model not found, try next model
-          if (data.error?.code === 404) {
-            console.log(`Model ${model} not found, trying next...`);
+          // Model not found, or retired for new accounts: remember it and try the next model
+          if (textModels.isModelRetiredError(data.error?.code || response.status, data.error?.message)) {
+            console.log(`Model ${model} is not available, trying next...`);
+            textModels.markModelRetired(model);
             break; // Break retry loop, try next model
           }
           throw new Error(data.error?.message || 'Gemini API error');
@@ -232,6 +231,30 @@ async function callGemini(prompt, options = {}) {
 
   // All APIs failed
   throw new Error('All Gemini API endpoints failed - quota may be exhausted');
+}
+
+/**
+ * One-shot call (text or image-in, text-out) that walks the shared text-model chain.
+ * Used by the vision helpers that used to name a fixed model (gemini-2.0-flash / gemini-1.5-flash).
+ * Moves to the next model when the current one is gone; any other error is thrown as is.
+ */
+async function postToTextModels(requestBody, timeoutMs, failureMessage) {
+  const chain = textModels.getTextModelChain({ withPrimary: false });
+  let lastError = null;
+  for (const model of chain) {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    }, timeoutMs);
+    const data = await response.json();
+    if (response.ok) return { data, model };
+    lastError = new Error(data.error?.message || failureMessage);
+    if (!textModels.isModelRetiredError(data.error?.code || response.status, data.error?.message)) throw lastError;
+    textModels.markModelRetired(model);
+  }
+  throw lastError || new Error(failureMessage);
 }
 
 /**
@@ -4417,8 +4440,6 @@ If no logo is detected, return:
   "confidence": 0.0
 }`;
 
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
     const requestBody = {
       contents: [{
         parts: [
@@ -4437,17 +4458,7 @@ If no logo is detected, return:
       }
     };
 
-    const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    }, 30000);
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error?.message || 'Gemini Vision failed');
-    }
+    const { data } = await postToTextModels(requestBody, 30000, 'Gemini Vision failed');
 
     // Extract text response
     const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -5546,17 +5557,7 @@ Return STRICT JSON with the following keys exactly:
     }
   };
 
-  const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
-  const response = await fetchWithTimeout(`${apiUrl}?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody)
-  }, 30000);
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to extract traits');
-  }
+  const { data } = await postToTextModels(requestBody, 30000, 'Failed to extract traits');
 
   const textResp = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!textResp) return null;

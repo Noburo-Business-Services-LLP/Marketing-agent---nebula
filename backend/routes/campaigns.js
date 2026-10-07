@@ -8,6 +8,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { requireFeature, requireFeatureWhen, wantsScheduling } = require('../middleware/requireFeature');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
+const { getTextModelChain, isModelRetiredError, markModelRetired } = require('../services/geminiTextModels');
 const Campaign = require('../models/Campaign');
 const Influencer = require('../models/Influencer');
 const Collaboration = require('../models/Collaboration');
@@ -4806,11 +4807,8 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
       };
 
       const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
-      const modelChain = [
-        'gemini-2.5-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-flash-latest'
-      ];
+      // Shared text-model chain (GEMINI_TEXT_MODELS to override); the alias stays as the last resort.
+      const modelChain = [...getTextModelChain({ withPrimary: false }), 'gemini-flash-latest'];
       let response, data, usedModel = null;
       for (const model of modelChain) {
         try {
@@ -4979,11 +4977,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
     // Model fallback chain — if the primary model returns 503 "high demand" or
     // the response is missing a caption, we cycle to the next model instead of
     // failing the whole request.
-    const modelChain = [
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-flash',
-      'gemini-flash-latest'
-    ];
+    const modelChain = [...getTextModelChain({ withPrimary: false }), 'gemini-flash-latest'];
     let response, data, usedModel = null;
     for (const model of modelChain) {
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -5021,6 +5015,12 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
       // 503 / 429 = model overloaded → try next model in chain
       if (response.status === 503 || response.status === 429) {
         console.warn(`Gemini ${model} returned ${response.status} — falling back to next model.`);
+        continue;
+      }
+      // Model gone (404) or "no longer available to new users" → remember it and try the next model
+      if (!response.ok && isModelRetiredError(response.status, data?.error?.message)) {
+        console.warn(`Gemini ${model} is not available — falling back to next model.`);
+        markModelRetired(model);
         continue;
       }
       if (!response.ok) {
@@ -5072,7 +5072,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
       caption: caption.trim(),
       hashtags: hashtags.slice(0, 4),
       aiSettings: {
-        model: 'gemini-2.0-flash',
+        model: usedModel, // the model that actually answered
         memoryInjected: Boolean(aiMemoryContext.reusablePromptText)
       }
     });

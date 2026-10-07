@@ -20,7 +20,9 @@ const modelsOf = (f) => f.urls.map((u) => /models\/([^:]+):/.exec(u)[1]);
 
 let logs = [];
 const origLog = console.log;
-test.beforeEach(() => { logs = []; console.log = (m) => logs.push(String(m)); delete process.env.GEMINI_PRO_MODEL; });
+test.beforeEach(() => { logs = []; console.log = (m) => logs.push(String(m)); delete process.env.GEMINI_PRO_MODEL;
+  // These tests describe the 2.5 chain; the new default chain is covered in llmRouterModels.test.js.
+  process.env.GEMINI_TEXT_MODELS = 'gemini-2.5-pro,gemini-2.5-flash,gemini-2.5-flash-lite'; });
 test.afterEach(() => { console.log = origLog; });
 
 test('pro quota then flash ok gives the flash answer and logs the fallback', async () => {
@@ -84,9 +86,10 @@ test('invalid JSON is not retried on another model', async () => {
 });
 
 test('GEMINI_PRO_MODEL overrides the primary model', async () => {
+  delete process.env.GEMINI_TEXT_MODELS; // default chain: current lite first, then the pro slot
   process.env.GEMINI_PRO_MODEL = 'gemini-2.5-flash';
-  const f = fakeFetch({ 'gemini-2.5-flash': [200, OK('x')] });
+  const f = fakeFetch({ 'gemini-3.5-flash-lite': [404, { error: { message: 'is no longer available to new users' } }], 'gemini-2.5-flash': [200, OK('x')] });
   router._setTestHooks({ fetch: f });
   await router.callGemini('p', {});
-  assert.deepStrictEqual(modelsOf(f), ['gemini-2.5-flash']);
+  assert.deepStrictEqual(modelsOf(f), ['gemini-3.5-flash-lite', 'gemini-2.5-flash']);
 });
