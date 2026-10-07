@@ -61,7 +61,7 @@ The SDD ledger and briefs from the previous run are git-ignored (`.superpowers/`
 ## Local testing safely
 
 - Use a **separate throwaway database**: copy the backend `.env`, change only the database name at the end of `MONGODB_URI` (e.g. `...mongodb.net/nebulaa_hero_local?...`), then run backend (`npm run dev` in `backend/`, port 5000) and frontend (`npm run dev` in `frontend/`, port 3000). Do NOT run the backend against a database other environments use: on boot it starts the video queue worker (fails and refunds in-flight Kling jobs), the campaign scheduler (publishes due scheduled posts), the calendar, notification and analytics schedulers.
-- Sign up a throwaway account in the local app. To get Quarks for a test (a hero costs 729; new accounts start with ~100), use the existing admin panel at `/#/admin/login` with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` values from your own `.env` (set them locally if missing) -> open the user -> "+ Add Credits".
+- Sign up a throwaway account in the local app. To get Quarks for a test (a hero costs 729; new accounts start with ~100), sign in as an Owner and use the Staff area (`/#/staff/clients`) -> open the client -> "Add Quarks" (the old `/admin` page is gone).
 - Atlas must allow your IP (Network Access). fal needs `FAL_KEY` with balance; an exhausted balance returns 403 "Exhausted balance" at submit (the job is refunded automatically).
 - Never commit `.env` files, keys, or the `backend/public/assets` build output.
 

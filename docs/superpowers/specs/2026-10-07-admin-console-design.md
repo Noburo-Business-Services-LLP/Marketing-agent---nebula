@@ -22,6 +22,7 @@ Three roles on a normal user account: **Owner**, **Admin**, **CSM**. Field: `sta
 | Add Quarks | yes | no | no |
 | Disable or enable an account | yes | yes | no |
 | Assign clients to CSMs (single and bulk) | yes | yes | no |
+| Leave a client out of the numbers (test accounts) | yes | yes | no |
 | Add CSM | yes | yes | no |
 | Add or remove Admin | yes | no | no |
 | Reset staff account, Reset Ayrshare IDs | yes | no | no |
@@ -59,7 +60,7 @@ Rules:
 ## Architecture
 - **Backend:** new router `/api/staff/*` with `protect` plus a `requireStaff(action)` middleware built on the permission function. Small, focused modules: `services/staff/permissions.js` (pure, tested), `services/staff/clientSummary.js` (one client's summary from several collections), `services/staff/clientList.js` (filters, paging, counts), `services/staff/metrics.js` (home, money, usage aggregates), `services/staff/activityLog.js`. Aggregations use indexed fields; heavy numbers are cached for 5 minutes.
 - **Frontend:** `/staff/*` routes in the existing app with their own left menu (Home, Clients, Team, Money, Usage), light Nebulaa design, plain wording (voice scanner applies). The main app menu shows "Staff area" only for staff.
-- **Old `/admin`:** keeps working; removed after Coupons, Ayrshare risk panel, trial funnel and content stats are covered.
+- **Old `/admin`:** removed (step 7, 2026-10-07). Its actions that staff still need (Reset Ayrshare IDs, reset a staff account, leave a client out of the numbers, coupons) are in the Staff area; only the server-side first-Owner bootstrap (`/api/admin/login`, `/api/admin/make-owner`) remains.
 
 ## Error handling
 - Every staff route returns plain messages; permission failures say "This area is for Nebulaa staff" or "Your role cannot do this".
