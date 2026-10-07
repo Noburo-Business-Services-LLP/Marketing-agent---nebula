@@ -11,6 +11,7 @@
  * Sign-in for the seeded team: the emails and password printed at the end (password below, invented).
  * The data is deterministic (fixed random seed) except that dates are relative to the moment you run it.
  */
+const { PLANS, ADDONS, TOPUP_PACKS, gstPaise, chargePaise } = require('../config/apiCosts');
 const SEED_PASSWORD = process.env.SEED_PASSWORD || 'SeedDemo-Staff-2026';
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 const DB_PREFIX = 'nebulaa_seed_';
@@ -73,7 +74,7 @@ function planFor(i) {
   if (i < 15) return { plan: { tier: 'managed', addons: [] }, tier: 'managed' };
   if (i < 30) return { plan: { tier: 'free', addons: [] }, tier: 'free' };
   if (i < 45) return { plan: { tier: 'starter', addons: i % 3 === 0 ? ['publish'] : i % 3 === 1 ? ['publish', 'inbox'] : [] }, tier: 'starter' };
-  return { plan: { tier: 'professional', addons: i % 2 === 0 ? ['bundle'] : ['publish'] }, tier: 'professional' };
+  return { plan: { tier: 'professional', addons: i % 2 === 0 ? ['bundle', 'publish', 'competitors', 'inbox'] : ['publish'] }, tier: 'professional' };
 }
 
 const PAYING = (i) => (i >= 0 && i <= 9) || (i >= 30 && i <= 37) || (i >= 45 && i <= 54);
@@ -133,14 +134,52 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
     const { plan, tier } = planFor(i);
     const paid = PAYING(i);
     const payments = [];
-    if (paid) {
-      const n = 1 + (i % 3);
-      for (let k = 0; k < n; k++) payments.push({ razorpayOrderId: `order_demo_${i}_${k}`, razorpayPaymentId: `pay_demo_${i}_${k}`, amount: tier === 'professional' ? 7999 : tier === 'starter' ? 2999 : 14999, currency: 'INR', status: 'paid', item: tier === 'managed' ? 'Managed plan' : `${tier[0].toUpperCase()}${tier.slice(1)} plan`, paidAt: new Date(Math.max(createdAt.getTime() + DAY / 2, now - (k * 30 + between(1, 20)) * DAY)) });
+    const subs = [];
+    let subscription;
+    const rupees = (inr) => chargePaise(inr) / 100; // what the card is charged, including GST
+    const sub = (kind, key, active) => ({ subscriptionId: `sub_demo_${i}_${kind === 'plan' ? 'p' : key}`, kind, key, razorpayPlanId: `plan_demo_${kind}_${key}`, active, createdAt });
+    const charge = (record, at, over = {}) => payments.push({
+      razorpayOrderId: record.subscriptionId, razorpayPaymentId: `pay_demo_${i}_${payments.length}`,
+      amount: rupees(record.kind === 'plan' ? PLANS[record.key].inr : ADDONS[record.key].inr), currency: 'INR',
+      credits: record.kind === 'plan' ? PLANS[record.key].quarks : 0, status: 'paid',
+      item: record.kind === 'plan' ? 'Nebulaa subscription' : 'Nebulaa add-on',
+      exGstAmount: record.kind === 'plan' ? PLANS[record.key].inr : ADDONS[record.key].inr, paidAt: at, ...over
+    });
+    const safeAge = Math.max(0.6, ageDays - 0.2);
+    let planDoc = plan ? { ...plan } : undefined;
+    if (paid && i <= 9) {
+      // Older managed accounts paid by hand before GST was split out: no ex-GST amount stored for the first five.
+      for (let k = 0; k < 1 + (i % 3); k++) payments.push({ razorpayOrderId: `order_demo_${i}_${k}`, razorpayPaymentId: `pay_demo_${i}_${k}`, amount: 11800, currency: 'INR', credits: 0, status: 'paid', item: 'Nebulaa subscription', ...(i > 4 ? { exGstAmount: 10000 } : {}), paidAt: new Date(Math.max(createdAt.getTime() + DAY / 2, now - (k * 30 + between(1, 20)) * DAY)) });
+    } else if (paid && (tier === 'starter' || tier === 'professional')) {
+      const planRec = sub('plan', tier, ACTIVE_SUB(i));
+      subs.push(planRec);
+      const lastCharge = Math.min(((i * 2) % 28) + 1, safeAge / 2); // days ago
+      const nCharges = Math.max(1, Math.min(1 + (i % 3), Math.floor(safeAge / 30) + 1));
+      for (let k = nCharges - 1; k >= 0; k--) charge(planRec, ago(lastCharge + k * 30));
+      const addonKeys = tier === 'starter' ? (i % 3 === 0 ? ['publish'] : i % 3 === 1 ? ['publish', 'inbox'] : []) : (i % 2 === 0 ? ['bundle'] : ['publish']);
+      if (ACTIVE_SUB(i)) {
+        addonKeys.forEach((key) => { const rec = sub('addon', key, true); subs.push(rec); charge(rec, ago(Math.min(lastCharge, safeAge / 2))); });
+        const next = new Date(now + (30 - lastCharge) * DAY);
+        subscription = { plan: 'pro', status: 'active', razorpaySubscriptionId: planRec.subscriptionId, razorpayPlanId: planRec.razorpayPlanId, currentPeriodEnd: next, nextBillingAt: next };
+      } else {
+        // The plan stopped: halted (renewal failed), or cancelled. Plan goes back to free and add-ons are cleared, as the billing code does.
+        const state = i === 35 ? 'halted' : 'cancelled';
+        const endedDaysAgo = i === 37 ? 50 : i === 36 ? 12 : 5;
+        subscription = { plan: 'pro', status: state, razorpaySubscriptionId: planRec.subscriptionId, razorpayPlanId: planRec.razorpayPlanId, currentPeriodEnd: ago(Math.min(endedDaysAgo, safeAge)) };
+        planDoc = { tier: 'free', addons: [] };
+      }
     }
-    if (TRAITS.failedPaymentOnly.has(i)) payments.push({ razorpayOrderId: `order_demo_${i}_f`, amount: 2999, currency: 'INR', status: 'failed', item: 'Starter plan', paidAt: ago(Math.min(ageDays, 3)) });
-    if (TRAITS.refundedOnly.has(i)) payments.push({ razorpayOrderId: `order_demo_${i}_r`, amount: 499, currency: 'INR', status: 'refunded', item: 'Quark pack', paidAt: ago(Math.min(ageDays, 5)) });
+    // Quark top-ups: paying clients only, so the Paying counts stay as they were.
+    if (paid && i % 4 === 2) {
+      const pack = TOPUP_PACKS[i % TOPUP_PACKS.length];
+      payments.push({ razorpayOrderId: `order_demo_${i}_t`, razorpayPaymentId: `pay_demo_${i}_t`, amount: rupees(pack.inr), currency: 'INR', credits: pack.quarks, status: 'paid', item: 'Nebulaa Quarks', exGstAmount: pack.inr, paidAt: ago(Math.min(safeAge, 2 + (i % 20))) });
+    }
+    // Declined attempts and a refund. The app does not record declined attempts today; these show how they would look if it did.
+    if (TRAITS.failedPaymentOnly.has(i)) payments.push({ razorpayOrderId: `order_demo_${i}_f`, razorpayPaymentId: `pay_demo_${i}_f`, amount: rupees(TOPUP_PACKS[1].inr), currency: 'INR', credits: TOPUP_PACKS[1].quarks, status: 'failed', item: 'Nebulaa Quarks', exGstAmount: TOPUP_PACKS[1].inr, paidAt: ago(Math.min(ageDays - 0.1, 3)) });
+    if (i === 31 || i === 47) payments.push({ razorpayOrderId: `order_demo_${i}_f`, razorpayPaymentId: `pay_demo_${i}_f`, amount: rupees(TOPUP_PACKS[0].inr), currency: 'INR', credits: TOPUP_PACKS[0].quarks, status: 'failed', item: 'Nebulaa Quarks', exGstAmount: TOPUP_PACKS[0].inr, paidAt: ago(Math.min(safeAge, i === 31 ? 8 : 40)) });
+    if (TRAITS.refundedOnly.has(i)) payments.push({ razorpayOrderId: `order_demo_${i}_r`, razorpayPaymentId: `pay_demo_${i}_r`, amount: rupees(TOPUP_PACKS[0].inr), currency: 'INR', credits: TOPUP_PACKS[0].quarks, status: 'refunded', item: 'Nebulaa Quarks', exGstAmount: TOPUP_PACKS[0].inr, paidAt: ago(Math.min(ageDays - 0.1, 5)) });
 
-    const planDoc = plan ? { ...plan, subscriptions: ACTIVE_SUB(i) ? [{ subscriptionId: `sub_demo_${i}`, kind: 'plan', key: tier, active: true, createdAt: createdAt }] : [] } : undefined;
+    if (planDoc) planDoc.subscriptions = subs;
     const trial = tier === 'free' || (!paid && tier !== 'managed')
       ? { startDate: createdAt, expiresAt: new Date(createdAt.getTime() + 14 * DAY), isExpired: TRAITS.expiredTrial.has(i) }
       : undefined;
@@ -160,9 +199,9 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
       onboardingCompleted: !TRAITS.unfinished.has(i),
       businessProfile: { name: i % 2 === 0 ? business : '', industry: INDUSTRIES[i % INDUSTRIES.length], businessLocation: CITIES[i % CITIES.length], website: `https://demo-${word.toLowerCase()}.example.test` },
       credits: { balance: quarks, totalUsed: Math.round(between(0, 3000)), history: [] },
-      payments, plan: planDoc, ...(trial ? { trial } : {}),
+      payments, plan: planDoc, ...(subscription ? { subscription } : {}), ...(trial ? { trial } : {}),
       connectedSocials: viaDirect ? platforms.map((p) => ({ platform: p, accountId: `acct_${i}_${p}`, accountName: `${business} ${p}`, connectedAt: createdAt })) : [],
-      ayrshare: { activeSocialAccounts: viaDirect ? [] : platforms },
+      ayrshare: { activeSocialAccounts: viaDirect ? [] : platforms, ...(connected > 0 && i % 3 !== 1 ? { profileKey: `PROFILE-KEY-DEMO-${i}`, title: business } : {}) },
       assignedCsm: csmOf[i] || null, // replaced with the real id when inserted
       lastLoginAt, createdAt, updatedAt: lastLoginAt
     });
@@ -206,6 +245,18 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
       { action: 'purchase', amount: 5000, description: 'Quark pack', balanceAfter: 5000, createdAt: new Date(c.createdAt.getTime() + 3600000), timestamp: new Date(c.createdAt.getTime() + 3600000) },
       { action: 'image', amount: -(10 + n), description: 'Image created', balanceAfter: c.credits.balance, createdAt: ago(1 + n * 0.2), timestamp: ago(1 + n * 0.2) }
     ];
+  });
+
+  // This month's Quark spending on paying clients (a refund each, one busy client with a long history) so the Money page has numbers.
+  clients.forEach((c) => {
+    if (!c.payments.some((p) => p.status === 'paid')) return;
+    const n = c.index === 45 ? 62 : 3 + (c.index % 5);
+    for (let k = 0; k < n; k++) {
+      const at = ago(Math.min(between(0.05, 6), Math.max(0.05, (now - c.createdAt.getTime()) / DAY - 0.05)));
+      const spend = 8 + Math.floor(between(0, 60));
+      c.credits.history.push({ action: k % 2 ? 'image' : 'video', amount: -spend, description: 'Made something', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });
+      if (k === 1) c.credits.history.push({ action: 'image_refund', amount: spend, description: 'Refund', balanceAfter: c.credits.balance, createdAt: at, timestamp: at });
+    }
   });
 
   return { staff, clients, events, drafts, csmOf };
