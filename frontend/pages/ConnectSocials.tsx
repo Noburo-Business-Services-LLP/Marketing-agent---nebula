@@ -525,8 +525,6 @@ const ConnectSocials: React.FC = () => {
     { id: 'accounts', label: 'Accounts', icon: ShieldCheck, path: '/connect-socials' },
     { id: 'permissions', label: 'Permissions', icon: KeyRound, path: '/connect-socials?tab=permissions' },
     { id: 'sync', label: 'Sync status', icon: Activity, path: '/connect-socials?tab=sync' },
-    { id: 'inbox', label: 'Inbox', icon: Inbox, path: '/inbox' },
-    { id: 'auto-reply', label: 'Automatic replies', icon: Sparkles, path: '/inbox?tab=auto-reply' },
   ];
   const activeTab = isInboxRoute ? 'inbox' : new URLSearchParams(location.search).get('tab') || 'accounts';
 
@@ -727,104 +725,33 @@ const ConnectSocials: React.FC = () => {
                   </div>
               </div>
           ))}
+          <div className="rounded-xl p-5 border border-white/[0.06] bg-white/[0.02] relative">
+            <div className="absolute top-0 right-0 bg-slate-500/80 text-white text-[9px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-bl-lg">Coming soon</div>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-[#4285F4] flex items-center justify-center text-white font-bold text-lg">G</div>
+              <div>
+                <p className="font-semibold">Google Business Profile</p>
+                <p className="text-xs opacity-70">Not connected</p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm opacity-80">Post your updates to Google and reply to reviews. We are finishing this, and it will appear here as soon as it can be connected.</p>
+            <button disabled className="mt-4 w-full py-2.5 rounded-lg bg-slate-300 text-slate-600 text-sm font-semibold cursor-not-allowed">Coming soon</button>
+          </div>
       </div>
 
-      <div className={`mt-8 rounded-2xl border overflow-hidden ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-        <div className={`p-5 border-b ${isDarkMode ? 'border-slate-700/50 bg-[#0d1117]' : 'border-slate-100 bg-slate-50'}`}>
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#F5A623] text-[#070A12] flex items-center justify-center shrink-0">
-                <Inbox className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Social inbox</h2>
-                <p className={`mt-1 text-sm max-w-2xl ${theme.textSecondary}`}>
-                  Manage messages, comments, mentions, and replies from all connected social platforms in one place.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={openInbox}
-              disabled={!inboxEnabled}
-              className="px-5 py-3 rounded-lg bg-[#F5A623] text-[#070A12] font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {inboxEnabled ? <Inbox className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              Open social inbox
-            </button>
+      <div className={`mt-8 rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+        <div className="flex items-start gap-4">
+          <div className="w-11 h-11 rounded-xl bg-[#F5A623] text-[#070A12] flex items-center justify-center shrink-0">
+            <Inbox className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className={`text-lg font-semibold ${theme.text}`}>Your inbox has its own place now</h2>
+            <p className={`mt-1 text-sm ${theme.textSecondary}`}>Comments, messages and Google reviews are in <strong>Inbox</strong> in the left menu.{unreadMessageCount > 0 ? ` ${unreadMessageCount} waiting for a reply.` : ''}</p>
           </div>
         </div>
-
-        <div className="p-5 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
-          <div className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Inbox status</p>
-                <p className={`mt-2 text-lg font-bold capitalize ${inboxEnabled ? 'text-green-400' : 'text-slate-400'}`}>
-                  {inboxSummaryLoading ? 'Checking...' : inboxEnabled ? (inboxSummary?.inboxStatus || 'Active') : 'Disabled'}
-                </p>
-              </div>
-              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Connected platforms</p>
-                <p className={`mt-2 text-lg font-bold ${theme.text}`}>{connectedPlatformCount}</p>
-              </div>
-              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Unread messages</p>
-                <p className={`mt-2 text-lg font-bold ${unreadMessageCount > 0 ? 'text-[#F5A623]' : theme.text}`}>{unreadMessageCount}</p>
-              </div>
-            </div>
-
-            {!inboxEnabled && (
-              <div className={`rounded-xl border p-4 flex items-center gap-3 ${isDarkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                <p className="text-sm font-medium">Connect social accounts to enable inbox management.</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Sparkles className="w-4 h-4 text-[#F5A623]" /> AI reply suggestions
-                </div>
-                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Nebulaa drafts on-brand replies for your conversations.</p>
-              </div>
-              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Tag className="w-4 h-4 text-[#F5A623]" /> Priority tagging
-                </div>
-                <p className={`mt-1 text-xs ${theme.textSecondary}`}>Spot urgent leads, complaints, and high-value messages.</p>
-              </div>
-              <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Bell className="w-4 h-4 text-[#F5A623]" /> Unread count
-                </div>
-                <p className={`mt-1 text-xs ${theme.textSecondary}`}>This page shows how many messages in your connected accounts are still unread.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-            <p className={`text-xs font-semibold uppercase tracking-wide mb-3 ${theme.textSecondary}`}>Platform status</p>
-            <div className="space-y-2">
-              {INBOX_PLATFORMS.map(platform => {
-                const connected = isPlatformConnected(platform);
-                return (
-                  <div key={platform} className={`flex items-center justify-between rounded-lg px-3 py-2 ${isDarkMode ? 'bg-[#0d1117]' : 'bg-slate-50'}`}>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${getBgColor(platform)}`}>
-                        {getCustomIcon(platform)}
-                      </div>
-                      <span className={`text-sm font-medium ${theme.text}`}>{platform === 'X' ? 'X/Twitter' : platform}</span>
-                    </div>
-                    <span className={`text-xs font-bold ${connected ? 'text-green-400' : 'text-slate-400'}`}>
-                      {connected ? 'Connected' : 'Not connected'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <button type="button" onClick={() => navigate('/inbox')} className="px-5 py-3 rounded-lg bg-[#F5A623] text-[#070A12] font-bold text-sm inline-flex items-center justify-center gap-2">
+          Open inbox <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
         </>
       )}
