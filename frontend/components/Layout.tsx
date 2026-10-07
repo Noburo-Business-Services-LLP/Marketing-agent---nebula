@@ -459,7 +459,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           <main className="flex-1 overflow-y-auto p-4 md:p-8">
             {localStorage.getItem('csmReturnToken') && (
               // A CSM working inside a client's account: always visible, always one click back.
-              <div className="mb-4 rounded-xl border border-[#F5A623]/50 bg-[#F5A623]/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="sticky top-0 z-30 mb-4 rounded-xl border border-[#F5A623]/50 bg-[#FDF1DC] px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-sm">
                 <p className="text-sm text-[var(--gv-text-primary)]">
                   You are working in <strong>{localStorage.getItem('csmActingClient') || 'a client'}</strong>'s account. Payments, plans and passwords stay with the client.
                 </p>
@@ -467,7 +467,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}
                   className="px-3 py-1.5 rounded-lg bg-[#F5A623] text-[#070A12] text-sm font-bold"
                 >
-                  Back to my clients
+                  {localStorage.getItem('csmReturnTo') === '#/staff/clients' ? 'Back to staff area' : 'Back to my clients'}
                 </button>
               </div>
             )}
