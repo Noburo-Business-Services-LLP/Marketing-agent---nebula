@@ -64,6 +64,7 @@
     { "label": "blueprint-stopped", "path": "/blueprint/audit-stopped", "mode": "normal", "group": "shell" },
     { "label": "blueprint-new-onboarding", "path": "/blueprint/new", "mode": "onboarding", "group": "onboarding" },
     { "label": "staff-home", "path": "/staff/home", "mode": "staff", "group": "shell", "note": "Owner view of staff Home with sample numbers (mock /staff/home)" },
+    { "label": "staff-money", "path": "/staff/money", "mode": "staff", "group": "shell", "note": "Owner view of the Money page with sample numbers (mock /staff/money)" },
     { "label": "staff-team", "path": "/staff/team", "mode": "staff", "group": "shell", "note": "Owner view of the Team page with sample people (mock /staff/team)" },
     { "label": "landing", "otherSession": true, "path": "/", "mode": "logged-out", "group": "public" },
     { "label": "login", "otherSession": true, "path": "/login", "mode": "logged-out", "group": "auth" },

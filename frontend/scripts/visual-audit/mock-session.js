@@ -240,6 +240,36 @@
     ['POST', /^\/staff\/team$/, ok({ member: { id: 'csm-9', name: 'New Person', email: 'new@example.test', role: 'csm' }, converted: false, emailed: true })],
     ['PATCH', /^\/staff\/team\/[^/]+$/, ok({ member: { id: 'csm-1', name: 'Priya Raman', email: 'priya@example.test', role: 'admin' }, unassigned: { count: 12, clients: [{ id: 'c1', name: 'Sunrise Bakery' }, { id: 'c2', name: 'Green Leaf Cafe' }, { id: 'c6', name: 'Meera Jewellers' }] } })],
     ['DELETE', /^\/staff\/team\/[^/]+$/, ok({ removed: true, unassigned: { count: 5, clients: [{ id: 'c1', name: 'Sunrise Bakery' }, { id: 'c2', name: 'Green Leaf Cafe' }, { id: 'c6', name: 'Meera Jewellers' }] } })],
+    ['GET', /^\/staff\/money\/payments/, ok({ total: 12, page: 2, pages: 2, pageSize: 10, rows: [
+      { id: 'c1:9', at: iso(-30), clientId: 'c1', clientName: 'Sunrise Bakery', what: 'Starter plan', totalPaise: 117882, exGstPaise: 99900, gstPaise: 17982, status: 'paid' },
+      { id: 'c2:4', at: iso(-33), clientId: 'c2', clientName: 'Green Leaf Cafe', what: 'Quark pack, 500 Quarks', totalPaise: 117882, exGstPaise: 99900, gstPaise: 17982, status: 'refunded' }
+    ] })],
+    ['GET', /^\/staff\/money/, ok({
+      generatedAt: iso(0),
+      revenue: {
+        currency: 'INR',
+        thisMonth: { exGstPaise: 399600, gstPaise: 71928, unsplitPaise: 0, totalPaise: 471528, count: 4 },
+        lastMonth: { exGstPaise: 1099700, gstPaise: 197946, unsplitPaise: 0, totalPaise: 1297646, count: 9 },
+        last30Days: { exGstPaise: 1199500, gstPaise: 215910, unsplitPaise: 0, totalPaise: 1415410, count: 10 },
+        allTime: { exGstPaise: 12345600, gstPaise: 2222208, unsplitPaise: 50000, totalPaise: 14617808, count: 61 },
+        series30: Array.from({ length: 30 }, function (_, i) { var d = new Date(Date.now() + 19800000 - (29 - i) * 86400000).toISOString().slice(0, 10); var n = (i % 6 === 0) ? 1 + (i % 3) : 0; return { day: d, exGstPaise: n * 99900, gstPaise: n * 17982, unsplitPaise: 0, totalPaise: n * 117882 }; }),
+        otherCurrencyPayments: 0,
+        note: 'Collected money from paid payment records, in rupees, in India time. Refunded and failed payments are not counted. Some older payments have no stored amount before GST, so they are counted in the total but not split.'
+      },
+      planMix: { customers: 62, tiers: [{ id: 'free', label: 'Free', count: 20 }, { id: 'starter', label: 'Starter', count: 9 }, { id: 'professional', label: 'Professional', count: 4 }, { id: 'managed', label: 'Managed', count: 29 }], addons: [{ id: 'publish', label: 'Publish and schedule', count: 5 }, { id: 'competitors', label: 'Competitor insights', count: 1 }, { id: 'inbox', label: 'Inbox and automatic replies', count: 2 }, { id: 'bundle', label: 'Publish, competitors and inbox bundle', count: 1 }], monthlyRecurring: { exGstPaise: 2189900, note: 'Estimate: the config price of every active plan and add-on subscription, before GST.' } },
+      payments: { total: 12, page: 1, pages: 2, pageSize: 10, rows: [
+        { id: 'c1:12', at: iso(-1), clientId: 'c1', clientName: 'Sunrise Bakery', what: 'Starter plan', totalPaise: 117882, exGstPaise: 99900, gstPaise: 17982, status: 'paid' },
+        { id: 'c4:2', at: iso(-2), clientId: 'c4', clientName: 'Kumar Hardware', what: 'Quark pack, 1,000 Quarks', totalPaise: 235882, exGstPaise: null, gstPaise: null, status: 'failed' },
+        { id: 'c7:1', at: iso(-3), clientId: 'c7', clientName: 'A Very Long Business Name For Narrow Screens Private Limited', what: 'Publish and schedule add-on', totalPaise: 118000, exGstPaise: 100000, gstPaise: 18000, status: 'paid' }
+      ] },
+      renewals: { windowDays: 14, totalPaise: 353764, items: [
+        { clientId: 'c1', clientName: 'Sunrise Bakery', what: 'Starter plan', at: iso(2), totalPaise: 117882, exGstPaise: 99900, gstPaise: 17982 },
+        { clientId: 'c3', clientName: 'Studio Nine Salon', what: 'Professional plan', at: iso(6), totalPaise: 235882, exGstPaise: 199900, gstPaise: 35982 }
+      ], note: 'Plan renewals only, at the current config price. Add-on renewal dates are not stored, so add-ons are not listed here.' },
+      failures: { windowDays: 30, payments: { count: 1, items: [{ clientId: 'c4', clientName: 'Kumar Hardware', what: 'Quark pack, 1,000 Quarks', at: iso(-2), totalPaise: 235882, reason: 'The payment did not go through.' }] }, renewals: { count: 1, items: [{ clientId: 'c6', clientName: 'Meera Jewellers', kind: 'halted', what: 'Starter plan', at: iso(-9), reason: 'The monthly renewal failed several times, so the plan was stopped.' }] }, note: 'Failed payments are listed only if they were recorded as failed; the app stores successful payments, so declined card attempts may be missing.' },
+      quarks: { available: true, monthStart: iso(-6), sold: 8400, spent: 5120, refunded: 240, grantedByStaff: 500, possiblyIncompleteClients: 1, usdPerQuark: 0.02, spentValueUsdCents: 10240, note: 'Sold is the Quarks on paid payments this month. Spent is counted from each client\'s recent Quark history (the app keeps only the last 50 to 100 entries per client), so a very busy client can be undercounted. Quarks added by staff are shown apart and are not sold.' },
+      ayrshare: { available: true, estimate: true, profiles: 34, included: 30, extra: 4, maxProfiles: 100, perExtraProfileUsdCents: 899, extraUsdCents: 3596, planUsdPerMonth: 599, note: 'Estimate: accounts that have a social profile, against the profiles the plan includes. The extra-profile rate is from our own config, not from an invoice.' }
+    })],
     ['GET', /^\/staff\/home/, ok({
       health: { since: iso(-1), cards: [
         { key: 'images', label: 'Images', status: 'green', note: 'Image creation is working.', lastHour: 0, lastDay: 1, latest: [{ at: iso(-0.5), detail: 'Image request timed out after 60 seconds (sample)' }] },
