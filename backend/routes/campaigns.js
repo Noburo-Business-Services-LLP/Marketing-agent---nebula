@@ -665,9 +665,9 @@ function buildStrictBrandLockText(brandCtx = {}) {
 function buildBrandContextForImages(brandCtx = {}, fallback = {}) {
   const palette = getBrandPalette(brandCtx);
   return {
-    companyName: String(brandCtx?.profile?.brandName || fallback.companyName || 'Brand').trim() || 'Brand',
+    companyName: String(fallback.companyName || brandCtx?.profile?.brandName || 'Brand').trim() || 'Brand',
     industry: String(fallback.industry || '').trim(),
-    description: String(brandCtx?.profile?.brandDescription || fallback.description || '').trim(),
+    description: String(fallback.description || brandCtx?.profile?.brandDescription || '').trim(),
     targetAudience: String(fallback.targetAudience || '').trim(),
     brandVoice: String(brandCtx?.effectiveTone || fallback.brandVoice || 'professional').trim(),
     brandColors: palette,
@@ -1587,7 +1587,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
 
     const brandCtx = await resolveBrandIntelligenceContext(userId, bp);
     const brandDisplayName =
-      String(brandCtx?.profile?.brandName || bp.companyName || bp.name || 'Brand').trim() || 'Brand';
+      String(bp.name || bp.companyName || brandCtx?.profile?.brandName || 'Brand').trim() || 'Brand';
     const strictBrandMode = isStrictBrandLockEnabled(brandCtx);
     const enforcedTone = strictBrandMode
       ? brandCtx.effectiveTone
@@ -4302,7 +4302,7 @@ router.post('/generate-campaign-posts', protect, checkTrial, async (req, res) =>
 
     const brandCtx = await resolveBrandIntelligenceContext(userId, bp);
     const brandDisplayName =
-      String(brandCtx?.profile?.brandName || bp.companyName || bp.name || 'Brand').trim() || 'Brand';
+      String(bp.name || bp.companyName || brandCtx?.profile?.brandName || 'Brand').trim() || 'Brand';
     const strictBrandMode = isStrictBrandLockEnabled(brandCtx);
     const enforcedTone = strictBrandMode
       ? brandCtx.effectiveTone

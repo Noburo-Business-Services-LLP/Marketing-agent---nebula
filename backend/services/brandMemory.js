@@ -23,6 +23,23 @@ const { resolveOrganizationId } = require('./aiMemoryService');
  * invented — "No approved photos of your space yet" is honest; silence would
  * read as "don't know", and a fabricated founder photo would be worse.
  */
+/**
+ * What the owner typed in Settings always wins over what a website scan
+ * stored earlier. The scan only fills the gaps. Without this, an account
+ * that was first pointed at another site kept writing about that site
+ * after the owner corrected the business profile.
+ */
+function resolveBrandIdentity({ bp = {}, user = {}, brandProfile = null } = {}) {
+  const pick = (...values) => values.find((v) => typeof v === 'string' && v.trim()) || '';
+  const voice = bp.brandVoice;
+  const hasVoice = Array.isArray(voice) ? voice.length > 0 : Boolean(voice && String(voice).trim());
+  return {
+    name: pick(bp.name, user.companyName, brandProfile?.brandName) || 'Not set',
+    description: pick(bp.description, bp.niche, brandProfile?.brandDescription),
+    tone: hasVoice ? voice : (brandProfile?.detectedProfile?.tone || 'professional')
+  };
+}
+
 async function buildBrandMemoryBlock(userId) {
   if (!userId) return '';
 
@@ -40,10 +57,11 @@ async function buildBrandMemoryBlock(userId) {
   const lines = [];
 
   lines.push('BRAND IDENTITY');
-  lines.push(`- Name: ${brandProfile?.brandName || user?.companyName || 'Not set'}`);
+  const identity = resolveBrandIdentity({ bp, user, brandProfile });
+  lines.push(`- Name: ${identity.name}`);
   lines.push(`- Industry: ${bp.industry || 'Not set'}`);
-  if (brandProfile?.brandDescription) lines.push(`- Description: ${brandProfile.brandDescription}`);
-  const tone = brandProfile?.detectedProfile?.tone || bp.brandVoice;
+  if (identity.description) lines.push(`- Description: ${identity.description}`);
+  const tone = identity.tone;
   lines.push(`- Tone: ${Array.isArray(tone) ? tone.join(', ') : (tone || 'professional')}`);
   if (assets.primaryColor || assets.secondaryColor) {
     lines.push(`- Brand colours: ${[assets.primaryColor, assets.secondaryColor].filter(Boolean).join(', ')}`);
@@ -240,6 +258,7 @@ async function getPrimaryLogoAsset(userId) {
 
 module.exports = {
   buildBrandMemoryBlock,
+  resolveBrandIdentity,
   buildAvailableAssetsCatalogue,
   resolveAssetNames,
   buildBrandGuidance,
