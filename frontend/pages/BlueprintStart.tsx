@@ -6,7 +6,7 @@ import UpgradePrompt from '../components/UpgradePrompt';
 import { apiService } from '../services/api';
 import { upgradeInfoOf } from '../utils/plans';
 import {
-  GOALS, MAX_COMPETITORS, MAX_OFFERS, MAX_COLOURS, emptyForm, validateForm, buildStartBody, canChooseMode,
+  GOALS, MAX_COMPETITORS, MAX_OFFERS, MAX_COLOURS, emptyForm, prefillFromProfile, validateForm, buildStartBody, canChooseMode,
   logoFileProblem, startFailureOf, quarksNote, BlueprintInputForm,
 } from '../utils/blueprint';
 import { BLUEPRINT_COPY } from '../constants/blueprintCopy';
@@ -29,10 +29,7 @@ const Field: React.FC<{ id: string; label: string; help?: string; error?: string
 const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
   const navigate = useNavigate();
   const [form, setForm] = useState<BlueprintInputForm>(() => {
-    const f = emptyForm();
-    f.businessName = (user as any)?.companyName || user?.businessProfile?.name || '';
-    f.website = user?.businessProfile?.website || '';
-    return f;
+    return { ...emptyForm(), ...prefillFromProfile(user) };
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);

@@ -21,6 +21,15 @@ interface SettingsProps {
   onUserUpdate: (user: User) => void;
 }
 
+// Defined here, not inside the page, so React keeps the same input between keystrokes
+// (a component created inside render is rebuilt on every letter and drops the cursor).
+const Field = ({ label, labelCls, children }: { label: string; labelCls: string; children: React.ReactNode }) => (
+  <div>
+    <label className={labelCls}>{label}</label>
+    {children}
+  </div>
+);
+
 const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
@@ -100,7 +109,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   useEffect(() => {
     if (user) {
         setFormData({
-          companyName: (user as any).companyName || user.businessProfile?.name || '',
+          companyName: user.businessProfile?.name || (user as any).companyName || '',
           industry: user.businessProfile?.industry || '',
           email: user.email || '',
           firstName: user.firstName || '',
@@ -461,12 +470,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                         : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                     }`;
                     const labelCls = `block text-xs font-bold ${theme.textSecondary} uppercase tracking-wide mb-2`;
-                    const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-                      <div>
-                        <label className={labelCls}>{label}</label>
-                        {children}
-                      </div>
-                    );
                     const industryOptions = ['Technology/SaaS', 'E-commerce/Retail', 'Food & Beverage', 'Fashion & Apparel', 'Beauty & Wellness', 'Healthcare', 'Education', 'Finance/Fintech', 'Real Estate', 'Travel & Hospitality', 'Media & Entertainment', 'Professional Services', 'Manufacturing', 'Automotive', 'Jewellery', 'Home & Furniture', 'Non-profit', 'Other'];
                     return (
                       <div className="animate-in fade-in duration-300">
@@ -475,22 +478,22 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
                         <div className="space-y-5 mb-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <Field label="Business Name">
+                            <Field labelCls={labelCls} label="Business Name">
                               <input className={inputCls} value={bizData.name || ''} onChange={e => handleBizChange('name', e.target.value)} />
                             </Field>
-                            <Field label="Website">
+                            <Field labelCls={labelCls} label="Website">
                               <input className={inputCls} value={bizData.website || ''} onChange={e => handleBizChange('website', e.target.value)} placeholder="https://..." />
                             </Field>
-                            <Field label="GST Number">
+                            <Field labelCls={labelCls} label="GST Number">
                               <input className={inputCls} value={bizData.gstNumber || ''} onChange={e => handleBizChange('gstNumber', e.target.value)} />
                             </Field>
-                            <Field label="Business Vertical (Industry)">
+                            <Field labelCls={labelCls} label="Business Vertical (Industry)">
                               <select className={inputCls} value={bizData.industry || ''} onChange={e => handleBizChange('industry', e.target.value)}>
                                 <option value="">Select...</option>
                                 {industryOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                               </select>
                             </Field>
-                            <Field label="Business Type">
+                            <Field labelCls={labelCls} label="Business Type">
                               <select className={inputCls} value={bizData.businessType || ''} onChange={e => handleBizChange('businessType', e.target.value)}>
                                 <option value="">Select...</option>
                                 <option value="B2B">B2B</option>
@@ -498,13 +501,13 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 <option value="Both">Both</option>
                               </select>
                             </Field>
-                            <Field label="Business Location">
+                            <Field labelCls={labelCls} label="Business Location">
                               <input className={inputCls} value={bizData.businessLocation || ''} onChange={e => handleBizChange('businessLocation', e.target.value)} placeholder="City, State / Country" />
                             </Field>
-                            <Field label="Years in Business">
+                            <Field labelCls={labelCls} label="Years in Business">
                               <input type="number" min={0} className={inputCls} value={bizData.yearsInBusiness ?? ''} onChange={e => handleBizChange('yearsInBusiness', e.target.value === '' ? undefined : Number(e.target.value))} />
                             </Field>
-                            <Field label="Brand Maturity">
+                            <Field labelCls={labelCls} label="Brand Maturity">
                               <select className={inputCls} value={bizData.brandMaturity || ''} onChange={e => handleBizChange('brandMaturity', e.target.value)}>
                                 <option value="">Select...</option>
                                 <option value="established">Established</option>
@@ -513,28 +516,28 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             </Field>
                           </div>
 
-                          <Field label="Niche">
+                          <Field labelCls={labelCls} label="Niche">
                             <input className={inputCls} value={bizData.niche || ''} onChange={e => handleBizChange('niche', e.target.value)} />
                           </Field>
 
-                          <Field label="Problem You Solve">
+                          <Field labelCls={labelCls} label="Problem You Solve">
                             <textarea className={`${inputCls} min-h-[80px]`} value={bizData.problemSolved || ''} onChange={e => handleBizChange('problemSolved', e.target.value)} />
                           </Field>
 
-                          <Field label="Description">
+                          <Field labelCls={labelCls} label="Description">
                             <textarea className={`${inputCls} min-h-[80px]`} value={bizData.description || ''} onChange={e => handleBizChange('description', e.target.value)} />
                           </Field>
 
-                          <Field label="Target Audience">
+                          <Field labelCls={labelCls} label="Target Audience">
                             <textarea className={`${inputCls} min-h-[80px]`} value={bizData.targetAudience || ''} onChange={e => handleBizChange('targetAudience', e.target.value)} />
                           </Field>
 
-                          <Field label="Target Customer Profile">
+                          <Field labelCls={labelCls} label="Target Customer Profile">
                             <textarea className={`${inputCls} min-h-[80px]`} value={bizData.targetCustomerProfile || ''} onChange={e => handleBizChange('targetCustomerProfile', e.target.value)} />
                           </Field>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <Field label="Target Gender">
+                            <Field labelCls={labelCls} label="Target Gender">
                               <select className={inputCls} value={bizData.targetGender || ''} onChange={e => handleBizChange('targetGender', e.target.value)}>
                                 <option value="">Select...</option>
                                 <option value="mostly_men">Mostly Men</option>
@@ -543,7 +546,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 <option value="families">Families</option>
                               </select>
                             </Field>
-                            <Field label="Geographic Reach">
+                            <Field labelCls={labelCls} label="Geographic Reach">
                               <select className={inputCls} value={bizData.geographicReach || ''} onChange={e => handleBizChange('geographicReach', e.target.value)}>
                                 <option value="">Select...</option>
                                 <option value="hyperlocal">Hyperlocal</option>
@@ -551,7 +554,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 <option value="regional">Regional</option>
                               </select>
                             </Field>
-                            <Field label="Customer Type">
+                            <Field labelCls={labelCls} label="Customer Type">
                               <select className={inputCls} value={bizData.customerType || ''} onChange={e => handleBizChange('customerType', e.target.value)}>
                                 <option value="">Select...</option>
                                 <option value="mostly_new">Mostly New</option>
@@ -559,7 +562,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 <option value="mostly_loyal">Mostly Loyal</option>
                               </select>
                             </Field>
-                            <Field label="Price Positioning">
+                            <Field labelCls={labelCls} label="Price Positioning">
                               <select className={inputCls} value={bizData.pricePositioning || ''} onChange={e => handleBizChange('pricePositioning', e.target.value)}>
                                 <option value="">Select...</option>
                                 <option value="budget">Budget</option>
@@ -569,7 +572,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 <option value="luxury">Luxury</option>
                               </select>
                             </Field>
-                            <Field label="Content Language">
+                            <Field labelCls={labelCls} label="Content Language">
                               <select className={inputCls} value={bizData.contentLanguage || ''} onChange={e => handleBizChange('contentLanguage', e.target.value)}>
                                 <option value="">Select...</option>
                                 {CONTENT_LANGUAGES.map((l) => (
@@ -585,14 +588,14 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 labels={{ title: 'Also post in', hint: 'Optional. Choose up to three more languages. You can turn any post into these languages later.', full: 'Three languages are chosen. Remove one to choose another.', names: Object.fromEntries(CONTENT_LANGUAGES.map(l => [l.value, l.label])) }}
                               />
                             </div>
-                            <Field label="Brand Voice">
+                            <Field labelCls={labelCls} label="Brand Voice">
                               <input className={inputCls} value={Array.isArray(bizData.brandVoice) ? bizData.brandVoice.join(', ') : (bizData.brandVoice || '')} onChange={e => handleBizChange('brandVoice', e.target.value)} placeholder="For example: Professional, Witty" />
                             </Field>
                             {/* How much the AI monthly planner generates. Forward-only —
                                 changing this reshapes next month's plan, not the current
                                 one, so a CSM mid-review never has their queue rewritten
                                 underneath them. */}
-                            <Field label="Posts Per Day">
+                            <Field labelCls={labelCls} label="Posts Per Day">
                               <input
                                 type="number" min={1} max={5} step={1}
                                 className={inputCls}
@@ -600,7 +603,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 onChange={e => handleBizChange('contentCadence', { ...bizData.contentCadence, postsPerDay: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })}
                               />
                             </Field>
-                            <Field label="Reels Per Week">
+                            <Field labelCls={labelCls} label="Reels Per Week">
                               <input
                                 type="number" min={0} max={7} step={1}
                                 className={inputCls}
@@ -613,27 +616,27 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             Changes apply from next month's plan onward. The current month's plan stays as it was generated.
                           </p>
 
-                          <Field label="Marketing Goals (comma separated)">
+                          <Field labelCls={labelCls} label="Marketing Goals (comma separated)">
                             <input className={inputCls} value={(bizData.marketingGoals || []).join(', ')} onChange={e => handleBizChange('marketingGoals', e.target.value.split(',').map(s => s.trim()).filter(Boolean))} placeholder="Brand Awareness, Sales, Leads" />
                           </Field>
 
-                          <Field label="Hero Product / Service">
+                          <Field labelCls={labelCls} label="Hero Product / Service">
                             <textarea className={`${inputCls} min-h-[70px]`} value={bizData.heroProduct || ''} onChange={e => handleBizChange('heroProduct', e.target.value)} />
                           </Field>
 
-                          <Field label="Key Differentiator">
+                          <Field labelCls={labelCls} label="Key Differentiator">
                             <textarea className={`${inputCls} min-h-[70px]`} value={bizData.keyDifferentiator || ''} onChange={e => handleBizChange('keyDifferentiator', e.target.value)} />
                           </Field>
 
-                          <Field label="Brand Story">
+                          <Field labelCls={labelCls} label="Brand Story">
                             <textarea className={`${inputCls} min-h-[100px]`} value={bizData.brandStory || ''} onChange={e => handleBizChange('brandStory', e.target.value)} />
                           </Field>
 
-                          <Field label="Content Restrictions">
+                          <Field labelCls={labelCls} label="Content Restrictions">
                             <textarea className={`${inputCls} min-h-[70px]`} value={bizData.contentRestrictions || ''} onChange={e => handleBizChange('contentRestrictions', e.target.value)} placeholder="Describe anything Nebulaa should avoid." />
                           </Field>
 
-                          <Field label="First Month Content Angles">
+                          <Field labelCls={labelCls} label="First Month Content Angles">
                             <textarea className={`${inputCls} min-h-[80px]`} value={bizData.firstMonthContentAngles || ''} onChange={e => handleBizChange('firstMonthContentAngles', e.target.value)} />
                           </Field>
                         </div>

@@ -283,3 +283,18 @@ test('the document source carries the print rules and no remapped classes', () =
   assert.ok(!/filter\s*:/.test(src.replace(/-webkit-print-color-adjust/g, '')), 'no filter on the logo');
   assert.match(src, /objectFit: 'contain'/);
 });
+
+import { prefillFromProfile } from '../utils/blueprint.ts';
+
+test('the Blueprint form starts from the saved business profile, and the profile name beats the sign-up name', () => {
+  const out = prefillFromProfile({
+    companyName: 'StratSchool',
+    businessProfile: { name: 'Nebulaa', website: 'www.nebulaa.ai', description: 'Marketing for small businesses', targetAudience: 'Shop owners', businessLocation: 'Chennai' }
+  });
+  assert.deepStrictEqual(out, { businessName: 'Nebulaa', website: 'www.nebulaa.ai', whatYouSell: 'Marketing for small businesses', whoItsFor: 'Shop owners', city: 'Chennai' });
+});
+
+test('with no profile the sign-up name is used and nothing else is invented', () => {
+  assert.deepStrictEqual(prefillFromProfile({ companyName: 'Acme' }), { businessName: 'Acme' });
+  assert.deepStrictEqual(prefillFromProfile(null), {});
+});

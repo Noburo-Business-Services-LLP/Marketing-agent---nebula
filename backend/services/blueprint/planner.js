@@ -185,9 +185,22 @@ async function ask(id, vars, { callLLM = lazy.callLLM, parseJSON = lazy.parseJSO
   try { return parseJSON(String(raw || '')); } catch (_) { return null; }
 }
 
+// What came back, in a form safe to log: shapes and counts only, never the text of the answer.
+function describeAnswer(parsed) {
+  if (!isObj(parsed)) return 'no JSON object';
+  return `keys=[${Object.keys(parsed).slice(0, 12).join(',')}] pillars=${arr(parsed.pillars, RAW_CAP).length} calendar=${arr(parsed.calendar, 60).length}`;
+}
+
+// The AI sometimes returns a plan the checks reject (too few themes, or ideas that fail the claim checks).
+// One more try usually gives a usable one; if not, the run fails and the Quarks are returned.
 async function runPlan({ sheet, input, direction, callLLM, parseJSON }) {
-  const parsed = await ask('blueprint.plan', buildPlanVars(sheet, input, direction), { callLLM, parseJSON });
-  return normalisePlan(parsed, sheet);
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const parsed = await ask('blueprint.plan', buildPlanVars(sheet, input, direction), { callLLM, parseJSON });
+    const plan = normalisePlan(parsed, sheet);
+    if (plan) return plan;
+    console.warn(`[blueprint] plan attempt ${attempt} rejected: ${describeAnswer(parsed)}`);
+  }
+  return null;
 }
 
 async function runDirections({ sheet, input, callLLM, parseJSON }) {

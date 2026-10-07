@@ -71,6 +71,24 @@ export const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 export const BLUEPRINT_SIGNUP_PATH = '/login?mode=signup&intent=blueprint';
 export const BLUEPRINT_NEW_PATH = '/blueprint/new';
 
+/**
+ * Starts the Blueprint form from what the person already told us (onboarding and Settings), so they
+ * do not type it again. The business profile name wins over the sign-up name.
+ */
+export function prefillFromProfile(user: any): Partial<BlueprintInputForm> {
+  const p = (user && user.businessProfile) || {};
+  const text = (v: any) => (typeof v === 'string' ? v.trim() : '');
+  const out: Partial<BlueprintInputForm> = {};
+  const name = text(p.name) || text(user && user.companyName);
+  if (name) out.businessName = name;
+  if (text(p.website)) out.website = text(p.website);
+  const sell = text(p.description) || text(p.niche);
+  if (sell) out.whatYouSell = sell;
+  if (text(p.targetAudience)) out.whoItsFor = text(p.targetAudience);
+  if (text(p.businessLocation)) out.city = text(p.businessLocation);
+  return out;
+}
+
 export function emptyForm(): BlueprintInputForm {
   return {
     businessName: '', website: '', instagram: '', whatYouSell: '', whoItsFor: '', goal: '',

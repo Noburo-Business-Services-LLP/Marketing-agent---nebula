@@ -1173,6 +1173,7 @@ router.put('/update-profile', protect, [
     if (updates.businessProfile && typeof updates.businessProfile === 'object') {
       updates.businessProfile = withCleanLanguages(updates.businessProfile);
     }
+    require('../services/accountNames').applyNameSync(updates);
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -1282,6 +1283,7 @@ router.put('/complete-onboarding', protect, async (req, res) => {
     };
 
     if (mobileNumber) updateData.mobileNumber = mobileNumber;
+    require('../services/accountNames').applyNameSync(updateData);
 
     // If connected socials are provided during onboarding, save them
     if (connectedSocials && Array.isArray(connectedSocials) && connectedSocials.length > 0) {

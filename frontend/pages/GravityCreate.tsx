@@ -1,3 +1,4 @@
+import PlatformIcon from '../components/PlatformIcon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd, Package, Globe } from 'lucide-react';
@@ -46,11 +47,14 @@ const VISUAL_STYLES = ['4:5 portrait', '1:1 square', '9:16 vertical', '16:9 land
 const LANGUAGES = CONTENT_LANGUAGES.map((l) => l.label);
 const languageValueFromLabel = (label: string) =>
   CONTENT_LANGUAGES.find((l) => l.label === label)?.value || 'english';
-const PLATFORMS = [
-  { key: 'instagram', label: 'Instagram', Icon: Instagram },
-  { key: 'facebook',  label: 'Facebook',  Icon: Facebook },
-  { key: 'x',         label: 'X',         Icon: ImageIcon /* placeholder */ },
-  { key: 'linkedin',  label: 'LinkedIn',  Icon: Linkedin },
+const platformIcon = (key: string): React.ComponentType<{ className?: string }> =>
+  ({ className }) => <PlatformIcon platform={key} className={className} />;
+const PLATFORMS: Array<{ key: string; label: string; Icon: React.ComponentType<{ className?: string }>; soon?: boolean }> = [
+  { key: 'instagram', label: 'Instagram', Icon: platformIcon('instagram') },
+  { key: 'facebook',  label: 'Facebook',  Icon: platformIcon('facebook') },
+  { key: 'x',         label: 'X',         Icon: platformIcon('x') },
+  { key: 'linkedin',  label: 'LinkedIn',  Icon: platformIcon('linkedin') },
+  { key: 'gmb',       label: 'Google Business (coming soon)', Icon: platformIcon('gmb'), soon: true },
 ];
 
 const MetaBox: React.FC<{
@@ -1218,14 +1222,15 @@ const GravityCreate: React.FC = () => {
       <div className="flex items-center justify-center gap-4 py-4 mb-2">
         <span className="gravity-label">Platforms</span>
         <div className="flex items-center gap-2">
-          {PLATFORMS.map(({ key, label, Icon }) => {
+          {PLATFORMS.map(({ key, label, Icon, soon }) => {
             const active = selectedPlatforms.includes(key);
             return (
               <button
                 key={key}
-                onClick={() => togglePlatform(key)}
+                onClick={() => !soon && togglePlatform(key)}
+                disabled={Boolean(soon)}
                 title={label}
-                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
+                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${soon ? 'opacity-40 cursor-not-allowed ' : ''}${
                   active
                     ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)] border border-[var(--gv-border-strong)]'
                     : 'bg-transparent text-[var(--gv-text-muted)] border border-[var(--gv-border-subtle)] hover:text-[var(--gv-text-secondary)]'
