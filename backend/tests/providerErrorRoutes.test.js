@@ -64,7 +64,8 @@ test('socials status: provider failure is not returned raw', async () => {
   const res = await call(find(social, '/status', 'get'));
   assert.strictEqual(res.code, 200);
   assert.strictEqual(res.body.success, true);
-  assert.doesNotMatch(shown(res.body), BANNED);
+  // "Google Business" is a platform name customers should see; what must never appear is provider error text.
+  assert.doesNotMatch(shown(res.body).replace(/Google Business/g, ''), BANNED);
 });
 
 test('account health hides a stored provider error', async () => {
