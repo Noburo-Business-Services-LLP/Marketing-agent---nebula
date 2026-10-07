@@ -23,6 +23,8 @@ test('seeded payments are realistic and the Money numbers add up', () => {
   // Paying stays as before: nobody who is not meant to pay got a paid payment.
   const hidden = users.filter((u) => u.isHidden);
   assert.ok(hidden.every((u) => !u.payments.some((p) => p.status === 'paid')));
+  // No payment is dated in the future.
+  users.forEach((u) => u.payments.forEach((p) => assert.ok(new Date(p.paidAt).getTime() <= NOW, `${u.key} payment dated in the future`)));
   // No payment is dated before the account existed.
   users.forEach((u) => u.payments.forEach((p) => assert.ok(new Date(p.paidAt) >= new Date(u.createdAt), `${u.key} payment before sign-up`)));
 });

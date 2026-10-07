@@ -185,7 +185,8 @@ function failuresOf(customers, now) {
     if (status === 'halted' || status === 'cancelled') {
       const at = toMs(u.subscription.currentPeriodEnd) ?? toMs(u.subscription.nextBillingAt);
       if (at === null || (at >= from && at <= now)) {
-        const tier = u.plan && u.plan.tier;
+        const rec = ((u.plan && u.plan.subscriptions) || []).find((x) => x && x.kind === 'plan' && PLAN_PRESENTATION[x.key]);
+        const tier = PLAN_PRESENTATION[u.plan && u.plan.tier] ? u.plan.tier : rec && rec.key; // the account is back on free by now; the record says which plan it was
         renewals.push({ clientId: idOf(u), clientName: displayName(u), kind: status, what: PLAN_PRESENTATION[tier] ? `${PLAN_PRESENTATION[tier].name} plan` : 'Plan', at: at === null ? null : new Date(at).toISOString(), reason: paymentFailureMessage(status), _t: at === null ? -Infinity : at });
       }
     }

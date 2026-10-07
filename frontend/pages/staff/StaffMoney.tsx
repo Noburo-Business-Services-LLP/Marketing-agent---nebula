@@ -38,10 +38,11 @@ const Unavailable: React.FC<{ reason?: string }> = ({ reason }) => (
 function revenueTile(label: string, w: Window | undefined) {
   const x = w || { exGstPaise: 0, gstPaise: 0, unsplitPaise: 0, totalPaise: 0, count: 0 };
   return (
-    <Tile label={label} value={formatInr(x.exGstPaise + x.unsplitPaise)} sub={(
+    <Tile label={label} value={formatInr(x.exGstPaise)} sub={(
       <>
-        <p>before GST{x.unsplitPaise > 0 ? ' (older payments with no GST split included in full)' : ''}</p>
-        <p>GST {formatInr(x.gstPaise)} · collected in total {formatInr(x.totalPaise)}</p>
+        <p>before GST · GST {formatInr(x.gstPaise)}</p>
+        {x.unsplitPaise > 0 && <p>plus {formatInr(x.unsplitPaise)} in older payments with no GST split</p>}
+        <p>Collected in total {formatInr(x.totalPaise)}</p>
         <p>{x.count} {x.count === 1 ? 'payment' : 'payments'}</p>
       </>
     )} />
@@ -123,14 +124,14 @@ const RevenueChart: React.FC<{ series: MoneySeries }> = ({ series }) => {
         </svg>
       </div>
       <p className="mt-1 min-h-[1.25rem] text-xs text-[var(--gv-text-secondary)]" aria-live="polite">
-        {focus ? `${focus.label}: ${formatInr(focus.total)} collected (before GST ${formatInr(focus.exGst + focus.unsplit)}, GST ${formatInr(focus.gst)})` : 'Hover or tap a day for its amount.'}
+        {focus ? `${focus.label}: ${formatInr(focus.total)} collected (before GST ${formatInr(focus.exGst)}, GST ${formatInr(focus.gst)}${focus.unsplit ? `, not split ${formatInr(focus.unsplit)}` : ''})` : 'Hover or tap a day for its amount.'}
       </p>
       <details className="mt-2 text-sm">
         <summary className="cursor-pointer font-semibold text-[var(--gv-accent-text)]">Show the numbers as a table</summary>
         <div className="mt-2 max-h-64 overflow-auto rounded-lg border border-[var(--gv-border-subtle)]">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[var(--gv-bg)] text-[var(--gv-text-tertiary)]"><tr><th scope="col" className="px-3 py-1.5">Day</th><th scope="col" className="px-3 py-1.5">Before GST</th><th scope="col" className="px-3 py-1.5">GST</th><th scope="col" className="px-3 py-1.5">Collected</th></tr></thead>
-            <tbody>{days.map((d) => <tr key={d.day} className="border-t border-[var(--gv-border-subtle)]"><td className="px-3 py-1">{d.label}</td><td className="px-3 py-1 tabular-nums">{formatInr(d.exGst + d.unsplit)}</td><td className="px-3 py-1 tabular-nums">{formatInr(d.gst)}</td><td className="px-3 py-1 tabular-nums">{formatInr(d.total)}</td></tr>)}</tbody>
+            <thead className="bg-[var(--gv-bg)] text-[var(--gv-text-tertiary)]"><tr><th scope="col" className="px-3 py-1.5">Day</th><th scope="col" className="px-3 py-1.5">Before GST</th><th scope="col" className="px-3 py-1.5">GST</th>{series.hasUnsplit && <th scope="col" className="px-3 py-1.5">Not split</th>}<th scope="col" className="px-3 py-1.5">Collected</th></tr></thead>
+            <tbody>{days.map((d) => <tr key={d.day} className="border-t border-[var(--gv-border-subtle)]"><td className="px-3 py-1">{d.label}</td><td className="px-3 py-1 tabular-nums">{formatInr(d.exGst)}</td><td className="px-3 py-1 tabular-nums">{formatInr(d.gst)}</td>{series.hasUnsplit && <td className="px-3 py-1 tabular-nums">{formatInr(d.unsplit)}</td>}<td className="px-3 py-1 tabular-nums">{formatInr(d.total)}</td></tr>)}</tbody>
           </table>
         </div>
       </details>

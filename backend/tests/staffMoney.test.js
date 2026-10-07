@@ -160,6 +160,11 @@ test('failures: failed payments and halted or cancelled plans in the last 30 day
   assert.match(f.note, /only/i);
 });
 
+test('a stopped plan is still named from the stored subscription record, even after the account went back to free', () => {
+  const users = [mk('b', { subscription: { status: 'halted', currentPeriodEnd: ago(5) }, plan: { tier: 'free', subscriptions: [{ subscriptionId: 's1', kind: 'plan', key: 'professional', active: false }] } })];
+  assert.strictEqual(buildMoney({ users, now: NOW, ayrshareProfiles: 0 }).failures.renewals.items[0].what, 'Professional plan');
+});
+
 test('failure reasons come from providerErrors and never repeat raw provider text', () => {
   assert.match(paymentFailureMessage('failed'), /did not go through/i);
   assert.match(paymentFailureMessage('halted'), /stopped/i);

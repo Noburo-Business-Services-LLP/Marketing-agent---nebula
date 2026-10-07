@@ -149,7 +149,7 @@ function buildData(now = Date.now(), passwordHash = 'x'.repeat(60)) {
     let planDoc = plan ? { ...plan } : undefined;
     if (paid && i <= 9) {
       // Older managed accounts paid by hand before GST was split out: no ex-GST amount stored for the first five.
-      for (let k = 0; k < 1 + (i % 3); k++) payments.push({ razorpayOrderId: `order_demo_${i}_${k}`, razorpayPaymentId: `pay_demo_${i}_${k}`, amount: 11800, currency: 'INR', credits: 0, status: 'paid', item: 'Nebulaa subscription', ...(i > 4 ? { exGstAmount: 10000 } : {}), paidAt: new Date(Math.max(createdAt.getTime() + DAY / 2, now - (k * 30 + between(1, 20)) * DAY)) });
+      for (let k = 0; k < 1 + (i % 3); k++) payments.push({ razorpayOrderId: `order_demo_${i}_${k}`, razorpayPaymentId: `pay_demo_${i}_${k}`, amount: 11800, currency: 'INR', credits: 0, status: 'paid', item: 'Nebulaa subscription', ...(i > 4 ? { exGstAmount: 10000 } : {}), paidAt: new Date(Math.min(now - 3600000, Math.max(createdAt.getTime() + DAY / 2, now - (k * 30 + between(1, 20)) * DAY))) });
     } else if (paid && (tier === 'starter' || tier === 'professional')) {
       const planRec = sub('plan', tier, ACTIVE_SUB(i));
       subs.push(planRec);
