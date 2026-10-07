@@ -196,6 +196,16 @@ const AdminDashboard: React.FC = () => {
     setCsmSaving(false);
   };
 
+  const resetStaff = async (userId: string, email: string) => {
+    const typed = window.prompt(`This clears the business profile and connected accounts of ${email} and archives their drafts. Their Quarks and login stay.\n\nType the email to confirm:`);
+    if (typed === null) return;
+    setAdminActionMsg('');
+    try {
+      const res = await adminFetch(`/users/${userId}/reset-staff-account`, { method: 'POST', body: JSON.stringify({ confirmEmail: typed }) });
+      setAdminActionMsg(res.success ? `Account reset. ${res.archivedDrafts} drafts archived.` : (res.message || 'Could not reset.'));
+    } catch { setAdminActionMsg('Could not reset the account.'); }
+  };
+
   const setCsmFlag = async (userId: string, isCsm: boolean) => {
     setAdminActionMsg('');
     try {
@@ -940,6 +950,11 @@ const AdminDashboard: React.FC = () => {
                               <input type="checkbox" checked={Boolean(row.isCsm)} onChange={e => setCsmFlag(selected.user._id, e.target.checked)} />
                               This person is a customer success manager
                             </label>
+                            {row.isCsm && (
+                              <button onClick={() => resetStaff(selected.user._id, selected.user.email)} className="w-full py-2 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20">
+                                Reset to a clean staff account
+                              </button>
+                            )}
                             {!row.isCsm && (
                               <select
                                 value={row.assignedCsm ? String(row.assignedCsm) : ''}

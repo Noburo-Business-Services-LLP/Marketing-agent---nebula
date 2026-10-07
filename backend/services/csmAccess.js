@@ -38,3 +38,15 @@ function issueActingToken({ clientId, csmId, secret = process.env.JWT_SECRET }) 
 }
 
 module.exports = { canActFor, isBlockedWhileActing, issueActingToken, ACTING_TOKEN_HOURS, idOf };
+
+// Resetting wipes a person's business profile, so it is only allowed for staff accounts and only
+// when the admin typed the account's own email to confirm.
+function canResetStaffAccount(user, confirmEmail) {
+  if (!user || !user.isCsm) return { ok: false, message: 'Only CSM accounts can be reset. Mark the account as a CSM first.' };
+  if (String(confirmEmail || '').trim().toLowerCase() !== String(user.email || '').trim().toLowerCase()) {
+    return { ok: false, message: 'Type the account email exactly to confirm.' };
+  }
+  return { ok: true };
+}
+
+module.exports.canResetStaffAccount = canResetStaffAccount;

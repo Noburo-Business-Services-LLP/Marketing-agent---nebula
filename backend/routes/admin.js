@@ -571,6 +571,28 @@ router.post('/csm-accounts', adminAuth, async (req, res) => {
   }
 });
 
+// Turn a staff account into a clean one: business profile and connected accounts cleared, drafts archived
+// (archived, not deleted, so they can be restored). Quarks, login and CSM role are kept.
+router.post('/users/:id/reset-staff-account', adminAuth, async (req, res) => {
+  try {
+    const { canResetStaffAccount } = require('../services/csmAccess');
+    const user = await User.findById(req.params.id).select('email isCsm');
+    const check = canResetStaffAccount(user, req.body?.confirmEmail);
+    if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+    await User.updateOne({ _id: user._id }, { $unset: { businessProfile: '' }, $set: { connectedSocials: [], onboardingCompleted: true } });
+    let archived = 0;
+    try {
+      const Draft = require('../models/Draft');
+      const result = await Draft.updateMany({ userId: user._id, status: { $ne: 'archived' } }, { $set: { status: 'archived' } });
+      archived = result.modifiedCount || 0;
+    } catch (_) { archived = 0; }
+    res.json({ success: true, archivedDrafts: archived });
+  } catch (error) {
+    console.error('[admin] reset staff account failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not reset the account.' });
+  }
+});
+
 router.post('/users/:id/assign-csm', adminAuth, async (req, res) => {
   try {
     const csmId = req.body?.csmId || null;

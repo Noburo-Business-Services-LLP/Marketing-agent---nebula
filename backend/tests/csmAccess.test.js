@@ -27,3 +27,11 @@ test('the acting token names the client and the CSM and expires', () => {
   assert.strictEqual(d.actingCsm, 'c1');
   assert.ok(d.exp - d.iat <= 8 * 3600);
 });
+
+test('reset needs a CSM account and the exact email typed', () => {
+  assert.strictEqual(c.canResetStaffAccount({ isCsm: false, email: 'a@x.com' }, 'a@x.com').ok, false);
+  assert.strictEqual(c.canResetStaffAccount({ isCsm: true, email: 'a@x.com' }, 'b@x.com').ok, false);
+  assert.strictEqual(c.canResetStaffAccount({ isCsm: true, email: 'a@x.com' }, '').ok, false);
+  assert.strictEqual(c.canResetStaffAccount({ isCsm: true, email: 'A@x.com' }, ' a@X.com ').ok, true);
+  assert.strictEqual(c.canResetStaffAccount(null, 'a@x.com').ok, false);
+});

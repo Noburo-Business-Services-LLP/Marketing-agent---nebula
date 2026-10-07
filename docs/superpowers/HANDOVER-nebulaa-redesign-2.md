@@ -214,3 +214,8 @@ Deploy everything since the last release with `bash docs/superpowers/ops/release
 ## Update 25 (2026-10-07): wrong site address in production
 - The CSM invite email linked to `http://stratschool-prod-alb-59606506.ap-south-1.elb.amazonaws.com`: prod `FRONTEND_URL` holds the load-balancer address. The invite now uses `APP_PUBLIC_URL` (default `https://gravity.nebulaa.ai`).
 - `FRONTEND_URL` is also used by `routes/social.js` and `routes/googleCalendar.js` for the redirect back to the app after connecting a social account or Google Calendar, so those customers would land on the load-balancer address. OWNER ACTION: set `FRONTEND_URL=https://gravity.nebulaa.ai` in the prod secret `nebulaa-gravity/prod/backend` and restart the backend. Check `WEBHOOK_BASE_URL` and any OAuth redirect URIs (`GOOGLE_REDIRECT_URI`, `LINKEDIN_REDIRECT_URI`, etc.) for the same problem, and that the load balancer redirects http to https.
+
+## Update 26 (2026-10-07): staff accounts
+- Marking a user as CSM (admin checkbox, or Add CSM on an existing email) now also sets `isHidden` (kept out of admin overview and trial-funnel counts) and `onboardingCompleted`. Sign-in response now carries `isCsm`; CSMs land on `/clients`.
+- Admin "Reset to a clean staff account" (`POST /api/admin/users/:id/reset-staff-account`, CSM accounts only, admin types the account email to confirm): unsets `businessProfile`, empties `connectedSocials`, archives (does not delete) the user's drafts. Quarks, login, CSM role and the external Ayrshare profile are untouched. Campaigns and other collections are not touched.
+- Open: CSM accounts still spend their own Quarks; no free-for-staff setting.
