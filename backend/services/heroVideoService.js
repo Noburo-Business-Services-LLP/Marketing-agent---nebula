@@ -199,11 +199,15 @@ function describeFalError(err) {
   const body = err && err.body;
   let detail = '';
   if (body && Array.isArray(body.detail)) {
-    detail = body.detail.map((d) => [Array.isArray(d && d.loc) ? d.loc.join('.') : '', d && (d.msg || d.message)].filter(Boolean).join(': ')).filter(Boolean).join('; ');
+    detail = body.detail.map((d) => [Array.isArray(d && d.loc) ? d.loc.join('.') : '', d && (d.msg || d.message || d.type)].filter(Boolean).join(': ')).filter(Boolean).join('; ');
   } else if (body && typeof body.detail === 'string') {
     detail = body.detail;
   } else if (body && typeof body.message === 'string') {
     detail = body.message;
+  }
+  if (!detail && body && typeof body === 'object') {
+    // Another shape (for example {error, code}): keep it short so the log shows what the provider said.
+    try { const raw = JSON.stringify(body); if (raw && raw !== '{}') detail = raw.slice(0, 300); } catch (e) { detail = ''; }
   }
   return detail ? `${base}: ${detail}`.slice(0, 500) : base;
 }

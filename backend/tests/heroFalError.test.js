@@ -29,3 +29,13 @@ test('a server error or a dropped connection is still retried, never failed', as
     await assert.rejects(() => getHeroClipStatus('m', 'r', fal));
   }
 });
+
+test('an entry with only a type, or a body in another shape, is still shown (the log said only "Unprocessable Entity")', () => {
+  const typed = Object.assign(new Error('Unprocessable Entity'), { body: { detail: [{ loc: ['body'], type: 'content_policy_violation' }] } });
+  assert.match(describeFalError(typed), /content_policy_violation/);
+  const other = Object.assign(new Error('Unprocessable Entity'), { body: { error: 'face detected', code: 'partner_validation' } });
+  assert.match(describeFalError(other), /face detected/);
+  assert.ok(describeFalError(other).length <= 500);
+  const empty = Object.assign(new Error('Unprocessable Entity'), { body: {} });
+  assert.strictEqual(describeFalError(empty), 'Unprocessable Entity');
+});
