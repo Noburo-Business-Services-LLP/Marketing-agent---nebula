@@ -4,6 +4,8 @@ import { Loader2, Home, Users, UserCog, Wallet, BarChart3 } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
 import StaffHome from './StaffHome';
+import StaffClients from './StaffClients';
+import StaffClientPage from './StaffClientPage';
 
 const SECTIONS = [
   { id: 'home', label: 'Home', icon: Home, needs: 'view_home' },
@@ -14,7 +16,6 @@ const SECTIONS = [
 ] as const;
 
 const NEXT_STEP: Record<string, string> = {
-  clients: 'The client list and client pages arrive in the next release.',
   team: 'Team management arrives in a later release.',
   money: 'Revenue, payments and renewals arrive in a later release.',
   usage: 'Feature use and the sign-up funnel arrive in a later release.'
@@ -22,7 +23,7 @@ const NEXT_STEP: Record<string, string> = {
 
 /** The Nebulaa staff area: its own menu, shown only to the Owner, Admins and CSMs. */
 const StaffLayout: React.FC = () => {
-  const { section = 'home' } = useParams();
+  const { section = 'home', id } = useParams();
   const [me, setMe] = useState<Awaited<ReturnType<typeof apiService.getStaffMe>> | null>(null);
   const [error, setError] = useState('');
 
@@ -55,7 +56,7 @@ const StaffLayout: React.FC = () => {
           );
         })}
       </nav>
-      {current?.id === 'home' ? <StaffHome role={me.staff.role} /> : <p className="py-16 text-center text-[var(--gv-text-muted)]">{NEXT_STEP[current?.id || ''] || ''}</p>}
+      {current?.id === 'home' ? <StaffHome role={me.staff.role} /> : current?.id === 'clients' ? (id ? <StaffClientPage id={id} /> : <StaffClients can={me.can} />) : <p className="py-16 text-center text-[var(--gv-text-muted)]">{NEXT_STEP[current?.id || ''] || ''}</p>}
     </div>
   );
 };

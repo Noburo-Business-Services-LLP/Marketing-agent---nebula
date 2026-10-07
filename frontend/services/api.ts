@@ -1340,6 +1340,30 @@ export const apiService = {
     return apiCall('/staff/me', { method: 'GET' }, true);
   },
 
+  // ---- Staff area: clients ----
+  getStaffClients: async (params: { filter?: string; q?: string; sort?: string; dir?: string; page?: number; pageSize?: number }): Promise<any> => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') qs.set(k, String(v)); });
+    return apiCall(`/staff/clients?${qs.toString()}`, { method: 'GET' }, true);
+  },
+  getStaffClient: async (id: string): Promise<any> => apiCall(`/staff/clients/${id}`, { method: 'GET' }, true),
+  getStaffCsms: async (): Promise<{ success: boolean; csms: Array<{ id: string; name: string }> }> => apiCall('/staff/csms', { method: 'GET' }, true),
+  staffAddQuarks: async (id: string, amount: number): Promise<any> => apiCall(`/staff/clients/${id}/quarks`, { method: 'POST', body: JSON.stringify({ amount }) }, true),
+  staffToggleClient: async (id: string, active: boolean): Promise<any> => apiCall(`/staff/clients/${id}/toggle`, { method: 'POST', body: JSON.stringify({ active }) }, true),
+  staffAssignCsm: async (id: string, csmId: string | null): Promise<any> => apiCall(`/staff/clients/${id}/assign-csm`, { method: 'POST', body: JSON.stringify({ csmId }) }, true),
+  staffBulkAssign: async (ids: string[], csmId: string | null): Promise<any> => apiCall('/staff/clients/bulk-assign', { method: 'POST', body: JSON.stringify({ ids, csmId }) }, true),
+  // Opens a client's account for a staff member; keeps their own login aside so "Back to my clients" can restore it.
+  staffOpenClient: async (id: string): Promise<any> => {
+    const res = await apiCall<any>(`/staff/clients/${id}/open`, { method: 'POST' }, true);
+    if (res?.success && res.token) {
+      const own = getToken();
+      if (own && !localStorage.getItem('csmReturnToken')) localStorage.setItem('csmReturnToken', own);
+      localStorage.setItem('csmActingClient', res.client?.name || '');
+      setToken(res.token);
+    }
+    return res;
+  },
+
   getCsmClients: async (): Promise<{ success: boolean; clients: Array<{ id: string; name: string; email: string; industry: string; quarks: number; connectedAccounts: number; onboardingCompleted: boolean; draftsWaiting: number; lastLoginAt: string | null; isActive: boolean }> }> => {
     return apiCall('/csm/clients', { method: 'GET' }, true);
   },

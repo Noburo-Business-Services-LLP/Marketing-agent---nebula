@@ -285,6 +285,7 @@ const App: React.FC = () => {
                     <Route path="/clients" element={<CsmClients />} />
                     <Route path="/staff" element={<StaffLayout />} />
                     <Route path="/staff/:section" element={<StaffLayout />} />
+                    <Route path="/staff/:section/:id" element={<StaffLayout />} />
                     <Route path="/connect-socials/inbox" element={<Navigate to="/inbox" replace />} />
                     <Route path="/brand-assets" element={<BrandAssets />} />
                     {/* Products & Services now lives inside Brand Assets. The old route is
