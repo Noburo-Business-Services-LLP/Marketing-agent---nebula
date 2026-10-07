@@ -481,28 +481,34 @@ const ConnectSocials: React.FC = () => {
     }
   };
 
+  // The server may send a platform as "X", "x", "Twitter" or "twitter"; every spelling gets the right logo.
+  const platformKey = (platform: string) => {
+    const key = String(platform || '').toLowerCase().trim();
+    return key === 'twitter' || key === 'x (twitter)' ? 'x' : key;
+  };
+
   const getIcon = (platform: string) => {
-      switch(platform) {
-          case 'Instagram': return <Instagram className="w-6 h-6 text-white" />;
-          case 'Facebook': return <Facebook className="w-6 h-6 text-white" />;
-          case 'X': return <XLogo className="w-5 h-5 text-white" />;
-          case 'LinkedIn': return <Linkedin className="w-6 h-6 text-white" />;
-          case 'YouTube': return <Youtube className="w-6 h-6 text-white" />;
-          case 'Pinterest': return <Pin className="w-6 h-6 text-white" />;
-          case 'Reddit': return <MessageCircle className="w-6 h-6 text-white" />;
-          default: return <Video className="w-6 h-6 text-white" />;
+      switch (platformKey(platform)) {
+          case 'instagram': return <Instagram className="w-6 h-6 text-white" />;
+          case 'facebook': return <Facebook className="w-6 h-6 text-white" />;
+          case 'x': return <XLogo className="w-5 h-5 text-white" />;
+          case 'linkedin': return <Linkedin className="w-6 h-6 text-white" />;
+          case 'youtube': return <Youtube className="w-6 h-6 text-white" />;
+          case 'pinterest': return <Pin className="w-6 h-6 text-white" />;
+          case 'reddit': return <MessageCircle className="w-6 h-6 text-white" />;
+          default: return <span className="text-lg font-bold text-white">{String(platform || '?').charAt(0).toUpperCase()}</span>;
       }
   };
 
   const getBgColor = (platform: string) => {
-    switch(platform) {
-        case 'Instagram': return 'bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600';
-        case 'Facebook': return 'bg-[#1877F2]';
-        case 'X': return 'bg-black';
-        case 'LinkedIn': return 'bg-[#0A66C2]';
-        case 'YouTube': return 'bg-[#FF0000]';
-        case 'Pinterest': return 'bg-[#BD081C]';
-        case 'Reddit': return 'bg-[#FF4500]';
+    switch (platformKey(platform)) {
+        case 'instagram': return 'bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600';
+        case 'facebook': return 'bg-[#1877F2]';
+        case 'x': return 'bg-black';
+        case 'linkedin': return 'bg-[#0A66C2]';
+        case 'youtube': return 'bg-[#FF0000]';
+        case 'pinterest': return 'bg-[#BD081C]';
+        case 'reddit': return 'bg-[#FF4500]';
         default: return 'bg-slate-500';
     }
   };
