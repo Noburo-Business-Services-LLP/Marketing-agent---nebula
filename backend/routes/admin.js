@@ -516,6 +516,54 @@ router.post('/users/:id/csm', adminAuth, async (req, res) => {
   }
 });
 
+// Add a CSM: creates a verified staff account with no customer onboarding or trial, and emails an invite.
+// They set their own password with "Forgot password" on the sign-in page.
+router.post('/csm-accounts', adminAuth, async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const firstName = String(req.body?.firstName || '').trim();
+    const lastName = String(req.body?.lastName || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    if (!firstName) return res.status(400).json({ success: false, message: 'Enter their first name.' });
+
+    let user = await User.findOne({ email });
+    if (user) {
+      user.isCsm = true;
+      await user.save();
+    } else {
+      const crypto = require('crypto');
+      user = await User.create({
+        email, firstName, lastName,
+        password: crypto.randomBytes(24).toString('hex'),
+        isVerified: true,
+        onboardingCompleted: true,
+        isCsm: true,
+        companyName: 'Nebulaa'
+      });
+    }
+
+    let emailed = false;
+    try {
+      if (process.env.RESEND_API_KEY) {
+        const { Resend } = require('resend');
+        const site = process.env.FRONTEND_URL || 'https://gravity.nebulaa.ai';
+        const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
+          from: process.env.RESEND_FROM_EMAIL || 'noreply@nebulaa.ai',
+          to: email,
+          subject: 'Your Nebulaa account is ready',
+          text: `Hi ${firstName},\n\nYou have been added to Nebulaa as a customer success manager.\n\n1. Open ${site} and choose Sign in.\n2. Select Forgot password and enter this email address.\n3. Use the code we send you to set your own password.\n\nAfter you sign in, My clients appears in the left menu.`
+        });
+        emailed = !error;
+      }
+    } catch (_) { emailed = false; }
+
+    res.json({ success: true, data: { _id: user._id, email: user.email, isCsm: true }, emailed });
+  } catch (error) {
+    console.error('[admin] add CSM failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not add the CSM.' });
+  }
+});
+
 router.post('/users/:id/assign-csm', adminAuth, async (req, res) => {
   try {
     const csmId = req.body?.csmId || null;

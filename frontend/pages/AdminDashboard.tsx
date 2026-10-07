@@ -173,6 +173,29 @@ const AdminDashboard: React.FC = () => {
   };
 
   // CSM set-up: mark someone as a CSM, or assign this client to a CSM.
+  const [showAddCsm, setShowAddCsm] = useState(false);
+  const [csmForm, setCsmForm] = useState({ firstName: '', lastName: '', email: '' });
+  const [csmSaving, setCsmSaving] = useState(false);
+
+  const addCsm = async () => {
+    setCsmSaving(true);
+    setAdminActionMsg('');
+    try {
+      const res = await adminFetch('/csm-accounts', { method: 'POST', body: JSON.stringify(csmForm) });
+      if (res.success) {
+        setUsers(prev => (prev.some((u: any) => u._id === res.data._id)
+          ? prev.map((u: any) => (u._id === res.data._id ? { ...u, isCsm: true } : u))
+          : [{ ...res.data, companyName: 'Nebulaa', isActive: true, createdAt: new Date().toISOString() } as any, ...prev]));
+        setAdminActionMsg(res.emailed
+          ? `${csmForm.email} was added and an invite email was sent.`
+          : `${csmForm.email} was added. Ask them to choose Forgot password on the sign-in page to set a password.`);
+        setCsmForm({ firstName: '', lastName: '', email: '' });
+        setShowAddCsm(false);
+      } else setAdminActionMsg(res.message || 'Could not add the CSM.');
+    } catch { setAdminActionMsg('Could not add the CSM.'); }
+    setCsmSaving(false);
+  };
+
   const setCsmFlag = async (userId: string, isCsm: boolean) => {
     setAdminActionMsg('');
     try {
@@ -599,6 +622,12 @@ const AdminDashboard: React.FC = () => {
                           />
                         </div>
                         <button
+                          onClick={() => setShowAddCsm(p => !p)}
+                          className="flex-shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold bg-[#ffcc29]/10 text-[#ffcc29] border border-[#ffcc29]/20 hover:bg-[#ffcc29]/20"
+                        >
+                          + Add CSM
+                        </button>
+                        <button
                           onClick={() => setShowHidden(p => !p)}
                           className={`flex-shrink-0 px-3 py-2.5 rounded-xl text-xs font-medium border transition-colors ${
                             showHidden
@@ -609,6 +638,17 @@ const AdminDashboard: React.FC = () => {
                           {showHidden ? 'Hide hidden' : `Show hidden (${users.filter(u => u.isHidden).length})`}
                         </button>
                       </div>
+                      {adminActionMsg && !selected && <p className="mt-3 text-sm text-[#ffcc29]">{adminActionMsg}</p>}
+                      {showAddCsm && (
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-4 gap-2">
+                          <input placeholder="First name" value={csmForm.firstName} onChange={e => setCsmForm(f => ({ ...f, firstName: e.target.value }))} className="bg-white/[0.05] border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+                          <input placeholder="Last name" value={csmForm.lastName} onChange={e => setCsmForm(f => ({ ...f, lastName: e.target.value }))} className="bg-white/[0.05] border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+                          <input placeholder="Work email" type="email" value={csmForm.email} onChange={e => setCsmForm(f => ({ ...f, email: e.target.value }))} className="bg-white/[0.05] border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none" />
+                          <button onClick={addCsm} disabled={csmSaving || !csmForm.email || !csmForm.firstName} className="rounded-xl text-sm font-semibold bg-[#ffcc29] text-black px-3 py-2 disabled:opacity-50">
+                            {csmSaving ? 'Adding...' : 'Add and invite'}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="overflow-auto max-h-[calc(100vh-440px)]">
