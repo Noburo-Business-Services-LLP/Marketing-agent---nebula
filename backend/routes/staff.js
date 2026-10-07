@@ -67,7 +67,7 @@ router.get('/team', requireStaff('add_csm'), async (req, res) => {
     const models = { User, FeatureEvent: require('../models/FeatureEvent'), Draft: require('../models/Draft') };
     const data = await loadTeamData({ models });
     const team = buildTeam(data);
-    res.json({ success: true, me: String(req.staff._id), grantable: grantableRoles(req.staff), can: { reset_accounts: can(req.staff, 'reset_accounts') }, ...team });
+    res.json({ success: true, me: String(req.staff._id), grantable: grantableRoles(req.staff), can: { reset_accounts: can(req.staff, 'reset_accounts'), add_quarks: can(req.staff, 'add_quarks') }, ...team });
   } catch (error) {
     console.error('[staff] team list failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the team. Please try again.' });
@@ -104,6 +104,13 @@ function toolsRepo() {
       return result.modifiedCount || 0;
     },
     setHidden: (id, hidden) => User.updateOne({ _id: id }, { $set: { isHidden: hidden } }),
+    grantQuarks: async (id, amount) => {
+      const updated = await User.findByIdAndUpdate(id, {
+        $inc: { 'credits.balance': amount },
+        $push: { 'credits.history': { action: 'staff_grant', amount, description: `Nebulaa staff added ${amount} Quarks`, createdAt: new Date() } }
+      }, { new: true }).select('credits.balance').lean();
+      return updated.credits.balance;
+    },
     exists: async (code) => Boolean(await Coupon().findOne({ code }).lean()),
     create: async (doc) => { const row = await Coupon().create(doc); return couponRow(row.toObject ? row.toObject() : row); },
     deactivate: async (code) => { const row = await Coupon().findOneAndUpdate({ code }, { isActive: false }, { new: true }).lean(); return row ? couponRow(row) : null; },
@@ -121,6 +128,10 @@ router.post('/ayrshare/reset-ids', requireStaff('reset_accounts'), (req, res) =>
 // POST /api/staff/team/:id/reset-account { confirm: true }: clean a staff member's old test business profile (Owner only).
 router.post('/team/:id/reset-account', requireStaff('reset_accounts'), (req, res) =>
   runTeam(res, 'staff account reset', () => tools.resetStaffAccount({ actor: req.staff, targetId: req.params.id, confirm: req.body && req.body.confirm, ...toolDeps() })));
+
+// POST /api/staff/team/:id/quarks { amount }: add Quarks to a team member's own account (Owner only).
+router.post('/team/:id/quarks', requireStaff('add_quarks'), (req, res) =>
+  runTeam(res, 'staff quarks', () => tools.grantStaffQuarks({ actor: req.staff, targetId: req.params.id, amount: req.body && req.body.amount, ...toolDeps() })));
 
 // POST /api/staff/clients/:id/hidden { hidden }: leave a client out of (or back in) the staff numbers (Owner, Admin).
 router.post('/clients/:id/hidden', requireStaff('hide_client'), (req, res) =>

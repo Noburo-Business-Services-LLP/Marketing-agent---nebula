@@ -180,6 +180,19 @@ const StaffTeam: React.FC = () => {
     setResetting(null);
   };
 
+  const addQuarks = async (row: TeamRow) => {
+    const typed = window.prompt(`How many Quarks should be added to ${row.name}'s own account?`, '1000');
+    if (typed === null) return;
+    const amount = Math.floor(Number(typed));
+    if (!Number.isFinite(amount) || amount <= 0) { setNote('Enter a whole number above 0.'); return; }
+    setResetting(row.id); setNote('');
+    try {
+      const res = await apiService.staffAddTeamQuarks(row.id, amount);
+      setNote(`Added ${res.amount} Quarks to ${row.name}. Their balance is now ${res.balance}.`);
+    } catch (e: any) { setNote(customerMessage(e && e.message, 'We could not add the Quarks. Please try again.')); }
+    setResetting(null);
+  };
+
   const done = (text: string) => { setAdding(false); setPending(null); setNote(text); load(true); };
 
   if (loading && !team) return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-[#F5A623]" aria-label="Loading the team" /></div>;
@@ -235,6 +248,9 @@ const StaffTeam: React.FC = () => {
                         <option value="">Change role</option>
                         {roles.map((role) => <option key={role} value={role}>Make {roleLabel(role)}</option>)}
                       </select>
+                    )}
+                    {team.can && team.can.add_quarks && (
+                      <button type="button" disabled={resetting === r.id} onClick={() => addQuarks(r)} className="rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] px-3 py-1.5 text-sm font-semibold text-[var(--gv-text-primary)] disabled:opacity-50">Add Quarks</button>
                     )}
                     {canResetAccount(team.can) && (
                       <button type="button" disabled={resetting === r.id} onClick={() => resetAccount(r)} className="rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] px-3 py-1.5 text-sm font-semibold text-[var(--gv-text-primary)] disabled:opacity-50">{resetting === r.id ? 'Resetting…' : 'Reset account'}</button>

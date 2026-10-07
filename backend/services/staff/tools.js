@@ -4,7 +4,7 @@
  * acting: `actor` is the signed-in account loaded by the server (requireStaff).
  */
 const { can, isStaff } = require('./permissions');
-const { isCustomer } = require('./clientActions');
+const { isCustomer, parseQuarkAmount } = require('./clientActions');
 
 const refuse = (status, message) => ({ status, body: { success: false, message } });
 const idOf = (v) => (v ? String(v._id || v.id || v) : '');
@@ -39,6 +39,21 @@ async function resetStaffAccount({ actor, targetId, confirm, repo, record }) {
   const archivedDrafts = await repo.clearTestProfile(target._id);
   await record({ actor, action: 'reset_staff_account', client: target._id, details: { archivedDrafts } });
   return { status: 200, body: { success: true, archivedDrafts } };
+}
+
+/**
+ * Adds Quarks to a team member's own account (Owner only), so staff can test the product with real
+ * features. The balance and its history line are changed in one step; the grant is logged.
+ */
+async function grantStaffQuarks({ actor, targetId, amount, repo, record }) {
+  if (!isStaff(actor) || !can(actor, 'add_quarks')) return refuse(403, 'Your role cannot do this.');
+  const parsed = parseQuarkAmount(amount);
+  if (!parsed.ok) return refuse(400, parsed.message);
+  const target = await repo.findById(targetId);
+  if (!target || !isStaff(target)) return refuse(404, 'That person is not on the team.');
+  const balance = await repo.grantQuarks(target._id, parsed.amount);
+  await record({ actor, action: 'add_quarks', client: target._id, details: { amount: parsed.amount, balanceAfter: balance, staffAccount: true } });
+  return { status: 200, body: { success: true, balance, amount: parsed.amount } };
 }
 
 /** Leaves a client out of (or back in) every staff count; test accounts are the use. Client accounts only. */
@@ -101,4 +116,4 @@ async function deleteCoupon({ actor, code, repo, record }) {
   return { status: 200, body: { success: true } };
 }
 
-module.exports = { AYRSHARE_RESET, resetAyrshareIds, resetStaffAccount, setHidden, parseCoupon, createCoupon, deactivateCoupon, deleteCoupon, idOf };
+module.exports = { AYRSHARE_RESET, resetAyrshareIds, resetStaffAccount, grantStaffQuarks, setHidden, parseCoupon, createCoupon, deactivateCoupon, deleteCoupon, idOf };

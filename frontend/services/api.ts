@@ -1370,6 +1370,7 @@ export const apiService = {
   // Owner tools (the Owner-only ones are refused by the server for everyone else).
   staffResetAyrshareIds: async (): Promise<any> => apiCall('/staff/ayrshare/reset-ids', { method: 'POST', body: JSON.stringify({ confirm: true }) }, true),
   staffResetStaffAccount: async (id: string): Promise<any> => apiCall(`/staff/team/${id}/reset-account`, { method: 'POST', body: JSON.stringify({ confirm: true }) }, true),
+  staffAddTeamQuarks: async (id: string, amount: number): Promise<any> => apiCall(`/staff/team/${id}/quarks`, { method: 'POST', body: JSON.stringify({ amount }) }, true),
   staffSetHidden: async (id: string, hidden: boolean): Promise<any> => apiCall(`/staff/clients/${id}/hidden`, { method: 'POST', body: JSON.stringify({ hidden }) }, true),
   getStaffCoupons: async (): Promise<any> => apiCall('/staff/coupons', { method: 'GET' }, true),
   staffCreateCoupon: async (body: { code: string; discountedAmount: number; maxUses: number; note: string }): Promise<any> => apiCall('/staff/coupons', { method: 'POST', body: JSON.stringify(body) }, true),
