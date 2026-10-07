@@ -35,7 +35,8 @@ function normalizeHeroBrief(raw) {
     hairStyle: str(c.hairStyle, 120), hairColor: str(c.hairColor, 60), personality: str(c.personality, 300),
     portraitUrl: pubUrl(c.portraitUrl)
   }));
-  if (!cast.length) return { ok: false, message: 'Create your cast first: finish the cast step, then make the hero video.' };
+  const quick = raw.quick === true;
+  if (!cast.length && !quick) return { ok: false, message: 'Create your cast first: finish the cast step, then make the hero video.' };
   const scenesIn = Array.isArray(raw.scenes) ? raw.scenes.filter(isObj) : [];
   const scenes = scenesIn.slice(0, MAX_SCENES).map((s, i) => {
     const d = Number(s.durationSeconds);
@@ -59,6 +60,7 @@ function normalizeHeroBrief(raw) {
   return {
     ok: true,
     brief: {
+      ...(quick ? { quick: true } : {}),
       concept: { title: str(c.title, 200), storySummary: str(c.storySummary, 1500), coreEmotion: str(c.coreEmotion, 200), visualStyle: str(c.visualStyle, 400) },
       aspectRatio: ASPECTS.includes(raw.aspectRatio) ? raw.aspectRatio : '9:16',
       language: str(raw.language, 40) || 'English',

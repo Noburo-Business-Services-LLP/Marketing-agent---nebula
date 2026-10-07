@@ -5,6 +5,7 @@ const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');
 const { normalizeHeroBrief, selectReferences } = require('../services/heroVideoBrief');
+const { QUICK_STYLES, isQuickStyle, normaliseQuickConcepts, conceptToBrief } = require('../services/heroQuick');
 const fs = require('fs');
 const path = require('path');
 const { DEFAULT_STYLE, HERO_STYLES, isHeroStyle } = require('../services/heroVideoStyles');
@@ -100,6 +101,7 @@ function referencesBlockFrom(refs) {
 }
 
 function castBlockFrom(cast, refs) {
+  if (!cast.length) return 'No cast photos or profiles. If the story needs a person, describe them fully in words from the story (age, looks, hair, clothing, manner), keep the same clothing in every beat, and show at most two people.';
   const wordsOnly = !refs.some((r) => r.kind === 'cast');
   const budget = wordsOnly ? CAST_BUDGET_WORDS : CAST_BUDGET;
   const tagOf = (url) => (url && (refs.find((r) => r.url === url && r.kind === 'cast') || {}).tag) || '';
@@ -343,6 +345,49 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       });
     } catch (err) {
       return fail(res, err, 'Failed to prepare brief');
+    }
+  });
+
+  // Quick flow: three crisp 15-second ideas. No charge; one short text-AI call.
+  router.post('/concepts', protect, checkTrial, heroWriteLimiter, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const idea = clip(body.idea, 600);
+      if (idea.length < 5) return res.status(400).json({ success: false, message: 'Tell us in a sentence or two what the video is about.' });
+      const styleKey = body.style == null || body.style === '' ? 'brand-film' : body.style;
+      if (!isQuickStyle(styleKey)) return res.status(400).json({ success: false, message: 'Choose UGC or Brand film.' });
+      const aspectRatio = body.aspectRatio == null || body.aspectRatio === '' ? '9:16' : body.aspectRatio;
+      if (!ASPECTS.includes(aspectRatio)) return res.status(400).json({ success: false, message: `aspectRatio must be one of ${ASPECTS.join(', ')}` });
+      const language = clip(body.language, 40) || 'English';
+      const cta = clip(body.ctaText, MAX_CTA);
+      const userId = toUserId(req.user);
+      const brand = (await planDeps.loadBrand(userId)) || {};
+      const st = QUICK_STYLES[styleKey];
+      const prompt = await planDeps.buildPrompt(userId, 'hero_quick.concepts', {
+        brandContextBlock: brandContextFrom(brand),
+        idea,
+        styleName: st.name,
+        styleRules: st.rules,
+        language,
+        ctaText: cta ? `"${cta}"` : 'one short, honest call to action that fits the brand',
+        brandName: clip(brand.name, 80) || 'the brand'
+      });
+      let concepts = [];
+      for (let attempt = 1; attempt <= 2 && concepts.length < 3; attempt++) {
+        const raw = await planDeps.callTextLLM(prompt, { jsonMode: true, maxTokens: 2500 });
+        let parsed = null;
+        try { parsed = planDeps.parseGeminiJSON(raw); } catch (_) { parsed = null; }
+        const got = normaliseQuickConcepts(parsed);
+        if (got.length > concepts.length) concepts = got;
+      }
+      if (!concepts.length) return res.status(502).json({ success: false, message: 'We could not come up with ideas this time. Please try again.' });
+      return res.json({
+        success: true,
+        style: st.slug,
+        concepts: concepts.map((c) => ({ ...c, cta: c.cta || cta, brief: conceptToBrief(c, { aspectRatio, language }) }))
+      });
+    } catch (err) {
+      return fail(res, err, 'Failed to write ideas');
     }
   });
 

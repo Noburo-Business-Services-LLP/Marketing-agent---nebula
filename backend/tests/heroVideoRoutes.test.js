@@ -14,12 +14,12 @@ function routes(r) {
   }));
 }
 
-test('router exposes the seven routes with protect first', () => {
+test('router exposes the eight routes with protect first', () => {
   const found = routes(router.router || router);
   const key = (r) => `${r.methods[0]} ${r.path}`;
-  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /generate', 'post /plan']);
+  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /concepts', 'post /generate', 'post /plan']);
   for (const r of found) assert.strictEqual(r.names[0], 'protect', key(r));
-  for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief')) {
+  for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief' || x.path === '/concepts')) {
     assert.ok(r.names.includes('checkTrial'), key(r));
   }
 });
@@ -377,10 +377,10 @@ test('POST /generate and poll send {status,json} verbatim', async () => {
   assert.deepStrictEqual(res2.body, { success: true, status: 'processing' });
 });
 
-test('checkTrial before handler on exactly /brief, /plan and /generate; limiter on every route', () => {
+test('checkTrial before handler on exactly /brief, /concepts, /plan and /generate; limiter on every route', () => {
   for (const r of routes(router)) {
     const idx = r.names.indexOf('checkTrial');
-    const wants = r.path === '/plan' || r.path === '/generate' || r.path === '/brief';
+    const wants = r.path === '/plan' || r.path === '/generate' || r.path === '/brief' || r.path === '/concepts';
     assert.strictEqual(idx !== -1, wants, r.path);
     if (wants) assert.ok(idx < r.names.length - 1 && idx > 0, r.path);
     assert.ok(r.names.length >= 3 && r.names[r.names.length - 2] !== 'protect' || r.names.length >= 3, r.path);
