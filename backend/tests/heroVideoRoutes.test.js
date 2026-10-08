@@ -14,12 +14,12 @@ function routes(r) {
   }));
 }
 
-test('router exposes the nine routes with protect first', () => {
+test('router exposes the eleven routes with protect first', () => {
   const found = routes(router.router || router);
   const key = (r) => `${r.methods[0]} ${r.path}`;
-  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /concepts', 'post /generate', 'post /jobs/:jobId/publish', 'post /plan']);
+  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /concepts', 'post /generate', 'post /jobs/:jobId/caption', 'post /jobs/:jobId/publish', 'post /jobs/:jobId/refinish', 'post /plan']);
   for (const r of found) assert.strictEqual(r.names[0], 'protect', key(r));
-  for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief' || x.path === '/concepts' || x.path === '/jobs/:jobId/publish')) {
+  for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief' || x.path === '/concepts' || x.path === '/jobs/:jobId/publish' || x.path === '/jobs/:jobId/caption' || x.path === '/jobs/:jobId/refinish')) {
     assert.ok(r.names.includes('checkTrial'), key(r));
   }
 });
@@ -132,7 +132,7 @@ test('/brief: staged references numbered @image1.. and a whitelisted brand summa
   assert.ok(!JSON.stringify(res.body).includes('evil.example'));
   const refs = res.body.references;
   assert.deepStrictEqual(refs.map((r) => r.tag), refs.map((_, i) => `@image${i + 1}`));
-  assert.deepStrictEqual(refs.map((r) => r.kind), ['environment', 'brand', 'brand']);
+  assert.deepStrictEqual(refs.map((r) => r.kind), ['environment', 'brand']);
   assert.deepStrictEqual(res.body.peoplePhotos.map((r) => [r.kind, r.url, r.mayShowPeople]), [['cast', `${CDN}/maya.png`, true], ['keyframe', `${CDN}/kf1.png`, true], ['keyframe', `${CDN}/kf2.png`, true]]);
   for (const r of refs) assert.deepStrictEqual(Object.keys(r).sort(), ['kind', 'label', 'source', 'tag', 'url']);
   assert.deepStrictEqual(res.body.dropped, []);
@@ -228,7 +228,7 @@ test('/plan happy path: blocks, style, audio and references reach buildPrompt', 
   assert.match(v.environmentBlock, /@image2/);
   assert.match(v.brandContextBlock, /Hero product: Filter coffee/);
   assert.match(v.brandBlock, /Hero product[^\n]*@image3/);
-  assert.match(v.brandBlock, /Logo @image4/);
+  assert.match(v.brandBlock, /no logo, brand name or lettering/);
   assert.match(v.brandBlock, /#F5A623/);
   assert.match(v.scenesBlock, /\[S1\] Hook/);
   assert.match(v.scenesBlock, /\[S2\] Turn/);
@@ -348,9 +348,9 @@ test('GET /jobs whitelist includes rawVideoUrl and finishError, still nothing in
   const JobModel = { find() { const q = { sort: () => q, limit: () => q, lean: async () => rows }; return q; } };
   const res = mkRes();
   await routeHandler({ JobModel }, '/jobs', 'get')({ user: { id: 'u1' } }, res);
-  assert.deepStrictEqual(res.body.jobs, [{ jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', rawVideoUrl: 'http://raw', finishError: 'Plain.', title: 'Hero video', prompt: 'P' }]);
+  assert.deepStrictEqual(res.body.jobs, [{ jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', rawVideoUrl: 'http://raw', finishError: 'Plain.', title: 'Hero video', prompt: 'P', finish: { realism: true } }]);
   const text = JSON.stringify(res.body);
-  for (const bad of ['falRequestId', 'metadata', 'payload', 'stack', 'fal1', 'realism']) assert.ok(!text.includes(bad), bad);
+  for (const bad of ['falRequestId', 'metadata', 'payload', 'stack', 'fal1']) assert.ok(!text.includes(bad), bad);
 });
 
 test('GET /jobs/:jobId CastError -> 404', async () => {
@@ -380,7 +380,7 @@ test('POST /generate and poll send {status,json} verbatim', async () => {
 test('checkTrial before handler on exactly /brief, /concepts, /plan and /generate; limiter on every route', () => {
   for (const r of routes(router)) {
     const idx = r.names.indexOf('checkTrial');
-    const wants = r.path === '/plan' || r.path === '/generate' || r.path === '/brief' || r.path === '/concepts' || r.path === '/jobs/:jobId/publish';
+    const wants = r.path === '/plan' || r.path === '/generate' || r.path === '/brief' || r.path === '/concepts' || r.path === '/jobs/:jobId/publish' || r.path === '/jobs/:jobId/caption' || r.path === '/jobs/:jobId/refinish';
     assert.strictEqual(idx !== -1, wants, r.path);
     if (wants) assert.ok(idx < r.names.length - 1 && idx > 0, r.path);
     assert.ok(r.names.length >= 3 && r.names[r.names.length - 2] !== 'protect' || r.names.length >= 3, r.path);
@@ -471,7 +471,7 @@ test('/plan default sends no people photos; an opt-in list adds only the staged 
   const { deps, calls } = mkDeps();
   const res = mkRes();
   await planHandler(deps)(reqOf({ brief: mkBrief() }), res);
-  assert.deepStrictEqual(res.body.references.map((r) => r.kind), ['environment', 'brand', 'brand']);
+  assert.deepStrictEqual(res.body.references.map((r) => r.kind), ['environment', 'brand']);
   assert.doesNotMatch(calls.build.vars.castBlock, /@image/);
   assert.match(calls.build.vars.castBlock, /Maya/);
   const { deps: d2 } = mkDeps();

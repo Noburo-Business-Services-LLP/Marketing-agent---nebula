@@ -4,6 +4,7 @@ import { Download, Film, Image as ImageIcon, Loader2, Play, Search, X } from 'lu
 import { GravityLabel, GravityButton } from '../components/gravity';
 import GenerationTimer from '../components/GenerationTimer';
 import HeroShare from '../components/HeroShare';
+import HeroEdit from '../components/HeroEdit';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import PlatformIcon from '../components/PlatformIcon';
 import { draftsAPI, videoGenerationAPI, heroVideoAPI } from '../services/api';
@@ -170,6 +171,7 @@ const Library: React.FC = () => {
               {open.mediaUrl && <a href={open.mediaUrl} download target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)] hover:underline"><Download className="w-4 h-4" />Download</a>}
               <GravityButton variant="ghost" onClick={() => goEdit(open)}>{open.status === 'draft' ? 'Edit' : 'Open'}</GravityButton>
             </div>
+            {open.source === 'hero' && open.mediaUrl && <HeroEdit key={`edit-${open.id}`} jobId={open.id} current={open.finish} onUpdated={(url) => { setOpen((o) => (o ? { ...o, mediaUrl: url } : o)); load(true); }} />}
             {open.source === 'hero' && open.mediaUrl && <HeroShare key={open.id} jobId={open.id} onPosted={() => load(true)} />}
           </div>
         </div>

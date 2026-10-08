@@ -22,6 +22,9 @@ const LOUDNORM = 'loudnorm=I=-16:TP=-1.5:LRA=11';
 const HOST_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 const HTTPS_RE = /^https:\/\/(?=.{1,253}(?:[/?#:]|$))(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{1,5})?(?:[/?#]\S{0,200})?$/i;
 
+const END_CARD_FONTS = ['modern', 'classic', 'friendly'];
+const END_CARD_SIZES = ['small', 'medium', 'large'];
+const END_CARD_THEMES = ['brand', 'dark', 'light'];
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const bool = (v, dflt) => (v === undefined || v === null ? dflt : !!v);
@@ -44,7 +47,12 @@ function normalizeFinishOptions(raw) {
       enabled: bool(e.enabled, true),
       ctaText: str(e.ctaText, 60),
       website: cleanWebsite(e.website),
-      tagline: str(e.tagline, 80)
+      tagline: str(e.tagline, 80),
+      details: str(e.details, 200),
+      font: END_CARD_FONTS.includes(e.font) ? e.font : 'modern',
+      size: END_CARD_SIZES.includes(e.size) ? e.size : 'medium',
+      theme: END_CARD_THEMES.includes(e.theme) ? e.theme : 'brand',
+      showLogo: bool(e.showLogo, true)
     },
     captions: bool(r.captions, false),
     loudnorm: bool(r.loudnorm, true)
@@ -346,18 +354,26 @@ async function fetchLogoBuffer(url, fetchImpl, opts = {}) {
 
 const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
 const FONT_FILE = path.join(FONT_DIR, 'Inter-Bold.ttf');
-let cardFamily = null;
+const CARD_FONT_FILES = {
+  modern: { file: 'Inter-Bold.ttf', family: 'HeroCardInter', fallback: 'sans-serif' },
+  classic: { file: 'PlayfairDisplay.ttf', family: 'HeroCardPlayfair', fallback: 'serif' },
+  friendly: { file: 'Poppins-Bold.ttf', family: 'HeroCardPoppins', fallback: 'sans-serif' }
+};
+const cardFamilies = {};
 
-function endCardFamily() {
-  if (cardFamily) return cardFamily;
-  cardFamily = 'sans-serif';
+function endCardFamily(font = 'modern') {
+  const key = CARD_FONT_FILES[font] ? font : 'modern';
+  if (cardFamilies[key]) return cardFamilies[key];
+  const f = CARD_FONT_FILES[key];
+  cardFamilies[key] = f.fallback;
   try {
-    if (fs.existsSync(FONT_FILE)) {
-      require('canvas').registerFont(FONT_FILE, { family: 'HeroCardInter', weight: 'bold' });
-      cardFamily = '"HeroCardInter", sans-serif';
+    const file = path.join(FONT_DIR, f.file);
+    if (fs.existsSync(file)) {
+      require('canvas').registerFont(file, { family: f.family, weight: 'bold' });
+      cardFamilies[key] = `"${f.family}", ${f.fallback}`;
     }
-  } catch (_) { /* fall back to the default sans */ }
-  return cardFamily;
+  } catch (_) { /* fall back to the default face */ }
+  return cardFamilies[key];
 }
 
 function cleanCardText(v, max) {
@@ -479,30 +495,53 @@ async function renderEndCardPng(spec, outPath) {
   const W = Number.isFinite(s.width) && s.width >= 16 && s.width <= 4096 ? Math.floor(s.width) : 0;
   const H = Number.isFinite(s.height) && s.height >= 16 && s.height <= 4096 ? Math.floor(s.height) : 0;
   if (!W || !H || typeof outPath !== 'string' || !outPath) throw plainError('bad end card size');
-  const family = endCardFamily();
+  const family = endCardFamily(s.font);
   const { createCanvas } = require('canvas');
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
   const unit = Math.min(W, H);
 
   const brand = parseHexColor(s.brandColor);
+  const theme = END_CARD_THEMES.includes(s.theme) ? s.theme : 'brand';
+  const useBrand = theme === 'brand' && brand;
   const grad = ctx.createLinearGradient(0, 0, W * 0.3, H);
-  if (brand) { grad.addColorStop(0, rgb(brand)); grad.addColorStop(1, rgb(brand, 0.55)); } else { grad.addColorStop(0, '#1f2937'); grad.addColorStop(1, '#0b1220'); }
+  if (theme === 'light') { grad.addColorStop(0, '#fbf7ef'); grad.addColorStop(1, '#efe6d6'); }
+  else if (useBrand) { grad.addColorStop(0, rgb(brand)); grad.addColorStop(1, rgb(brand, 0.55)); }
+  else { grad.addColorStop(0, '#1f2937'); grad.addColorStop(1, '#0b1220'); }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
-  const lum = brand ? (0.2126 * brand[0] + 0.7152 * brand[1] + 0.0722 * brand[2]) / 255 : 0;
+  const lum = theme === 'light' ? 1 : useBrand ? (0.2126 * brand[0] + 0.7152 * brand[1] + 0.0722 * brand[2]) / 255 : 0;
   const ink = lum > 0.62 ? '17,24,39' : '255,255,255';
+  const sizeK = s.size === 'small' ? 0.8 : s.size === 'large' ? 1.25 : 1;
 
   const portrait = H >= W;
   let top = H * (portrait ? 0.3 : 0.22);
-  const logo = await loadLogoImage(s.logoBuffer);
+  const logo = s.showLogo === false ? null : await loadLogoImage(s.logoBuffer);
   if (logo) {
     const k = Math.min((W * 0.42) / logo.width, (H * (portrait ? 0.14 : 0.22)) / logo.height);
     const lw = logo.width * k;
     const lh = logo.height * k;
     const ly = H * (portrait ? 0.2 : 0.12);
+    // On a dark card the logo sits on a soft white plate so a dark logo stays readable.
+    if (ink === '255,255,255') {
+      const pad = unit * 0.03;
+      const x0 = (W - lw) / 2 - pad;
+      const y0 = ly - pad;
+      const w0 = lw + pad * 2;
+      const h0 = lh + pad * 2;
+      const r = Math.min(unit * 0.035, h0 / 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.96)';
+      ctx.beginPath();
+      ctx.moveTo(x0 + r, y0);
+      ctx.arcTo(x0 + w0, y0, x0 + w0, y0 + h0, r);
+      ctx.arcTo(x0 + w0, y0 + h0, x0, y0 + h0, r);
+      ctx.arcTo(x0, y0 + h0, x0, y0, r);
+      ctx.arcTo(x0, y0, x0 + w0, y0, r);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.drawImage(logo, (W - lw) / 2, ly, lw, lh);
-    top = ly + lh + unit * 0.08;
+    top = ly + lh + unit * 0.1;
   }
 
   const maxW = W * 0.84;
@@ -510,17 +549,24 @@ async function renderEndCardPng(spec, outPath) {
   ctx.textBaseline = 'middle';
   const blocks = [];
   const cta = cleanCardText(s.ctaText, 300);
-  if (cta) blocks.push({ ...fitText(ctx, cta, { family, maxW, maxH: H * 0.3, maxLines: 5, startPx: unit * 0.11, minPx: unit * 0.045 }), alpha: 1 });
+  if (cta) blocks.push({ ...fitText(ctx, cta, { family, maxW, maxH: H * 0.3, maxLines: 5, startPx: unit * 0.11 * sizeK, minPx: unit * 0.045 * Math.min(sizeK, 1) }), alpha: 1 });
   const site = cleanCardText(s.website, 200);
-  if (site) blocks.push({ ...fitText(ctx, site, { family, maxW, maxH: unit * 0.08, maxLines: 1, startPx: unit * 0.055, minPx: unit * 0.03 }), alpha: 0.85 });
+  if (site) blocks.push({ ...fitText(ctx, site, { family, maxW, maxH: unit * 0.08, maxLines: 1, startPx: unit * 0.055 * sizeK, minPx: unit * 0.03 * Math.min(sizeK, 1) }), alpha: 0.85 });
   const tag = cleanCardText(s.tagline, 200);
-  if (tag) blocks.push({ ...fitText(ctx, tag, { family, maxW, maxH: unit * 0.12, maxLines: 2, startPx: unit * 0.042, minPx: unit * 0.028 }), alpha: 0.7 });
+  if (tag) blocks.push({ ...fitText(ctx, tag, { family, maxW, maxH: unit * 0.12, maxLines: 2, startPx: unit * 0.042 * sizeK, minPx: unit * 0.028 * Math.min(sizeK, 1) }), alpha: 0.7 });
+  const more = cleanCardText(s.details, 200);
+  if (more) blocks.push({ ...fitText(ctx, more, { family, maxW, maxH: unit * 0.14, maxLines: 3, startPx: unit * 0.04 * sizeK, minPx: unit * 0.026 * Math.min(sizeK, 1) }), alpha: 0.85 });
 
   const gapBetween = unit * 0.05;
   const heights = blocks.map((b) => b.lines.length * b.px * 1.2);
   const total = heights.reduce((x, y) => x + y, 0) + gapBetween * Math.max(0, blocks.length - 1);
   const bottom = H * 0.88;
   let y = Math.max(top, top + (bottom - top - total) / 2);
+  // A short accent bar above the text gives the card a finished look.
+  ctx.fillStyle = useBrand ? `rgba(${ink},0.9)` : '#F5A623';
+  const barW = unit * 0.16;
+  const barH = Math.max(3, unit * 0.012);
+  ctx.fillRect((W - barW) / 2, Math.max(top - unit * 0.035, 0), barW, barH);
   blocks.forEach((b, i) => {
     ctx.font = `bold ${b.px}px ${family}`;
     ctx.fillStyle = `rgba(${ink},${b.alpha})`;
@@ -624,6 +670,11 @@ async function finishInner(args, timeoutMs) {
         ctaText: opts.endCard.ctaText || str(b.name, 60),
         website: displayWebsite(opts.endCard.website || cleanWebsite(b.website)),
         tagline: opts.endCard.tagline,
+        details: opts.endCard.details,
+        font: opts.endCard.font,
+        size: opts.endCard.size,
+        theme: opts.endCard.theme,
+        showLogo: opts.endCard.showLogo,
         logoBuffer: logoPng,
         brandColor: b.color
       }, cardFile);
@@ -685,7 +736,7 @@ function finishHeroClip(args) {
 }
 
 module.exports = {
-  normalizeFinishOptions, buildCaptionsSrt, buildFinishFilterGraph,
+  END_CARD_FONTS, END_CARD_SIZES, END_CARD_THEMES, normalizeFinishOptions, buildCaptionsSrt, buildFinishFilterGraph,
   resolveFfmpegPath, runFfmpeg, probeMedia,
   fetchLogoBuffer, renderEndCardPng, readImageDimensions, loadLogoImage, _pinnedFetch: pinnedFetch, finishHeroClip, escapeFilterValue
 };

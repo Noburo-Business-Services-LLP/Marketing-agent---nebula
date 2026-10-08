@@ -3970,6 +3970,8 @@ export interface HeroJobSummary {
   title?: string;
   thumbnailUrl?: string;
   publish?: { status: string; platforms?: string[]; at?: string };
+  /** the finishing options the video was made with (end card, captions, logo) */
+  finish?: any;
 }
 
 export interface HeroStyleOption { slug: string; label: string; group: string; blurb: string; coverUrl: string }
@@ -3977,6 +3979,16 @@ export interface HeroStyleOption { slug: string; label: string; group: string; b
 export const heroVideoAPI = {
   styles: async (): Promise<{ success: boolean; styles: HeroStyleOption[] }> => {
     return apiCall('/hero-video/styles', { method: 'GET' }, true);
+  },
+
+  // Change the end card, captions or logo of a finished video without making a new one. No Quarks.
+  refinish: async (jobId: string, finish: Record<string, any>): Promise<{ success: boolean; videoUrl?: string; thumbnailUrl?: string; message?: string }> => {
+    return apiCall(`/hero-video/jobs/${encodeURIComponent(jobId)}/refinish`, { method: 'POST', body: JSON.stringify({ finish }) }, true);
+  },
+
+  // Write a caption and hashtags for a finished video. Free.
+  caption: async (jobId: string, language?: string): Promise<{ success: boolean; caption?: string; hashtags?: string[]; message?: string }> => {
+    return apiCall(`/hero-video/jobs/${encodeURIComponent(jobId)}/caption`, { method: 'POST', body: JSON.stringify({ language }) }, true);
   },
 
   // Post or schedule a finished Hero video.

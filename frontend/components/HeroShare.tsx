@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Loader2, Send, CalendarClock } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Loader2, Send, CalendarClock, Sparkles } from 'lucide-react';
 import PlatformPicker from './PlatformPicker';
 import { GravityLabel, GravityButton } from './gravity';
 import { choicesFor } from '../utils/platforms';
@@ -17,6 +17,29 @@ const HeroShare: React.FC<{ jobId: string; defaultCaption?: string; onPosted?: (
   const [busy, setBusy] = useState<'' | 'now' | 'later'>('');
   const [note, setNote] = useState('');
   const [failed, setFailed] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [captionNote, setCaptionNote] = useState('');
+  const askedRef = useRef('');
+
+  // The caption and hashtags are written for you, once, when the video opens. You can edit them or ask for another.
+  const writeCaption = async () => {
+    if (writing) return;
+    setWriting(true); setCaptionNote('');
+    try {
+      const r = await heroVideoAPI.caption(jobId);
+      if (!r?.success || !r.caption) throw new Error(r?.message || 'We could not write a caption this time. You can write your own or try again.');
+      setCaption(r.caption);
+      setTags((r.hashtags || []).join(' '));
+    } catch (e: any) {
+      setCaptionNote(e?.message || 'We could not write a caption this time. You can write your own or try again.');
+    } finally { setWriting(false); }
+  };
+  useEffect(() => {
+    if (defaultCaption || askedRef.current === jobId) return;
+    askedRef.current = jobId;
+    writeCaption();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
 
   const toggle = (k: string) => setPlatforms((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
 
@@ -47,7 +70,14 @@ const HeroShare: React.FC<{ jobId: string; defaultCaption?: string; onPosted?: (
         <span className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Posting to</span>
         <PlatformPicker kind="video" items={choicesFor('video').map(({ key, label, soon, video }) => ({ key, label, soon, blocked: !video }))} selected={platforms} onToggle={toggle} />
       </div>
-      <textarea rows={3} maxLength={2000} value={caption} onChange={(e) => setCaption(e.target.value)} className={field} placeholder="Write a caption for your post" aria-label="Caption" />
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Caption and hashtags</span>
+        <button type="button" onClick={writeCaption} disabled={writing} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)] disabled:opacity-60">
+          {writing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}{writing ? 'Writing…' : 'Write another'}
+        </button>
+      </div>
+      <textarea rows={4} maxLength={2000} value={caption} onChange={(e) => setCaption(e.target.value)} className={field} placeholder={writing ? 'Writing a caption for you…' : 'Your caption'} aria-label="Caption" />
+      {captionNote && <p role="status" className="text-[12.5px] text-[var(--gv-text-secondary)]">{captionNote}</p>}
       <input value={tags} onChange={(e) => setTags(e.target.value)} className={field} placeholder="Hashtags, separated by spaces (optional)" aria-label="Hashtags" />
       <div className="flex flex-wrap items-center gap-3">
         <GravityButton onClick={() => send(true)} disabled={!!busy}>

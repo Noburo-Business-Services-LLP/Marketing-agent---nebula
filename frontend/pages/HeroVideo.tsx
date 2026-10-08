@@ -9,6 +9,7 @@ import HeroStylePicker from '../components/HeroStylePicker';
 import GenerationTimer from '../components/GenerationTimer';
 import HeroQuickStart from '../components/HeroQuickStart';
 import HeroShare from '../components/HeroShare';
+import HeroEdit from '../components/HeroEdit';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 
 // Hero Studio: one premium 15-second clip built from the Reels wizard's story, cast and place,
@@ -501,7 +502,8 @@ const HeroVideoInner: React.FC = () => {
               </a>
             )}
           </div>
-          <HeroShare key={jobId || 'job'} jobId={jobId as string} defaultCaption={plan?.story?.hook ? `${plan.story.hook}${plan.story.cta ? ` ${plan.story.cta}` : ''}` : ''} onPosted={refreshHistory} />
+          <HeroEdit key={`edit-${jobId}`} jobId={jobId as string} current={history.find((h) => h.jobId === jobId)?.finish} onUpdated={(url) => { setVideoUrl(url); refreshHistory(); }} />
+          <HeroShare key={jobId || 'job'} jobId={jobId as string} onPosted={refreshHistory} />
         </div>
       ) : jobError ? (
         <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{jobError}</p>

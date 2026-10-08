@@ -20,6 +20,8 @@ export interface LibraryItem {
   createdAt: number;
   /** the original post draft, kept so the editing sheet can open it; only for posts and images */
   raw?: any;
+  /** Hero videos: the finishing options it was made with, for the edit panel */
+  finish?: any;
 }
 
 const ms = (v: any): number => {
@@ -81,6 +83,7 @@ export function fromHeroJob(j: any): LibraryItem | null {
     title: text(j.title) || 'Hero video', status,
     thumbnailUrl: String(j.thumbnailUrl || stillFor(j.videoUrl) || ''), mediaUrl: String(j.videoUrl || ''),
     caption: '', platforms: list(j.publish && j.publish.platforms), createdAt: ms(j.createdAt),
+    finish: j.finish,
   };
 }
 

@@ -141,7 +141,9 @@ function selectReferences(brief, brand, opts = {}) {
   const env = brief.environment;
   if (env && env.enabled) for (const im of env.images || []) add('environment', im.alt || 'Location', im.url, 'environment', im.dataUrl);
   for (const p of b.productImages || []) add('brand', p.alt || 'Product', p.url, 'brand-product');
-  add('brand', 'Logo', b.logoUrl, 'brand-logo');
+  // The logo is not sent as a reference by default: given the image, the video model prints it on every prop.
+  // The end card and the optional logo mark carry the brand; the logo is only a reference when asked for.
+  if (opts.includeLogo === true) add('brand', 'Logo', b.logoUrl, 'brand-logo');
   for (const s of kept) add('keyframe', s.title || s.sceneId, s.imageUrl, 'scene-keyframe');
   out.forEach((r, i) => { r.tag = `@image${i + 1}`; });
   return out;

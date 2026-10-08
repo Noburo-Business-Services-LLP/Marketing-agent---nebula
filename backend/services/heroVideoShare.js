@@ -47,4 +47,16 @@ async function shareHeroVideo({ job, user, body, publishVideoDraft, post }) {
   };
 }
 
-module.exports = { thumbnailFor, titleFor, shareHeroVideo };
+/** The caption and hashtags the AI wrote, cut to safe lengths; null when nothing usable came back. */
+function normaliseCaption(parsed) {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const caption = String(parsed.caption || '').replace(/[ \t]+/g, ' ').trim().slice(0, 600);
+  if (!caption) return null;
+  const tags = (Array.isArray(parsed.hashtags) ? parsed.hashtags : [])
+    .map((t) => String(t || '').trim().replace(/^#+/, '').replace(/[^\p{L}\p{N}_]/gu, ''))
+    .filter(Boolean)
+    .map((t) => `#${t.slice(0, 30)}`);
+  return { caption, hashtags: Array.from(new Set(tags)).slice(0, 8) };
+}
+
+module.exports = { thumbnailFor, titleFor, shareHeroVideo, normaliseCaption };

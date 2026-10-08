@@ -1,0 +1,4 @@
+Fonts used for the Hero video end card. All are under the SIL Open Font License 1.1 (see OFL.txt).
+- Inter Bold: The Inter Project Authors (https://github.com/rsms/inter)
+- Poppins Bold: The Poppins Project Authors (https://github.com/itfoundry/Poppins)
+- Playfair Display: The Playfair Project Authors (https://github.com/clauseggers/Playfair-Display)

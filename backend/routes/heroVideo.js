@@ -5,7 +5,7 @@ const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');
 const { normalizeHeroBrief, selectReferences } = require('../services/heroVideoBrief');
-const { thumbnailFor, titleFor, shareHeroVideo } = require('../services/heroVideoShare');
+const { thumbnailFor, titleFor, shareHeroVideo, normaliseCaption } = require('../services/heroVideoShare');
 const { DIALOGUE_MODES, isDialogueMode, normaliseQuickConcepts, conceptToBrief } = require('../services/heroQuick');
 const fs = require('fs');
 const path = require('path');
@@ -148,6 +148,7 @@ function brandBlockFrom(brand, refs) {
     lines.push('No hero product on file: show the brand through what it does in the story; never invent packaging.');
   }
   if (logo) lines.push(`Logo ${logo.tag}: only on a physical item that belongs in the scene, if at all.`);
+  else lines.push('Brand marks: no logo, brand name or lettering on any prop or screen until the final shot; then at most one subtle reveal.');
   if (brand.colors && brand.colors.length) lines.push(`Brand colours ${brand.colors.slice(0, 4).map((c) => clip(c, 20)).join(', ')}: as wardrobe or prop accents, never as graphics.`);
   if (brand.website) lines.push('The website and CTA go on the end card added after generation; never render them as text in the clip.');
   return lines.join('\n');
@@ -486,6 +487,7 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
         o.title = titleFor(j);
         if (j.metadata && j.metadata.publish) o.publish = j.metadata.publish;
         if (j.payload && j.payload.prompt) o.prompt = j.payload.prompt;
+        if (j.status === 'completed' && j.payload && j.payload.finish) o.finish = j.payload.finish;
         return o;
       });
       return res.json({ success: true, jobs });
@@ -512,6 +514,72 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       return res.status(out.status).json(out.json);
     } catch (err) {
       return fail(res, err, 'Failed to post video');
+    }
+  });
+
+  // Change the end card, captions or logo of a finished video without making a new one (no Quarks).
+  router.post('/jobs/:jobId/refinish', protect, checkTrial, heroWriteLimiter, async (req, res) => {
+    try {
+      const userId = toUserId(req.user);
+      const jobId = String(req.params.jobId);
+      const Job = jobModel();
+      const job = await Job.findOne({ userId, jobId, 'metadata.kind': 'hero' }).lean();
+      if (!job || job.status !== 'completed') return res.status(404).json({ success: false, message: 'Not found' });
+      if (!(job.result && job.result.rawVideoUrl)) return res.status(400).json({ success: false, message: 'This video has no saved original to change.' });
+      const finishIn = req.body && req.body.finish;
+      if (!finishIn || typeof finishIn !== 'object' || Array.isArray(finishIn)) return res.status(400).json({ success: false, message: 'Choose what to change.' });
+      // One change at a time per video: a second request within three minutes is refused.
+      const lock = await Job.updateOne(
+        { userId, jobId, $or: [{ 'metadata.refinishAt': { $exists: false } }, { 'metadata.refinishAt': { $lt: new Date(Date.now() - 180000) } }] },
+        { $set: { 'metadata.refinishAt': new Date() } }
+      );
+      if (!lock || !(lock.modifiedCount || lock.nModified)) return res.status(409).json({ success: false, message: 'This video is already being updated. Please wait a moment.' });
+      try {
+        const done = await (impl.refinishClip || require('../services/heroVideoFlow').refinishClip)({ job, finishOverride: finishIn });
+        const previous = [job.result.videoUrl, ...(job.result.previousVideoUrls || [])].filter(Boolean).slice(0, 5);
+        await Job.updateOne({ userId, jobId }, { $set: { 'result.videoUrl': done.videoUrl, 'result.previousVideoUrls': previous, 'payload.finish': done.options }, $unset: { 'metadata.refinishAt': '' } });
+        return res.json({ success: true, videoUrl: done.videoUrl, thumbnailUrl: thumbnailFor(done.videoUrl) });
+      } catch (err) {
+        await Job.updateOne({ userId, jobId }, { $unset: { 'metadata.refinishAt': '' } }).catch(() => {});
+        console.error('[heroVideo] refinish failed:', err && err.message);
+        return res.status(502).json({ success: false, message: 'We could not update the video this time. Please try again.' });
+      }
+    } catch (err) {
+      return fail(res, err, 'Failed to update video');
+    }
+  });
+
+  // Write a caption and hashtags for a finished video. Free; one short text-AI call.
+  router.post('/jobs/:jobId/caption', protect, checkTrial, heroWriteLimiter, async (req, res) => {
+    try {
+      const userId = toUserId(req.user);
+      const job = await jobModel().findOne({ userId, jobId: String(req.params.jobId), 'metadata.kind': 'hero' }).lean();
+      if (!job || job.status !== 'completed') return res.status(404).json({ success: false, message: 'Not found' });
+      const p = job.payload || {};
+      const brand = (await planDeps.loadBrand(userId)) || {};
+      const beats = (Array.isArray(p.beatSheet) ? p.beatSheet : []).map((b) => clip(b && b.beat, 160)).filter(Boolean);
+      const summary = beats.length ? beats.map((b, i) => `${i + 1}. ${b}`).join('\n') : clip(p.prompt, 500) || 'A short brand video.';
+      const language = clip(req.body && req.body.language, 40) || 'English';
+      const ctaText = (p.finish && p.finish.endCard && p.finish.endCard.ctaText) ? `"${clip(p.finish.endCard.ctaText, 60)}"` : 'one short, honest next step that fits the brand';
+      const prompt = await planDeps.buildPrompt(userId, 'hero_video.caption', {
+        brandContextBlock: brandContextFrom(brand),
+        videoSummary: summary,
+        spokenLines: clip(p.dialogue, 400) || 'None.',
+        language,
+        ctaText,
+        brandName: clip(brand.name, 80) || 'the brand'
+      });
+      let out = null;
+      for (let attempt = 1; attempt <= 2 && !out; attempt++) {
+        const raw = await planDeps.callTextLLM(prompt, { jsonMode: true, maxTokens: 800 });
+        let parsed = null;
+        try { parsed = planDeps.parseGeminiJSON(raw); } catch (_) { parsed = null; }
+        out = normaliseCaption(parsed);
+      }
+      if (!out) return res.status(502).json({ success: false, message: 'We could not write a caption this time. You can write your own or try again.' });
+      return res.json({ success: true, ...out });
+    } catch (err) {
+      return fail(res, err, 'Failed to write caption');
     }
   });
 

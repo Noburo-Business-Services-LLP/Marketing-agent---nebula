@@ -126,6 +126,47 @@ async function finalizeClipDefault({ remoteUrl, job }, io = {}) {
   }
 }
 
+/**
+ * Re-runs only the finishing step on the saved original clip with changed options (end card text, font,
+ * size, theme, logo, captions...). Nothing is generated and no Quarks are used. The original clip is read
+ * from `job.result.rawVideoUrl`; the previous finished video stays in `result.previousVideoUrls`.
+ * `io` injects the I/O for tests. Rejects with a plain message; the job is untouched on failure.
+ */
+async function refinishClip({ job, finishOverride }, io = {}) {
+  const raw = job && job.result && job.result.rawVideoUrl;
+  if (!raw) throw new Error('This video has no saved original to finish again.');
+  const mkdtemp = io.mkdtemp || (() => fs.promises.mkdtemp(path.join(os.tmpdir(), 'hero-refinish-')));
+  const download = io.download || ((u, o) => require('./videoDownload').downloadVideoFromUrl(u, o));
+  const upload = io.upload || ((p, f) => require('./imageUploader').uploadVideoFile(p, f));
+  const loadBrand = io.loadBrand || ((id) => require('./heroVideoBrief').loadBrand(id));
+  const finish = io.finish || realFinishHeroClip;
+  const capMs = io.capMs || FINISH_CAP_MS;
+  const payload = (job && job.payload) || {};
+  const prev = payload.finish || {};
+  const over = finishOverride && typeof finishOverride === 'object' ? finishOverride : {};
+  const merged = { ...prev, ...over, endCard: { ...(prev.endCard || {}), ...(over.endCard || {}) } };
+  const options = normalizeFinishOptions(merged);
+
+  const dir = await mkdtemp();
+  try {
+    const dl = await download(raw, { downloadsDir: dir });
+    const rawPath = dl && dl.filePath;
+    if (!rawPath) throw new Error('Download returned no file path');
+    const outputPath = path.join(dir, 'refinished.mp4');
+    let b = {};
+    try { b = (await loadBrand(job.userId)) || {}; } catch (_) { b = {}; }
+    const brand = { name: b.name || '', logoUrl: b.logoUrl || '', website: b.website || '' };
+    const color = firstHex(b.colors);
+    if (color) brand.color = color.trim();
+    await withTimeout(finish({ inputPath: rawPath, outputPath, options, brand, beatSheet: payload.beatSheet, dialogue: payload.dialogue, timeoutMs: capMs }), capMs + 5000);
+    const up = await upload(outputPath, HERO_FOLDER);
+    if (!up || !up.url) throw new Error('Upload returned no URL');
+    return { videoUrl: up.url, options };
+  } finally {
+    await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 const strCap = (v, n) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 function sanitizeBeatSheet(v) {
   if (!Array.isArray(v)) return [];
@@ -468,4 +509,4 @@ async function pollHeroJob(deps, { userId, jobId }) {
   return processing;
 }
 
-module.exports = { startHeroGeneration, pollHeroJob, defaultDeps, finalizeClipDefault, FINISH_CAP_MS, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS };
+module.exports = { startHeroGeneration, pollHeroJob, defaultDeps, finalizeClipDefault, refinishClip, FINISH_CAP_MS, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS };

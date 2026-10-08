@@ -26,8 +26,10 @@ const brand = () => ({ name: 'B', logoUrl: `${CDN}/logo.png`, productImages: [{ 
 
 test('default reference set has no cast or keyframe images, even when portraits and scene stills exist', () => {
   const refs = selectReferences(brief(), brand());
-  assert.deepEqual(refs.map((r) => r.kind), ['environment', 'brand', 'brand']);
-  assert.deepEqual(refs.map((r) => r.tag), ['@image1', '@image2', '@image3']);
+  assert.deepEqual(refs.map((r) => r.kind), ['environment', 'brand']);
+  assert.deepEqual(refs.map((r) => r.tag), ['@image1', '@image2']);
+  assert.ok(!refs.some((r) => r.source === 'brand-logo'), 'the logo is not a default reference');
+  assert.ok(selectReferences(brief(), brand(), { includeLogo: true }).some((r) => r.source === 'brand-logo'));
   assert.ok(!refs.some((r) => r.kind === 'cast' || r.kind === 'keyframe' || r.source === 'cast-sheet'));
 });
 
@@ -37,7 +39,7 @@ test('people photos join only when opted in, and only the ones asked for', () =>
   for (const r of all) assert.equal(Boolean(r.mayShowPeople), r.kind === 'cast' || r.kind === 'keyframe');
   const one = selectReferences(brief(), brand(), { includePeople: [`${CDN}/maya.png`, 'https://evil.example/x.png'] });
   assert.deepEqual(one.map((r) => r.url).filter((u) => /maya|ravi|kf|sheet|evil/.test(u)), [`${CDN}/maya.png`]);
-  assert.deepEqual(selectReferences(brief(), brand(), { includePeople: false }).map((r) => r.kind), ['environment', 'brand', 'brand']);
+  assert.deepEqual(selectReferences(brief(), brand(), { includePeople: false }).map((r) => r.kind), ['environment', 'brand']);
 });
 
 test('an empty set goes to the text model with no image_urls', () => {
