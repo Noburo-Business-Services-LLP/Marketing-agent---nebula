@@ -94,15 +94,23 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
           </div>
           <div>
             <p className="text-[13px] font-semibold text-[var(--gv-text-primary)] mb-1.5">Style</p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {styles.map((s) => (
-                <button key={s.slug} type="button" onClick={() => setStyle(s.slug)} aria-pressed={style === s.slug}
-                  className={`text-left rounded-xl border px-3.5 py-2.5 ${style === s.slug ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)]'}`}>
-                  {s.coverUrl && <img src={s.coverUrl} alt="" loading="lazy" className="w-full aspect-video object-cover rounded-lg mb-2 bg-[var(--gv-surface-2)]" />}
-                  <span className="block text-[13.5px] font-semibold text-[var(--gv-text-primary)]">{s.label}</span>
-                  <span className="block text-[12px] text-[var(--gv-text-tertiary)] mt-0.5">{s.blurb}</span>
-                </button>
-              ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3" role="radiogroup" aria-label="Video style">
+              {styles.map((s) => {
+                const on = style === s.slug;
+                return (
+                  <button key={s.slug} type="button" role="radio" aria-checked={on} onClick={() => setStyle(s.slug)}
+                    className={`group relative text-left rounded-xl overflow-hidden border-2 bg-[var(--gv-panel)] transition-colors ${on ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'}`}>
+                    {s.coverUrl
+                      ? <img src={s.coverUrl} alt="" loading="lazy" className="w-full aspect-[3/4] object-cover bg-[var(--gv-surface-2)]" />
+                      : <span className="block w-full aspect-[3/4] bg-[var(--gv-surface-2)]" />}
+                    {on && <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--gv-accent)] text-[#1A1208] flex items-center justify-center shadow"><Check className="w-3.5 h-3.5" /></span>}
+                    <span className="block px-3 py-2.5">
+                      <span className="block text-[13px] font-semibold text-[var(--gv-text-primary)]">{s.label}</span>
+                      <span className="block mt-0.5 text-[11.5px] leading-snug text-[var(--gv-text-tertiary)]">{s.blurb}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div>

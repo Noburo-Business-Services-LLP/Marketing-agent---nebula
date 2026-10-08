@@ -1330,7 +1330,13 @@ const GravityCreate: React.FC = () => {
           )}
         </div>
 
-        <div className="mt-6 pt-6 border-t border-[var(--gv-border-subtle)]">
+      </div>
+      )}
+
+      {/* The look of the post: style with sample pictures, the exact text, a reference picture, header and footer.
+          Its own full-width section, not squeezed into the options row above. */}
+      {mode !== 'linkedin' && (
+        <div className="mt-10">
           <PostDesignPanel
             design={design}
             onChange={setDesign}
@@ -1340,7 +1346,6 @@ const GravityCreate: React.FC = () => {
             logoPosition={logoPosition}
           />
         </div>
-      </div>
       )}
 
       {/* Error */}

@@ -1,18 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ImagePlus, X } from 'lucide-react';
-import { GravityLabel } from './gravity';
+import { Check, ImagePlus, X } from 'lucide-react';
 import PostPreview from './PostPreview';
 import { brandAssetsAPI } from '../services/api';
 import { POST_STYLE_OPTIONS, PostDesign, PostDetails, referenceFileProblem } from '../utils/postDesign';
 
-const field = 'w-full rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 py-2 text-[13.5px] text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-tertiary)] focus:outline-none';
+const input = 'w-full rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 py-2.5 text-[14px] text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-tertiary)] focus:outline-none focus:border-[var(--gv-accent)]';
+const label = 'block text-[12.5px] font-semibold text-[var(--gv-text-primary)] mb-1.5';
+const sectionTitle = 'text-[13px] font-semibold uppercase tracking-[0.12em] text-[var(--gv-text-secondary)]';
 
 const DETAIL_NOTE: Record<string, string> = {
-  single: 'Only the text you type here is put on the design. Leave a box empty and it is left out.',
-  carousel: 'The headline, offer and items go on the first slide. Phone, address, hours and tagline go on the last slide.',
-  campaign: 'Phone, address, hours and tagline repeat on every post. The headline and offer of each post come from its own idea.',
+  single: 'Only what you type is put on the design. A box you leave empty is left out.',
+  carousel: 'Headline, offer and items go on the first slide. Phone, address, hours and tagline go on the last.',
+  campaign: 'Phone, address, hours and tagline repeat on every post. Each post\'s own headline and offer come from its idea.',
 };
+
+const Field: React.FC<{ id: string; text: string; children: React.ReactNode }> = ({ id, text, children }) => (
+  <div><label htmlFor={id} className={label}>{text}</label>{children}</div>
+);
 
 /** The look of a post: a design style with sample pictures, the exact text to show, a picture to copy, and a saved header and footer. */
 const PostDesignPanel: React.FC<{
@@ -61,87 +66,120 @@ const PostDesignPanel: React.FC<{
   };
 
   const designed = design.style !== 'plain';
-  const FrameRow: React.FC<{ label: string; items: any[]; value: string; k: 'headerUrl' | 'footerUrl' }> = ({ label, items, value, k }) => (
+
+  const FrameChoice: React.FC<{ title: string; items: any[]; value: string; k: 'headerUrl' | 'footerUrl' }> = ({ title, items, value, k }) => (
     <div>
-      <div className="gravity-label mb-2">{label}</div>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <button type="button" onClick={() => chooseFrame(k, '')} aria-pressed={!value} className={`rounded-lg border px-3 py-2 text-[12px] font-semibold ${!value ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]' : 'border-[var(--gv-border-default)] text-[var(--gv-text-tertiary)]'}`}>None</button>
-        {items.map((a) => (
-          <button key={a._id} type="button" onClick={() => chooseFrame(k, a.url)} aria-pressed={value === a.url} title={a.name} className={`h-11 w-28 rounded-lg border overflow-hidden bg-white ${value === a.url ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)]'}`}>
-            <img src={a.url} alt={a.name} className="w-full h-full object-cover" />
-          </button>
-        ))}
-        {items.length === 0 && <button type="button" onClick={() => navigate('/brand-assets?tab=frames')} className="text-[11.5px] text-[var(--gv-text-muted)] hover:text-[var(--gv-accent-text)] underline underline-offset-2">Add one in Brand assets</button>}
+      <p className={label}>{title}</p>
+      <div className="space-y-2" role="radiogroup" aria-label={title}>
+        <button type="button" role="radio" aria-checked={!value} onClick={() => chooseFrame(k, '')}
+          className={`w-full flex items-center gap-3 rounded-lg border px-3 h-11 text-left text-[13px] font-semibold ${!value ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-text-primary)]' : 'border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:border-[var(--gv-border-strong)]'}`}>
+          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${!value ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-strong)]'}`}>{!value && <span className="w-2 h-2 rounded-full bg-[var(--gv-accent)]" />}</span>
+          None
+        </button>
+        {items.map((a) => {
+          const on = value === a.url;
+          return (
+            <button key={a._id} type="button" role="radio" aria-checked={on} onClick={() => chooseFrame(k, a.url)}
+              className={`w-full flex items-center gap-3 rounded-lg border p-2 text-left ${on ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'}`}>
+              <span className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center ml-1 ${on ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-strong)]'}`}>{on && <span className="w-2 h-2 rounded-full bg-[var(--gv-accent)]" />}</span>
+              <img src={a.url} alt="" className="h-9 w-32 shrink-0 object-cover rounded border border-[var(--gv-border-subtle)] bg-white" />
+              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[var(--gv-text-primary)]">{a.name}</span>
+            </button>
+          );
+        })}
+        {items.length === 0 && (
+          <p className="text-[12.5px] text-[var(--gv-text-tertiary)]">
+            None saved yet.{' '}
+            <button type="button" onClick={() => navigate('/brand-assets?tab=frames')} className="font-semibold text-[var(--gv-accent-text)] underline underline-offset-2">Add one in Brand assets</button>
+          </p>
+        )}
       </div>
     </div>
   );
 
   return (
-    <div className="space-y-5">
+    <section className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-5 sm:p-6 space-y-8" aria-label="Post design">
       <div>
-        <div className="gravity-label mb-2">Post style</div>
-        <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Post style">
+        <h2 className="text-[18px] font-semibold text-[var(--gv-text-primary)]">Post design</h2>
+        <p className="mt-1 text-[13.5px] text-[var(--gv-text-secondary)]">Choose how the post should look. The pictures below are examples of each look, not your own products.</p>
+      </div>
+
+      <div>
+        <p className={sectionTitle}>1 · Style</p>
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" role="radiogroup" aria-label="Post style">
           {POST_STYLE_OPTIONS.map((s) => {
             const on = design.style === s.id;
             return (
               <button key={s.id} type="button" role="radio" aria-checked={on} onClick={() => set({ style: s.id })}
-                className={`text-left rounded-xl overflow-hidden border-2 transition-colors ${on ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'}`}>
+                className={`group relative text-left rounded-xl overflow-hidden border-2 bg-[var(--gv-panel)] transition-colors ${on ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'}`}>
                 <img src={s.sample} alt="" loading="lazy" className="w-full aspect-[4/5] object-cover bg-[var(--gv-surface-2)]" />
-                <span className="block px-2.5 py-2">
-                  <span className="block text-[12.5px] font-semibold text-[var(--gv-text-primary)]">{s.label}</span>
-                  <span className="block text-[11px] text-[var(--gv-text-tertiary)] leading-snug">{s.blurb}</span>
+                {on && <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--gv-accent)] text-[#1A1208] flex items-center justify-center shadow"><Check className="w-3.5 h-3.5" /></span>}
+                <span className="block px-3 py-2.5">
+                  <span className="block text-[13px] font-semibold text-[var(--gv-text-primary)]">{s.label}</span>
+                  <span className="block mt-0.5 text-[11.5px] leading-snug text-[var(--gv-text-tertiary)]">{s.blurb}</span>
                 </span>
               </button>
             );
           })}
         </div>
-        <p className="mt-1.5 text-[11.5px] text-[var(--gv-text-muted)]">The pictures are examples of the look, not your own products.</p>
       </div>
 
       {designed && (
-        <div className="space-y-2.5">
-          <div className="gravity-label">Text to show on the design</div>
-          <p className="text-[12px] text-[var(--gv-text-tertiary)]">{DETAIL_NOTE[mode]}</p>
-          <input className={field} value={design.details.headline} maxLength={90} onChange={(e) => setDetail('headline', e.target.value)} placeholder="Headline, for example: Festive Home Sale" aria-label="Headline" />
-          <input className={field} value={design.details.offer} maxLength={120} onChange={(e) => setDetail('offer', e.target.value)} placeholder="The offer, for example: Up to 30% off this October" aria-label="Offer" />
-          <textarea className={field} rows={3} value={design.details.items} onChange={(e) => setDetail('items', e.target.value)} placeholder={'Items and prices, one per line\nSofa sets from Rs 24,999\nSteel vessels from Rs 599'} aria-label="Items and prices" />
-          <div className="grid sm:grid-cols-2 gap-2.5">
-            <input className={field} value={design.details.phone} maxLength={60} onChange={(e) => setDetail('phone', e.target.value)} placeholder="Phone" aria-label="Phone" />
-            <input className={field} value={design.details.hours} maxLength={80} onChange={(e) => setDetail('hours', e.target.value)} placeholder="Opening hours" aria-label="Opening hours" />
-            <input className={field} value={design.details.address} maxLength={200} onChange={(e) => setDetail('address', e.target.value)} placeholder="Address" aria-label="Address" />
-            <input className={field} value={design.details.tagline} maxLength={80} onChange={(e) => setDetail('tagline', e.target.value)} placeholder="Tagline" aria-label="Tagline" />
+        <div className="border-t border-[var(--gv-border-subtle)] pt-6">
+          <p className={sectionTitle}>2 · Text on the design</p>
+          <p className="mt-1 text-[12.5px] text-[var(--gv-text-tertiary)]">{DETAIL_NOTE[mode]}</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <Field id="pd-headline" text="Headline"><input id="pd-headline" className={input} value={design.details.headline} maxLength={90} onChange={(e) => setDetail('headline', e.target.value)} placeholder="For example: Festive Home Sale" /></Field>
+            <Field id="pd-offer" text="Offer"><input id="pd-offer" className={input} value={design.details.offer} maxLength={120} onChange={(e) => setDetail('offer', e.target.value)} placeholder="For example: Up to 30% off this October" /></Field>
+            <div className="md:col-span-2">
+              <Field id="pd-items" text="Items and prices, one per line"><textarea id="pd-items" className={input} rows={3} value={design.details.items} onChange={(e) => setDetail('items', e.target.value)} placeholder={'Sofa sets from Rs 24,999\nSteel vessels from Rs 599'} /></Field>
+            </div>
+            <Field id="pd-phone" text="Phone"><input id="pd-phone" className={input} value={design.details.phone} maxLength={60} onChange={(e) => setDetail('phone', e.target.value)} placeholder="93442 83333" /></Field>
+            <Field id="pd-hours" text="Opening hours"><input id="pd-hours" className={input} value={design.details.hours} maxLength={80} onChange={(e) => setDetail('hours', e.target.value)} placeholder="9:00 AM to 9:00 PM" /></Field>
+            <div className="md:col-span-2">
+              <Field id="pd-address" text="Address"><input id="pd-address" className={input} value={design.details.address} maxLength={200} onChange={(e) => setDetail('address', e.target.value)} placeholder="Shop name, road, town" /></Field>
+            </div>
+            <div className="md:col-span-2">
+              <Field id="pd-tagline" text="Tagline"><input id="pd-tagline" className={input} value={design.details.tagline} maxLength={80} onChange={(e) => setDetail('tagline', e.target.value)} placeholder="All household items under one roof" /></Field>
+            </div>
           </div>
         </div>
       )}
 
-      <div>
-        <div className="gravity-label mb-2">Reference picture <span className="text-[var(--gv-text-muted)] normal-case">· optional</span></div>
-        {design.referenceImage ? (
-          <div className="flex items-center gap-3">
-            <img src={design.referenceImage} alt="Your reference" className="h-20 w-16 object-cover rounded-lg border border-[var(--gv-border-default)]" />
-            <button type="button" onClick={() => set({ referenceImage: '' })} className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-[var(--gv-accent-text)]"><X className="w-3.5 h-3.5" />Remove</button>
-          </div>
-        ) : (
-          <label className="inline-flex items-center gap-2 rounded-lg border border-dashed border-[var(--gv-border-strong)] px-3 py-2 text-[12.5px] font-semibold text-[var(--gv-text-secondary)] cursor-pointer">
-            <ImagePlus className="w-4 h-4" />Add a picture you like
-            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { pickReference(e.target.files?.[0]); e.target.value = ''; }} aria-label="Reference picture" />
-          </label>
-        )}
-        <p className="mt-1.5 text-[11.5px] text-[var(--gv-text-muted)]">Found a post you like on Instagram or Pinterest? Add it and Nebulaa copies its layout and mood with your brand, products and text. It never copies their logo or words.</p>
-        {refNote && <p role="alert" className="mt-1 text-[12px] text-[var(--gv-text-primary)]">{refNote}</p>}
+      <div className="border-t border-[var(--gv-border-subtle)] pt-6">
+        <p className={sectionTitle}>{designed ? '3' : '2'} · Reference picture <span className="normal-case tracking-normal font-normal text-[var(--gv-text-tertiary)]">(optional)</span></p>
+        <div className="mt-3 flex flex-col sm:flex-row gap-4 sm:items-center">
+          {design.referenceImage ? (
+            <div className="flex items-center gap-4">
+              <img src={design.referenceImage} alt="Your reference" className="h-28 w-[88px] object-cover rounded-lg border border-[var(--gv-border-default)]" />
+              <button type="button" onClick={() => set({ referenceImage: '' })} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)]"><X className="w-4 h-4" />Remove</button>
+            </div>
+          ) : (
+            <label className="shrink-0 w-full sm:w-56 h-28 rounded-xl border-2 border-dashed border-[var(--gv-border-strong)] flex flex-col items-center justify-center gap-1.5 text-[var(--gv-text-secondary)] cursor-pointer hover:border-[var(--gv-accent)]">
+              <ImagePlus className="w-6 h-6" />
+              <span className="text-[13px] font-semibold">Add a picture you like</span>
+              <span className="text-[11.5px] text-[var(--gv-text-tertiary)]">PNG, JPG or WebP, up to 5 MB</span>
+              <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(e) => { pickReference(e.target.files?.[0]); e.target.value = ''; }} aria-label="Reference picture" />
+            </label>
+          )}
+          <p className="text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">Found a post you like on Instagram or Pinterest? Add it and Nebulaa copies its layout and mood with your brand, products and text. It never copies their logo or words.</p>
+        </div>
+        {refNote && <p role="alert" className="mt-2 text-[12.5px] text-[var(--gv-text-primary)]">{refNote}</p>}
       </div>
 
-      <div className="space-y-3">
-        <FrameRow label="Header" items={headers} value={design.headerUrl} k="headerUrl" />
-        <FrameRow label="Footer" items={footers} value={design.footerUrl} k="footerUrl" />
-        {(design.headerUrl || design.footerUrl || logoUrl) && (
+      <div className="border-t border-[var(--gv-border-subtle)] pt-6">
+        <p className={sectionTitle}>{designed ? '4' : '3'} · Header and footer <span className="normal-case tracking-normal font-normal text-[var(--gv-text-tertiary)]">(optional)</span></p>
+        <p className="mt-1 text-[12.5px] text-[var(--gv-text-tertiary)]">Strips laid over the top and bottom of the finished post, such as your address, GST number or branches. Your logo goes on top of them.</p>
+        <div className="mt-4 grid gap-6 md:grid-cols-[1fr_1fr_190px]">
+          <FrameChoice title="Header" items={headers} value={design.headerUrl} k="headerUrl" />
+          <FrameChoice title="Footer" items={footers} value={design.footerUrl} k="footerUrl" />
           <div>
-            <div className="gravity-label mb-1.5 text-[var(--gv-text-muted)]">Preview</div>
-            <PostPreview aspect={aspect} headerUrl={design.headerUrl} footerUrl={design.footerUrl} logoUrl={logoUrl} logoPosition={logoPosition} className="w-40" />
+            <p className={label}>Preview</p>
+            <PostPreview aspect={aspect} headerUrl={design.headerUrl} footerUrl={design.footerUrl} logoUrl={logoUrl} logoPosition={logoPosition} className="w-full max-w-[190px]" />
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    </section>
   );
 };
 
