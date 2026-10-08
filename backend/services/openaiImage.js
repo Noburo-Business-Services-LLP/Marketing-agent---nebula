@@ -137,4 +137,52 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
   }
 }
 
-module.exports = { generateOpenAIImage, referencesFromParts, buildEditForm };
+/**
+ * One image straight to a Buffer, with no upload: for pages that code finishes before they are stored.
+ * Portrait 1024x1536 at high quality. Never throws.
+ */
+async function generateOpenAIImageBuffer(prompt, { size = '1024x1536', model } = {}) {
+  if (!OPENAI_API_KEY) return { success: false, error: 'OPENAI_API_KEY is not configured' };
+  try {
+    const res = await fetchWithTimeout(OPENAI_IMAGE_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: model || OPENAI_IMAGE_MODEL, prompt: String(prompt || '').slice(0, 4000), size, n: 1, quality: 'high' })
+    }, 180000);
+    if (!res.ok) throw new Error(`OpenAI image HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    const data = await res.json();
+    const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
+    if (!b64) throw new Error('OpenAI returned no image data');
+    return { success: true, buffer: Buffer.from(b64, 'base64'), model: model || OPENAI_IMAGE_MODEL };
+  } catch (error) {
+    console.error('[OpenAI Image] page generation failed:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/** Reads the text out of a picture with a small vision model. Returns '' when it cannot. Never throws. */
+async function readTextFromImage(buffer, { model } = {}) {
+  if (!OPENAI_API_KEY) return '';
+  try {
+    const res = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model || process.env.BLUEPRINT_VISION_MODEL || 'gpt-4o-mini',
+        max_tokens: 900,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: 'Read every piece of text printed in this image, exactly as written, including numbers. Output only the text, one line per text element. Do not describe the picture.' },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${buffer.toString('base64')}` } }
+        ] }]
+      })
+    }, 90000);
+    if (!res.ok) return '';
+    const data = await res.json();
+    return String((data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
+  } catch (error) {
+    console.error('[OpenAI Vision] read failed:', error.message);
+    return '';
+  }
+}
+
+module.exports = { generateOpenAIImageBuffer, readTextFromImage, generateOpenAIImage, referencesFromParts, buildEditForm };

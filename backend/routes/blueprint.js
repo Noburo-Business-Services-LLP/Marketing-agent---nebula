@@ -38,6 +38,9 @@ function createBlueprintRouter(impl = {}) {
     handle((svc, req) => svc.start({ user: req.user, tier: resolveTier(req.user), body: req.body || {}, ip: req.ip })));
   router.get('/', protect, readLimiter, handle((svc, req, userId) => svc.list({ userId })));
   router.get('/:id', protect, readLimiter, handle((svc, req, userId) => svc.get({ userId, id: req.params.id })));
+  // The designed (image) edition of a finished Blueprint. Charged once when it starts.
+  router.post('/:id/designed', protect, requireFeature('blueprint'), checkTrial, requireCredits('blueprint_pdf', 1), writeLimiter,
+    handle((svc, req, userId) => svc.startDesigned({ userId, id: req.params.id })));
   router.post('/:id/continue', protect, writeLimiter,
     handle((svc, req, userId) => svc.continueRun({ userId, id: req.params.id, body: req.body || {} })));
 

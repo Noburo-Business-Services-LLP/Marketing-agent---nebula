@@ -736,7 +736,7 @@ function finishHeroClip(args) {
 }
 
 module.exports = {
-  END_CARD_FONTS, END_CARD_SIZES, END_CARD_THEMES, normalizeFinishOptions, buildCaptionsSrt, buildFinishFilterGraph,
+  endCardFamily, END_CARD_FONTS, END_CARD_SIZES, END_CARD_THEMES, normalizeFinishOptions, buildCaptionsSrt, buildFinishFilterGraph,
   resolveFfmpegPath, runFfmpeg, probeMedia,
   fetchLogoBuffer, renderEndCardPng, readImageDimensions, loadLogoImage, _pinnedFetch: pinnedFetch, finishHeroClip, escapeFilterValue
 };

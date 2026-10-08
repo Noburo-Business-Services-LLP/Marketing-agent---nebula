@@ -66,8 +66,25 @@ const PROVIDER_RATES = {
   // billed per output second at 720p, so a clip's cost scales with its
   // length. LIST PRICE: verify against the first fal.ai invoice, because
   // 1080p and audio-on are billed differently and we only generate 720p.
-  seedance_720p_per_sec: 0.3034
+  seedance_720p_per_sec: 0.3034,
+
+  // OpenAI image models, per generated image at HIGH quality and 1024x1536 (portrait).
+  // Verified on 2026-10-08 from OpenAI's own image generation guide ("Calculating costs"):
+  //   GPT Image 1 $0.25, GPT Image 1.5 $0.20, GPT Image 2 $0.165, GPT Image 1 Mini $0.052.
+  // The designed Blueprint PDF prices the model it actually uses (OPENAI_IMAGE_MODEL, default gpt-image-1).
+  openai_image_high_portrait_per_image: {
+    'gpt-image-1': 0.25,
+    'gpt-image-1.5': 0.20,
+    'gpt-image-2': 0.165,
+    'gpt-image-1-mini': 0.052
+  },
+  // The vision pass that reads a finished page back to check its text: an image plus a short answer on a
+  // small model. Rounded up generously so the check is never priced at zero.
+  openai_vision_check_per_page: 0.01
 };
+
+// The designed Blueprint PDF: cover, nine content pages and a closing page.
+const BLUEPRINT_PDF_PAGES = 11;
 
 // Length of one hero clip. Seedance bills by the second, so this is what turns
 // the per-second rate into a per-clip price; heroVideoService also uses it as
@@ -225,6 +242,16 @@ const ACTION_USD = {
   // Page fetches are not metered and no image model is used.
   blueprint: gpt4o(TOKENS.blueprint_plan),
 
+  // Designed Blueprint PDF: one high-quality image per page, regenerated now and then when the text check fails
+  // (retry factor), a vision check per page, and storing the page images and the finished PDF once.
+  blueprint_pdf:
+    BLUEPRINT_PDF_PAGES * (
+      PROVIDER_RATES.openai_image_high_portrait_per_image[process.env.OPENAI_IMAGE_MODEL] ||
+      PROVIDER_RATES.openai_image_high_portrait_per_image['gpt-image-1']
+    ) * 1.4 +
+    BLUEPRINT_PDF_PAGES * PROVIDER_RATES.openai_vision_check_per_page +
+    assetCost(INFRA.mb_per_image * (BLUEPRINT_PDF_PAGES + 4)),
+
   // --- hero video ----------------------------------------------------------
   // One Seedance clip of HERO_CLIP_SECONDS, plus storing and serving it once
   // as a scene-sized clip. No image, narration or merge step: the model returns
@@ -320,7 +347,8 @@ const ACTION_UNITS = {
   event_post: 'per post',
   hero_video_clip: 'per clip',
   competitor_scrape: 'free',
-  blueprint: 'per blueprint'
+  blueprint: 'per blueprint',
+  blueprint_pdf: 'per designed Blueprint PDF'
 };
 
 // ---------------------------------------------------------------------------
@@ -582,7 +610,7 @@ const ADDONS = {
 };
 
 module.exports = {
-  PROVIDER_RATES, HERO_CLIP_SECONDS, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
+  PROVIDER_RATES, HERO_CLIP_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
   assertPlanAllowance, TOPUP_PACKS, GST_RATE, gstPaise, chargePaise, ADDONS,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,

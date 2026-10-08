@@ -35,7 +35,22 @@ export interface BlueprintView {
   discovery?: BlueprintDiscovery;
   directions?: BlueprintDirection[];
   result?: any;
+  designed?: BlueprintDesigned;
 }
+
+/** The designed (image) edition of a finished Blueprint. */
+export interface BlueprintDesignedPage { n: number; id: string; title: string; status: 'pending' | 'ok' | 'fallback'; imageUrl: string }
+export interface BlueprintDesigned {
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  total: number;
+  done: number;
+  pages: BlueprintDesignedPage[];
+  pdfUrl: string;
+  refunded: boolean;
+  error: string | null;
+  quarks?: number;
+}
+export const designedActive = (d?: Pick<BlueprintDesigned, 'status'> | null): boolean => !!d && (d.status === 'queued' || d.status === 'processing');
 
 export interface BlueprintCompetitorForm { name: string; url: string }
 export interface BlueprintOfferForm { name: string; price: string }
@@ -250,7 +265,8 @@ export function isTerminal(status: string | undefined): boolean {
 }
 
 /** Polling stops at a terminal state and at a checkpoint that waits for the visitor. */
-export function shouldPoll(view: Pick<BlueprintView, 'status'> | null | undefined): boolean {
+export function shouldPoll(view: Pick<BlueprintView, 'status' | 'designed'> | null | undefined): boolean {
+  if (view && view.status === 'completed' && designedActive(view.designed)) return true;
   return !view || !(isTerminal(view.status) || view.status === 'awaiting_approval');
 }
 

@@ -478,7 +478,29 @@ async function deleteImage(publicId) {
   }
 }
 
+/**
+ * Upload a finished PDF (a Buffer) as a downloadable file. Cloudinary serves a "raw" resource as-is.
+ * @returns {Promise<{success: boolean, url?: string, error?: string}>}
+ */
+async function uploadPdfBuffer(buffer, folder = 'nebula-blueprint-pdfs', publicIdHint = '') {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder, resource_type: 'raw', format: 'pdf', ...(publicIdHint ? { public_id: publicIdHint } : {}), timeout: 120000 },
+        (err, res) => (err ? reject(err) : resolve(res))
+      );
+      stream.end(buffer);
+    });
+    if (!result || !result.secure_url) return { success: false, error: 'Upload returned no link' };
+    return { success: true, url: result.secure_url, publicId: result.public_id };
+  } catch (error) {
+    console.error('PDF upload failed:', error && error.message);
+    return { success: false, error: 'Upload failed' };
+  }
+}
+
 module.exports = {
+  uploadPdfBuffer,
   uploadBase64Image,
   uploadMultipleImages,
   isBase64DataUrl,

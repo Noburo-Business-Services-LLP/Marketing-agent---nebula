@@ -16,9 +16,9 @@ const handlerFor = (impl, method, p) => {
   return r.handlers[r.handlers.length - 1];
 };
 
-test('the four routes exist and protect is first on every one', () => {
+test('the five routes exist and protect is first on every one', () => {
   const found = routesOf(router);
-  assert.deepStrictEqual(found.map((r) => `${r.method} ${r.path}`).sort(), ['get /', 'get /:id', 'post /', 'post /:id/continue']);
+  assert.deepStrictEqual(found.map((r) => `${r.method} ${r.path}`).sort(), ['get /', 'get /:id', 'post /', 'post /:id/continue', 'post /:id/designed']);
   for (const r of found) assert.strictEqual(r.handlers[0], protect, `${r.method} ${r.path}`);
 });
 

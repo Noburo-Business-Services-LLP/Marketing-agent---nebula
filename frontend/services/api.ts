@@ -456,6 +456,10 @@ export const apiService = {
   regenerateCalendar: async (data: { focus: string; month?: string; language?: string }): Promise<{ success: boolean; calendar: any }> => {
     return apiCall('/content-calendar/regenerate', { method: 'POST', body: JSON.stringify(data) }, true);
   },
+  /** Start the designed (image) edition of a finished Blueprint. Charged once. */
+  blueprintDesigned: async (id: string): Promise<{ success: boolean; started?: boolean; quarks?: number; message?: string }> => {
+    return apiCall(`/blueprint/${encodeURIComponent(id)}/designed`, { method: 'POST' }, true);
+  },
   blueprintContinue: async (id: string, body: { directionId?: number } = {}): Promise<{ success: boolean; id: string; status: string }> => {
     return apiCall(`/blueprint/${encodeURIComponent(id)}/continue`, { method: 'POST', body: JSON.stringify(body) }, true);
   },

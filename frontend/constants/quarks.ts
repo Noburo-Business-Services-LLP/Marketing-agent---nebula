@@ -11,6 +11,7 @@ export const ACTION_LABELS: Record<string, { label: string; icon: string }> = {
   campaign_full: { label: 'Campaign Post', icon: '📣' },
   chat_message: { label: 'Chat Message', icon: '💬' },
   competitor_scrape: { label: 'Competitor Intel', icon: '🔍' },
+  blueprint_pdf: { label: 'Designed Blueprint PDF', icon: '📄' },
   rival_post: { label: 'Rival Post', icon: '🥊' },
   strategic_post: { label: 'Strategic Post', icon: '🧭' },
   event_post: { label: 'Event Post', icon: '🎉' },

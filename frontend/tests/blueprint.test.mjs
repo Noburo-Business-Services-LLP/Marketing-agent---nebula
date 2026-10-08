@@ -298,3 +298,12 @@ test('with no profile the sign-up name is used and nothing else is invented', ()
   assert.deepStrictEqual(prefillFromProfile({ companyName: 'Acme' }), { businessName: 'Acme' });
   assert.deepStrictEqual(prefillFromProfile(null), {});
 });
+
+test('polling continues while the designed PDF is being made', async () => {
+  const { shouldPoll, designedActive } = await import('../utils/blueprint.ts');
+  assert.equal(shouldPoll({ status: 'completed' }), false);
+  assert.equal(shouldPoll({ status: 'completed', designed: { status: 'processing' } }), true);
+  assert.equal(shouldPoll({ status: 'completed', designed: { status: 'completed' } }), false);
+  assert.equal(designedActive({ status: 'queued' }), true);
+  assert.equal(designedActive(undefined), false);
+});

@@ -94,7 +94,8 @@ function publicView(doc) {
     directions: awaiting && doc.checkpoint === 1
       ? (doc.directions || []).map((d, i) => ({ id: i, name: d.name, rationale: d.rationale, risk: d.risk }))
       : undefined,
-    result: doc.status === 'completed' ? doc.result : undefined
+    result: doc.status === 'completed' ? doc.result : undefined,
+    designed: doc.status === 'completed' ? require('./designedService').publicDesigned(doc.designed) : undefined
   };
 }
 
@@ -102,6 +103,8 @@ function createBlueprintService(depsIn) {
   const deps = depsIn || defaultDeps();
   const { Blueprint } = deps;
   const at = () => new Date(deps.now());
+  let designedSvc = null;
+  const designedService = () => (designedSvc = designedSvc || (deps.designed || require('./designedService').createDesignedService(deps.designedDeps)));
   const noteFlag = (rule, detail) => ({ level: 'note', rule, where: 'run', detail });
 
   async function findExisting(key, keys) {
@@ -300,6 +303,10 @@ function createBlueprintService(depsIn) {
       await refundOnce(doc);
       doc = (await Blueprint.findOne({ blueprintId: key, userId: uid })) || doc;
     }
+    if (doc.designed && doc.designed.status) {
+      // A designed edition that stopped reporting is ended and refunded here, like the Blueprint itself.
+      doc = await designedService().reconcile(doc);
+    }
     return reply(200, { success: true, ...publicView(doc) });
   }
 
@@ -330,7 +337,9 @@ function createBlueprintService(depsIn) {
     return reply(202, { success: true, id: key, status: 'queued' });
   }
 
-  return { start, run, get, list, continueRun, refundOnce };
+  const startDesigned = (args) => designedService().start(args);
+
+  return { start, run, get, list, continueRun, refundOnce, startDesigned };
 }
 
 module.exports = { createBlueprintService, defaultDeps, publicView, applyLogo, ACTION, MSG };

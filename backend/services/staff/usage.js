@@ -56,6 +56,7 @@ const ACTION_CATEGORY = {
   video_base: 'video', video_generated: 'video', video_scene_image: 'video', video_scene_clip: 'video', video_character_portrait: 'video',
   hero_video_clip: 'hero',
   blueprint: 'blueprint',
+  blueprint_pdf: 'blueprint',
   chat_message: 'other', competitor_scrape: 'other'
 };
 
