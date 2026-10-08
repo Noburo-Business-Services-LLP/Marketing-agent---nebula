@@ -110,15 +110,12 @@ test('canUse: starter and professional', () => {
   }
 });
 
-test('heroLimitForUser', () => {
-  assert.equal(ent.heroLimitForUser(U('managed')), 2);
-  assert.equal(ent.heroLimitForUser({}), 2);
-  assert.equal(ent.heroLimitForUser(U('professional')), 2);
-  assert.equal(ent.heroLimitForUser(U('starter')), 1);
-  assert.equal(ent.heroLimitForUser(U('free')), 1);
+test('heroLimitForUser: no monthly cap on any plan; an emergency brake can still be set', () => {
+  for (const t of ['managed', 'professional', 'starter', 'free']) assert.equal(ent.heroLimitForUser(U(t)), Infinity, t);
+  assert.equal(ent.heroLimitForUser({}), Infinity);
   assert.equal(ent.heroLimitForUser(U('free'), '5'), 5);
   assert.equal(ent.heroLimitForUser(U('managed'), 7), 7);
   for (const bad of ['0', '-1', 'abc', '', undefined, null, '1.5', '2x']) {
-    assert.equal(ent.heroLimitForUser(U('starter'), bad), 1, String(bad));
+    assert.equal(ent.heroLimitForUser(U('starter'), bad), Infinity, String(bad));
   }
 });

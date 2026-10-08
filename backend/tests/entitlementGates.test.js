@@ -249,20 +249,20 @@ test('callbacks, webhooks, Hero, billing, auth and admin routes carry no require
 });
 
 // ---- Hero quota ----
-test('getHeroQuota takes its limit from heroLimitForUser (tier-aware, managed 2, env wins)', async () => {
+test('getHeroQuota has no monthly cap (Infinity) unless the emergency brake is set', async () => {
   const fake = { countDocuments: async () => 0 };
   const users = (plan) => ({ findById: () => ({ select: () => ({ lean: async () => ({ plan }) }) }) });
   const now = new Date('2026-10-10T10:00:00Z');
   delete process.env.HERO_VIDEO_MONTHLY_LIMIT;
-  assert.equal((await hero.getHeroQuota('u1', now, fake)).limit, 2);
-  assert.equal((await hero.getHeroQuota('u1', now, fake, users(undefined))).limit, 2);
-  assert.equal((await hero.getHeroQuota('u1', now, fake, users({ tier: 'managed' }))).limit, 2);
-  assert.equal((await hero.getHeroQuota('u1', now, fake, users({ tier: 'starter' }))).limit, 1);
-  assert.equal((await hero.getHeroQuota('u1', now, fake, users({ tier: 'free' }))).limit, 1);
+  assert.equal((await hero.getHeroQuota('u1', now, fake)).limit, Infinity);
+  assert.equal((await hero.getHeroQuota('u1', now, fake, users(undefined))).limit, Infinity);
+  assert.equal((await hero.getHeroQuota('u1', now, fake, users({ tier: 'managed' }))).limit, Infinity);
+  assert.equal((await hero.getHeroQuota('u1', now, fake, users({ tier: 'starter' }))).limit, Infinity);
+  assert.equal((await hero.getHeroQuota('u1', now, fake, users({ tier: 'free' }))).limit, Infinity);
   process.env.HERO_VIDEO_MONTHLY_LIMIT = '5';
   try { assert.equal((await hero.getHeroQuota('u1', now, fake, users({ tier: 'free' }))).limit, 5); } finally { delete process.env.HERO_VIDEO_MONTHLY_LIMIT; }
   const broken = { findById: () => { throw new Error('x'); } };
-  assert.equal((await hero.getHeroQuota('u1', now, fake, broken)).limit, 2);
+  assert.equal((await hero.getHeroQuota('u1', now, fake, broken)).limit, Infinity);
 });
 
 // ---- scheduling through campaigns and the calendar (C1) ----
@@ -344,14 +344,4 @@ test('spec and landing no longer say plan Quarks expire or do not roll over', ()
   const spec = fs.readFileSync(path.join(__dirname, '../../docs/superpowers/specs/2026-10-04-plans-and-quarks-design.md'), 'utf8');
   assert.doesNotMatch(spec, /no rollover/i);
   assert.match(spec, /carry over/i);
-});
-
-test('getHeroQuota lifts the monthly cap for team members only', async () => {
-  const { getHeroQuota } = require('../services/heroVideoService');
-  const Jobs = { countDocuments: async () => 2 };
-  const users = (u) => ({ findById: () => ({ select: () => ({ lean: async () => u }) }) });
-  const staff = await getHeroQuota('u1', new Date('2026-10-08'), Jobs, users({ plan: { tier: 'managed' }, staffRole: 'owner' }));
-  const customer = await getHeroQuota('u2', new Date('2026-10-08'), Jobs, users({ plan: { tier: 'managed' } }));
-  assert.equal(staff.limit >= 50, true);
-  assert.equal(customer.limit, 2);
 });

@@ -96,5 +96,5 @@ test('getHeroQuota filter and result', async () => {
     status: { $in: ['queued', 'processing', 'completed'] },
     createdAt: { $gte: hero.monthStartUTC(now) }
   });
-  assert.deepEqual(q, { used: 1, limit: 2, resetsOn: '2026-11-01T00:00:00.000Z' });
+  assert.deepEqual(q, { used: 1, limit: Infinity, resetsOn: '2026-11-01T00:00:00.000Z' });
 });

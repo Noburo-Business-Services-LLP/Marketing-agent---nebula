@@ -625,13 +625,13 @@ test('no welcome email for add-ons or top-ups', async () => {
 });
 
 test('welcome email content: plan, Quarks, Hero count, add-ons, plain voice', () => {
-  for (const [tier, quarks, plan, heroWord, other] of [['starter', 2100, 'Starter', 'one Hero video', 'two'], ['professional', 3500, 'Professional', 'two Hero videos', 'one Hero']]) {
+  for (const [tier, quarks, plan] of [['starter', 2100, 'Starter'], ['professional', 3500, 'Professional']]) {
     const m = we.buildWelcomeEmail({ firstName: 'Asha', tier, quarks });
     const all = `${m.subject}\n${m.text}\n${m.html}`;
     assert.match(m.subject, new RegExp(plan));
     assert.match(m.text, new RegExp(`${quarks.toLocaleString('en-US')} Quarks`));
-    assert.ok(m.text.includes(heroWord));
-    assert.ok(!m.text.includes(other + ' Hero'));
+    assert.ok(m.text.includes('Hero videos') && !/each month/.test(m.text), 'no monthly Hero cap is promised');
+    assert.ok(m.text.includes('top up with more Quarks'));
     for (const a of ['Publish and schedule', 'Inbox and replies', 'Competitor insights', 'plans page', 'Create content']) assert.ok(m.text.includes(a), a);
     assert.ok(!/[!\u2014\u2013]/.test(all), 'no exclamation marks or dashes');
     assert.ok(!/credit|production|migrat|trial/i.test(all), 'forbidden words');

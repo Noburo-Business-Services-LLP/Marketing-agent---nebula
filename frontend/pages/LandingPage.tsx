@@ -113,14 +113,14 @@ const PLANS = [
     name: 'Starter',
     price: 999,
     note: 'For one person getting started',
-    features: ['2,100 Quarks a month', '30 image posts and 1 Hero video a month', '1 team member'],
+    features: ['2,100 Quarks a month', 'Quarks for about 30 image posts and 1 Hero video a month', '1 team member'],
   },
   {
     name: 'Professional',
     price: 1999,
     note: 'For more posts and more people',
     popular: true,
-    features: ['3,500 Quarks a month', 'Everything in Starter', '2 Hero videos a month', 'Extra captions', 'Up to 5 team members'],
+    features: ['3,500 Quarks a month', 'Everything in Starter', 'Quarks for about 2 Hero videos a month', 'Extra captions', 'Up to 5 team members'],
   },
 ];
 

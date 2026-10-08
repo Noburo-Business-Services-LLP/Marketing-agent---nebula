@@ -19,7 +19,7 @@ function isAddonId(id) { return typeof id === 'string' && ADDON_IDS.includes(id)
 function planFeatures(id) {
   const plan = PLANS[id];
   const c = plan.commits;
-  const out = [`${fmt(plan.quarks)} Quarks every month`, `${c.image_generated} image posts a month`, `${c.hero} Hero video${c.hero === 1 ? '' : 's'} a month`];
+  const out = [`${fmt(plan.quarks)} Quarks every month`, `Enough for about ${c.image_generated} image posts and ${c.hero} Hero video${c.hero === 1 ? '' : 's'} a month`, 'Top up with more Quarks any time'];
   return out.concat(PLAN_PRESENTATION[id].extraFeatures);
 }
 

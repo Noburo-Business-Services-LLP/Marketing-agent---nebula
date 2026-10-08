@@ -16,7 +16,8 @@ import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton
 // state ({ brief }); the server validates it and stages the reference images (/brief), writes
 // the prompt (/plan), and charges + generates only on /generate.
 
-interface QuotaInfo { used: number; limit: number; resetsOn: string }
+// limit is null when there is no monthly cap: the Quark price is the only limit.
+interface QuotaInfo { used: number; limit: number | null; resetsOn: string }
 
 const POLL_MS = 5000;
 // Server fails any job older than 60 min; stop client polling a little after that.
@@ -412,7 +413,7 @@ const HeroVideoInner: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brief, plan, planning]);
 
-  const quotaUsedUp = !!quota && quota.used >= quota.limit;
+  const quotaUsedUp = !!quota && quota.limit != null && quota.used >= quota.limit;
   // Affordability preflight: with a known price and balance, an unaffordable clip never calls /generate.
   const cannotAfford = price !== undefined && balance !== undefined && balance < price;
   // Only an active submit or poll loop counts as in flight; every poll exit path clears it.
@@ -1032,7 +1033,7 @@ const HeroVideoInner: React.FC = () => {
               </span>
             )}
           </div>
-          {quota && (
+          {quota && quota.limit != null && (
             <p className="text-[12.5px] text-[var(--gv-text-tertiary)]">
               {quota.used} of {quota.limit} Hero videos used this month
               {fmtDate(quota.resetsOn) && <> · resets {fmtDate(quota.resetsOn)}</>}
