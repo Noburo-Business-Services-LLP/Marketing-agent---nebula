@@ -293,13 +293,6 @@ app.get('/api/health/details', (req, res) => {
   return res.status(200).json({
     status: 'ok',
     checks: {
-      env: {
-        NODE_ENV: process.env.NODE_ENV || 'development',
-        PORT: process.env.PORT || null,
-        MONGODB_URI: Boolean(process.env.MONGODB_URI),
-        JWT_SECRET: Boolean(process.env.JWT_SECRET),
-        GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY),
-      },
       mongo: {
         readyState: mongoState,
         state: mongoStates[mongoState] || 'unknown'
@@ -405,7 +398,7 @@ app.use((req, res, next) => {
 });
 
 // Routes - Admin (no trial/credit guard)
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', authLimiter, adminRoutes);
 app.use('/api/csm', csmRoutes);
 app.use('/api/staff', staffRoutes);
 

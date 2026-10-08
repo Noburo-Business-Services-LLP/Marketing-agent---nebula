@@ -2,9 +2,9 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // Demo mode when MONGODB_URI is missing or clearly a placeholder
-const isDemoMode =
+const isDemoMode = process.env.NODE_ENV !== 'production' && (
   !process.env.MONGODB_URI ||
-  process.env.MONGODB_URI.includes('your_mongodb_connection_string_here');
+  process.env.MONGODB_URI.includes('your_mongodb_connection_string_here'));
 
 // Generate JWT Token
 const generateToken = (userId) => {

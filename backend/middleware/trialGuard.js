@@ -70,25 +70,10 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
 
     const totalCost = cost * count;
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return { success: false, creditsRemaining: 0, creditsDeducted: 0, error: 'User not found' };
-    }
-
-    const currentBalance = user.credits?.balance ?? 100;
-
-    if (currentBalance < totalCost) {
-      return {
-        success: false,
-        creditsRemaining: currentBalance,
-        creditsDeducted: 0,
-        error: `Insufficient Quarks. Need ${totalCost}, have ${currentBalance}. Please upgrade your plan, or buy an add-on pack or Quarks.`
-      };
-    }
-
-    // Deduct credits and log history
-    const result = await User.findByIdAndUpdate(
-      userId,
+    // One atomic step: the balance is checked and subtracted together, so many requests sent at the same
+    // moment cannot all pass the check and overdraw the account.
+    const result = await User.findOneAndUpdate(
+      { _id: userId, 'credits.balance': { $gte: totalCost } },
       {
         $inc: {
           'credits.balance': -totalCost,
@@ -108,6 +93,20 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
       },
       { new: true }
     );
+
+    if (!result) {
+      const user = await User.findById(userId).select('credits.balance');
+      if (!user) {
+        return { success: false, creditsRemaining: 0, creditsDeducted: 0, error: 'User not found' };
+      }
+      const currentBalance = user.credits?.balance ?? 100;
+      return {
+        success: false,
+        creditsRemaining: currentBalance,
+        creditsDeducted: 0,
+        error: `Insufficient Quarks. Need ${totalCost}, have ${currentBalance}. Please upgrade your plan, or buy an add-on pack or Quarks.`
+      };
+    }
 
     return {
       success: true,

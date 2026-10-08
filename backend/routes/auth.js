@@ -910,7 +910,7 @@ router.post('/verify-reset-otp', [
 router.post('/reset-password', [
   body('email').isEmail().normalizeEmail(),
   body('otp').isLength({ min: 6, max: 6 }).isNumeric(),
-  body('newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters').matches(/\d/).withMessage('Password must contain at least one number').matches(/[a-zA-Z]/).withMessage('Password must contain at least one letter'),
   handleValidationErrors
 ], async (req, res) => {
   try {
@@ -921,9 +921,15 @@ router.post('/reset-password', [
     if (!user.otp?.code) return res.status(400).json({ success: false, message: 'No reset code found. Please start over.' });
     if (new Date() > new Date(user.otp.expiresAt)) return res.status(400).json({ success: false, message: 'Code has expired. Please start over.' });
 
+    // Guessing the code here counts like guessing it anywhere else: five wrong tries and the code is dead.
+    if ((user.otp.attempts || 0) >= 5) return res.status(429).json({ success: false, message: 'Too many failed attempts. Please request a new code.' });
+
     // Re-verify OTP to prevent bypassing
     const isValid = await otpService.verifyOTP(otp, user.otp.code);
-    if (!isValid) return res.status(400).json({ success: false, message: 'Invalid code. Please start over.' });
+    if (!isValid) {
+      await User.updateOne({ _id: user._id }, { $inc: { 'otp.attempts': 1 } });
+      return res.status(400).json({ success: false, message: 'Invalid code. Please start over.' });
+    }
 
     // Update password (pre-save hook will hash it)
     user.password = newPassword;

@@ -19,13 +19,14 @@ router.post('/login', async (req, res) => {
       return res.status(500).json({ error: 'Admin credentials not configured' });
     }
 
-    if (email !== adminEmail || password !== adminPassword) {
+    const same = (a, b) => { const x = Buffer.from(String(a || '')); const y = Buffer.from(String(b || '')); return x.length === y.length && require('crypto').timingSafeEqual(x, y); };
+    if (!same(email, adminEmail) || !same(password, adminPassword)) {
       return res.status(401).json({ error: 'Invalid admin credentials' });
     }
 
     const token = jwt.sign(
       { role: 'admin', email },
-      process.env.JWT_SECRET || 'fallback-secret',
+      process.env.JWT_SECRET,
       { expiresIn: '12h' }
     );
 

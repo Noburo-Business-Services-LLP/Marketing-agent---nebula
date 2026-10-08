@@ -74,16 +74,53 @@ function getDataSourcesForUrl(url) {
 /**
  * Simple HTTP fetch with timeout
  */
-function fetchUrl(url, options = {}) {
+const MAX_REDIRECTS = 5;
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+const dnsLib = require('dns');
+
+// Connect-time address check: the address actually dialled must be public. This covers every redirect hop and
+// DNS answers that change between a check and the connection, so internal addresses (cloud metadata, private
+// networks, localhost) can never be reached through a customer-supplied website address.
+function publicOnlyLookup(hostname, opts, cb) {
+  const { isPublicIp } = require('./heroVideoService');
+  dnsLib.lookup(hostname, { ...opts, all: true, verbatim: true }, (err, list) => {
+    if (err) return cb(err);
+    const addrs = Array.isArray(list) ? list : [{ address: list, family: 4 }];
+    if (!addrs.length || !addrs.every((a) => isPublicIp(a.address))) {
+      return cb(new Error('That address is not allowed'));
+    }
+    if (opts && opts.all) return cb(null, addrs);
+    return cb(null, addrs[0].address, addrs[0].family);
+  });
+}
+
+/**
+ * Simple HTTP fetch with timeout. Public addresses only, standard ports only, limited redirects and size.
+ */
+function fetchUrl(url, options = {}, hops = 0) {
   return new Promise((resolve, reject) => {
-    const parsedUrl = new URL(url);
+    let parsedUrl;
+    try { parsedUrl = new URL(url); } catch (e) { return reject(new Error('Invalid URL')); }
+    if (!['http:', 'https:'].includes(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password) {
+      return reject(new Error('That address is not allowed'));
+    }
+    if (parsedUrl.port && !['80', '443'].includes(parsedUrl.port)) {
+      return reject(new Error('That address is not allowed'));
+    }
+    if (hops > MAX_REDIRECTS) return reject(new Error('Too many redirects'));
+    // A host written as a number never goes through the lookup, so it is checked here.
+    const bareHost = parsedUrl.hostname.replace(/^\[|\]$/g, '');
+    if (require('net').isIP(bareHost) && !require('./heroVideoService').isPublicIp(bareHost)) {
+      return reject(new Error('That address is not allowed'));
+    }
     const protocol = parsedUrl.protocol === 'https:' ? https : http;
-    
+
     const reqOptions = {
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
       path: parsedUrl.pathname + parsedUrl.search,
       method: options.method || 'GET',
+      lookup: options.lookup || publicOnlyLookup,
       headers: {
         'User-Agent': 'GravityMarketingBot/1.0 (Educational/Research; +https://gravity.ai)',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -92,32 +129,41 @@ function fetchUrl(url, options = {}) {
       },
       timeout: options.timeout || 15000
     };
-    
+
     const req = protocol.request(reqOptions, (res) => {
       // Handle redirects
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        const redirectUrl = new URL(res.headers.location, url).toString();
-        fetchUrl(redirectUrl, options).then(resolve).catch(reject);
+        res.resume();
+        let redirectUrl;
+        try { redirectUrl = new URL(res.headers.location, url).toString(); } catch (e) { return reject(new Error('Invalid redirect')); }
+        fetchUrl(redirectUrl, options, hops + 1).then(resolve).catch(reject);
         return;
       }
-      
+
       if (res.statusCode !== 200) {
+        res.resume();
         reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
         return;
       }
-      
+
       let data = '';
       res.setEncoding('utf8');
-      res.on('data', chunk => data += chunk);
+      res.on('data', (chunk) => {
+        data += chunk;
+        if (data.length > MAX_BODY_BYTES) {
+          req.destroy();
+          reject(new Error('Page is too large'));
+        }
+      });
       res.on('end', () => resolve(data));
     });
-    
+
     req.on('error', reject);
     req.on('timeout', () => {
       req.destroy();
       reject(new Error('Request timeout'));
     });
-    
+
     req.end();
   });
 }
@@ -933,6 +979,7 @@ function getAllDataSources() {
 module.exports = {
   scrape,
   scrapeWebsite,
+  fetchUrl,
   scrapeWebsitePages,
   deepScrapeWebsite,
   scrapeWebsiteWithApify,
