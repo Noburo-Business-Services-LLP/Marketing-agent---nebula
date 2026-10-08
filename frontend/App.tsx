@@ -14,6 +14,7 @@ import GravityHome from './pages/GravityHome';
 import GravityCreate from './pages/GravityCreate';
 import GravityApprove from './pages/GravityApprove';
 import Library from './pages/Library';
+import PageTabs from './components/PageTabs';
 import GravityCalendar from './pages/GravityCalendar';
 import GravityInsights from './pages/GravityInsights';
 import Campaigns from './pages/Campaigns';
@@ -268,17 +269,17 @@ const App: React.FC = () => {
                         view) and Schedule (real month grid, thumbnails on the day
                         they're actually scheduled). content-calendar-grid/-classic
                         kept as direct links to the individual views. */}
-                    <Route path="/content-calendar" element={<CalendarHome />} />
+                    <Route path="/content-calendar" element={<PageTabs tabs={[{ key: 'calendar', label: 'Calendar', element: <CalendarHome /> }, { key: 'ideas', label: 'Content ideas', element: <IdeaInbox /> }]} />} />
                     <Route path="/content-calendar-grid" element={<GravityCalendar />} />
                     <Route path="/content-calendar-classic" element={<ContentCalendar />} />
-                    <Route path="/idea-inbox" element={<IdeaInbox />} />
-                    <Route path="/campaigns" element={<GravityCreate />} />
+                    <Route path="/idea-inbox" element={<Navigate to="/content-calendar?tab=ideas" replace />} />
+                    <Route path="/campaigns" element={<PageTabs tabs={[{ key: 'create', label: 'Create with Nebulaa', element: <GravityCreate /> }, { key: 'upload', label: 'Upload and schedule', element: <UploadAndSchedule /> }]} />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove user={user} />} />
                     <Route path="/library" element={<Library />} />
                     <Route path="/reels" element={<ReelGenerator />} />
                     <Route path="/reels/hero" element={<HeroVideo />} />
-                    <Route path="/upload" element={<UploadAndSchedule />} />
+                    <Route path="/upload" element={<Navigate to="/campaigns?tab=upload" replace />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
                     <Route path="/competitors" element={<Competitors />} />
                     <Route path="/connect-socials" element={<ConnectSocials />} />

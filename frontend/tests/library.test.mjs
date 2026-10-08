@@ -47,3 +47,11 @@ test('a still is made only for a hosted video link', () => {
   assert.match(stillFor(MP4), /\.jpg$/);
   assert.equal(stillFor('https://x.com/a.mp4'), '');
 });
+
+test('a reel draft from the plan is a video with its job and file', () => {
+  const r = fromPostDraft({ _id: 'r1', title: 'Pour', contentType: 'reel', status: 'draft', imageUrl: '', creative: { videoUrl: 'https://res.cloudinary.com/demo/video/upload/v1/a.mp4' }, generationProgress: { jobId: 'job9' } });
+  assert.equal(r.kind, 'video'); assert.equal(r.source, 'reel'); assert.equal(r.jobId, 'job9');
+  assert.match(r.mediaUrl, /\.mp4$/); assert.match(r.thumbnailUrl, /\.jpg$/);
+  const img = fromPostDraft({ _id: 'i1', imageUrl: 'https://i/a.jpg', status: 'draft' });
+  assert.equal(img.source, 'post'); assert.equal(img.kind, 'image');
+});

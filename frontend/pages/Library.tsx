@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Film, Image as ImageIcon, Loader2, Play, Search, X } from 'lucide-react';
+import { Download, Film, Image as ImageIcon, Loader2, Play, Search, Trash2, X } from 'lucide-react';
 import { GravityLabel, GravityButton } from '../components/gravity';
+import { useConfirm } from '../context/ConfirmContext';
 import GenerationTimer from '../components/GenerationTimer';
 import HeroShare from '../components/HeroShare';
 import HeroEdit from '../components/HeroEdit';
@@ -23,6 +24,7 @@ const KINDS: Array<{ key: LibraryFilters['kind']; label: string }> = [
 ];
 const SOURCES: Array<{ key: LibraryFilters['source']; label: string }> = [
   { key: 'all', label: 'Everything' }, { key: 'hero', label: 'Hero videos' }, { key: 'video-draft', label: 'Step-by-step videos' }, { key: 'post', label: 'Posts and images' },
+  { key: 'reel', label: 'Reels from your plan' },
 ];
 
 const chip = (on: boolean) =>
@@ -34,6 +36,7 @@ const fmtDate = (t: number) => (t ? new Date(t).toLocaleDateString(undefined, { 
 /** Everything you have made, images and videos together. */
 const Library: React.FC = () => {
   const navigate = useNavigate();
+  const confirmDialog = useConfirm();
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [problems, setProblems] = useState<string[]>([]);
@@ -51,8 +54,6 @@ const Library: React.FC = () => {
     const all: LibraryItem[] = [];
     if (posts.status === 'fulfilled') {
       (posts.value?.drafts || []).forEach((d: any) => {
-        const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
-        if (source === 'reel' || source === 'video') return; // reels are the step-by-step videos below
         const c = fromPostDraft(d); if (c) all.push(c);
       });
     } else bad.push('posts and images');
@@ -80,7 +81,25 @@ const Library: React.FC = () => {
     setOpen(null);
     if (i.source === 'hero') navigate('/reels/hero');
     else if (i.source === 'video-draft') navigate(`/reels?jobId=${encodeURIComponent(i.id)}`);
+    else if (i.source === 'reel' && i.jobId) navigate(`/reels?jobId=${encodeURIComponent(i.jobId)}`);
     else navigate('/drafts');
+  };
+
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState('');
+  const canRemove = (i: LibraryItem) => i.source === 'hero' || i.source === 'video-draft' || i.source === 'reel';
+  const remove = async (i: LibraryItem) => {
+    if (removing) return;
+    const ok = await confirmDialog(i.source === 'hero' ? 'This removes the video from your library. Quarks already spent are not returned.' : 'This removes it and its files. This cannot be undone.', { title: `Delete "${i.title}"?`, confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
+    setRemoving(true); setRemoveError('');
+    try {
+      const r: any = i.source === 'hero' ? await heroVideoAPI.remove(i.id) : i.source === 'video-draft' ? await videoGenerationAPI.deleteDraft(i.id) : await draftsAPI.deleteDraft(i.id);
+      if (r && r.success === false) throw new Error(r.message || 'We could not delete this.');
+      setOpen(null); load(true);
+    } catch (e: any) {
+      setRemoveError(e?.message || 'We could not delete this. Please try again.');
+    } finally { setRemoving(false); }
   };
 
   return (
@@ -170,7 +189,16 @@ const Library: React.FC = () => {
             <div className="flex flex-wrap items-center gap-4">
               {open.mediaUrl && <a href={open.mediaUrl} download target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)] hover:underline"><Download className="w-4 h-4" />Download</a>}
               <GravityButton variant="ghost" onClick={() => goEdit(open)}>{open.status === 'draft' ? 'Edit' : 'Open'}</GravityButton>
+              {canRemove(open) && (
+                <button type="button" onClick={() => remove(open)} disabled={removing} className="ml-auto inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-coral-text)] disabled:opacity-60">
+                  {removing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}Delete
+                </button>
+              )}
             </div>
+            {removeError && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{removeError}</p>}
+            {open.source === 'hero' && open.heroSource && (
+              <GravityButton variant="ghost" onClick={() => { const o = open; setOpen(null); navigate('/reels/hero', { state: { tweak: { title: o.title, prompt: o.heroSource!.prompt, finish: o.finish, tweak: o.heroSource!.tweak } } }); }}>Make a new version from the prompt</GravityButton>
+            )}
             {open.source === 'hero' && open.mediaUrl && <HeroEdit key={`edit-${open.id}`} jobId={open.id} current={open.finish} onUpdated={(url) => { setOpen((o) => (o ? { ...o, mediaUrl: url } : o)); load(true); }} />}
             {open.source === 'hero' && open.mediaUrl && <HeroShare key={open.id} jobId={open.id} onPosted={() => load(true)} />}
           </div>

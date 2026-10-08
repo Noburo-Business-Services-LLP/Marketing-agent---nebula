@@ -10,6 +10,7 @@ import GenerationTimer from '../components/GenerationTimer';
 import HeroQuickStart from '../components/HeroQuickStart';
 import HeroShare from '../components/HeroShare';
 import HeroEdit from '../components/HeroEdit';
+import HeroTweak, { TweakSource } from '../components/HeroTweak';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 
 // Hero Studio: one premium 15-second clip built from the Reels wizard's story, cast and place,
@@ -115,7 +116,8 @@ html:not(.dark) .hero-studio .gravity-label:not([class*="gv-accent-text"]) { col
 const HeroVideoInner: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const incoming = (location.state || {}) as { brief?: unknown; style?: unknown; cta?: unknown };
+  const incoming = (location.state || {}) as { brief?: unknown; style?: unknown; cta?: unknown; tweak?: TweakSource };
+  const tweakSource = incoming.tweak && typeof incoming.tweak.prompt === 'string' ? incoming.tweak : null;
   const incomingCta = typeof incoming.cta === 'string' ? incoming.cta.slice(0, 60) : '';
   const incomingBrief = isBrief(incoming.brief) ? incoming.brief : null;
   // The wizard's chosen style (a slug) is the starting pick; the list from /styles validates it.
@@ -502,6 +504,11 @@ const HeroVideoInner: React.FC = () => {
               </a>
             )}
           </div>
+          {history.find((h) => h.jobId === jobId)?.prompt && (
+            <GravityButton variant="ghost" onClick={() => { const h = history.find((x) => x.jobId === jobId)!; navigate('/reels/hero', { state: { tweak: { title: h.title, prompt: h.prompt, finish: h.finish, tweak: h.tweak } } }); }}>
+              Make a new version from the prompt
+            </GravityButton>
+          )}
           <HeroEdit key={`edit-${jobId}`} jobId={jobId as string} current={history.find((h) => h.jobId === jobId)?.finish} onUpdated={(url) => { setVideoUrl(url); refreshHistory(); }} />
           <HeroShare key={jobId || 'job'} jobId={jobId as string} onPosted={refreshHistory} />
         </div>
@@ -555,6 +562,24 @@ const HeroVideoInner: React.FC = () => {
       </ul>
     </div>
   ) : null;
+
+  // ---- a new version of a finished video: just the prompt, then make it ----
+  if (tweakSource && !incomingBrief) {
+    return (
+      <div className="hero-studio max-w-[920px] mx-auto pb-16 pt-6 space-y-8">
+        <style>{LIGHT_FIX}</style>
+        <GravityHero
+          eyebrow="Hero Studio"
+          headline={<>Make a new <GravityEmphasis>version</GravityEmphasis></>}
+          subcopy="Edit the prompt and make another video from it."
+          className="!mb-0"
+        />
+        {!jobId && <HeroTweak source={tweakSource} onStarted={(id) => { setJobId(id); setJobStatus('queued'); startPolling(id); }} />}
+        {jobPanel}
+        {historyList}
+      </div>
+    );
+  }
 
   // ---- no brief: the quick flow (three crisp ideas), or an error loading the chosen one ----
   if (!incomingBrief || prepError) {
@@ -901,7 +926,7 @@ const HeroVideoInner: React.FC = () => {
 
         {/* 7 · Prompt */}
         <GravityPanel contentClassName="space-y-4">
-          <SectionTitle n={7} title="Prompt" />
+          <SectionTitle n={7} title="Prompt" aside="You can edit it before you make the video" />
           <div className="flex flex-wrap items-center gap-3">
             <GravityButton onClick={buildPrompt} disabled={planning || inFlight} variant={plan && !planStale ? 'ghost' : 'primary'}>
               {planning ? <><Loader2 className="w-4 h-4 animate-spin" />Building prompt…</> : plan ? 'Rebuild prompt' : 'Build prompt'}

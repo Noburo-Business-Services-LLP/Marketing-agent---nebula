@@ -44,3 +44,26 @@ test('caption: cut to safe length, hashtags cleaned, nothing usable gives null',
   assert.equal(normaliseCaption({ caption: '  ' }), null);
   assert.equal(normaliseCaption(null), null);
 });
+
+test('DELETE /jobs/:jobId hides a finished video, refuses one still being made, and 404s for others', async () => {
+  const { createHeroVideoRouter } = require('../routes/heroVideo');
+  const rows = { done: { status: 'completed' }, busy: { status: 'processing' } };
+  const updates = [];
+  const JobModel = {
+    findOne: (q) => ({ select: () => ({ lean: async () => (q.userId === 'u1' ? rows[q.jobId] || null : null) }) }),
+    updateOne: async (q, u) => { updates.push([q, u]); }
+  };
+  const r = createHeroVideoRouter({}, { JobModel });
+  const layer = r.stack.find((l) => l.route && l.route.path === '/jobs/:jobId' && l.route.methods.delete);
+  const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+  const call = async (user, jobId) => {
+    const res = { code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+    await handler({ user: { id: user }, params: { jobId } }, res);
+    return res;
+  };
+  assert.equal((await call('u1', 'done')).code, 200);
+  assert.deepEqual(updates[0][1], { $set: { 'metadata.deleted': true } });
+  assert.equal((await call('u1', 'busy')).code, 409);
+  assert.equal((await call('u2', 'done')).code, 404);
+  assert.equal(updates.length, 1);
+});

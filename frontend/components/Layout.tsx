@@ -136,8 +136,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   // Ad Campaigns, Influencer Portal and Competitors remain hidden from navigation; their routes are intact.
   const secondaryNav = [
     ...(staffEntry && !staffEntry.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
-    { path: '/idea-inbox',       label: 'Content ideas',     icon: Lightbulb },
-    { path: '/upload',           label: 'Upload and schedule', icon: UploadCloud },
     { path: '/blueprint',        label: 'Growth Blueprint',  icon: FileText },
     { path: '/brand-assets',      label: 'Brand assets',      icon: Palette },
     { path: '/connect-socials',   label: 'Connected accounts', icon: Link2 },

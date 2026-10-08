@@ -2376,43 +2376,14 @@ setCharacterAge(nextDraft?.characterAge || '');
           </div>
         )}
 
-        {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
-            toggle — the one tab control style the whole app should share. */}
-        <div className="overflow-x-auto">
-          <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
-            {[
-              { id: 'create', label: 'Create', icon: Plus },
-              { id: 'all', label: 'All AI Videos', icon: null },
-              { id: 'draft', label: 'Drafts', icon: null },
-              { id: 'created', label: 'Created', icon: null },
-              { id: 'scheduled', label: 'Scheduled', icon: null },
-              { id: 'posted', label: 'Posted', icon: null }
-            ].map((tab) => {
-              const active = tab.id === 'create' ? showWizard : (!showWizard && statusFilter === tab.id);
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => {
-                    if (tab.id === 'create') {
-                      resetWizard();
-                    } else {
-                      setShowWizard(false);
-                      setStatusFilter(tab.id as VideoStatusFilter);
-                      setSuccessMessage('');
-                    }
-                  }}
-                  className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors flex items-center gap-2 ${
-                    active ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
-                  }`}
-                >
-                  {Icon && <Icon className="w-3.5 h-3.5" />}
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+        {/* Finished videos, drafts, scheduled and posted all live in the Library now; this page is only for making a video. */}
+        <div className="flex flex-wrap items-center gap-3 text-[13px]">
+          <span className="inline-flex items-center gap-2 h-9 px-5 rounded-full bg-white/[0.10] text-[#F5F4F1] font-semibold border border-white/[0.06]">
+            <Plus className="w-3.5 h-3.5" />Create
+          </span>
+          <button type="button" onClick={() => navigate('/library')} className="font-semibold text-[#F5A623] underline underline-offset-2">
+            See your videos, drafts and scheduled posts in the Library
+          </button>
         </div>
 
         {!showWizard && (

@@ -3972,6 +3972,8 @@ export interface HeroJobSummary {
   publish?: { status: string; platforms?: string[]; at?: string };
   /** the finishing options the video was made with (end card, captions, logo) */
   finish?: any;
+  /** what a new version starts from */
+  tweak?: { aspectRatio?: string; refImageUrls?: string[]; references?: any[]; beatSheet?: any[]; dialogue?: string };
 }
 
 export interface HeroStyleOption { slug: string; label: string; group: string; blurb: string; coverUrl: string }
@@ -3979,6 +3981,11 @@ export interface HeroStyleOption { slug: string; label: string; group: string; b
 export const heroVideoAPI = {
   styles: async (): Promise<{ success: boolean; styles: HeroStyleOption[] }> => {
     return apiCall('/hero-video/styles', { method: 'GET' }, true);
+  },
+
+  // Remove a finished or failed Hero video from your library.
+  remove: async (jobId: string): Promise<{ success: boolean; message?: string }> => {
+    return apiCall(`/hero-video/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' }, true);
   },
 
   // Change the end card, captions or logo of a finished video without making a new one. No Quarks.

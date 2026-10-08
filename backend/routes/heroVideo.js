@@ -458,7 +458,7 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
     try {
       const userId = toUserId(req.user);
       const load = () => jobModel()
-        .find({ userId, 'metadata.kind': 'hero' })
+        .find({ userId, 'metadata.kind': 'hero', 'metadata.deleted': { $ne: true } })
         .sort({ createdAt: -1 })
         .limit(20)
         .lean();
@@ -488,6 +488,12 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
         if (j.metadata && j.metadata.publish) o.publish = j.metadata.publish;
         if (j.payload && j.payload.prompt) o.prompt = j.payload.prompt;
         if (j.status === 'completed' && j.payload && j.payload.finish) o.finish = j.payload.finish;
+        // What "make a new version" needs to start from the same prompt, references and story beats.
+        if (j.status === 'completed' && j.payload && j.payload.prompt) {
+          const t = {};
+          for (const k of ['aspectRatio', 'refImageUrls', 'references', 'beatSheet', 'dialogue']) if (j.payload[k] !== undefined) t[k] = j.payload[k];
+          if (Object.keys(t).length) o.tweak = t;
+        }
         return o;
       });
       return res.json({ success: true, jobs });
@@ -580,6 +586,21 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       return res.json({ success: true, ...out });
     } catch (err) {
       return fail(res, err, 'Failed to write caption');
+    }
+  });
+
+  // Remove a finished or failed video from your library. Quarks already spent are not returned.
+  router.delete('/jobs/:jobId', protect, heroWriteLimiter, async (req, res) => {
+    try {
+      const userId = toUserId(req.user);
+      const jobId = String(req.params.jobId);
+      const job = await jobModel().findOne({ userId, jobId, 'metadata.kind': 'hero' }).select('status').lean();
+      if (!job) return res.status(404).json({ success: false, message: 'Not found' });
+      if (ACTIVE.includes(job.status)) return res.status(409).json({ success: false, message: 'This video is still being made. You can remove it once it finishes.' });
+      await jobModel().updateOne({ userId, jobId }, { $set: { 'metadata.deleted': true } });
+      return res.json({ success: true });
+    } catch (err) {
+      return fail(res, err, 'Failed to remove video');
     }
   });
 

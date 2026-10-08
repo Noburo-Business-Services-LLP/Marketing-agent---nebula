@@ -14,10 +14,10 @@ function routes(r) {
   }));
 }
 
-test('router exposes the eleven routes with protect first', () => {
+test('router exposes the twelve routes with protect first', () => {
   const found = routes(router.router || router);
   const key = (r) => `${r.methods[0]} ${r.path}`;
-  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /concepts', 'post /generate', 'post /jobs/:jobId/caption', 'post /jobs/:jobId/publish', 'post /jobs/:jobId/refinish', 'post /plan']);
+  assert.deepStrictEqual(found.map(key).sort(), ['delete /jobs/:jobId', 'get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /concepts', 'post /generate', 'post /jobs/:jobId/caption', 'post /jobs/:jobId/publish', 'post /jobs/:jobId/refinish', 'post /plan']);
   for (const r of found) assert.strictEqual(r.names[0], 'protect', key(r));
   for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief' || x.path === '/concepts' || x.path === '/jobs/:jobId/publish' || x.path === '/jobs/:jobId/caption' || x.path === '/jobs/:jobId/refinish')) {
     assert.ok(r.names.includes('checkTrial'), key(r));
@@ -334,9 +334,9 @@ test('GET /jobs returns only whitelisted fields and filters by owner + kind', as
   const JobModel = { find(f) { seen = { filter: f }; const q = { sort(s) { seen.sort = s; return q; }, limit(n) { seen.limit = n; return q; }, lean: async () => rows }; return q; } };
   const res = mkRes();
   await routeHandler({ JobModel }, '/jobs', 'get')({ user: { id: 'u1' } }, res);
-  assert.deepStrictEqual(seen, { filter: { userId: 'u1', 'metadata.kind': 'hero' }, sort: { createdAt: -1 }, limit: 20 });
+  assert.deepStrictEqual(seen, { filter: { userId: 'u1', 'metadata.kind': 'hero', 'metadata.deleted': { $ne: true } }, sort: { createdAt: -1 }, limit: 20 });
   assert.deepStrictEqual(res.body.jobs, [
-    { jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', title: 'Hero video', prompt: 'P' },
+    { jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', title: 'Hero video', prompt: 'P', tweak: { refImageUrls: ['x'] } },
     { jobId: 'b', status: 'failed', createdAt: 'T0', title: 'Hero video' }
   ]);
   const text = JSON.stringify(res.body);

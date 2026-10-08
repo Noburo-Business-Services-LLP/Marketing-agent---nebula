@@ -3,7 +3,7 @@
  * card shape, so one page can browse, filter and open all of them. Pure functions only.
  */
 export type LibraryKind = 'image' | 'video';
-export type LibrarySource = 'post' | 'video-draft' | 'hero';
+export type LibrarySource = 'post' | 'reel' | 'video-draft' | 'hero';
 export type LibraryStatus = 'creating' | 'draft' | 'ready' | 'scheduled' | 'posted' | 'archived' | 'failed';
 
 export interface LibraryItem {
@@ -20,8 +20,12 @@ export interface LibraryItem {
   createdAt: number;
   /** the original post draft, kept so the editing sheet can open it; only for posts and images */
   raw?: any;
+  /** a step-by-step video job this draft belongs to, if any */
+  jobId?: string;
   /** Hero videos: the finishing options it was made with, for the edit panel */
   finish?: any;
+  /** Hero videos: the prompt and settings to start a new version from */
+  heroSource?: { prompt: string; tweak?: any };
 }
 
 const ms = (v: any): number => {
@@ -46,13 +50,17 @@ export function fromPostDraft(d: any): LibraryItem | null {
     s === 'processing' ? 'creating' : s === 'failed' ? 'failed' : s === 'scheduled' ? 'scheduled'
       : s === 'published' ? 'posted' : s === 'archived' ? 'archived' : s === 'completed' ? 'ready' : 'draft';
   const url = String(d.imageUrl || '');
-  const isVideo = VIDEO_FILE.test(url) || String(d.contentType || d.sourceType || '').toLowerCase() === 'reel';
+  const reelKind = ['reel', 'video'].includes(String(d.contentType || d.sourceType || '').toLowerCase());
+  const videoFile = VIDEO_FILE.test(url) ? url : String((d.creative && d.creative.videoUrl) || '');
+  const isVideo = reelKind || Boolean(videoFile);
+  const media = isVideo ? videoFile : url;
+  const jobId = d.generationProgress && d.generationProgress.jobId ? String(d.generationProgress.jobId) : undefined;
   return {
-    id: String(d._id), kind: isVideo ? 'video' : 'image', source: 'post',
+    id: String(d._id), kind: isVideo ? 'video' : 'image', source: isVideo ? 'reel' : 'post',
     title: text(d.title) || text(d.caption, 70) || 'Untitled post', status,
-    thumbnailUrl: isVideo ? stillFor(url) : url, mediaUrl: url,
+    thumbnailUrl: isVideo ? stillFor(media) : url, mediaUrl: media,
     caption: text(d.caption, 600), platforms: list(d.platforms), createdAt: ms(d.createdAt || d.updatedAt || d.scheduledDate),
-    raw: d,
+    raw: d, ...(jobId ? { jobId } : {}),
   };
 }
 
@@ -84,6 +92,7 @@ export function fromHeroJob(j: any): LibraryItem | null {
     thumbnailUrl: String(j.thumbnailUrl || stillFor(j.videoUrl) || ''), mediaUrl: String(j.videoUrl || ''),
     caption: '', platforms: list(j.publish && j.publish.platforms), createdAt: ms(j.createdAt),
     finish: j.finish,
+    ...(j.prompt ? { heroSource: { prompt: String(j.prompt), tweak: j.tweak } } : {}),
   };
 }
 
