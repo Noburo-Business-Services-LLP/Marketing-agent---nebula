@@ -11,7 +11,7 @@ const { generateChatResponse, generateChatSuggestions } = require('../services/g
 const { checkTrial, deductCredits } = require('../middleware/trialGuard');
 
 // Chat completion endpoint - uses Gemini AI with user context
-router.post('/message', optionalAuth, async (req, res) => {
+router.post('/message', protect, async (req, res) => {
   try {
     const { message, conversationHistory = [], currentPage = 'dashboard' } = req.body;
 
@@ -162,7 +162,7 @@ router.post('/message', optionalAuth, async (req, res) => {
 });
 
 // Quick suggestions endpoint - personalized based on business profile
-router.get('/suggestions', optionalAuth, async (req, res) => {
+router.get('/suggestions', protect, async (req, res) => {
   try {
     let businessProfile = null;
     

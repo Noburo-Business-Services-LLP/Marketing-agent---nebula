@@ -544,13 +544,14 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
 
-  const status = Number(err?.statusCode || err?.status || 500);
+  // A malformed id in a link or request is the caller's mistake, not a server fault.
+  const status = err?.name === 'CastError' ? 400 : Number(err?.statusCode || err?.status || 500);
   // The real message goes to the log only. Customers never see raw system errors.
   const message = status === 413
     ? 'That file or request is too large.'
     : status >= 500
       ? 'Something went wrong. Please try again.'
-      : String(err?.message || 'Request could not be completed.');
+      : err?.name === 'CastError' ? 'That request is not valid.' : String(err?.message || 'Request could not be completed.');
   const isApiRequest = req.path.startsWith('/api');
 
   console.error('Server Error:', {

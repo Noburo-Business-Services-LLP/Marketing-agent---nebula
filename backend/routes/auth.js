@@ -974,7 +974,12 @@ router.post('/login', [
     .normalizeEmail(),
   body('password')
     .notEmpty()
-    .withMessage('Password is required'),
+    .withMessage('Password is required')
+    .bail()
+    .isString()
+    .withMessage('Please enter your password')
+    .isLength({ max: 200 })
+    .withMessage('Please enter your password'),
   handleValidationErrors
 ], async (req, res) => {
   try {
