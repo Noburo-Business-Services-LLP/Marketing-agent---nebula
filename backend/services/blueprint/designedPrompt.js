@@ -24,8 +24,8 @@ function buildPagePrompt(page, style) {
   const p = page || {};
   const lines = (p.lines || []).map(clean).filter(Boolean);
   const textPart = lines.length
-    ? `TEXT TO PRINT (spell every character exactly as written, and print nothing else, no other words, numbers, names or logos):\n${lines.map((l, i) => `${i + 1}. "${l}"`).join('\n')}`
-    : 'Print only the heading. No other words or numbers.';
+    ? `TEXT TO PRINT (spell every character exactly as written. Print each line ONCE and nothing else: no other words, numbers, names or logos; no captions under icons, no labels on cards, no slogans, no decorative words. Icons and pictures carry no text):\n${lines.map((l, i) => `${i + 1}. "${l}"`).join('\n')}`
+    : 'Print only the heading. No other words or numbers, no captions, no labels.';
   const head = p.kind === 'cover'
     ? `COVER PAGE. The big headline is the business name "${clean(p.title)}", with the small label "${clean(p.kicker)}" above it.`
     : p.kind === 'closing'

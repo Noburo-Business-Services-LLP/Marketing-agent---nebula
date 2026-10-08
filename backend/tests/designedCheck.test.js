@@ -35,3 +35,45 @@ test('an invented price or count fails the page, a planned one and small day num
 test('a page with no planned lines passes on coverage', () => {
   assert.equal(matchTranscript([], 'anything').coverage, 1);
 });
+
+const { rejectionNote } = require('../services/blueprint/designedCheck');
+
+test('words that are not in the Blueprint fail the page (found in the real test run: "Affluent audience", "Trusted brand")', () => {
+  const lines = ['Your shop is known for honest prices on daily-use items', 'Customers ask most about steel and copper cookware'];
+  const transcript = [
+    'WHAT CAN BE CONFIRMED ABOUT YOUR BUSINESS TODAY', 'Where you are today',
+    'HOME GOODS', 'AFFLUENT AUDIENCE', 'TRUSTED BRAND', 'STEADY GROWTH',
+    'Your shop is known for honest prices on daily-use items', 'Customers ask most about steel and copper cookware',
+  ].join('\n');
+  const m = matchTranscript(lines, transcript, { allowed: ['Where you are today', 'What can be confirmed about your business today'] });
+  assert.equal(m.coverage, 1);
+  assert.ok(m.extraWords > 3);
+  assert.deepEqual(m.extraLines.sort(), ['AFFLUENT AUDIENCE', 'HOME GOODS', 'STEADY GROWTH', 'TRUSTED BRAND']);
+  assert.equal(pageAccepted(m), false);
+  assert.match(rejectionNote(m), /Words that are not in your Blueprint/);
+});
+
+test('the heading, the small label and the planned lines are not counted as extra', () => {
+  const m = matchTranscript(['Show one product in use every morning'], 'WHO YOU SPEAK TO\nAudience and positioning\nShow one product in use every morning', { allowed: ['Audience and positioning', 'Who you speak to'] });
+  assert.deepEqual(m.extraLines, []); assert.ok(pageAccepted(m));
+});
+
+test('a planned line printed twice fails the page (found in the real test run on page 4)', () => {
+  const line = 'Show one product in use every morning';
+  const m = matchTranscript([line], `${line}\nShow one product\nin use every morning\n${line}`);
+  assert.deepEqual(m.duplicates, [line]);
+  assert.equal(pageAccepted(m), false);
+  assert.match(rejectionNote(m), /twice/);
+});
+
+test('a line wrapped into pieces by the reader is not a duplicate and not extra', () => {
+  const line = 'Show one product in use every morning';
+  const m = matchTranscript([line], 'Show one product\nin use every\nmorning');
+  assert.deepEqual(m.duplicates, []); assert.deepEqual(m.extraLines, []); assert.ok(pageAccepted(m));
+});
+
+test('a stray word or two from reading noise is tolerated; numbers inside the heading are allowed', () => {
+  const m = matchTranscript(['Reply to every comment within a day'], 'Reply to every comment within a day\nNebula', { allowed: ['Your first 30 days'] });
+  assert.ok(m.extraWords <= 3); assert.ok(pageAccepted(m));
+  assert.deepEqual(matchTranscript([], 'Your first 30 days', { allowed: ['Your first 30 days'] }).invented, []);
+});

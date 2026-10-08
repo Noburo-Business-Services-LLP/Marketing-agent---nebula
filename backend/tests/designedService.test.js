@@ -51,6 +51,24 @@ function makeDeps(doc, over = {}) {
   return { deps, calls, queue };
 }
 
+// Each generated picture carries its page number in its colour, so the fake reader can return that page's own text.
+function pagedFakes(deck, calls, readFor) {
+  return {
+    generateImage: async (prompt) => {
+      calls.generate += 1;
+      const n = deck.find((p) => prompt.includes(`The page heading is "${p.title}"`) || (p.kind === 'cover' && prompt.includes('COVER PAGE')) || (p.kind === 'closing' && prompt.includes('CLOSING PAGE')))?.n || 1;
+      return { success: true, buffer: await sharp({ create: { width: 1024, height: 1536, channels: 3, background: { r: n * 15, g: 60, b: 60 } } }).png().toBuffer() };
+    },
+    readText: async (jpeg) => {
+      const { data } = await sharp(jpeg).raw().toBuffer({ resolveWithObject: true });
+      const n = Math.round(data[0] / 15);
+      const page = deck.find((p) => p.n === n);
+      return readFor(page, n);
+    },
+  };
+}
+const honest = (page) => [page.title, page.kicker, ...page.lines].join('\n');
+
 test('the price is derived from the verified image rate, not typed in', () => {
   const rate = PROVIDER_RATES.openai_image_high_portrait_per_image['gpt-image-1'];
   assert.equal(rate, 0.25);
@@ -91,8 +109,10 @@ test('no Quarks: nothing is queued and the edition is removed', async () => {
 test('a full run makes eleven pages and a PDF and keeps the single charge', async () => {
   const doc = completedDoc();
   const { buildDeck } = require('../services/blueprint/designedDeck');
-  doc.__echo = buildDeck(doc.result).flatMap((p) => [p.title, ...p.lines]).join('\n');
+  const deck = buildDeck(doc.result);
+  const calls0 = { generate: 0 };
   const { deps, calls, queue } = makeDeps(doc);
+  Object.assign(deps, pagedFakes(deck, calls, honest));
   const svc = createDesignedService(deps);
   await svc.start({ userId: 'u1', id: 'b1' });
   await queue[0]();
@@ -103,6 +123,36 @@ test('a full run makes eleven pages and a PDF and keeps the single charge', asyn
   assert.equal(calls.refund, 0);
   const view = publicDesigned(doc.designed);
   assert.equal(view.done, 11); assert.equal(view.pdfUrl, 'https://cdn/blueprint.pdf');
+  void calls0;
+});
+
+test('a page that keeps adding words that are not in the Blueprint becomes a plain page with a note', async () => {
+  const doc = completedDoc();
+  const { buildDeck } = require('../services/blueprint/designedDeck');
+  const deck = buildDeck(doc.result);
+  const { deps, calls, queue } = makeDeps(doc);
+  Object.assign(deps, pagedFakes(deck, calls, (page, n) => (n === 4 ? `${honest(page)}\nAFFLUENT AUDIENCE\nTRUSTED BRAND` : honest(page))));
+  const svc = createDesignedService(deps);
+  await svc.start({ userId: 'u1', id: 'b1' });
+  await queue[0]();
+  assert.equal(doc.designed.status, 'completed');
+  const bad = doc.designed.pages.find((p) => p.n === 4);
+  assert.equal(bad.status, 'fallback'); assert.equal(bad.attempts, 3);
+  assert.match(bad.note, /Words that are not in your Blueprint/);
+  assert.equal(doc.designed.pages.filter((p) => p.status === 'ok').length, 10);
+});
+
+test('a page that prints a line twice is tried again and then becomes a plain page', async () => {
+  const doc = completedDoc();
+  const { buildDeck } = require('../services/blueprint/designedDeck');
+  const deck = buildDeck(doc.result);
+  const { deps, calls, queue } = makeDeps(doc);
+  Object.assign(deps, pagedFakes(deck, calls, (page, n) => (n === 3 ? `${honest(page)}\n${page.lines[0]}` : honest(page))));
+  const svc = createDesignedService(deps);
+  await svc.start({ userId: 'u1', id: 'b1' });
+  await queue[0]();
+  const bad = doc.designed.pages.find((p) => p.n === 3);
+  assert.equal(bad.status, 'fallback'); assert.match(bad.note, /twice/);
 });
 
 test('a page that keeps failing the check becomes a plain page and the PDF still completes', async () => {
@@ -120,7 +170,7 @@ test('a page that keeps failing the check becomes a plain page and the PDF still
     readText: async (jpeg) => {
       const { data } = await sharp(jpeg).raw().toBuffer({ resolveWithObject: true });
       const n = Math.round(data[0] / 15);
-      return n === 3 ? 'unreadable' : deck.find((p) => p.n === n).lines.concat([deck.find((p) => p.n === n).title]).join('\n');
+      return n === 3 ? 'unreadable' : deck.find((p) => p.n === n).lines.concat([deck.find((p) => p.n === n).title, deck.find((p) => p.n === n).kicker]).join('\n');
     },
   });
   const svc = createDesignedService(deps);

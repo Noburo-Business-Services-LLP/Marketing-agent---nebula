@@ -5,7 +5,7 @@
 const { QUARK_COSTS } = require('../../config/apiCosts');
 const { buildDeck } = require('./designedDeck');
 const { buildStyleSpec, buildPagePrompt } = require('./designedPrompt');
-const { matchTranscript, pageAccepted } = require('./designedCheck');
+const { matchTranscript, pageAccepted, rejectionNote } = require('./designedCheck');
 
 const ACTION = 'blueprint_pdf';
 const MAX_ATTEMPTS = 3;          // the first image and up to two regenerations
@@ -152,13 +152,13 @@ function createDesignedService(depsIn) {
       const sharp = require('sharp');
       const small = await sharp(gen.buffer).jpeg({ quality: 82 }).toBuffer();
       const transcript = await deps.readText(small);
-      const m = matchTranscript(page.lines, transcript);
+      const m = matchTranscript(page.lines, transcript, { allowed: [page.title, page.kicker] });
       // A cover or closing page with no planned lines is accepted when the model produced an image at all.
       if (pageAccepted(m) && (transcript || !page.lines.length)) {
         const finished = await composePage({ image: gen.buffer, logo, n: page.n, total: deck.length, illustrative: page.kind !== 'closing' });
         return { status: 'ok', attempts, buffer: finished, note: '' };
       }
-      lastNote = m.invented.length ? 'A number that is not in your Blueprint appeared.' : 'Some of the text was not readable.';
+      lastNote = rejectionNote(m);
     }
     const plain = await fallbackPage({ page, colours, logo, n: page.n, total: deck.length });
     return { status: 'fallback', attempts, buffer: plain, note: lastNote };
