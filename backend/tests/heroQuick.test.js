@@ -61,3 +61,23 @@ test('POST /concepts: refuses a missing idea, writes ideas, never charges', asyn
   assert.equal(ok.body.concepts[0].brief.quick, true);
   assert.equal(calls[0][0], 'hero_quick.concepts');
 });
+
+test('POST /concepts with mode asis keeps the client idea: one idea back, faithful instructions, long idea allowed', async () => {
+  const { createHeroVideoRouter } = require('../routes/heroVideo');
+  const seen = [];
+  const r = createHeroVideoRouter({
+    loadBrand: async () => ({ name: 'Nebulaa' }),
+    buildPrompt: async (_u, id, vars) => { seen.push(vars); return 'P'; },
+    callTextLLM: async () => ({ concepts: [good('Mine'), good('Extra'), good('Extra 2')] }),
+    parseGeminiJSON: (x) => x
+  });
+  const layer = r.stack.find((l) => l.route && l.route.path === '/concepts');
+  const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+  const res = { code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+  await handler({ user: { id: 'u1' }, body: { idea: 'A long idea. '.repeat(100), mode: 'asis' } }, res);
+  assert.equal(res.code, 200);
+  assert.equal(res.body.concepts.length, 1);
+  assert.match(seen[0].task, /faithful/);
+  assert.match(seen[0].countRule, /exactly one/i);
+  assert.ok(seen[0].idea.length > 600);
+});

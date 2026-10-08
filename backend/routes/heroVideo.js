@@ -353,13 +353,14 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
   router.post('/concepts', protect, checkTrial, heroWriteLimiter, async (req, res) => {
     try {
       const body = req.body || {};
-      const idea = clip(body.idea, 600);
+      const idea = clip(body.idea, 2000);
       if (idea.length < 5) return res.status(400).json({ success: false, message: 'Tell us in a sentence or two what the video is about.' });
       const styleKey = body.style == null || body.style === '' ? DEFAULT_STYLE : body.style;
       if (!isHeroStyle(styleKey)) return res.status(400).json({ success: false, message: 'Choose one of the listed video styles.' });
       const dialogueMode = body.dialogue == null || body.dialogue === '' ? 'little' : body.dialogue;
       if (!isDialogueMode(dialogueMode)) return res.status(400).json({ success: false, message: 'Choose how much speech you want.' });
       const lookNote = clip(body.lookNote, 240);
+      const asIs = body.mode === 'asis';
       const aspectRatio = body.aspectRatio == null || body.aspectRatio === '' ? '9:16' : body.aspectRatio;
       if (!ASPECTS.includes(aspectRatio)) return res.status(400).json({ success: false, message: `aspectRatio must be one of ${ASPECTS.join(', ')}` });
       const language = clip(body.language, 40) || 'English';
@@ -370,6 +371,12 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
       const prompt = await planDeps.buildPrompt(userId, 'hero_quick.concepts', {
         brandContextBlock: brandContextFrom(brand),
         idea,
+        task: asIs
+          ? "Write ONE idea that stays faithful to the client's own idea below: keep its story, people, setting, mood and message, and tighten it so it fits 15 seconds, dropping only what cannot fit"
+          : 'Write THREE different ideas',
+        countRule: asIs
+          ? "Return exactly one idea. Do not change the client's concept or invent a new one; shorten and simplify it."
+          : 'The three ideas must differ in situation and emotion.',
         styleName: st.label,
         styleRules: st.blurb,
         lookNote: lookNote || 'None given; choose what suits the style and the brand.',
@@ -378,14 +385,16 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
         ctaText: cta ? `"${cta}"` : 'one short, honest call to action that fits the brand',
         brandName: clip(brand.name, 80) || 'the brand'
       });
+      const want = asIs ? 1 : 3;
       let concepts = [];
-      for (let attempt = 1; attempt <= 2 && concepts.length < 3; attempt++) {
+      for (let attempt = 1; attempt <= 2 && concepts.length < want; attempt++) {
         const raw = await planDeps.callTextLLM(prompt, { jsonMode: true, maxTokens: 2500 });
         let parsed = null;
         try { parsed = planDeps.parseGeminiJSON(raw); } catch (_) { parsed = null; }
         const got = normaliseQuickConcepts(parsed, dialogueMode);
         if (got.length > concepts.length) concepts = got;
       }
+      concepts = concepts.slice(0, want);
       if (!concepts.length) return res.status(502).json({ success: false, message: 'We could not come up with ideas this time. Please try again.' });
       return res.json({
         success: true,

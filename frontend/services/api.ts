@@ -3997,7 +3997,7 @@ export const heroVideoAPI = {
   },
 
   // Quick flow: three crisp 15-second ideas, each with a ready brief. No charge.
-  concepts: async (payload: { idea: string; style?: string; dialogue?: 'none' | 'little' | 'full'; lookNote?: string; language?: string; aspectRatio?: HeroAspectRatio; ctaText?: string }): Promise<{
+  concepts: async (payload: { idea: string; mode?: 'three' | 'asis'; style?: string; dialogue?: 'none' | 'little' | 'full'; lookNote?: string; language?: string; aspectRatio?: HeroAspectRatio; ctaText?: string }): Promise<{
     success: boolean; style?: string; message?: string;
     concepts?: Array<{ title: string; emotion: string; hook: string; beats: string[]; dialogue: string[]; cta: string; look: string; brief: HeroBrief }>;
   }> => {

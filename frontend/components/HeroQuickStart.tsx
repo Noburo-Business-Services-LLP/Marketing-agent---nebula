@@ -51,14 +51,15 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [styleSlug, setStyleSlug] = useState('');
 
-  const write = async () => {
+  const write = async (mode: 'three' | 'asis' = 'three') => {
     if (busy) return;
-    if (idea.trim().length < 5) { setError('Tell us in a sentence or two what the video is about.'); return; }
+    if (idea.trim().length < 5) { setError('Write your idea, a sentence or a full concept, or pull one from your content plan.'); return; }
     setBusy(true); setError(''); setConcepts([]);
     try {
       const label = CONTENT_LANGUAGES.find((l) => l.value === language)?.label || 'English';
-      const r = await heroVideoAPI.concepts({ idea: idea.trim(), style, dialogue, lookNote: lookNote.trim() || undefined, language: label, aspectRatio: aspect, ctaText: cta.trim() || undefined });
+      const r = await heroVideoAPI.concepts({ idea: idea.trim(), mode, style, dialogue, lookNote: lookNote.trim() || undefined, language: label, aspectRatio: aspect, ctaText: cta.trim() || undefined });
       if (!r?.success || !r.concepts?.length) throw new Error(r?.message || 'We could not come up with ideas this time. Please try again.');
+      if (mode === 'asis') { onPick(r.concepts[0].brief, r.style || style, r.concepts[0].cta || cta.trim()); return; }
       setConcepts(r.concepts);
       setStyleSlug(r.style || '');
     } catch (e: any) {
@@ -88,7 +89,7 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
               </button>
             </div>
             {fromPlan && <p className="text-[12.5px] text-[var(--gv-text-tertiary)] mb-1.5">Loaded from your plan: {fromPlan}. Edit it if you like.</p>}
-            <textarea id="hq-idea" rows={3} maxLength={600} value={idea} onChange={(e) => setIdea(e.target.value)} className={field}
+            <textarea id="hq-idea" rows={3} maxLength={2000} value={idea} onChange={(e) => setIdea(e.target.value)} className={field}
               placeholder="For example: launching our new festive collection, or why small shops should plan a month of posts in one sitting" />
           </div>
           <div>
@@ -129,8 +130,11 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <GravityButton onClick={write} disabled={busy}>
-              {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Writing ideas…</>) : concepts.length ? 'Write new ideas' : 'Show me three ideas'}
+            <GravityButton onClick={() => write('asis')} disabled={busy}>
+              {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Working…</>) : 'Bring my idea to life'}
+            </GravityButton>
+            <GravityButton variant="ghost" onClick={() => write('three')} disabled={busy}>
+              {concepts.length ? 'Show me three new ideas' : 'Show me three ideas'}
             </GravityButton>
             <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Free. Nothing is charged until you generate.</span>
           </div>
