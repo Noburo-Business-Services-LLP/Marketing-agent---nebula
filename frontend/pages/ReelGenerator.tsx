@@ -196,7 +196,7 @@ const ReelGenerator: React.FC = () => {
   const [videoDrafts, setVideoDrafts] = useState<any[]>([]);
   const [reelDraftsList, setReelDraftsList] = useState<Draft[]>([]);
   const [statusFilter, setStatusFilter] = useState<VideoStatusFilter>('all');
-  const [showWizard, setShowWizard] = useState(false);
+  const [showWizard, setShowWizard] = useState(true);
   const [deletingDraftId, setDeletingDraftId] = useState('');
   const [previewDraft, setPreviewDraft] = useState<any>(null);
 
@@ -473,67 +473,13 @@ const ReelGenerator: React.FC = () => {
   const [pendingSceneIndex, setPendingSceneIndex] = useState<number | null>(null);
   const [totalScenesForRun, setTotalScenesForRun] = useState<number>(0);
 
-  // Hydrate persisted workspace once on mount (concepts, characters,
-  // cast image). Placed here so all referenced state vars are defined.
+  // Opening Videos always starts a fresh, blank video. Unfinished work is already a draft
+  // (Drafts tab -> Edit reopens it where it stopped), so nothing from the last visit is restored here.
+  // The old browser copy of the previous workspace is cleared so it can never leak into a new video.
   useEffect(() => {
     if (workspaceHydratedRef.current) return;
     workspaceHydratedRef.current = true;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      const savedBrief = String(saved.description || '').trim();
-      if (savedBrief) setDescription(savedBrief);
-
-      // Concepts are derived from the brief, so they are only restored
-      // alongside it. Restoring them on their own left three concepts sitting
-      // above an empty brief with no way to replace them: the Generate button
-      // hides once concepts exist, and Regenerate is disabled while the brief
-      // is empty — a dead end you could only escape by clearing storage.
-      if (savedBrief && Array.isArray(saved.concepts) && saved.concepts.length) {
-        setConcepts(saved.concepts);
-        if (saved.conceptsRecommended) setConceptsRecommended(saved.conceptsRecommended);
-        if (saved.conceptsReason) setConceptsReason(saved.conceptsReason);
-        if (saved.acceptedConceptId) setAcceptedConceptId(saved.acceptedConceptId);
-        if (saved.acceptedConcept) setAcceptedConcept(saved.acceptedConcept);
-      }
-      if (Array.isArray(saved.generatedCharacters) && saved.generatedCharacters.length) {
-        setGeneratedCharacters(saved.generatedCharacters);
-      }
-      if (saved.castReferencePrompt) setCastReferencePrompt(saved.castReferencePrompt);
-      if (saved.castImageUrl) setCastImageUrl(saved.castImageUrl);
-      if (saved.castTweakPrompt) setCastTweakPrompt(saved.castTweakPrompt);
-      if (saved.acceptedCharacterId) setAcceptedCharacterId(saved.acceptedCharacterId);
-      // v2 Script + Scenes: story arc + full voiceover
-      if (saved.story && typeof saved.story === 'object') {
-        setStory({
-          hook: String(saved.story.hook || ''),
-          beginning: String(saved.story.beginning || ''),
-          emotionalProgression: String(saved.story.emotionalProgression || ''),
-          climax: String(saved.story.climax || ''),
-          brandReveal: String(saved.story.brandReveal || ''),
-          ending: String(saved.story.ending || ''),
-        });
-      }
-      if (Array.isArray(saved.scenes) && saved.scenes.length) setScenes(saved.scenes);
-      if (saved.promptText) setPromptText(saved.promptText);
-      if (saved.aspectRatio && ['9:16','16:9','1:1','4:5'].includes(saved.aspectRatio)) {
-        setAspectRatio(saved.aspectRatio as AspectRatio);
-      }
-      if (saved.languageCode && ['en','hi','ta','te','kn','ml'].includes(saved.languageCode)) {
-        setLanguageCode(saved.languageCode as VideoLang);
-      }
-      if (typeof saved.environmentEnabled === 'boolean') setEnvironmentEnabled(saved.environmentEnabled);
-      if (Array.isArray(saved.environmentRefs)) setEnvironmentRefs(saved.environmentRefs);
-      if (typeof saved.environmentNotes === 'string') setEnvironmentNotes(saved.environmentNotes);
-      if (saved.voiceGender && ['male','female'].includes(saved.voiceGender)) {
-        setVoiceGender(saved.voiceGender as 'male' | 'female');
-      }
-      if (typeof saved.selectedVoiceId === 'string') {
-        setSelectedVoiceId(saved.selectedVoiceId);
-      }
-    } catch (_) { /* corrupt entry — ignore */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    try { localStorage.removeItem(STORAGE_KEY); } catch (_) { /* private mode */ }
   }, []);
 
   // Save on every meaningful change. Batched by React so no thrashing.
@@ -755,32 +701,11 @@ const ReelGenerator: React.FC = () => {
   }, [step]);
 
   useEffect(() => {
-    // Resume last open draft after refresh.
-    //
-    // The stored id can outlive the draft it points at — deleting a draft
-    // never cleared it. Previously the failed load was swallowed and jobId
-    // was left set, so every later save 404'd and the wizard was stuck for
-    // good with no way to recover. A load failure must therefore clear the
-    // stored id and start clean.
+    // The last open draft is no longer resumed automatically; it lives in the Drafts tab.
     try {
-      const savedJobId = localStorage.getItem('nebula_ai_video_wizard_jobId') || '';
-      if (!savedJobId) return;
-      setShowWizard(true);
-      setJobId(savedJobId);
-      refreshDraft(savedJobId, { syncStep: true }).catch(() => {
-        try {
-          localStorage.removeItem('nebula_ai_video_wizard_jobId');
-          localStorage.removeItem('nebula_ai_video_wizard_step');
-        } catch (_) { }
-        setJobId('');
-        setDraft(null);
-        setStep(1);
-        setError('That draft is no longer available, so we started you on a new one.');
-      });
-    } catch (_) {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      localStorage.removeItem('nebula_ai_video_wizard_jobId');
+      localStorage.removeItem('nebula_ai_video_wizard_step');
+    } catch (_) { /* private mode */ }
   }, []);
 
   const deriveRawStepFromDraft = (d: any) => {
@@ -2214,34 +2139,57 @@ setCharacterAge(nextDraft?.characterAge || '');
     ));
   };
 
+  // Everything the last video built, cleared, so the next one starts blank.
+  const clearWizardState = () => {
+    setShowWizard(true);
+    setJobId('');
+    setDraft(null);
+    setDescription('');
+    setSelectedProductId('');
+    setInputImageData('');
+    setInputImageName('');
+    setPromptText('');
+    setScenes([]);
+    setGeneratedTracks(null);
+    setFinalAudioUrl('');
+    setFinalVideoUrl('');
+    setFinalOutputUrl('');
+    setThumbnailUrl('');
+    setCaption('');
+    setHashtagsText('');
+    setSelectedPlatforms([]);
+    setScheduleDate('');
+    setScheduleTime('');
+    setSuccessMessage('');
+    // Everything the last video built is cleared, so a new one really starts blank.
+    setConcepts([]);
+    setConceptsRecommended('');
+    setConceptsReason('');
+    setAcceptedConceptId('');
+    setAcceptedConcept(null);
+    setGeneratedCharacters([]);
+    setCastReferencePrompt('');
+    setCastImageUrl('');
+    setCastTweakPrompt('');
+    setAcceptedCharacterId('');
+    setStory(emptyStory);
+    setEnvironmentEnabled(false);
+    setEnvironmentRefs([]);
+    setEnvironmentNotes('');
+    setPickedIdea('');
+  };
+
   const resetWizard = (startNew = true) => {
     if (startNew) {
       setShowWizard(true);
-      setJobId('');
-      setDraft(null);
-      setDescription('');
-      setSelectedProductId('');
-      setInputImageData('');
-      setInputImageName('');
-      setPromptText('');
-      setScenes([]);
-      setGeneratedTracks(null);
-      setFinalAudioUrl('');
-      setFinalVideoUrl('');
-      setFinalOutputUrl('');
-      setThumbnailUrl('');
-      setCaption('');
-      setHashtagsText('');
-      setSelectedPlatforms([]);
-      setScheduleDate('');
-      setScheduleTime('');
-      setSuccessMessage('');
+      clearWizardState();
     }
     setStep(1);
     resetActiveJobState();
   };
 
   const openVideoDraft = async (id: string) => {
+    clearWizardState();
     setShowWizard(true);
     setJobId(id);
     await refreshDraft(id, { syncStep: true });
