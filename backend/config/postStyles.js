@@ -58,7 +58,7 @@ function buildStyleDirective(styleId, rawDetails, { language = 'English' } = {})
   if (d.address) lines.push(`Address: "${d.address}"`);
   if (d.hours) lines.push(`Opening hours: "${d.hours}"`);
   const textPart = lines.length
-    ? `TEXT TO SHOW ON THE DESIGN (spell every character exactly as written, in ${language} where it is words, and write nothing else):\n${lines.join('\n')}\nDo not invent any other words, numbers, prices, discounts, phone numbers or addresses.`
+    ? `TEXT TO SHOW ON THE DESIGN (spell every character exactly as written, in ${language} where it is words, and write nothing else). The words before each colon below only tell you what the text is for: never print those words themselves, print only what is inside the quotation marks, and add an icon (a phone, a map pin, a clock) beside contact lines instead of a label:\n${lines.join('\n')}\nDo not invent any other words, numbers, prices, discounts, phone numbers or addresses.`
     : `No exact text was supplied. Use at most a short headline of a few words in ${language} that fits the idea, and do not show any prices, phone numbers or addresses.`;
   return `DESIGN TREATMENT: this is a finished, Instagram-ready social media post design, not a plain photograph. ${style.layout}\n${textPart}\nThe artwork must look professionally designed, with a clear visual hierarchy, a limited colour palette that follows the brand colours, and text that is large, sharp and fully readable with no cut-off letters.`;
 }

@@ -4684,6 +4684,8 @@ async function generateCampaignImageNanoBananaCore(imageDescription, options = {
     // frame but not a designed still; a carousel wants shared palette,
     // lighting and composition language, not "the same clothing".
     previousSlideImage = null,
+    // A picture the person likes (from Instagram or Pinterest): match its layout, mood and typography, never its brand or text.
+    styleReferenceImage = null,
     productReferenceImage = null,
     // Several products can feature in one creative (a bundle, a range, a
     // comparison). The single productReferenceImage above stays for callers
@@ -4983,6 +4985,7 @@ Treat this as an image editing task where the original person must remain identi
     // Prepared separately so one unreadable product image cannot take the
     // whole batch down with it — prepareInlineImage already returns null on
     // failure, and those are dropped here.
+    const styleRefInline = styleReferenceImage ? await prepareInlineImage(styleReferenceImage, 'style reference image') : null;
     const extraProductInline = (await Promise.all(
       extraProductImages.map((url, i) => prepareInlineImage(url, `product reference image ${i + 2}`))
     )).filter((img) => img?.data);
@@ -5027,6 +5030,11 @@ IMPORTANT: If an ENVIRONMENT REFERENCE image is also attached (see notes below),
 If it contains people, keep their exact identity, clothing, and props consistent in this next frame.
 If it is a backdrop / interior only, match its lighting palette and material vocabulary in this next frame.
 Do NOT invent new people not visible in earlier scenes.`);
+    }
+
+    if (styleRefInline?.data) {
+      parts.push({ inlineData: { mimeType: styleRefInline.mimeType || 'image/png', data: styleRefInline.data } });
+      referenceNotes.push(`Image ${parts.length} is a STYLE REFERENCE the client likes. Recreate its layout, composition, colour mood, lighting and the feel of its typography for this brand and idea. Do NOT copy its logo, brand name, products, people, prices, phone numbers or any wording; every word and detail in this design comes from the brief and the exact text given below.`);
     }
 
     if (previousSlideInline?.data) {

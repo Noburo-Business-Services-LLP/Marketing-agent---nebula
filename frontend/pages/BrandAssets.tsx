@@ -27,6 +27,7 @@ import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logo
 // this file ~980, and one 2,100-line component would be a poor edit surface.
 import InventoryPanel from './Inventory';
 import EnvironmentPanel from './EnvironmentAssets';
+import FramesManager from '../components/FramesManager';
 import {
   GravityHero,
   GravityEmphasis,
@@ -190,10 +191,10 @@ const BrandAssets: React.FC = () => {
 
   // Brand Assets is the single home for brand material: identity, what the
   // business offers, the space it operates in, and how it writes.
-  type BrandTab = 'brand' | 'products' | 'environment' | 'voice';
+  type BrandTab = 'brand' | 'products' | 'environment' | 'frames' | 'voice';
   const [activeTab, setActiveTab] = useState<BrandTab>(() => {
     const t = new URLSearchParams(window.location.hash.split('?')[1] || '').get('tab');
-    return (['brand', 'products', 'environment', 'voice'] as const).includes(t as BrandTab) ? (t as BrandTab) : 'brand';
+    return (['brand', 'products', 'environment', 'frames', 'voice'] as const).includes(t as BrandTab) ? (t as BrandTab) : 'brand';
   });
 
   const isDarkMode = document.documentElement.classList.contains('dark');
@@ -687,6 +688,7 @@ const BrandAssets: React.FC = () => {
               { id: 'brand', label: 'Brand' },
               { id: 'products', label: 'Products and services' },
               { id: 'environment', label: 'Environment' },
+              { id: 'frames', label: 'Headers and footers' },
               { id: 'voice', label: 'Voice' },
             ] as const).map((t) => (
               <button
@@ -1109,6 +1111,8 @@ const BrandAssets: React.FC = () => {
         {activeTab === 'products' && <InventoryPanel embedded />}
 
         {activeTab === 'environment' && <EnvironmentPanel />}
+
+        {activeTab === 'frames' && <FramesManager logoUrl={primaryLogo?.url} logoPosition={primaryLogo?.defaultPosition} />}
 
         {activeTab === 'voice' && (
         <section className={`rounded-2xl border p-5 border-white/[0.06] bg-white/[0.02]`}>

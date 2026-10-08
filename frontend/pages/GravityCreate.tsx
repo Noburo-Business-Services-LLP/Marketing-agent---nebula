@@ -8,6 +8,8 @@ import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
 import { CONTENT_LANGUAGES } from '../constants/languages';
 import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
+import PostDesignPanel from '../components/PostDesignPanel';
+import { DEFAULT_DESIGN, PostDesign, designRequestFields } from '../utils/postDesign';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
@@ -217,6 +219,8 @@ const GravityCreate: React.FC = () => {
   const [logos, setLogos] = useState<Array<{ id: string; url: string; name: string; defaultPosition: LogoGridPosition }>>([]);
   const [logoPosition, setLogoPosition] = useState<LogoGridPosition>('bottom-right');
   const [selectedLogo, setSelectedLogo] = useState<string>('');
+  // The look of the post: style, exact text, a picture to copy, saved header and footer.
+  const [design, setDesign] = useState<PostDesign>(DEFAULT_DESIGN);
   const [captionBusy, setCaptionBusy] = useState<string>('');
   const [editingCaption, setEditingCaption] = useState<string>('');
   const [captionDraft, setCaptionDraft] = useState<string>('');
@@ -592,6 +596,7 @@ const GravityCreate: React.FC = () => {
       // logo") lets generation do it once, correctly, in one pass.
       logoUrl: selectedLogo,
       logoPosition: selectedLogo ? logoPosition : undefined,
+      ...designRequestFields(design),
     });
     if (res?.draft) {
       setResults([res.draft]);
@@ -669,6 +674,7 @@ const GravityCreate: React.FC = () => {
         contentPillar: ideaContext.contentPillar,
         contentType: 'carousel',
         objective: ideaContext.objective,
+        ...designRequestFields(design),
       }),
     });
     if (!response.ok) throw new Error(`The server returned an error (${response.status}).`);
@@ -758,6 +764,7 @@ const GravityCreate: React.FC = () => {
       language: languageValueFromLabel(language),
       aspectRatio: backendAspect,
       logoPosition: selectedLogo ? logoPosition : undefined,
+      ...designRequestFields(design),
       // No keyMessages. The brief already travels as campaignDescription
       // above; sending it here as well presented it to the model as a
       // MANDATORY CONTENT STRUCTURE — a template to reproduce exactly, under
@@ -1321,6 +1328,17 @@ const GravityCreate: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+
+        <div className="mt-6 pt-6 border-t border-[var(--gv-border-subtle)]">
+          <PostDesignPanel
+            design={design}
+            onChange={setDesign}
+            mode={mode === 'campaign' ? 'campaign' : mode === 'carousel' ? 'carousel' : 'single'}
+            aspect={backendAspect}
+            logoUrl={selectedLogo || undefined}
+            logoPosition={logoPosition}
+          />
         </div>
       </div>
       )}

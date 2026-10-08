@@ -3199,6 +3199,17 @@ export const brandAssetsAPI = {
     );
   },
 
+  // Brand headers and footers laid over the top and bottom of a post
+  getFrames: async (): Promise<{ success: boolean; specs: Record<'header' | 'footer', { width: number; height: number }>; headers: any[]; footers: any[] }> => {
+    return await apiCall<any>('/brand-assets/frames', {}, true);
+  },
+  addFrame: async (data: { kind: 'header' | 'footer'; imageData: string; name: string; position?: 'north' | 'centre' | 'south'; makeDefault?: boolean }): Promise<any> => {
+    return await apiCall<any>('/brand-assets/frames', { method: 'POST', body: JSON.stringify(data) }, true);
+  },
+  setDefaultFrame: async (id: string): Promise<any> => {
+    return await apiCall<any>(`/brand-assets/frames/${id}/default`, { method: 'PUT' }, true);
+  },
+
   // Re-read the website and bring the saved brand profile in line with Settings (free)
   refreshBrand: async (): Promise<{ success: boolean; changed: string[]; siteRead: boolean; hasWebsite: boolean }> => {
     return await apiCall<any>('/brand-assets/refresh', { method: 'POST' }, true);

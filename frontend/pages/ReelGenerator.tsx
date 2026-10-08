@@ -3605,7 +3605,8 @@ setCharacterAge(nextDraft?.characterAge || '');
                       >
                         <div className="relative">
                           <img
-                            src={`/assets/video-styles/${s.slug}.svg`}
+                            src={`/assets/video-styles/${s.slug}.jpg`}
+                            onError={(e) => { const img = e.currentTarget; if (!img.src.endsWith('.svg')) img.src = `/assets/video-styles/${s.slug}.svg`; }}
                             alt=""
                             loading="lazy"
                             className={`w-full aspect-video object-cover transition-transform duration-300 ${

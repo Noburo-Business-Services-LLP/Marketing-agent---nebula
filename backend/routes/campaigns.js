@@ -1543,8 +1543,10 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       postStyle: postStyleIn,
       postDetails: postDetailsIn,
       headerUrl: headerUrlIn,
-      footerUrl: footerUrlIn
+      footerUrl: footerUrlIn,
+      referenceImage: referenceImageIn
     } = req.body;
+    const styleReference = typeof referenceImageIn === 'string' && /^data:image\/(png|jpe?g|webp);base64,/i.test(referenceImageIn) && referenceImageIn.length < 7000000 ? referenceImageIn : undefined;
     const { isPostStyle: isDesignStyle, normalisePostDetails: normaliseDesignDetails } = require('../config/postStyles');
     const designStyle = isDesignStyle(postStyleIn) && postStyleIn !== 'plain' ? postStyleIn : undefined;
     const designDetailsAll = normaliseDesignDetails(postDetailsIn);
@@ -2241,7 +2243,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           postStyle: designStyle,
           postDetails: designStyle ? designDetails : undefined,
           headerUrl: designHeader,
-          footerUrl: designFooter
+          footerUrl: designFooter,
+          styleReferenceImage: styleReference
         });
         
         // The failure reason used to be dropped entirely — a dead card in the

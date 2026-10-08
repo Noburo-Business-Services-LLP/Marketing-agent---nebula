@@ -73,8 +73,10 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       postStyle: postStyleIn,
       postDetails: postDetailsIn,
       headerUrl: headerUrlIn,
-      footerUrl: footerUrlIn
+      footerUrl: footerUrlIn,
+      referenceImage: referenceImageIn
     } = req.body || {};
+    const styleReference = typeof referenceImageIn === 'string' && /^data:image\/(png|jpe?g|webp);base64,/i.test(referenceImageIn) && referenceImageIn.length < 7000000 ? referenceImageIn : undefined;
     const { isPostStyle, normalisePostDetails } = require('../config/postStyles');
     const designStyle = isPostStyle(postStyleIn) && postStyleIn !== 'plain' ? postStyleIn : undefined;
     const designDetails = normalisePostDetails(postDetailsIn);
@@ -258,7 +260,8 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           postStyle: designStyle,
           postDetails: designStyle ? slideDetails(i, plan.slides.length) : undefined,
           headerUrl: designHeader,
-          footerUrl: designFooter
+          footerUrl: designFooter,
+          styleReferenceImage: styleReference
         });
 
         // Image generation falls back to an inline base64 data URI when the

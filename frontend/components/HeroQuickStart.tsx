@@ -14,7 +14,7 @@ const DIALOGUE: { value: 'none' | 'little' | 'full'; label: string }[] = [
   { value: 'full', label: 'Let them talk' },
 ];
 const FALLBACK_STYLES = [{ slug: 'cinematic-commercial', label: 'Cinematic Commercial', blurb: 'Filmic grade, shallow depth, dramatic light' }];
-type StyleCard = { slug: string; label: string; blurb: string };
+type StyleCard = { slug: string; label: string; blurb: string; coverUrl?: string };
 const ASPECTS: { value: '9:16' | '16:9' | '1:1'; label: string }[] = [
   { value: '9:16', label: 'Vertical (Reels, Shorts)' },
   { value: '1:1', label: 'Square' },
@@ -98,6 +98,7 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
               {styles.map((s) => (
                 <button key={s.slug} type="button" onClick={() => setStyle(s.slug)} aria-pressed={style === s.slug}
                   className={`text-left rounded-xl border px-3.5 py-2.5 ${style === s.slug ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)]'}`}>
+                  {s.coverUrl && <img src={s.coverUrl} alt="" loading="lazy" className="w-full aspect-video object-cover rounded-lg mb-2 bg-[var(--gv-surface-2)]" />}
                   <span className="block text-[13.5px] font-semibold text-[var(--gv-text-primary)]">{s.label}</span>
                   <span className="block text-[12px] text-[var(--gv-text-tertiary)] mt-0.5">{s.blurb}</span>
                 </button>
