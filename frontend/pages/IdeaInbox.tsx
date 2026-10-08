@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
+import { readFirstColumn } from '../utils/spreadsheet';
 import {
   ImageIcon,
   Link2,
@@ -157,14 +157,7 @@ const IdeaInbox: React.FC = () => {
     setBulkBusy(true);
     setError('');
     try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-      const items = rows
-        .map((row) => (Array.isArray(row) ? row[0] : row))
-        .map((v) => String(v ?? '').trim())
-        .filter(Boolean);
+      const items = await readFirstColumn(file);
 
       if (items.length === 0) {
         setError('No text was found in the first column of that file.');
@@ -306,7 +299,7 @@ const IdeaInbox: React.FC = () => {
             <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-semibold border border-white/[0.10] text-white/70 hover:bg-white/[0.04] cursor-pointer">
               {bulkBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
               Upload file
-              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={bulkBusy} />
+              <input type="file" accept=".xlsx,.csv" className="hidden" onChange={handleFileUpload} disabled={bulkBusy} />
             </label>
             <button
               onClick={() => setBulkOpen((v) => !v)}

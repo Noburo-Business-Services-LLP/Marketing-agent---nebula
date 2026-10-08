@@ -4,7 +4,7 @@ import { ContentCalendar, ContentCalendarItem } from '../types';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import * as XLSX from 'xlsx';
+import { downloadXlsx } from '../utils/spreadsheet';
 
 interface StrategyDocumentViewProps {
   calendar: ContentCalendar;
@@ -73,9 +73,8 @@ const StrategyDocumentView: React.FC<StrategyDocumentViewProps> = ({ calendar, o
     }
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     try {
-      const wb = XLSX.utils.book_new();
       const wsData: any[][] = [];
       
       // SECTION 1: Overview
@@ -119,10 +118,7 @@ const StrategyDocumentView: React.FC<StrategyDocumentViewProps> = ({ calendar, o
         });
       });
 
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      XLSX.utils.book_append_sheet(wb, ws, 'Strategy Plan');
-
-      XLSX.writeFile(wb, `Nebulaa_Strategy_${calendar.month}.xlsx`);
+      await downloadXlsx(wsData, 'Strategy Plan', `Nebulaa_Strategy_${calendar.month}.xlsx`);
     } catch (error) {
       console.error('Excel Export Error', error);
       alert('Failed to generate Excel file');
