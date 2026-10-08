@@ -77,3 +77,19 @@ test('a stray word or two from reading noise is tolerated; numbers inside the he
   assert.ok(m.extraWords <= 3); assert.ok(pageAccepted(m));
   assert.deepEqual(matchTranscript([], 'Your first 30 days', { allowed: ['Your first 30 days'] }).invented, []);
 });
+
+test('a small percentage that was not planned is invented (found in the real run: "15% OFF")', () => {
+  const m = matchTranscript(['Show one product in use every morning'], 'Show one product in use every morning\n15% OFF');
+  assert.deepEqual(m.invented, ['15']); assert.equal(pageAccepted(m), false);
+  assert.deepEqual(matchTranscript(['Save 15% on the first order'], 'Save 15% on the first order').invented, []);
+});
+
+test('a misspelled small label fails the page (found in the second real run: "What he competitors you named")', () => {
+  const heading = ['Competitor read', 'What the competitors you named say about themselves.'];
+  const bad = matchTranscript([], 'What he competitors you named say about themselves\nCompetitor read', { allowed: heading, headings: heading });
+  assert.deepEqual(bad.headingWordsMissing, ['the']);
+  assert.equal(pageAccepted(bad), false);
+  assert.match(rejectionNote(bad), /misspelled/);
+  const good = matchTranscript([], 'What the competitors you named say about themselves\nCompetitor read', { allowed: heading, headings: heading });
+  assert.deepEqual(good.headingWordsMissing, []); assert.ok(pageAccepted(good));
+});

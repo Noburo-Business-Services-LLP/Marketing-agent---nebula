@@ -152,7 +152,7 @@ function createDesignedService(depsIn) {
       const sharp = require('sharp');
       const small = await sharp(gen.buffer).jpeg({ quality: 82 }).toBuffer();
       const transcript = await deps.readText(small);
-      const m = matchTranscript(page.lines, transcript, { allowed: [page.title, page.kicker] });
+      const m = matchTranscript(page.lines, transcript, { allowed: [page.title, page.kicker], headings: [page.title, page.kicker] });
       // A cover or closing page with no planned lines is accepted when the model produced an image at all.
       if (pageAccepted(m) && (transcript || !page.lines.length)) {
         const finished = await composePage({ image: gen.buffer, logo, n: page.n, total: deck.length, illustrative: page.kind !== 'closing' });

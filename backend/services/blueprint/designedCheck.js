@@ -18,7 +18,7 @@ const MAX_EXTRA_WORDS = 3;        // a page may carry at most this many unplanne
  * `allowed` is other text the page is meant to carry (the heading and the small label); it is not a planned line,
  * but it is not "extra" either.
  */
-function matchTranscript(expectedLines, transcript, { minLineMatch = 0.8, allowed = [] } = {}) {
+function matchTranscript(expectedLines, transcript, { minLineMatch = 0.8, allowed = [], headings = [] } = {}) {
   const expected = (expectedLines || []).map((l) => String(l || '')).filter((l) => norm(l));
   const got = new Set(tokens(transcript));
   const missing = [];
@@ -29,7 +29,14 @@ function matchTranscript(expectedLines, transcript, { minLineMatch = 0.8, allowe
     if (t.length && hit / t.length >= minLineMatch) found += 1; else missing.push(line);
   }
   const allowedNumbers = new Set(numberTokens([...expected, ...allowed].join(' ')));
-  const invented = Array.from(new Set(numberTokens(transcript))).filter((n) => !allowedNumbers.has(n) && !SMALL_OK(n));
+  // A small number is fine as a day or a count, but never as a percentage: "15% off" must have been planned.
+  const percentOf = (txt) => (String(txt || '').match(/\d[\d,.]*\s*%/g) || []).map((x) => x.replace(/[^\d]/g, ''));
+  const plannedPercents = new Set(percentOf([...expected, ...allowed].join(' ')));
+  const inventedPercents = percentOf(transcript).filter((n) => !plannedPercents.has(n));
+  const invented = Array.from(new Set([
+    ...numberTokens(transcript).filter((n) => !allowedNumbers.has(n) && !SMALL_OK(n)),
+    ...inventedPercents,
+  ]));
   const coverage = expected.length ? found / expected.length : 1;
 
   // Text that is not ours: lines the reader found that are not made of planned or allowed words.
@@ -51,7 +58,9 @@ function matchTranscript(expectedLines, transcript, { minLineMatch = 0.8, allowe
     const copies = readLines.filter((r) => { const rt = new Set(tokens(r)); return t.filter((w) => rt.has(w)).length / t.length >= minLineMatch; }).length;
     if (copies >= 2) duplicates.push(line);
   }
-  return { coverage, missing, invented, extraLines, extraWords, duplicates };
+  // The heading and the small label must be spelled exactly: every word of them has to be readable on the page.
+  const headingWordsMissing = Array.from(new Set(headings.flatMap(tokens))).filter((w) => !got.has(w));
+  return { coverage, missing, invented, extraLines, extraWords, duplicates, headingWordsMissing };
 }
 
 /**
@@ -62,7 +71,8 @@ function pageAccepted(match, { minCoverage = 0.75 } = {}) {
   return match.coverage >= minCoverage
     && match.invented.length === 0
     && (match.extraWords || 0) <= MAX_EXTRA_WORDS
-    && (match.duplicates || []).length === 0;
+    && (match.duplicates || []).length === 0
+    && (match.headingWordsMissing || []).length === 0;
 }
 
 /** One plain sentence for the page note, in the order that matters most. */
@@ -70,6 +80,7 @@ function rejectionNote(match) {
   if (match.invented.length) return 'A number that is not in your Blueprint appeared.';
   if ((match.extraWords || 0) > MAX_EXTRA_WORDS) return 'Words that are not in your Blueprint appeared.';
   if ((match.duplicates || []).length) return 'A line appeared twice.';
+  if ((match.headingWordsMissing || []).length) return 'A heading was misspelled.';
   return 'Some of the text was not readable.';
 }
 
