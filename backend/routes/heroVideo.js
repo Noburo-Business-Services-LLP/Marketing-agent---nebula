@@ -5,6 +5,7 @@ const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');
 const { normalizeHeroBrief, selectReferences } = require('../services/heroVideoBrief');
+const { thumbnailFor, titleFor, shareHeroVideo } = require('../services/heroVideoShare');
 const { DIALOGUE_MODES, isDialogueMode, normaliseQuickConcepts, conceptToBrief } = require('../services/heroQuick');
 const fs = require('fs');
 const path = require('path');
@@ -470,13 +471,38 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
           o.videoUrl = j.result.videoUrl;
           if (j.result.rawVideoUrl) o.rawVideoUrl = j.result.rawVideoUrl;
           if (j.result.finishError) o.finishError = j.result.finishError;
+          const thumb = thumbnailFor(j.result.videoUrl);
+          if (thumb) o.thumbnailUrl = thumb;
         }
+        o.title = titleFor(j);
+        if (j.metadata && j.metadata.publish) o.publish = j.metadata.publish;
         if (j.payload && j.payload.prompt) o.prompt = j.payload.prompt;
         return o;
       });
       return res.json({ success: true, jobs });
     } catch (err) {
       return fail(res, err, 'Failed to list jobs');
+    }
+  });
+
+  // Post or schedule a finished Hero video through the same sender the step-by-step videos use.
+  router.post('/jobs/:jobId/publish', protect, checkTrial, heroWriteLimiter, async (req, res) => {
+    try {
+      const userId = toUserId(req.user);
+      const job = await jobModel().findOne({ userId, jobId: String(req.params.jobId), 'metadata.kind': 'hero' }).lean();
+      if (!job) return res.status(404).json({ success: false, message: 'Not found' });
+      const sender = impl.shareDeps || {
+        publishVideoDraft: require('../services/videoPublish').publishVideoDraft,
+        post: (...a) => require('../services/socialMediaAPI').postToSocialMedia(...a)
+      };
+      const out = await shareHeroVideo({ job, user: req.user, body: req.body, ...sender });
+      if (out.providerError) console.error('[heroVideo] provider refused the video:', String(out.providerError).slice(0, 300));
+      if (out.record) {
+        await jobModel().updateOne({ userId, jobId: String(req.params.jobId) }, { $set: { 'metadata.publish': out.record } });
+      }
+      return res.status(out.status).json(out.json);
+    } catch (err) {
+      return fail(res, err, 'Failed to post video');
     }
   });
 

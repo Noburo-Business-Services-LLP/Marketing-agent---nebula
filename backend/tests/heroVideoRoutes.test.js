@@ -14,12 +14,12 @@ function routes(r) {
   }));
 }
 
-test('router exposes the eight routes with protect first', () => {
+test('router exposes the nine routes with protect first', () => {
   const found = routes(router.router || router);
   const key = (r) => `${r.methods[0]} ${r.path}`;
-  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /concepts', 'post /generate', 'post /plan']);
+  assert.deepStrictEqual(found.map(key).sort(), ['get /jobs', 'get /jobs/:jobId', 'get /quota', 'get /styles', 'post /brief', 'post /concepts', 'post /generate', 'post /jobs/:jobId/publish', 'post /plan']);
   for (const r of found) assert.strictEqual(r.names[0], 'protect', key(r));
-  for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief' || x.path === '/concepts')) {
+  for (const r of found.filter((x) => x.path === '/plan' || x.path === '/generate' || x.path === '/brief' || x.path === '/concepts' || x.path === '/jobs/:jobId/publish')) {
     assert.ok(r.names.includes('checkTrial'), key(r));
   }
 });
@@ -336,8 +336,8 @@ test('GET /jobs returns only whitelisted fields and filters by owner + kind', as
   await routeHandler({ JobModel }, '/jobs', 'get')({ user: { id: 'u1' } }, res);
   assert.deepStrictEqual(seen, { filter: { userId: 'u1', 'metadata.kind': 'hero' }, sort: { createdAt: -1 }, limit: 20 });
   assert.deepStrictEqual(res.body.jobs, [
-    { jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', prompt: 'P' },
-    { jobId: 'b', status: 'failed', createdAt: 'T0' }
+    { jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', title: 'Hero video', prompt: 'P' },
+    { jobId: 'b', status: 'failed', createdAt: 'T0', title: 'Hero video' }
   ]);
   const text = JSON.stringify(res.body);
   for (const bad of ['falRequestId', 'metadata', 'payload', 'stack', 'fal1']) assert.ok(!text.includes(bad), bad);
@@ -348,7 +348,7 @@ test('GET /jobs whitelist includes rawVideoUrl and finishError, still nothing in
   const JobModel = { find() { const q = { sort: () => q, limit: () => q, lean: async () => rows }; return q; } };
   const res = mkRes();
   await routeHandler({ JobModel }, '/jobs', 'get')({ user: { id: 'u1' } }, res);
-  assert.deepStrictEqual(res.body.jobs, [{ jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', rawVideoUrl: 'http://raw', finishError: 'Plain.', prompt: 'P' }]);
+  assert.deepStrictEqual(res.body.jobs, [{ jobId: 'a', status: 'completed', createdAt: 'T1', videoUrl: 'http://v', rawVideoUrl: 'http://raw', finishError: 'Plain.', title: 'Hero video', prompt: 'P' }]);
   const text = JSON.stringify(res.body);
   for (const bad of ['falRequestId', 'metadata', 'payload', 'stack', 'fal1', 'realism']) assert.ok(!text.includes(bad), bad);
 });
@@ -380,7 +380,7 @@ test('POST /generate and poll send {status,json} verbatim', async () => {
 test('checkTrial before handler on exactly /brief, /concepts, /plan and /generate; limiter on every route', () => {
   for (const r of routes(router)) {
     const idx = r.names.indexOf('checkTrial');
-    const wants = r.path === '/plan' || r.path === '/generate' || r.path === '/brief' || r.path === '/concepts';
+    const wants = r.path === '/plan' || r.path === '/generate' || r.path === '/brief' || r.path === '/concepts' || r.path === '/jobs/:jobId/publish';
     assert.strictEqual(idx !== -1, wants, r.path);
     if (wants) assert.ok(idx < r.names.length - 1 && idx > 0, r.path);
     assert.ok(r.names.length >= 3 && r.names[r.names.length - 2] !== 'protect' || r.names.length >= 3, r.path);
@@ -407,7 +407,7 @@ test('GET /jobs: completed-on-fal job is finished and returned with videoUrl', a
   await seedJob(d, 'j1');
   const res = await listVia(d);
   assert.strictEqual(res.code, 200);
-  assert.deepStrictEqual(res.body.jobs, [{ jobId: 'j1', status: 'completed', createdAt: d.JobModel.docs[0].createdAt, videoUrl: 'https://cdn.example/stored.mp4', prompt: 'P-j1' }]);
+  assert.deepStrictEqual(res.body.jobs, [{ jobId: 'j1', status: 'completed', createdAt: d.JobModel.docs[0].createdAt, videoUrl: 'https://cdn.example/stored.mp4', title: 'Hero video', prompt: 'P-j1' }]);
   assert.strictEqual(d.calls.copy.length, 1);
 });
 

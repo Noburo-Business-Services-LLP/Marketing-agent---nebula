@@ -8,6 +8,7 @@ import {
 import HeroStylePicker from '../components/HeroStylePicker';
 import GenerationTimer from '../components/GenerationTimer';
 import HeroQuickStart from '../components/HeroQuickStart';
+import HeroShare from '../components/HeroShare';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 
 // Hero Studio: one premium 15-second clip built from the Reels wizard's story, cast and place,
@@ -499,6 +500,7 @@ const HeroVideoInner: React.FC = () => {
               </a>
             )}
           </div>
+          <HeroShare key={jobId || 'job'} jobId={jobId as string} defaultCaption={plan?.story?.hook ? `${plan.story.hook}${plan.story.cta ? ` ${plan.story.cta}` : ''}` : ''} onPosted={refreshHistory} />
         </div>
       ) : jobError ? (
         <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{jobError}</p>
@@ -519,27 +521,32 @@ const HeroVideoInner: React.FC = () => {
     </GravityPanel>
   ) : null;
 
+  const openFromHistory = (h: HeroJobSummary) => {
+    if (!h.videoUrl || polling) return;
+    setJobId(h.jobId); setJobStatus('completed'); setVideoUrl(h.videoUrl); setRawVideoUrl(h.rawVideoUrl || '');
+    setFinishError(h.finishError || ''); setJobError('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const historyList = history.length > 0 ? (
     <div>
-      <GravityLabel className="mb-3">Recent Hero videos</GravityLabel>
-      <ul className="space-y-2">
-        {history.slice(0, 8).map((h) => (
-          <li
-            key={h.jobId}
-            className="flex items-center gap-3 rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-3 py-2"
-          >
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--gv-text-tertiary)] w-20 flex-shrink-0">
-              {STATUS_LABEL[h.status] || h.status}
-            </span>
-            <span className="flex-1 min-w-0 truncate text-[12.5px] text-[var(--gv-text-secondary)]">
-              {h.prompt || fmtDate(h.createdAt)}
-            </span>
-            <span className="text-[11.5px] text-[var(--gv-text-muted)] hidden sm:inline">{fmtDate(h.createdAt)}</span>
-            {h.videoUrl && (
-              <a href={h.videoUrl} target="_blank" rel="noreferrer" className="text-[12.5px] font-semibold text-[var(--gv-accent-text)] hover:underline">
-                Open
-              </a>
-            )}
+      <GravityLabel className="mb-3">Your Hero videos</GravityLabel>
+      <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {history.slice(0, 12).map((h) => (
+          <li key={h.jobId} className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] overflow-hidden flex flex-col">
+            <button type="button" disabled={!h.videoUrl} onClick={() => openFromHistory(h)} className="block text-left disabled:cursor-default" aria-label={h.videoUrl ? `Open ${h.title || 'Hero video'}` : undefined}>
+              <div className="aspect-square bg-[var(--gv-border-subtle)] flex items-center justify-center overflow-hidden">
+                {h.thumbnailUrl
+                  ? <img src={h.thumbnailUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  : <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--gv-text-tertiary)]">{STATUS_LABEL[h.status] || h.status}</span>}
+              </div>
+              <div className="px-3 py-2 space-y-0.5">
+                <p className="text-[12.5px] font-semibold text-[var(--gv-text-primary)] line-clamp-2">{h.title || 'Hero video'}</p>
+                <p className="text-[11.5px] text-[var(--gv-text-muted)]">
+                  {fmtDate(h.createdAt)}{h.publish ? ` · ${h.publish.status === 'published' ? 'Posted' : 'Scheduled'}` : ''}
+                </p>
+              </div>
+            </button>
           </li>
         ))}
       </ul>

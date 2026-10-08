@@ -3967,6 +3967,9 @@ export interface HeroJobSummary {
   rawVideoUrl?: string;
   finishError?: string;
   prompt?: string;
+  title?: string;
+  thumbnailUrl?: string;
+  publish?: { status: string; platforms?: string[]; at?: string };
 }
 
 export interface HeroStyleOption { slug: string; label: string; group: string; blurb: string; coverUrl: string }
@@ -3974,6 +3977,11 @@ export interface HeroStyleOption { slug: string; label: string; group: string; b
 export const heroVideoAPI = {
   styles: async (): Promise<{ success: boolean; styles: HeroStyleOption[] }> => {
     return apiCall('/hero-video/styles', { method: 'GET' }, true);
+  },
+
+  // Post or schedule a finished Hero video.
+  publish: async (jobId: string, body: { platforms: string[]; caption?: string; hashtags?: string[]; publishNow?: boolean; scheduledAt?: string }): Promise<{ success: boolean; status?: string; message?: string }> => {
+    return apiCall(`/hero-video/jobs/${encodeURIComponent(jobId)}/publish`, { method: 'POST', body: JSON.stringify(body) }, true);
   },
 
   quota: async (): Promise<{ success: boolean; used: number; limit: number; resetsOn: string }> => {
