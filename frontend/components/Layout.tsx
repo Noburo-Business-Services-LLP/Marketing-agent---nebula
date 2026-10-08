@@ -294,6 +294,21 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
         {/* ================= MAIN COLUMN ================= */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {localStorage.getItem('csmReturnToken') && (
+            // A CSM working inside a client's account: always visible above the header, never scrolls away, one click back.
+            <div className="shrink-0 border-b border-[#F5A623]/50 bg-[#FDF1DC] px-4 md:px-8 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+              <p className="text-[13px] text-[var(--gv-text-primary)]">
+                You are working in <strong>{localStorage.getItem('csmActingClient') || 'a client'}</strong>'s account. Payments, plans and passwords stay with the client.
+              </p>
+              <button
+                onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}
+                className="px-3 py-1 rounded-lg bg-[#F5A623] text-[#070A12] text-[13px] font-bold"
+              >
+                {localStorage.getItem('csmReturnTo') === '#/staff/clients' ? 'Back to staff area' : 'Back to my clients'}
+              </button>
+            </div>
+          )}
+
           {/* Mobile top bar */}
           <header className="md:hidden flex items-center justify-between px-4 h-14 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] backdrop-blur">
             <button
@@ -428,20 +443,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           </header>
 
           <main className="flex-1 overflow-y-auto p-4 md:p-8">
-            {localStorage.getItem('csmReturnToken') && (
-              // A CSM working inside a client's account: always visible, always one click back.
-              <div className="sticky top-0 z-30 mb-4 rounded-xl border border-[#F5A623]/50 bg-[#FDF1DC] px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-sm">
-                <p className="text-sm text-[var(--gv-text-primary)]">
-                  You are working in <strong>{localStorage.getItem('csmActingClient') || 'a client'}</strong>'s account. Payments, plans and passwords stay with the client.
-                </p>
-                <button
-                  onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}
-                  className="px-3 py-1.5 rounded-lg bg-[#F5A623] text-[#070A12] text-sm font-bold"
-                >
-                  {localStorage.getItem('csmReturnTo') === '#/staff/clients' ? 'Back to staff area' : 'Back to my clients'}
-                </button>
-              </div>
-            )}
             {children}
           </main>
         </div>
