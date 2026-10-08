@@ -313,7 +313,16 @@ export const apiService = {
   // REAL AUTHENTICATION ENDPOINTS
   // ============================================
 
-  register: async (data: { email: string; password: string; firstName: string; companyName?: string; website?: string }): Promise<AuthResponse & { requiresVerification?: boolean }> => {
+  signupConfig: async (): Promise<{ inviteRequired: boolean; botCheckSiteKey: string }> => {
+    try {
+      const r = await apiCall<{ success: boolean; inviteRequired?: boolean; botCheckSiteKey?: string }>('/auth/signup-config');
+      return { inviteRequired: !!r.inviteRequired, botCheckSiteKey: r.botCheckSiteKey || '' };
+    } catch {
+      return { inviteRequired: false, botCheckSiteKey: '' };
+    }
+  },
+
+  register: async (data: { email: string; password: string; firstName: string; companyName?: string; website?: string; inviteCode?: string; botCheckToken?: string }): Promise<AuthResponse & { requiresVerification?: boolean }> => {
     const response = await apiCall<{ success: boolean; message: string; token: string; user: User; requiresVerification?: boolean }>(
       '/auth/signup',
       { method: 'POST', body: JSON.stringify(data) }

@@ -33,6 +33,39 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const [companyName, setCompanyName] = useState('');
   const [website, setWebsite] = useState('');
   const [brandPrimaryColor, setBrandPrimaryColor] = useState('#F5A623');
+
+  // Signup protection: an invitation code when sign-up is by invitation, and a "are you a person" check when set up.
+  const [signupConfig, setSignupConfig] = useState<{ inviteRequired: boolean; botCheckSiteKey: string }>({ inviteRequired: false, botCheckSiteKey: '' });
+  const [inviteCode, setInviteCode] = useState('');
+  const [botCheckToken, setBotCheckToken] = useState('');
+  const botCheckBox = useRef<HTMLDivElement | null>(null);
+  const botCheckWidget = useRef<any>(null);
+  useEffect(() => {
+    if (isLogin) return;
+    let live = true;
+    apiService.signupConfig().then((c) => { if (live) setSignupConfig(c); });
+    return () => { live = false; };
+  }, [isLogin]);
+  useEffect(() => {
+    if (isLogin || !signupConfig.botCheckSiteKey) return;
+    const w: any = window;
+    const draw = () => {
+      if (!botCheckBox.current || botCheckWidget.current !== null || !w.turnstile) return;
+      botCheckWidget.current = w.turnstile.render(botCheckBox.current, {
+        sitekey: signupConfig.botCheckSiteKey,
+        callback: (t: string) => setBotCheckToken(t),
+        'expired-callback': () => setBotCheckToken(''),
+        'error-callback': () => setBotCheckToken(''),
+      });
+    };
+    if (w.turnstile) { draw(); return; }
+    const tag = document.createElement('script');
+    tag.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    tag.async = true;
+    tag.onload = draw;
+    document.head.appendChild(tag);
+    return () => { botCheckWidget.current = null; };
+  }, [isLogin, signupConfig.botCheckSiteKey]);
   const [brandSecondaryColor, setBrandSecondaryColor] = useState('#ffb833');
   const [detectingBrandColors, setDetectingBrandColors] = useState(false);
 
@@ -109,6 +142,11 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    if (!isLogin && signupConfig.botCheckSiteKey && !botCheckToken) {
+      setError('Please complete the check below to show that you are a person.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -121,7 +159,9 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           password,
           firstName,
           companyName,
-          website
+          website,
+          inviteCode: signupConfig.inviteRequired ? inviteCode.trim() : undefined,
+          botCheckToken: botCheckToken || undefined
         });
       }
 
@@ -813,6 +853,23 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
               )}
             </div>
 
+            {!isLogin && signupConfig.inviteRequired && (
+              <div>
+                <label className="block text-sm font-medium mb-1" htmlFor="invite-code">Invitation code</label>
+                <input
+                  id="invite-code"
+                  type="text"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  placeholder="Enter your invitation code"
+                  autoComplete="off"
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 outline-none transition-all"
+                />
+                <p className="text-xs mt-1 opacity-70">Sign-up is by invitation for now.</p>
+              </div>
+            )}
+
             {/* Password Strength Meter (Only for Signup) */}
             {!isLogin && (
               <div className={`p-3 rounded-lg text-xs animate-in fade-in ${theme === 'dark'
@@ -830,6 +887,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 </ul>
               </div>
             )}
+
+            {!isLogin && signupConfig.botCheckSiteKey && <div ref={botCheckBox} className="mt-4" />}
 
             <button
               type="submit"

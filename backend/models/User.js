@@ -11,6 +11,8 @@ const userSchema = new mongoose.Schema({
     trim: true,
     match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
   },
+  // The mailbox with "+tag" and Gmail dots removed, so one person cannot open many accounts from one address.
+  emailKey: { type: String, index: true, sparse: true, select: false },
   password: {
     type: String,
     required: [true, 'Password is required'],

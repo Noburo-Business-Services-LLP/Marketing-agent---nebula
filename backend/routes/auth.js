@@ -9,6 +9,8 @@ const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
 const axios = require('axios');
 const otpService = require('../services/otpService');
 const { newAccountPlan } = require('../config/entitlements');
+const rateLimit = require('express-rate-limit');
+const { signupGuard, publicConfig, canonicalEmail, MSG: SIGNUP_MSG } = require('../services/signupGuard');
 const { determineBrandColors } = require('../services/brandIntelligenceService');
 const { scrapeWebsite } = require('../services/scraper');
 
@@ -102,6 +104,19 @@ function withCleanLanguages(profile) {
 }
 
 const router = express.Router();
+
+// Signup abuse limits (per visitor address). Kept small: a real customer signs up once.
+const signupLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false,
+  message: { success: false, message: 'Too many sign-ups from this connection today. Please try again tomorrow, or sign in if you already have an account.' }
+});
+const brandColorsLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 12, standardHeaders: true, legacyHeaders: false,
+  message: { success: false, message: 'Too many requests. Please try again in a while.' }
+});
+
+// What the signup screen needs (invitation box, bot check). Never includes a secret.
+router.get('/signup-config', (req, res) => res.json({ success: true, ...publicConfig() }));
 
 /**
  * BACKGROUND COMPETITOR DISCOVERY
@@ -493,7 +508,7 @@ async function detectWebsiteBrandColors(websiteInput) {
 // @route   POST /api/auth/signup-brand-colors
 // @desc    Detect brand colors from company website during signup
 // @access  Public
-router.post('/signup-brand-colors', [
+router.post('/signup-brand-colors', brandColorsLimiter, [
   body('website')
     .trim()
     .notEmpty()
@@ -523,7 +538,7 @@ router.post('/signup-brand-colors', [
 // @route   POST /api/auth/signup
 // @desc    Register a new user
 // @access  Public
-router.post('/signup', [
+router.post('/signup', signupLimiter, signupGuard(), [
   body('email')
     .isEmail()
     .withMessage('Please enter a valid email address')
@@ -556,13 +571,17 @@ router.post('/signup', [
   try {
     const { email, password, firstName, lastName, companyName, website } = req.body;
 
-    // Check if user already exists
+    // Check if user already exists (the same mailbox written another way counts as the same account)
+    const emailKey = canonicalEmail(email);
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({
         success: false,
         message: 'An account with this email already exists. Please sign in.'
       });
+    }
+    if (await User.exists({ emailKey })) {
+      return res.status(400).json({ success: false, message: SIGNUP_MSG.alias });
     }
 
     let brandAssets = undefined;
@@ -585,6 +604,7 @@ router.post('/signup', [
     // Create new user (unverified)
     const user = await User.create({
       email: email.toLowerCase(),
+      emailKey,
       password,
       firstName,
       lastName: lastName || '',
