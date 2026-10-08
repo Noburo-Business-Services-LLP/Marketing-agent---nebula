@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard';
 import GravityHome from './pages/GravityHome';
 import GravityCreate from './pages/GravityCreate';
 import GravityApprove from './pages/GravityApprove';
+import Library from './pages/Library';
 import GravityCalendar from './pages/GravityCalendar';
 import GravityInsights from './pages/GravityInsights';
 import Campaigns from './pages/Campaigns';
@@ -274,6 +275,7 @@ const App: React.FC = () => {
                     <Route path="/campaigns" element={<GravityCreate />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove user={user} />} />
+                    <Route path="/library" element={<Library />} />
                     <Route path="/reels" element={<ReelGenerator />} />
                     <Route path="/reels/hero" element={<HeroVideo />} />
                     <Route path="/upload" element={<UploadAndSchedule />} />
