@@ -29,11 +29,13 @@ import {
   FileText,
   Inbox,
   Shield,
-  LayoutGrid
+  Images
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
 import AppSwitcher from './AppSwitcher';
+import AccountMenu from './AccountMenu';
+import { groupHasPath } from '../utils/navMenu';
 import { apiService } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
 
@@ -125,26 +127,31 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
     { path: '/drafts',           label: 'Review and approve', icon: PenTool, badge: 'drafts' as const },
-    { path: '/library',          label: 'Library',           icon: LayoutGrid },
-    { path: '/inbox',            label: 'Inbox',             icon: Inbox },
+    { path: '/library',          label: 'Library',           icon: Images },
     { path: '/content-calendar', label: 'Calendar',          icon: CalendarDays },
-    { path: '/idea-inbox',       label: 'Content ideas',     icon: Lightbulb },
-    { path: '/upload',           label: 'Upload and schedule', icon: UploadCloud },
+    { path: '/inbox',            label: 'Inbox',             icon: Inbox },
     { path: '/analytics',        label: 'Performance',       icon: BarChart3 },
   ];
-  // What is left is genuinely set-once configuration, which is a real
-  // grouping rather than "everything else".
-  //
-  // Ad Campaigns, Influencer Portal and Competitors remain hidden from
-  // navigation. Their routes and pages are left intact so nothing breaks and
-  // they can be restored by adding entries here.
+  // Tools used now and then, and set-once configuration, are folded into one group so the menu stays short.
+  // Ad Campaigns, Influencer Portal and Competitors remain hidden from navigation; their routes are intact.
   const secondaryNav = [
     ...(staffEntry && !staffEntry.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
+    { path: '/idea-inbox',       label: 'Content ideas',     icon: Lightbulb },
+    { path: '/upload',           label: 'Upload and schedule', icon: UploadCloud },
     { path: '/blueprint',        label: 'Growth Blueprint',  icon: FileText },
     { path: '/brand-assets',      label: 'Brand assets',      icon: Palette },
     { path: '/connect-socials',   label: 'Connected accounts', icon: Link2 },
     { path: '/ai-memory',         label: 'Brand memory',      icon: Brain },
   ];
+  const groupOnItsPage = groupHasPath(location.pathname, secondaryNav.map((n) => n.path).filter((p) => !p.startsWith('/staff')));
+  const [moreOpen, setMoreOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('nebulaa_sidebar_more') === '1'; } catch { return false; }
+  });
+  const toggleMore = () => setMoreOpen((o) => {
+    try { localStorage.setItem('nebulaa_sidebar_more', o ? '0' : '1'); } catch { /* private mode */ }
+    return !o;
+  });
+  const showMore = moreOpen || groupOnItsPage;
 
   const resolveTopBarMeta = (pathname: string) => {
     if (pathname.startsWith('/campaigns')) return { title: 'Create content', crumb: 'New campaign' };
@@ -253,28 +260,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
               </div>
             </div>
 
-            <div className="px-4 mb-2">
+            {/* On a phone the workspace switch lives here; on a computer it sits in the top bar. */}
+            <div className="px-4 mb-3 md:hidden">
               <AppSwitcher onNavigate={() => setSidebarOpen(false)} />
-            </div>
-
-            {/* Account chip — opens Settings straight into Business Profile,
-                since that's what someone clicking their own account name is
-                almost always after. */}
-            <div className="px-4 mb-4">
-              <button
-                onClick={() => { setSidebarOpen(false); navigate('/settings?tab=business'); }}
-                title="Business profile settings"
-                className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl bg-[var(--gv-surface-1)] border border-[var(--gv-border-subtle)] hover:bg-[var(--gv-surface-2)] transition-colors"
-              >
-                <span className="w-7 h-7 rounded-md bg-[var(--gv-accent-fill)] border border-[var(--gv-border-default)] text-[11px] font-semibold text-[var(--gv-accent-text)] flex items-center justify-center">
-                  {businessInitial}
-                </span>
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="text-[13px] font-semibold text-[var(--gv-text-primary)] truncate leading-tight">{businessName}</div>
-                  <div className="text-[10.5px] text-[var(--gv-text-tertiary)] truncate leading-tight mt-[1px]">{businessHandle}</div>
-                </div>
-                <ChevronDown className="w-3.5 h-3.5 text-[var(--gv-text-muted)]" />
-              </button>
             </div>
 
             {/* Nav — scroll region */}
@@ -284,35 +272,25 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                   <NavLink key={item.path} {...item} />
                 ))}
               </nav>
-              <div className="my-4 mx-1 border-t border-[var(--gv-border-subtle)]" />
-              <div className="px-4 mb-2 gravity-label">Setup</div>
-              <nav className="space-y-0.5">
-                {secondaryNav.map((item) => (
-                  <NavLink key={item.path} {...item} />
-                ))}
-              </nav>
+              <div className="my-3 mx-1 border-t border-[var(--gv-border-subtle)]" />
+              <button
+                type="button"
+                onClick={toggleMore}
+                aria-expanded={showMore}
+                className="w-full flex items-center justify-between pl-4 pr-3 h-9 rounded-lg text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)]"
+              >
+                <span className="gravity-label">Setup and tools</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showMore ? 'rotate-180' : ''}`} />
+              </button>
+              {showMore && (
+                <nav className="space-y-0.5 mt-1">
+                  {secondaryNav.map((item) => (
+                    <NavLink key={item.path} {...item} />
+                  ))}
+                </nav>
+              )}
             </div>
 
-            {/* Footer nav */}
-            <div className="p-3 border-t border-[var(--gv-border-subtle)]">
-              <nav className="space-y-0.5">
-                <NavLink path="/settings" label="Settings" icon={Settings} />
-                <button
-                  onClick={handleLogout}
-                  className="group flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)] transition-colors w-full"
-                >
-                  <HelpCircle className="w-[15px] h-[15px] text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]" />
-                  <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1 text-left">Help</span>
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="group flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)] transition-colors w-full"
-                >
-                  <LogOut className="w-[15px] h-[15px] text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]" />
-                  <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1 text-left">Logout</span>
-                </button>
-              </nav>
-            </div>
           </div>
         </aside>
 
@@ -343,11 +321,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 </div>
               )}
               <NotificationBell />
+              <AccountMenu name={businessName} email={businessHandle} onLogout={handleLogout} compact />
             </div>
           </header>
 
           {/* Desktop top bar */}
           <header className="hidden md:flex items-center h-16 px-8 border-b border-[var(--gv-border-subtle)] bg-transparent">
+            <div className="w-[170px] mr-5 shrink-0"><AppSwitcher /></div>
             <div className="flex items-baseline gap-3 min-w-0">
               <h1 className="text-[15px] font-semibold text-[var(--gv-text-primary)] tracking-[-0.01em]">{topBarMeta.title}</h1>
               {topBarMeta.crumb && (
@@ -445,17 +425,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 );
               })()}
 
-              {/* Primary CTA — Create post */}
-              <Link
-                to="/campaigns"
-                className="ml-1 flex items-center gap-2 h-9 pl-3 pr-3 rounded-lg bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[13px] font-semibold shadow-[0_4px_18px_rgba(245,166,35,0.25)] transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Create post</span>
-                <kbd className="ml-1 hidden lg:inline-flex items-center gap-1 h-5 px-1.5 rounded bg-[#1A1208]/20 text-[10px] font-semibold text-[#1A1208]/70">
-                  ⌘N
-                </kbd>
-              </Link>
+              <AccountMenu name={businessName} email={businessHandle} onLogout={handleLogout} />
             </div>
           </header>
 
