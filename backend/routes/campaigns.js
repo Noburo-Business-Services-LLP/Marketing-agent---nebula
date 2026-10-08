@@ -1538,8 +1538,21 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       logoPosition: logoPositionOverride,
       // Cadence from the Create page ("2 posts / week"). Optional — callers
       // that omit it keep the old preferredDays-driven behaviour.
-      postsPerWeek: postsPerWeekInput
+      postsPerWeek: postsPerWeekInput,
+      // Design style and saved header/footer chosen in Create (all optional)
+      postStyle: postStyleIn,
+      postDetails: postDetailsIn,
+      headerUrl: headerUrlIn,
+      footerUrl: footerUrlIn
     } = req.body;
+    const { isPostStyle: isDesignStyle, normalisePostDetails: normaliseDesignDetails } = require('../config/postStyles');
+    const designStyle = isDesignStyle(postStyleIn) && postStyleIn !== 'plain' ? postStyleIn : undefined;
+    const designDetailsAll = normaliseDesignDetails(postDetailsIn);
+    // Each post of a campaign has its own idea, so only the standing details (contact, address, hours, tagline) repeat on every post.
+    const designDetails = { phone: designDetailsAll.phone, address: designDetailsAll.address, hours: designDetailsAll.hours, tagline: designDetailsAll.tagline };
+    const designHttps = (u) => (typeof u === 'string' && /^https:\/\//i.test(u.trim()) ? u.trim() : undefined);
+    const designHeader = designHttps(headerUrlIn);
+    const designFooter = designHttps(footerUrlIn);
 
     // Shared with single-post/carousel/calendar generation (see
     // contentCalendarService.js) — was previously a local 6-language map
@@ -2224,7 +2237,11 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           productReferenceImages: chosenProductImages.slice(1),
           targetLanguage: selectedLanguage,
           imageText: resolvedImageText,
-          logoReservedPosition: slotLogoUrl ? slotLogoPosition : null
+          logoReservedPosition: slotLogoUrl ? slotLogoPosition : null,
+          postStyle: designStyle,
+          postDetails: designStyle ? designDetails : undefined,
+          headerUrl: designHeader,
+          footerUrl: designFooter
         });
         
         // The failure reason used to be dropped entirely — a dead card in the

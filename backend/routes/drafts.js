@@ -605,8 +605,12 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       // "No logo" was explicitly picked, distinct from omitting the field
       // entirely (which falls back to the brand's primary logo). See
       // backgroundQueue.js's `effectiveLogo` for how that distinction is used.
-      logoUrl, logoPosition
+      logoUrl, logoPosition,
+      // Design style, its text, and the saved header/footer chosen in Create
+      postStyle, postDetails, headerUrl, footerUrl
     } = req.body;
+    const { isPostStyle, normalisePostDetails } = require('../config/postStyles');
+    const httpsOnly = (u) => (typeof u === 'string' && /^https:\/\//i.test(u.trim()) ? u.trim() : undefined);
 
     // Single-post generation had no deduction at all — free, unlike every
     // other generation path in the app. The type:'campaign' branch here is
@@ -673,7 +677,11 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       // back to the brand's primary logo). Coercing '' to undefined here
       // would silently ignore an explicit "No logo" choice.
       logoUrl,
-      logoPosition: logoPosition || undefined
+      logoPosition: logoPosition || undefined,
+      postStyle: isPostStyle(postStyle) && postStyle !== 'plain' ? postStyle : undefined,
+      postDetails: postDetails ? normalisePostDetails(postDetails) : undefined,
+      headerUrl: httpsOnly(headerUrl),
+      footerUrl: httpsOnly(footerUrl)
     });
 
     res.status(201).json({ success: true, draftId: draft._id, draft });

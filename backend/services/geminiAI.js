@@ -7,6 +7,7 @@ const { GoogleAuth } = require('google-auth-library');
 const { buildPrompt } = require('./promptRegistry');
 const { uploadBase64Image } = require('./imageUploader');
 const { generateOpenAIImage, referencesFromParts } = require('./openaiImage');
+const { addFramesToImage } = require('./postFrames');
 const { isProviderLimitError } = require('./providerErrors');
 const { getPlatformRules } = require('./platformContentRules');
 const fs = require('fs/promises');
@@ -4635,7 +4636,34 @@ IMPORTANT RULES:
 // texture, no beauty-filter look. Used for video stills and cast portraits.
 const PHOTO_REALISM_BLOCK = `REALISM (mandatory): This must look like an unretouched real photograph taken on a real camera, not a render or an illustration. Photorealistic, natural imperfections, true-to-life textures. Real skin with visible pores, fine lines, under-eye texture, slight redness, peach fuzz, flyaway hairs, asymmetry, real teeth and natural fingernails. Real fabric grain and creases. Natural window or practical room light with realistic shadows, no beauty lighting, no glow. Natural muted colour and realistic contrast, subtle sensor grain, mostly sharp focus like a phone or documentary camera, candid unposed expression and posture. Correct hands and anatomy. No plastic or waxy skin, no airbrushing, no beauty filter, no CGI or 3D look, no over-sharpening, no HDR, no cinematic teal-and-orange grade, no text, logo or watermark unless the brief asks for it.`;
 
+// Heights (at a 1080 pixel wide post) used to tell the model how much of the top and bottom to keep quiet.
+const POST_HEIGHT_BY_ASPECT = { '1:1': 1080, '4:5': 1350, '9:16': 1920, '16:9': 608, '3:4': 1440 };
+
+/**
+ * The entry point every creative goes through. Adds what the post should look like (a design style with its exact
+ * text), tells the model to keep the header and footer bands quiet, runs the image model, and then lays the
+ * saved header and footer over the finished image. With none of those options it behaves exactly as before.
+ */
 async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
+  const { postStyle, postDetails, headerUrl, footerUrl } = options;
+  const { buildStyleDirective } = require('../config/postStyles');
+  const { frameShare, addFramesToImage } = require('./postFrames');
+  let description = imageDescription;
+  const directive = postStyle ? buildStyleDirective(postStyle, postDetails, { language: options.targetLanguage || 'English' }) : '';
+  if (directive) description = `${description}\n\n${directive}`;
+  const H = POST_HEIGHT_BY_ASPECT[options.aspectRatio || '1:1'] || 1080;
+  const bands = [];
+  if (headerUrl) bands.push(`the top ${Math.round(frameShare('header', 1080, H) * 100)}%`);
+  if (footerUrl) bands.push(`the bottom ${Math.round(frameShare('footer', 1080, H) * 100)}%`);
+  if (bands.length) description = `${description}\n\nA header and footer will be added over this image afterwards. Keep ${bands.join(' and ')} of the picture calm and free of text and important detail, and place all text and subjects inside the middle of the frame.`;
+
+  const result = await generateCampaignImageNanoBananaCore(description, options);
+  if (!result || !result.success || !result.imageUrl || (!headerUrl && !footerUrl)) return result;
+  const framed = await addFramesToImage(result.imageUrl, { headerUrl, footerUrl });
+  return framed.applied ? { ...result, imageUrl: framed.imageUrl, preFrameImageUrl: framed.preFrameImageUrl } : result;
+}
+
+async function generateCampaignImageNanoBananaCore(imageDescription, options = {}) {
   const {
     aspectRatio = '1:1',
     brandName = '',

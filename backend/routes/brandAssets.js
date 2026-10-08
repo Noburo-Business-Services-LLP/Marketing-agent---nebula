@@ -16,6 +16,7 @@ const {
 } = require('../services/brandIntelligenceService');
 
 const { extractLogoColors, colorsFromLogoUrl } = require('../services/logoColorService');
+const { FRAME_SPECS, cropToFrame } = require('../services/postFrames');
 
 // Replaceable in tests; production always uses these defaults.
 const deps = { uploadBase64Image, deepScrapeWebsite, extractLogoColors, colorsFromLogoUrl };
@@ -717,6 +718,71 @@ router.delete('/intelligence-profile/past-posts/:postId', protect, async (req, r
   } catch (error) {
     console.error('Error removing past post sample:', error);
     res.status(500).json({ success: false, message: 'Failed to remove past post sample' });
+  }
+});
+
+/**
+ * Brand headers and footers: strips laid over the top and bottom of a post (address, GST number, branches).
+ * Uploaded at, or cut to, the exact size in services/postFrames.js. Several can be saved; one per kind is the default.
+ */
+const FRAME_KINDS = ['header', 'footer'];
+
+router.get('/frames', protect, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const rows = await BrandAsset.find({ user: userId, type: { $in: FRAME_KINDS } }).sort({ isPrimary: -1, createdAt: -1 }).lean();
+    res.json({
+      success: true,
+      specs: FRAME_SPECS,
+      headers: rows.filter((r) => r.type === 'header'),
+      footers: rows.filter((r) => r.type === 'footer')
+    });
+  } catch (error) {
+    console.error('Error fetching frames:', error);
+    res.status(500).json({ success: false, message: 'Could not load your headers and footers.' });
+  }
+});
+
+router.post('/frames', protect, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { imageData, kind, name, position, makeDefault } = req.body || {};
+    if (!FRAME_KINDS.includes(kind)) return res.status(400).json({ success: false, message: 'Choose header or footer.' });
+    if (!imageData || typeof imageData !== 'string') return res.status(400).json({ success: false, message: 'Choose a picture first.' });
+    const label = String(name || '').trim().slice(0, 100);
+    if (!label) return res.status(400).json({ success: false, message: 'Give it a name.' });
+    const raw = bufferFromImageData(imageData);
+    if (!raw || raw.length < 100 || raw.length > 10 * 1024 * 1024) return res.status(400).json({ success: false, message: 'Use a picture under 10 MB.' });
+    let cut;
+    try { cut = await cropToFrame(raw, kind, position); } catch (_) { return res.status(400).json({ success: false, message: 'That file could not be read as a picture. Use a PNG, JPG or WebP.' }); }
+    const uploadResult = await deps.uploadBase64Image(`data:image/png;base64,${cut.toString('base64')}`, `nebula-brand-${kind}s`);
+    if (!uploadResult.success) return res.status(500).json({ success: false, message: 'We could not save your picture. Please try again.' });
+    const first = (await BrandAsset.countDocuments({ user: userId, type: kind })) === 0;
+    const primary = Boolean(makeDefault) || first;
+    if (primary) await BrandAsset.updateMany({ user: userId, type: kind }, { isPrimary: false });
+    const asset = await BrandAsset.create({
+      user: userId, type: kind, name: label, url: uploadResult.url, cloudinaryPublicId: uploadResult.publicId,
+      width: FRAME_SPECS[kind].width, height: FRAME_SPECS[kind].height, fileSize: cut.length, format: 'png', isPrimary: primary
+    });
+    res.status(201).json({ success: true, asset });
+  } catch (error) {
+    console.error('Error saving frame:', error);
+    res.status(500).json({ success: false, message: 'We could not save your picture. Please try again.' });
+  }
+});
+
+router.put('/frames/:id/default', protect, async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const asset = await BrandAsset.findOne({ _id: req.params.id, user: userId, type: { $in: FRAME_KINDS } });
+    if (!asset) return res.status(404).json({ success: false, message: 'Not found' });
+    await BrandAsset.updateMany({ user: userId, type: asset.type, _id: { $ne: asset._id } }, { isPrimary: false });
+    asset.isPrimary = true;
+    await asset.save();
+    res.json({ success: true, asset });
+  } catch (error) {
+    console.error('Error setting default frame:', error);
+    res.status(500).json({ success: false, message: 'Could not change the default.' });
   }
 });
 

@@ -68,8 +68,24 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       objective = '',
       // Overrides the logo's own saved default (Brand Assets) for this
       // generation only — set from Create's position picker.
-      logoPosition: logoPositionOverride
+      logoPosition: logoPositionOverride,
+      // Design style and saved header/footer chosen in Create (all optional)
+      postStyle: postStyleIn,
+      postDetails: postDetailsIn,
+      headerUrl: headerUrlIn,
+      footerUrl: footerUrlIn
     } = req.body || {};
+    const { isPostStyle, normalisePostDetails } = require('../config/postStyles');
+    const designStyle = isPostStyle(postStyleIn) && postStyleIn !== 'plain' ? postStyleIn : undefined;
+    const designDetails = normalisePostDetails(postDetailsIn);
+    const httpsOnly = (u) => (typeof u === 'string' && /^https:\/\//i.test(u.trim()) ? u.trim() : undefined);
+    const designHeader = httpsOnly(headerUrlIn);
+    const designFooter = httpsOnly(footerUrlIn);
+    // First slide carries the headline and offer, the last carries the contact details; the ones between carry the style only.
+    const slideDetails = (idx, total) => ({
+      ...(idx === 0 ? { headline: designDetails.headline, offer: designDetails.offer, items: designDetails.items.join('\n') } : {}),
+      ...(idx === total - 1 ? { phone: designDetails.phone, address: designDetails.address, hours: designDetails.hours, tagline: designDetails.tagline } : {})
+    });
 
     // Accepts both the stored value ("tamil_english_mix") and a display
     // label, same normalizer used for single-post and calendar generation —
@@ -238,7 +254,11 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           productReferenceImages: chosenProductImages.slice(1),
           postIndex: i,
           totalPosts: plan.slides.length,
-          logoReservedPosition: logoUrl ? logoPosition : null
+          logoReservedPosition: logoUrl ? logoPosition : null,
+          postStyle: designStyle,
+          postDetails: designStyle ? slideDetails(i, plan.slides.length) : undefined,
+          headerUrl: designHeader,
+          footerUrl: designFooter
         });
 
         // Image generation falls back to an inline base64 data URI when the

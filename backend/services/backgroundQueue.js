@@ -7,6 +7,7 @@ const { callTextLLM } = require('./openAI');
 const { uploadBase64Image } = require('./imageUploader');
 const { buildPrompt } = require('./promptRegistry');
 const { buildBrandMemoryBlock, getPrimaryLogoAsset } = require('./brandMemory');
+const { addFramesToImage } = require('./postFrames');
 // Lazy to avoid a load-order cycle: contentCalendarService lazily requires
 // this module too, when auto-generation runs.
 const { normalizeLanguage } = require('./contentCalendarService');
@@ -272,6 +273,8 @@ async function processDraftImageGenerationJob(job) {
     // image-to-image path so the generated poster mirrors the reference's
     // style, composition, and layout. Otherwise, plain text-to-image.
     const hasReference = typeof job.referenceImage === 'string' && job.referenceImage.trim().length > 0;
+    // Design style, its exact text, and the saved header and footer chosen in Create (all optional).
+    const designOpts = { postStyle: job.postStyle || undefined, postDetails: job.postDetails || undefined, headerUrl: job.headerUrl || undefined, footerUrl: job.footerUrl || undefined };
     // "Regenerate with this exact prompt" — the user edited the resolved
     // prompt shown on the draft and wants THIS text run, not a fresh
     // Creative Director decision. Takes priority over both other paths:
@@ -308,7 +311,8 @@ async function processDraftImageGenerationJob(job) {
           tone: bp.tone || 'professional',
           targetLanguage: effectiveLanguage,
           imageText: draft.imageText || '',
-          logoReservedPosition: effectiveLogo?.url ? effectiveLogo.position : null
+          logoReservedPosition: effectiveLogo?.url ? effectiveLogo.position : null,
+          ...designOpts
         }),
         timeoutPromise
       ]);
@@ -330,10 +334,14 @@ async function processDraftImageGenerationJob(job) {
       // and returns { success, imageBase64, error } — raw base64, NOT a URL.
       // So we upload the returned base64 to Cloudinary and hand back a { imageUrl }
       // shape the downstream code expects.
+      const { buildStyleDirective } = require('../config/postStyles');
+      const styleText = designOpts.postStyle ? buildStyleDirective(designOpts.postStyle, designOpts.postDetails, { language: effectiveLanguage }) : '';
       const contentString = [
         draft.imagePrompt || draft.caption || 'A creative poster',
         user?.companyName ? `Brand: ${user.companyName}` : '',
-        bp.industry ? `Industry: ${bp.industry}` : ''
+        bp.industry ? `Industry: ${bp.industry}` : '',
+        'Recreate the layout, composition, colour mood and typographic style of the reference with this brand, its products and its details. Do not copy any logo, name, price or contact text that is in the reference.',
+        styleText
       ].filter(Boolean).join('\n');
 
       const genRes = await Promise.race([
@@ -353,6 +361,15 @@ async function processDraftImageGenerationJob(job) {
         throw new Error(upload?.error || 'Cloudinary upload failed after reference-image generation');
       }
       imageResult = { imageUrl: upload.url };
+      if (designOpts.headerUrl || designOpts.footerUrl) {
+        const framed = await addFramesToImage(imageResult.imageUrl, designOpts);
+        if (framed.applied) imageResult = { imageUrl: framed.imageUrl };
+      }
+      if (imageResult.imageUrl && effectiveLogo?.url) {
+        preLogoImageUrl = imageResult.imageUrl;
+        imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, { logoUrl: effectiveLogo.url, position: effectiveLogo.position, size: effectiveLogo.size });
+        logoWasComposited = true;
+      }
     } else {
       // Write the actual copy and image brief before rendering anything. The
       // idea typed in Create is a one-liner; it is not what should become the
@@ -474,7 +491,8 @@ async function processDraftImageGenerationJob(job) {
           environmentReferenceImage: creative?.environmentImage || null,
           productReferenceImage: chosenProductImages[0] || null,
           productReferenceImages: chosenProductImages.slice(1),
-          logoReservedPosition: effectiveLogo?.url ? effectiveLogo.position : null
+          logoReservedPosition: effectiveLogo?.url ? effectiveLogo.position : null,
+          ...designOpts
         }),
         timeoutPromise
       ]);
