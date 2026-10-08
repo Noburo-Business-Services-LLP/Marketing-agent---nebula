@@ -22,8 +22,14 @@ const HERO_LIMITS = { managed: Infinity, professional: Infinity, starter: Infini
 
 const MESSAGES = {
   upgrade: 'This is not included in the free plan. Please upgrade your plan, or buy an add-on pack.',
+  video: 'Videos unlock once you have finished setting up your business, or bought Quarks or a plan. Please complete your business setup first.',
   addon: 'This needs an add-on. Please add it to your plan or upgrade.'
 };
+
+function hasPaid(user) {
+  const list = user && user.payments;
+  return Array.isArray(list) && list.some((p) => p && p.status === 'paid');
+}
 
 function resolveTier(user) {
   const tier = user && user.plan && user.plan.tier;
@@ -43,7 +49,12 @@ function holds(addons, name) {
 function canUse(user, feature) {
   const tier = resolveTier(user);
   if (tier === 'managed') return { allowed: true, reason: 'ok', message: '' };
-  if (feature === 'create' || feature === 'video' || feature === 'blueprint') return { allowed: true, reason: 'ok', message: '' };
+  // Videos are the costly part of a free account, so they open once the person has set up their business or paid once.
+  if (feature === 'video') {
+    if (tier !== 'free' || user.onboardingCompleted === true || hasPaid(user)) return { allowed: true, reason: 'ok', message: '' };
+    return { allowed: false, reason: 'setup', message: MESSAGES.video };
+  }
+  if (feature === 'create' || feature === 'blueprint') return { allowed: true, reason: 'ok', message: '' };
 
   if (tier === 'free') return { allowed: false, reason: 'upgrade', message: MESSAGES.upgrade };
 

@@ -461,7 +461,12 @@ app.use('/api/carousels', carouselRoutes);
 // Video generation has its own per-route limiters (job polling must not trip AI limiter).
 // Scheduling a video post calls an outside service; gated here so the Kling route file stays untouched.
 app.post('/api/video-generation/schedulePost', protect, requireFeature('schedule'));
+// Video generation costs real money: on a brand-new free account it opens once the business is set up or a payment is made.
+// Every POST is gated except the cheap ones below (saving, cancelling, favourites, adding the logo).
+const CHEAP_VIDEO_POSTS = /^\/(favourite-audio|favourite-voice|updateEnvironment|applySceneLogo|createDraft|schedulePost|jobs\/[^/]+\/cancel)\/?$/;
+app.use('/api/video-generation', protect, requireFeature('video', { when: (req) => req.method === 'POST' && !CHEAP_VIDEO_POSTS.test(req.path) }));
 app.use('/api/video-generation', videoGenerationRoutes);
+app.use('/api/hero-video', protect, requireFeature('video', { when: (req) => req.method === 'POST' && /^\/(concepts|plan|generate)\/?$/.test(req.path) }));
 app.use('/api/hero-video', heroVideoRoutes);
 app.use('/api/blueprint', blueprintRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);

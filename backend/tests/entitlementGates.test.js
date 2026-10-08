@@ -37,10 +37,39 @@ test('free user is blocked from every outside-service feature with the plain upg
   }
 });
 
-test('free user may still use create and video', async () => {
-  for (const f of ['create', 'video', 'blueprint']) {
+test('free user may still use create and blueprint', async () => {
+  for (const f of ['create', 'blueprint']) {
     assert.equal((await run(f, { plan: { tier: 'free' } })).nexted, true);
   }
+});
+
+test('a brand-new free account cannot make videos until the business is set up or a payment was made', async () => {
+  const fresh = await run('video', { plan: { tier: 'free' }, onboardingCompleted: false, payments: [] });
+  assert.equal(fresh.nexted, false);
+  assert.equal(fresh.res.statusCode, 403);
+  assert.equal(fresh.res.body.reason, 'setup');
+  assert.match(fresh.res.body.message, /finished setting up your business|complete your business setup/i);
+  assert.ok(!/gravity|pulsar|orbit/i.test(fresh.res.body.message));
+  assert.equal((await run('video', { plan: { tier: 'free' }, onboardingCompleted: true })).nexted, true);
+  assert.equal((await run('video', { plan: { tier: 'free' }, payments: [{ status: 'paid' }] })).nexted, true);
+  assert.equal((await run('video', { plan: { tier: 'free' }, payments: [{ status: 'failed' }, { status: 'refunded' }] })).nexted, false);
+});
+
+test('paid plans, managed accounts and old accounts without a plan are never held back from video', async () => {
+  assert.equal((await run('video', { plan: { tier: 'starter' }, onboardingCompleted: false })).nexted, true);
+  assert.equal((await run('video', { plan: { tier: 'professional' } })).nexted, true);
+  assert.equal((await run('video', { plan: { tier: 'managed' } })).nexted, true);
+  assert.equal((await run('video', { email: 'old@account.test' })).nexted, true);
+});
+
+test('the video routes are gated in the server, and only the cheap actions are left open', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'server-main.js'), 'utf8');
+  assert.match(src, /app\.use\('\/api\/video-generation', protect, requireFeature\('video'/);
+  assert.match(src, /app\.use\('\/api\/hero-video', protect, requireFeature\('video'/);
+  const cheap = src.match(/const CHEAP_VIDEO_POSTS = (\/.*\/);/)[1];
+  const re = eval(cheap);
+  for (const p of ['/favourite-audio', '/applySceneLogo', '/createDraft', '/jobs/abc123/cancel']) assert.ok(re.test(p), p);
+  for (const p of ['/createVideo', '/generateClips', '/generateImages', '/generateSingleVideoClip', '/mergeVideo', '/generateScenes']) assert.ok(!re.test(p), p);
 });
 
 test('starter without add-on gets reason addon; with publish add-on passes publish only', async () => {

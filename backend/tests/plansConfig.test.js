@@ -76,7 +76,10 @@ test('resolveTier and addonsOf', () => {
 const OUTSIDE = ['social_connect', 'publish', 'schedule', 'inbox', 'auto_reply', 'competitors'];
 
 test('canUse: free', () => {
-  for (const f of ['create', 'video']) assert.equal(ent.canUse(U('free'), f).allowed, true);
+  assert.equal(ent.canUse(U('free'), 'create').allowed, true);
+  // Video opens once the business is set up or a payment was made (a deliberate change for launch).
+  assert.equal(ent.canUse(U('free'), 'video').allowed, false);
+  assert.equal(ent.canUse({ ...U('free'), onboardingCompleted: true }, 'video').allowed, true);
   for (const f of OUTSIDE) {
     const r = ent.canUse(U('free'), f);
     assert.deepEqual(r, { allowed: false, reason: 'upgrade', message: 'This is not included in the free plan. Please upgrade your plan, or buy an add-on pack.' });
