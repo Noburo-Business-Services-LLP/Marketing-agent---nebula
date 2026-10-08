@@ -6,7 +6,7 @@ const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { protect } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
-const XLSX = require('xlsx');
+const { readRows, SpreadsheetError } = require('../services/spreadsheetRows');
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
@@ -285,16 +285,14 @@ router.post('/bulk-import', protect, upload.single('file'), async (req, res) => 
       return res.status(400).json({ success: false, message: 'No file uploaded. Please attach a CSV or Excel file.' });
     }
 
-    // Parse file with xlsx (supports CSV + XLS + XLSX)
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      return res.status(400).json({ success: false, message: 'The uploaded file contains no sheets.' });
+    // Read the first sheet of the CSV or XLSX file (old .xls files are refused with a clear message)
+    let rows;
+    try {
+      rows = await readRows(req.file.buffer);
+    } catch (readErr) {
+      if (readErr instanceof SpreadsheetError) return res.status(400).json({ success: false, message: readErr.message });
+      throw readErr;
     }
-
-    const sheet = workbook.Sheets[sheetName];
-    // defval: '' ensures empty cells become empty strings instead of undefined
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
     if (!rows || rows.length === 0) {
       return res.status(400).json({ success: false, message: 'The file is empty or has no data rows.' });
