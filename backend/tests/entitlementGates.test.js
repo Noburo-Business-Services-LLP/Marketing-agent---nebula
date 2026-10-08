@@ -345,3 +345,13 @@ test('spec and landing no longer say plan Quarks expire or do not roll over', ()
   assert.doesNotMatch(spec, /no rollover/i);
   assert.match(spec, /carry over/i);
 });
+
+test('getHeroQuota lifts the monthly cap for team members only', async () => {
+  const { getHeroQuota } = require('../services/heroVideoService');
+  const Jobs = { countDocuments: async () => 2 };
+  const users = (u) => ({ findById: () => ({ select: () => ({ lean: async () => u }) }) });
+  const staff = await getHeroQuota('u1', new Date('2026-10-08'), Jobs, users({ plan: { tier: 'managed' }, staffRole: 'owner' }));
+  const customer = await getHeroQuota('u2', new Date('2026-10-08'), Jobs, users({ plan: { tier: 'managed' } }));
+  assert.equal(staff.limit >= 50, true);
+  assert.equal(customer.limit, 2);
+});

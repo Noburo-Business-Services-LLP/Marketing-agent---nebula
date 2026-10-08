@@ -22,6 +22,7 @@ const ASPECTS = ['9:16', '16:9', '1:1'];
 const DEFAULT_TEXT_MODEL = 'bytedance/seedance-2.0/text-to-video';
 const DEFAULT_REF_MODEL = 'bytedance/seedance-2.0/reference-to-video';
 const DEFAULT_LIMIT = 2;
+const STAFF_HERO_LIMIT = 50;
 
 const net = require('net');
 const { HERO_CLIP_SECONDS } = require('../config/apiCosts');
@@ -156,9 +157,11 @@ async function getHeroQuota(userId, now = new Date(), JobModel, UserModel) {
   });
   let user = null;
   if (UserModel) {
-    try { user = await UserModel.findById(userId).select('plan').lean(); } catch (e) { user = null; }
+    try { user = await UserModel.findById(userId).select('plan staffRole isCsm').lean(); } catch (e) { user = null; }
   }
-  const limit = heroLimitForUser(user, process.env.HERO_VIDEO_MONTHLY_LIMIT);
+  let limit = heroLimitForUser(user, process.env.HERO_VIDEO_MONTHLY_LIMIT);
+  // Team members test the product with real runs; the Quark charge still applies, only the monthly cap is lifted.
+  if (user && (user.staffRole || user.isCsm)) limit = Math.max(limit, STAFF_HERO_LIMIT);
   return { used, limit, resetsOn: nextMonthStartUTC(now).toISOString() };
 }
 
