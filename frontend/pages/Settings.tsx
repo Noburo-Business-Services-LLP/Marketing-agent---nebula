@@ -9,6 +9,7 @@ import { buildStrategyPdf } from '../utils/strategyPdf';
 import { apiService, brandAssetsAPI } from '../services/api';
 import { CONTENT_LANGUAGES } from '../constants/languages';
 import AdditionalLanguagePicker from '../components/AdditionalLanguagePicker';
+import BusinessProfileFields from '../components/BusinessProfileFields';
 import { cleanSelection } from '../utils/languages';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import {
@@ -458,176 +459,12 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                         : 'bg-white border-slate-300 text-slate-900 focus:ring-[#F5A623]'
                     }`;
                     const labelCls = `block text-xs font-bold ${theme.textSecondary} uppercase tracking-wide mb-2`;
-                    const industryOptions = ['Technology/SaaS', 'E-commerce/Retail', 'Food & Beverage', 'Fashion & Apparel', 'Beauty & Wellness', 'Healthcare', 'Education', 'Finance/Fintech', 'Real Estate', 'Travel & Hospitality', 'Media & Entertainment', 'Professional Services', 'Manufacturing', 'Automotive', 'Jewellery', 'Home & Furniture', 'Non-profit', 'Other'];
                     return (
                       <div className="animate-in fade-in duration-300">
                         <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-2">Business profile</h2>
-                        <p className={`text-sm mb-6 ${theme.textSecondary}`}>This page shows the answers you gave during onboarding. Some fields are optional details that onboarding no longer asks for, so you can add them here. Edit any field, then select Save business profile.</p>
+                        <p className={`text-sm mb-6 ${theme.textSecondary}`}>These are the answers Nebulaa uses to write your posts, plans and videos. Change anything that is out of date, then select Save business profile. After saving, use Refresh my brand details below so everything Nebulaa remembers matches.</p>
 
-                        <div className="space-y-5 mb-6">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <Field labelCls={labelCls} label="Business Name">
-                              <input className={inputCls} value={bizData.name || ''} onChange={e => handleBizChange('name', e.target.value)} />
-                            </Field>
-                            <Field labelCls={labelCls} label="Website">
-                              <input className={inputCls} value={bizData.website || ''} onChange={e => handleBizChange('website', e.target.value)} placeholder="https://..." />
-                            </Field>
-                            <Field labelCls={labelCls} label="GST Number">
-                              <input className={inputCls} value={bizData.gstNumber || ''} onChange={e => handleBizChange('gstNumber', e.target.value)} />
-                            </Field>
-                            <Field labelCls={labelCls} label="Business Vertical (Industry)">
-                              <select className={inputCls} value={bizData.industry || ''} onChange={e => handleBizChange('industry', e.target.value)}>
-                                <option value="">Select...</option>
-                                {industryOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                              </select>
-                            </Field>
-                            <Field labelCls={labelCls} label="Business Type">
-                              <select className={inputCls} value={bizData.businessType || ''} onChange={e => handleBizChange('businessType', e.target.value)}>
-                                <option value="">Select...</option>
-                                <option value="B2B">B2B</option>
-                                <option value="B2C">B2C</option>
-                                <option value="Both">Both</option>
-                              </select>
-                            </Field>
-                            <Field labelCls={labelCls} label="Business Location">
-                              <input className={inputCls} value={bizData.businessLocation || ''} onChange={e => handleBizChange('businessLocation', e.target.value)} placeholder="City, State / Country" />
-                            </Field>
-                            <Field labelCls={labelCls} label="Years in Business">
-                              <input type="number" min={0} className={inputCls} value={bizData.yearsInBusiness ?? ''} onChange={e => handleBizChange('yearsInBusiness', e.target.value === '' ? undefined : Number(e.target.value))} />
-                            </Field>
-                            <Field labelCls={labelCls} label="Brand Maturity">
-                              <select className={inputCls} value={bizData.brandMaturity || ''} onChange={e => handleBizChange('brandMaturity', e.target.value)}>
-                                <option value="">Select...</option>
-                                <option value="established">Established</option>
-                                <option value="growing">Growing</option>
-                              </select>
-                            </Field>
-                          </div>
-
-                          <Field labelCls={labelCls} label="Niche">
-                            <input className={inputCls} value={bizData.niche || ''} onChange={e => handleBizChange('niche', e.target.value)} />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="Problem You Solve">
-                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.problemSolved || ''} onChange={e => handleBizChange('problemSolved', e.target.value)} />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="Description">
-                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.description || ''} onChange={e => handleBizChange('description', e.target.value)} />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="Target Audience">
-                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.targetAudience || ''} onChange={e => handleBizChange('targetAudience', e.target.value)} />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="Target Customer Profile">
-                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.targetCustomerProfile || ''} onChange={e => handleBizChange('targetCustomerProfile', e.target.value)} />
-                          </Field>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <Field labelCls={labelCls} label="Target Gender">
-                              <select className={inputCls} value={bizData.targetGender || ''} onChange={e => handleBizChange('targetGender', e.target.value)}>
-                                <option value="">Select...</option>
-                                <option value="mostly_men">Mostly Men</option>
-                                <option value="mostly_women">Mostly Women</option>
-                                <option value="both_equally">Both Equally</option>
-                                <option value="families">Families</option>
-                              </select>
-                            </Field>
-                            <Field labelCls={labelCls} label="Geographic Reach">
-                              <select className={inputCls} value={bizData.geographicReach || ''} onChange={e => handleBizChange('geographicReach', e.target.value)}>
-                                <option value="">Select...</option>
-                                <option value="hyperlocal">Hyperlocal</option>
-                                <option value="local_city">Local City</option>
-                                <option value="regional">Regional</option>
-                              </select>
-                            </Field>
-                            <Field labelCls={labelCls} label="Customer Type">
-                              <select className={inputCls} value={bizData.customerType || ''} onChange={e => handleBizChange('customerType', e.target.value)}>
-                                <option value="">Select...</option>
-                                <option value="mostly_new">Mostly New</option>
-                                <option value="mix_new_repeat">Mix of New & Repeat</option>
-                                <option value="mostly_loyal">Mostly Loyal</option>
-                              </select>
-                            </Field>
-                            <Field labelCls={labelCls} label="Price Positioning">
-                              <select className={inputCls} value={bizData.pricePositioning || ''} onChange={e => handleBizChange('pricePositioning', e.target.value)}>
-                                <option value="">Select...</option>
-                                <option value="budget">Budget</option>
-                                <option value="affordable">Affordable</option>
-                                <option value="mid_range">Mid Range</option>
-                                <option value="premium">Premium</option>
-                                <option value="luxury">Luxury</option>
-                              </select>
-                            </Field>
-                            <Field labelCls={labelCls} label="Content Language">
-                              <select className={inputCls} value={bizData.contentLanguage || ''} onChange={e => handleBizChange('contentLanguage', e.target.value)}>
-                                <option value="">Select...</option>
-                                {CONTENT_LANGUAGES.map((l) => (
-                                  <option key={l.value} value={l.value}>{l.label}</option>
-                                ))}
-                              </select>
-                            </Field>
-                            <div className="md:col-span-2">
-                              <AdditionalLanguagePicker
-                                primary={bizData.contentLanguage}
-                                value={bizData.additionalLanguages || []}
-                                onChange={next => handleBizChange('additionalLanguages', next)}
-                                labels={{ title: 'Also post in', hint: 'Optional. Choose up to three more languages. You can turn any post into these languages later.', full: 'Three languages are chosen. Remove one to choose another.', names: Object.fromEntries(CONTENT_LANGUAGES.map(l => [l.value, l.label])) }}
-                              />
-                            </div>
-                            <Field labelCls={labelCls} label="Brand Voice">
-                              <input className={inputCls} value={Array.isArray(bizData.brandVoice) ? bizData.brandVoice.join(', ') : (bizData.brandVoice || '')} onChange={e => handleBizChange('brandVoice', e.target.value)} placeholder="For example: Professional, Witty" />
-                            </Field>
-                            {/* How much the AI monthly planner generates. Forward-only —
-                                changing this reshapes next month's plan, not the current
-                                one, so a CSM mid-review never has their queue rewritten
-                                underneath them. */}
-                            <Field labelCls={labelCls} label="Posts Per Day">
-                              <input
-                                type="number" min={1} max={5} step={1}
-                                className={inputCls}
-                                value={bizData.contentCadence?.postsPerDay ?? 1}
-                                onChange={e => handleBizChange('contentCadence', { ...bizData.contentCadence, postsPerDay: Math.max(1, Math.min(5, Number(e.target.value) || 1)) })}
-                              />
-                            </Field>
-                            <Field labelCls={labelCls} label="Reels Per Week">
-                              <input
-                                type="number" min={0} max={7} step={1}
-                                className={inputCls}
-                                value={bizData.contentCadence?.reelsPerWeek ?? 1}
-                                onChange={e => handleBizChange('contentCadence', { ...bizData.contentCadence, reelsPerWeek: Math.max(0, Math.min(7, Number(e.target.value) || 0)) })}
-                              />
-                            </Field>
-                          </div>
-                          <p className={`text-[11.5px] -mt-3 ${theme.textMuted}`}>
-                            Changes apply from next month's plan onward. The current month's plan stays as it was generated.
-                          </p>
-
-                          <Field labelCls={labelCls} label="Marketing Goals (comma separated)">
-                            <input className={inputCls} value={(bizData.marketingGoals || []).join(', ')} onChange={e => handleBizChange('marketingGoals', e.target.value.split(',').map(s => s.trim()).filter(Boolean))} placeholder="Brand Awareness, Sales, Leads" />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="Hero Product / Service">
-                            <textarea className={`${inputCls} min-h-[70px]`} value={bizData.heroProduct || ''} onChange={e => handleBizChange('heroProduct', e.target.value)} />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="Key Differentiator">
-                            <textarea className={`${inputCls} min-h-[70px]`} value={bizData.keyDifferentiator || ''} onChange={e => handleBizChange('keyDifferentiator', e.target.value)} />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="Brand Story">
-                            <textarea className={`${inputCls} min-h-[100px]`} value={bizData.brandStory || ''} onChange={e => handleBizChange('brandStory', e.target.value)} />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="Content Restrictions">
-                            <textarea className={`${inputCls} min-h-[70px]`} value={bizData.contentRestrictions || ''} onChange={e => handleBizChange('contentRestrictions', e.target.value)} placeholder="Describe anything Nebulaa should avoid." />
-                          </Field>
-
-                          <Field labelCls={labelCls} label="First Month Content Angles">
-                            <textarea className={`${inputCls} min-h-[80px]`} value={bizData.firstMonthContentAngles || ''} onChange={e => handleBizChange('firstMonthContentAngles', e.target.value)} />
-                          </Field>
-                        </div>
+                        <BusinessProfileFields biz={bizData} onChange={handleBizChange} inputCls={inputCls} labelCls={labelCls} mutedCls={theme.textMuted} />
 
                         {bizError && (
                           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-600 text-sm">

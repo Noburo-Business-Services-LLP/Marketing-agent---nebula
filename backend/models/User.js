@@ -74,10 +74,19 @@ const userSchema = new mongoose.Schema({
     yearsInBusiness: { type: Number, min: 0, default: null },
     brandMaturity: { type: String, enum: ['established', 'growing', ''], default: '' },
 
-    // CSM-filled during Brand DNA session (admin dashboard only)
+    // About the customers and the offer. Filled by the customer in Settings; a CSM can also fill them.
     targetCustomerProfile: { type: String, default: '' },
     targetGender: { type: String, enum: ['mostly_men', 'mostly_women', 'both_equally', 'families', ''], default: '' },
-    geographicReach: { type: String, enum: ['hyperlocal', 'local_city', 'regional', ''], default: '' },
+    // Old single answer, kept so saved profiles still load. 'reachAreas' below is the one to use now.
+    geographicReach: { type: String, enum: ['hyperlocal', 'local_city', 'regional', 'state', 'national', 'international', ''], default: '' },
+    // Where the customers are: any mix of these.
+    reachAreas: { type: [{ type: String, enum: ['neighbourhood', 'city', 'state', 'india', 'international'] }], default: [] },
+    // For businesses that sell to other businesses (businessType B2B or Both).
+    b2b: {
+      companySize: { type: String, enum: ['solo', 'small', 'medium', 'large', ''], default: '' },
+      decisionMaker: { type: String, default: '' },
+      salesCycle: { type: String, enum: ['days', 'weeks', 'months', ''], default: '' }
+    },
     customerType: { type: String, enum: ['mostly_new', 'mix_new_repeat', 'mostly_loyal', ''], default: '' },
     pricePositioning: { type: String, enum: ['budget', 'affordable', 'mid_range', 'premium', 'luxury', ''], default: '' },
     keyDifferentiator: { type: String, default: '' },

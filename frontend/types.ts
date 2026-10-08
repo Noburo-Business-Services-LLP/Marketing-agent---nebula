@@ -1,9 +1,13 @@
 export type BrandMaturity = 'established' | 'growing' | '';
 export type TargetGender = 'mostly_men' | 'mostly_women' | 'both_equally' | 'families' | '';
-export type GeographicReach = 'hyperlocal' | 'local_city' | 'regional' | '';
+export type GeographicReach = 'hyperlocal' | 'local_city' | 'regional' | 'state' | 'national' | 'international' | '';
+export type ReachArea = 'neighbourhood' | 'city' | 'state' | 'india' | 'international';
+export type CompanySize = 'solo' | 'small' | 'medium' | 'large' | '';
+export type SalesCycle = 'days' | 'weeks' | 'months' | '';
 export type CustomerType = 'mostly_new' | 'mix_new_repeat' | 'mostly_loyal' | '';
 export type PricePositioning = 'budget' | 'affordable' | 'mid_range' | 'premium' | 'luxury' | '';
-export type ContentLanguage = 'tamil' | 'english' | 'tamil_english_mix' | '';
+// Any of the languages offered in Settings: a base language, or that language mixed with English (for example 'hindi_english_mix').
+export type ContentLanguage = string;
 
 export interface BusinessProfile {
   name: string;
@@ -24,10 +28,13 @@ export interface BusinessProfile {
   yearsInBusiness?: number;
   brandMaturity?: BrandMaturity;
 
-  // CSM-filled during Brand DNA session (admin dashboard only)
+  // About the customers and the offer. Filled by the customer in Settings; a CSM can also fill them.
   targetCustomerProfile?: string;
   targetGender?: TargetGender;
+  // Old single answer, kept so saved profiles still load; reachAreas is the one to use now.
   geographicReach?: GeographicReach;
+  reachAreas?: ReachArea[];
+  b2b?: { companySize?: CompanySize; decisionMaker?: string; salesCycle?: SalesCycle };
   customerType?: CustomerType;
   pricePositioning?: PricePositioning;
   keyDifferentiator?: string;

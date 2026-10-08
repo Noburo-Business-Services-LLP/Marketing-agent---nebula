@@ -40,6 +40,34 @@ function resolveBrandIdentity({ bp = {}, user = {}, brandProfile = null } = {}) 
   };
 }
 
+const REACH_LABEL = { neighbourhood: 'the neighbourhood', city: 'the city', state: 'the state', india: 'all of India', international: 'other countries' };
+const OLD_REACH = { hyperlocal: 'the neighbourhood', local_city: 'the city', regional: 'the region', state: 'the state', national: 'all of India', international: 'other countries' };
+const SIZE_LABEL = { solo: 'one-person businesses', small: 'small companies', medium: 'mid-size companies', large: 'large companies' };
+const CYCLE_LABEL = { days: 'a few days', weeks: 'a few weeks', months: 'several months' };
+const GENDER_LABEL = { mostly_men: 'mostly men', mostly_women: 'mostly women', families: 'families' };
+
+/**
+ * The "who buys and where" lines for the content-writing prompts, from what the owner told us. Only what was
+ * answered is written; a gender guess is never made, and business buyers get their own lines.
+ */
+function describeAudience(bp = {}) {
+  const lines = [];
+  const type = String(bp.businessType || '');
+  if (type) lines.push(`- Sells to: ${type === 'B2B' ? 'other businesses' : type === 'B2C' ? 'individual customers' : 'both businesses and individual customers'}`);
+  const areas = Array.isArray(bp.reachAreas) && bp.reachAreas.length ? bp.reachAreas.map((a) => REACH_LABEL[a]).filter(Boolean) : (OLD_REACH[bp.geographicReach] ? [OLD_REACH[bp.geographicReach]] : []);
+  if (areas.length) lines.push(`- Customers are in: ${areas.join(', ')}`);
+  if (bp.pricePositioning) lines.push(`- Price level: ${String(bp.pricePositioning).replace('_', ' ')}`);
+  if (type !== 'B2B' && GENDER_LABEL[bp.targetGender]) lines.push(`- Customers are ${GENDER_LABEL[bp.targetGender]}`);
+  const b = bp.b2b || {};
+  if (type === 'B2B' || type === 'Both') {
+    if (SIZE_LABEL[b.companySize]) lines.push(`- Business customers are ${SIZE_LABEL[b.companySize]}`);
+    if (b.decisionMaker) lines.push(`- The buyer is usually: ${String(b.decisionMaker).trim().slice(0, 120)}`);
+    if (CYCLE_LABEL[b.salesCycle]) lines.push(`- A sale usually takes ${CYCLE_LABEL[b.salesCycle]}`);
+  }
+  if (bp.keyDifferentiator) lines.push(`- What makes it different: ${String(bp.keyDifferentiator).trim().slice(0, 200)}`);
+  return lines;
+}
+
 async function buildBrandMemoryBlock(userId) {
   if (!userId) return '';
 
@@ -72,6 +100,7 @@ async function buildBrandMemoryBlock(userId) {
   lines.push('');
   lines.push('TARGET AUDIENCE / ICP');
   lines.push(`- ${bp.targetCustomerProfile || bp.targetAudience || 'Not defined — infer a reasonable audience from the brand and idea.'}`);
+  describeAudience(bp).forEach((l) => lines.push(l));
 
   lines.push('');
   lines.push('PRODUCTS AND SERVICES');
@@ -259,6 +288,7 @@ async function getPrimaryLogoAsset(userId) {
 module.exports = {
   buildBrandMemoryBlock,
   resolveBrandIdentity,
+  describeAudience,
   buildAvailableAssetsCatalogue,
   resolveAssetNames,
   buildBrandGuidance,
