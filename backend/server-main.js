@@ -320,8 +320,20 @@ app.use('/api', generalLimiter);
 // Raw body for Razorpay webhook signature verification (must come before express.json)
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 
-app.use(express.json({ limit: '150mb' }));
-app.use(express.urlencoded({ extended: true, limit: '150mb' }));
+// Request size limits. Most routes only ever receive small text, so they get 1 MB; only the routes that take pictures
+// (sent as text) get a bigger allowance. A huge body is refused before it is read into memory.
+const BIG_BODY_PREFIXES = [
+  '/api/campaigns', '/api/carousels', '/api/drafts', '/api/brand-assets', '/api/video-generation', '/api/hero-video',
+  '/api/products', '/api/ideas', '/api/content', '/api/social', '/api/ads', '/api/ad-campaigns', '/api/chat',
+  '/api/blueprint', '/api/brand', '/api/auth/update-profile', '/api/auth/complete-onboarding'
+];
+const smallJson = express.json({ limit: '1mb' });
+const bigJson = express.json({ limit: '40mb' });
+const smallForm = express.urlencoded({ extended: true, limit: '1mb' });
+const bigForm = express.urlencoded({ extended: true, limit: '40mb' });
+const wantsBigBody = (req) => BIG_BODY_PREFIXES.some((p) => req.path === p || req.path.startsWith(`${p}/`));
+app.use((req, res, next) => (wantsBigBody(req) ? bigJson : smallJson)(req, res, next));
+app.use((req, res, next) => (wantsBigBody(req) ? bigForm : smallForm)(req, res, next));
 
 // ============================================
 // Security: NoSQL Injection Prevention
@@ -533,14 +545,19 @@ app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
 
   const status = Number(err?.statusCode || err?.status || 500);
-  const message = String(err?.message || 'Internal server error');
+  // The real message goes to the log only. Customers never see raw system errors.
+  const message = status === 413
+    ? 'That file or request is too large.'
+    : status >= 500
+      ? 'Something went wrong. Please try again.'
+      : String(err?.message || 'Request could not be completed.');
   const isApiRequest = req.path.startsWith('/api');
 
   console.error('Server Error:', {
     status,
     method: req.method,
     path: req.path,
-    message,
+    message: String(err?.message || message),
     stack: err?.stack
   });
 
@@ -549,7 +566,7 @@ app.use((err, req, res, next) => {
     return res.status(status).json({
       success: false,
       message,
-      errorCode: err?.code || err?.name || undefined,
+      errorCode: status >= 500 ? undefined : (err?.code || err?.name || undefined),
       error: process.env.NODE_ENV === 'development' ? (err?.stack || String(err)) : undefined
     });
   }
