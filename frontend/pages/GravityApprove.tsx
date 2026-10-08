@@ -76,11 +76,6 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   // to the finished image once the worker lands it.
   const TABS = [
     { key: 'review',    label: 'Needs review', status: '' },
-    { key: 'all',       label: 'All',          status: 'all' },
-    { key: 'draft',     label: 'Drafts',       status: 'draft' },
-    { key: 'scheduled', label: 'Scheduled',    status: 'scheduled' },
-    { key: 'published', label: 'Posted',       status: 'published' },
-    { key: 'archived',  label: 'Archived',     status: 'archived' },
   ] as const;
 
   const [tab, setTab] = useState<string>('review');
@@ -406,132 +401,15 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
     />
   );
 
-  // Same pill-shaped switcher as Create's Campaign/Single post/Carousel
-  // toggle — the one tab control style the whole app should share.
+  // Everything that is not waiting for your OK (drafts, scheduled, posted, archived) is in the Library.
   const TabBar = () => (
-    <div className="mb-8 overflow-x-auto">
-      <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--gv-surface-1)] border border-[var(--gv-border-subtle)]">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              tab === t.key ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+    <div className="mb-8 flex flex-wrap items-center gap-3 text-[13px] text-[var(--gv-text-secondary)]">
+      <span className="inline-flex items-center h-9 px-5 rounded-full bg-[var(--gv-surface-3)] border border-[var(--gv-border-subtle)] font-semibold text-[var(--gv-text-primary)]">Needs review</span>
+      <button type="button" onClick={() => navigate('/library')} className="font-semibold text-[var(--gv-accent-text)] underline underline-offset-2">
+        See drafts, scheduled and posted in the Library
+      </button>
     </div>
   );
-
-  // Read-only browse of posts at a given status. No approve/reject here —
-  // this is for finding things, not actioning them.
-  if (tab !== 'review') {
-    const statusChip = (s: string) => {
-      const v = String(s || 'draft').toLowerCase();
-      const map: Record<string, string> = {
-        processing: 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]',
-        scheduled: 'bg-blue-500/15 text-blue-300',
-        published: 'bg-emerald-500/15 text-emerald-400',
-        archived: 'bg-[var(--gv-surface-2)] text-[var(--gv-text-tertiary)]',
-        failed: 'bg-red-500/15 text-red-400',
-      };
-      return map[v] || 'bg-[var(--gv-surface-2)] text-[var(--gv-text-tertiary)]';
-    };
-
-    return (
-      <div className="max-w-[1100px] mx-auto pb-24">
-        <Header />
-        <TabBar />
-
-        {libraryLoading ? (
-          <div className="flex items-center justify-center py-20 text-[var(--gv-text-tertiary)]">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-            Loading…
-          </div>
-        ) : libraryItems.length === 0 ? (
-          <div className="text-center py-24">
-            <div className="gravity-label mb-3">No posts to show</div>
-            <p className="text-[14px] text-[var(--gv-text-tertiary)]">
-              No posts are listed under "{activeTab.label}" yet.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {libraryItems.map((d: any) => {
-              const img = d.imageUrl || d.creative?.imageUrls?.[0] || '';
-              const processing = String(d?.status || '').toLowerCase() === 'processing';
-              return (
-                <div
-                  key={d._id}
-                  onClick={() => !processing && openDetail(d)}
-                  className={`group relative rounded-xl border overflow-hidden transition-all duration-200 ${
-                    processing
-                      ? 'cursor-wait border-[var(--gv-border-default)] bg-[var(--gv-surface-1)]'
-                      : 'cursor-pointer border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:border-[rgb(var(--gv-accent-rgb)/0.70)] hover:bg-[var(--gv-surface-2)] hover:-translate-y-1 hover:shadow-[0_12px_36px_rgba(0,0,0,0.55),0_0_0_1px_rgba(245,166,35,0.25)]'
-                  }`}
-                >
-                  <div className="relative bg-black aspect-[4/5] overflow-hidden">
-                    {/* Hover affordance — makes the target unmistakable */}
-                    {!processing && (
-                      <div className="absolute inset-0 z-10 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--gv-accent)] text-black text-[11.5px] font-bold">
-                          <Pencil className="w-3.5 h-3.5" />
-                          Edit
-                        </span>
-                      </div>
-                    )}
-                    {img ? (
-                      <img src={img} alt={d.title || 'Post'} className="w-full h-full object-contain" />
-                    ) : processing ? (
-                      <GeneratingFill resolution="" />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <AlertCircle className="w-5 h-5 text-[var(--gv-text-muted)]" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="text-[12.5px] font-semibold text-[var(--gv-text-primary)] truncate">{d.title || 'Untitled'}</p>
-                    {d.caption && <p className="text-[11px] text-[var(--gv-text-muted)] line-clamp-2 mt-1">{d.caption}</p>}
-                    <div className="flex items-center justify-between mt-2.5 gap-2">
-                      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${statusChip(d.status)}`}>
-                        {processing ? 'Generating' : (d.status || 'draft')}
-                      </span>
-                      {/* Where this post is headed */}
-                      <div className="flex items-center gap-1">
-                        {(d.platforms || []).length === 0 ? (
-                          <span className="text-[10px] text-[var(--gv-text-muted)]">No platform</span>
-                        ) : (d.platforms || []).slice(0, 4).map((p: string) => {
-                          const meta = PLATFORM_META[String(p).toLowerCase()];
-                          return meta
-                            ? <meta.Icon key={p} className="w-3.5 h-3.5 text-[var(--gv-text-tertiary)]" />
-                            : <span key={p} className="text-[10px] text-[var(--gv-text-muted)]">{p}</span>;
-                        })}
-                      </div>
-                    </div>
-                    {d.scheduledDate && (
-                      <div className="text-[10px] text-[var(--gv-text-muted)] mt-1.5">{formatScheduleDate(d.scheduledDate)}</div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {selected && (
-          <DraftPreviewModal
-            draft={selected}
-            onClose={closeDetail}
-            onSuccess={() => { closeDetail(); loadLibrary(activeTab.status, true); }}
-          />
-        )}
-      </div>
-    );
-  }
 
   if (loading) {
     return (

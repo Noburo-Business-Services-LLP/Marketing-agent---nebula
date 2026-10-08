@@ -4,6 +4,7 @@ import { Download, Film, Image as ImageIcon, Loader2, Play, Search, X } from 'lu
 import { GravityLabel, GravityButton } from '../components/gravity';
 import GenerationTimer from '../components/GenerationTimer';
 import HeroShare from '../components/HeroShare';
+import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import PlatformIcon from '../components/PlatformIcon';
 import { draftsAPI, videoGenerationAPI, heroVideoAPI } from '../services/api';
 import { platformLabel } from '../utils/platforms';
@@ -146,7 +147,11 @@ const Library: React.FC = () => {
         </ul>
       )}
 
-      {open && (
+      {open && open.source === 'post' && open.raw && (
+        <DraftPreviewModal draft={open.raw} onClose={() => setOpen(null)} onSuccess={() => { setOpen(null); load(true); }} />
+      )}
+
+      {open && !(open.source === 'post' && open.raw) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label={open.title} onClick={() => setOpen(null)}>
           <div className="w-full max-w-[640px] max-h-[90vh] overflow-y-auto rounded-2xl bg-[var(--gv-panel)] border border-[var(--gv-border-subtle)] p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">

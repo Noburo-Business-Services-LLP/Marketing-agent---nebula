@@ -8,7 +8,8 @@ test('all three sources become the same card shape', () => {
   const post = fromPostDraft({ _id: 'p1', title: 'Diwali offer', imageUrl: 'https://i/x.jpg', status: 'scheduled', platforms: ['Instagram'], createdAt: '2026-10-01' });
   const vid = fromVideoDraft({ jobId: 'v1', title: 'Filter coffee', status: 'created', finalVideoUrl: MP4, createdAt: '2026-10-02' });
   const hero = fromHeroJob({ jobId: 'h1', status: 'completed', title: 'A phone buzzes', videoUrl: MP4, publish: { status: 'scheduled', platforms: ['instagram'] }, createdAt: '2026-10-03' });
-  for (const c of [post, vid, hero]) assert.deepEqual(Object.keys(c).sort(), ['caption', 'createdAt', 'id', 'kind', 'mediaUrl', 'platforms', 'source', 'status', 'thumbnailUrl', 'title']);
+  for (const c of [post, vid, hero]) assert.deepEqual(Object.keys(c).filter((k) => k !== 'raw').sort(), ['caption', 'createdAt', 'id', 'kind', 'mediaUrl', 'platforms', 'source', 'status', 'thumbnailUrl', 'title']);
+  assert.equal(post.raw._id, 'p1'); assert.equal(vid.raw, undefined);
   assert.equal(post.kind, 'image'); assert.equal(post.status, 'scheduled'); assert.deepEqual(post.platforms, ['instagram']);
   assert.equal(vid.status, 'ready'); assert.match(vid.thumbnailUrl, /so_1/);
   assert.equal(hero.status, 'scheduled'); assert.equal(hero.source, 'hero');

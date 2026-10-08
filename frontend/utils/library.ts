@@ -18,6 +18,8 @@ export interface LibraryItem {
   caption: string;
   platforms: string[];
   createdAt: number;
+  /** the original post draft, kept so the editing sheet can open it; only for posts and images */
+  raw?: any;
 }
 
 const ms = (v: any): number => {
@@ -48,6 +50,7 @@ export function fromPostDraft(d: any): LibraryItem | null {
     title: text(d.title) || text(d.caption, 70) || 'Untitled post', status,
     thumbnailUrl: isVideo ? stillFor(url) : url, mediaUrl: url,
     caption: text(d.caption, 600), platforms: list(d.platforms), createdAt: ms(d.createdAt || d.updatedAt || d.scheduledDate),
+    raw: d,
   };
 }
 
