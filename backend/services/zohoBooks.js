@@ -53,7 +53,7 @@ async function zohoRequest(method, endpoint, body = null) {
   const token = await getAccessToken();
   const orgId = process.env.ZOHO_BOOKS_ORG_ID;
 
-  const url = `${BASE_URL}${endpoint}?organization_id=${orgId}`;
+  const url = `${BASE_URL}${endpoint}${endpoint.includes('?') ? '&' : '?'}organization_id=${orgId}`;
   const options = {
     method,
     headers: {
@@ -228,21 +228,12 @@ async function createInvoice(params) {
   const invoiceResult = await zohoRequest('POST', '/invoices', invoiceData);
   const invoice = invoiceResult.invoice;
 
+  // Step 2b: an invoice created through the API starts as a draft; a customer-facing paid invoice is "sent".
+  await markInvoiceSent(invoice.invoice_id);
+
   // Step 3: Record payment against the invoice
   try {
-    const paymentData = {
-      customer_id: contactId,
-      payment_mode: 'Razorpay',
-      amount: paidAmount,
-      date: today,
-      reference_number: razorpayPaymentId,
-      invoices: [{
-        invoice_id: invoice.invoice_id,
-        amount_applied: paidAmount
-      }]
-    };
-
-    await zohoRequest('POST', '/customerpayments', paymentData);
+    await recordPayment({ customerId: contactId, invoiceId: invoice.invoice_id, amount: paidAmount, date: today, mode: 'Razorpay', reference: razorpayPaymentId });
   } catch (e) {
     console.warn('Zoho payment recording failed (non-blocking):', e.message);
   }
@@ -273,4 +264,110 @@ async function createInvoice(params) {
   };
 }
 
-module.exports = { createInvoice };
+// ---------------------------------------------------------------------------------------------------------------
+// Managed clients: read invoices, create one for a service month, mark it sent, record how it was paid.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Marks a draft invoice as sent. Never throws: a failure here must not lose the invoice. */
+async function markInvoiceSent(invoiceId) {
+  try {
+    await zohoRequest('POST', `/invoices/${invoiceId}/status/sent`);
+    return true;
+  } catch (e) {
+    console.warn('📄 [ZOHO] Could not mark the invoice as sent (non-blocking):', e.message);
+    return false;
+  }
+}
+
+// Zoho's own payment modes; anything else is sent as 'other' so a missing custom mode never blocks recording.
+const ZOHO_MODE = { bank: 'banktransfer', cheque: 'check', cash: 'cash', upi: 'other', razorpay: 'other', other: 'other' };
+
+/** Records a payment against an invoice. `mode` may be one of our names (bank, cheque, ...) or a Zoho mode. */
+async function recordPayment({ customerId, invoiceId, amount, date, mode, reference }) {
+  const base = {
+    customer_id: customerId, amount, date, reference_number: reference || '',
+    invoices: [{ invoice_id: invoiceId, amount_applied: amount }]
+  };
+  const wanted = ZOHO_MODE[mode] || mode || 'other';
+  try {
+    return await zohoRequest('POST', '/customerpayments', { ...base, payment_mode: wanted });
+  } catch (e) {
+    if (wanted === 'other') throw e;
+    return zohoRequest('POST', '/customerpayments', { ...base, payment_mode: 'other' }); // custom mode not set up in Zoho
+  }
+}
+
+/** A shareable link for the customer, or null. */
+async function sharingUrl(invoiceId) {
+  try {
+    const token = await getAccessToken();
+    const res = await fetch(`${BASE_URL}/invoices/${invoiceId}/sharingurl?organization_id=${process.env.ZOHO_BOOKS_ORG_ID}`, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const d = await res.json();
+    return d.code === 0 && d.sharing_url ? d.sharing_url : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+const slim = (i) => ({
+  invoiceId: i.invoice_id, invoiceNumber: i.invoice_number, customerId: i.customer_id, customerName: i.customer_name || '',
+  email: String(i.email || '').toLowerCase(), date: i.date, dueDate: i.due_date, status: i.status,
+  total: Number(i.total) || 0, balance: Number(i.balance) || 0, lastPaymentDate: i.last_payment_date || '', reference: i.reference_number || ''
+});
+
+let invoiceCache = { at: 0, rows: [] };
+/** Every invoice of the organisation (about a minute of cache), newest first. */
+async function listInvoices({ force = false } = {}) {
+  if (!force && Date.now() - invoiceCache.at < 60000 && invoiceCache.rows.length) return invoiceCache.rows;
+  const rows = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const d = await zohoRequest('GET', `/invoices?per_page=200&page=${page}&sort_column=date&sort_order=D`);
+    rows.push(...(d.invoices || []).map(slim));
+    if (!d.page_context || !d.page_context.has_more_page) break;
+  }
+  invoiceCache = { at: Date.now(), rows };
+  return rows;
+}
+
+/** One invoice with its amounts before and after tax. */
+async function getInvoice(invoiceId) {
+  const d = await zohoRequest('GET', `/invoices/${invoiceId}`);
+  const i = d.invoice || {};
+  return {
+    ...slim(i), subTotal: Number(i.sub_total) || 0, taxTotal: Number(i.tax_total) || 0,
+    invoiceUrl: i.invoice_url || '', paymentsCount: Array.isArray(i.payments) ? i.payments.length : 0
+  };
+}
+
+/** The tax_id of a GST rate in this organisation, or '' when there is none. Only 18 percent is created automatically. */
+async function getGstTaxId(percent) {
+  if (Number(percent) === 18) return getGST18TaxId();
+  const list = await zohoRequest('GET', '/settings/taxes');
+  const hit = (list.taxes || []).find((t) => t.tax_percentage === Number(percent));
+  return hit ? hit.tax_id : '';
+}
+
+/**
+ * Creates the invoice for one service month of a managed client (not yet marked sent or paid) and returns
+ * { invoiceId, invoiceNumber, customerId }. The reference makes a retry safe: an invoice that already carries
+ * the same reference is returned instead of creating a second one.
+ */
+async function createManagedInvoice(p) {
+  const existing = (await listInvoices({ force: true })).find((i) => i.reference === p.reference);
+  if (existing) return { invoiceId: existing.invoiceId, invoiceNumber: existing.invoiceNumber, customerId: existing.customerId, reused: true };
+  const taxId = await getGstTaxId(p.gstPercent);
+  if (!(Number(p.gstPercent) > 0)) throw new Error('Automatic invoices need a GST rate above 0%. Raise this invoice in Zoho Books and link it.');
+  if (!taxId) throw new Error(`A ${p.gstPercent}% GST tax is not set up in Zoho Books`);
+  const contactId = p.customerId || await getOrCreateContact({ email: p.email, firstName: p.firstName, lastName: p.lastName, companyName: p.companyName });
+  const line = { name: p.itemName, description: p.description || p.itemName, rate: p.exInr, quantity: 1 };
+  line.tax_id = taxId;
+  const data = {
+    customer_id: contactId, date: p.date, due_date: p.dueDate, is_inclusive_tax: false, gst_treatment: 'consumer', place_of_supply: 'TN',
+    line_items: [line], reference_number: p.reference, notes: p.notes || ''
+  };
+  const out = await zohoRequest('POST', '/invoices', data);
+  invoiceCache = { at: 0, rows: [] };
+  return { invoiceId: out.invoice.invoice_id, invoiceNumber: out.invoice.invoice_number, customerId: contactId, reused: false };
+}
+
+module.exports = { createInvoice, listInvoices, getInvoice, createManagedInvoice, markInvoiceSent, recordPayment, sharingUrl, getGstTaxId };

@@ -127,7 +127,7 @@ function buildLedger({ settings, records = [], now = Date.now() }) {
     }
     return {
       period, label: labelOf(period), status, ...amounts,
-      invoiceNumber: (r && r.invoiceNumber) || '', invoiceUrl: (r && r.invoiceUrl) || '',
+      invoiceNumber: (r && r.invoiceNumber) || '', invoiceUrl: (r && r.invoiceUrl) || '', zohoInvoiceId: (r && r.zohoInvoiceId) || '',
       issuedOn: (r && r.issuedOn) || null, paidOn: (r && r.paidOn) || null,
       paidMode: (r && r.paidMode) || null, paidModeLabel: r && r.paidMode ? MODE_LABEL[r.paidMode] : '',
       paidReference: (r && r.paidReference) || '', note: (r && r.note) || ''
@@ -257,4 +257,4 @@ async function setVoid({ actor, clientId, period, voided, repo, record }) {
   return { status: 200, body: { success: true } };
 }
 
-module.exports = { toPaise, amountsFor, periodOf, labelOf, nextPeriod, parseSettings, parseInvoice, parsePayment, buildLedger, viewBilling, saveSettings, linkInvoice, markPaid, undoPaid, setVoid, PAID_MODES, GST_RATES, DEFAULT_GST, PERIOD };
+module.exports = { loadTarget, monthAmounts, toPaise, amountsFor, periodOf, labelOf, nextPeriod, parseSettings, parseInvoice, parsePayment, buildLedger, viewBilling, saveSettings, linkInvoice, markPaid, undoPaid, setVoid, PAID_MODES, GST_RATES, DEFAULT_GST, DEFAULT_DUE_DAYS, PERIOD };

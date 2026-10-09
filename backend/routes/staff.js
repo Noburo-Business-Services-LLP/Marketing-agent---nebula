@@ -17,6 +17,7 @@ const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/s
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
 const tools = require('../services/staff/tools');
 const billing = require('../services/staff/billingLedger');
+const billingZoho = require('../services/staff/billingZoho');
 const { bulkClients, createClient } = require('../services/staff/clientBulk');
 const { canonicalEmail } = require('../services/signupGuard');
 
@@ -357,7 +358,7 @@ const OBJECT_ID = /^[a-f0-9]{24}$/i;
 const billingRepo = () => {
   const ClientInvoice = require('../models/ClientInvoice');
   return {
-    getClient: (id) => (OBJECT_ID.test(String(id)) ? User.findById(id).select('staffRole isCsm managedBilling plan').lean() : null),
+    getClient: (id) => (OBJECT_ID.test(String(id)) ? User.findById(id).select('staffRole isCsm email firstName lastName companyName businessProfile.name managedBilling plan').lean() : null),
     listRecords: (id) => ClientInvoice.find({ client: id }).lean(),
     getRecord: (id, period) => ClientInvoice.findOne({ client: id, period }).lean(),
     upsertRecord: (id, period, set) => ClientInvoice.updateOne({ client: id, period }, { $set: set, $setOnInsert: { client: id, period } }, { upsert: true }),
@@ -368,7 +369,8 @@ const billingRepo = () => {
 };
 const billingRoute = (handler) => async (req, res) => {
   try {
-    const out = await handler({ actor: req.staff, clientId: req.params.id, period: req.params.period, input: req.body || {}, repo: billingRepo(), record: (row) => recordStaffAction(row) });
+    const out = await handler({ actor: req.staff, clientId: req.params.id, period: req.params.period, input: req.body || {}, repo: billingRepo(), zoho: require('../services/zohoBooks'), record: (row) => recordStaffAction(row) });
+    if (out.body && out.body.success && out.body.rows) out.body.zohoOrgId = process.env.ZOHO_BOOKS_ORG_ID || '';
     res.status(out.status).json(out.body);
   } catch (error) {
     console.error('[staff] billing failed:', error.message);
@@ -378,7 +380,18 @@ const billingRoute = (handler) => async (req, res) => {
 router.get('/clients/:id/billing', requireStaff('manage_billing'), billingRoute((a) => billing.viewBilling(a)));
 router.put('/clients/:id/billing/settings', requireStaff('manage_billing'), billingRoute((a) => billing.saveSettings(a)));
 router.post('/clients/:id/billing/:period/invoice', requireStaff('manage_billing'), billingRoute((a) => billing.linkInvoice(a)));
-router.post('/clients/:id/billing/:period/paid', requireStaff('manage_billing'), billingRoute((a) => billing.markPaid(a)));
+router.post('/clients/:id/billing/sync', requireStaff('manage_billing'), billingRoute((a) => billingZoho.syncFromZoho({ ...a, apply: a.input.apply === true })));
+router.post('/clients/:id/billing/:period/zoho-invoice', requireStaff('manage_billing'), billingRoute((a) => billingZoho.createZohoInvoice(a)));
+router.post('/clients/:id/billing/:period/paid', requireStaff('manage_billing'), billingRoute((a) => billingZoho.markPaidWithZoho(a)));
+router.get('/zoho/invoices', requireStaff('manage_billing'), async (req, res) => {
+  try {
+    const out = await billingZoho.searchZohoInvoices({ actor: req.staff, q: req.query.q, zoho: require('../services/zohoBooks') });
+    res.status(out.status).json(out.body);
+  } catch (error) {
+    console.error('[staff] zoho search failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not search Zoho Books. Please try again.' });
+  }
+});
 router.post('/clients/:id/billing/:period/unpay', requireStaff('manage_billing'), billingRoute((a) => billing.undoPaid(a)));
 router.post('/clients/:id/billing/:period/void', requireStaff('manage_billing'), billingRoute((a) => billing.setVoid({ ...a, voided: a.input.void !== false })));
 

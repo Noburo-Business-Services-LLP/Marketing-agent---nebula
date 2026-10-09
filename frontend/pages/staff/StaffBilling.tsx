@@ -7,9 +7,10 @@ import { formatInr, previewLine, STATUS_LABEL, today } from '../../utils/staffBi
 
 type Row = {
   period: string; label: string; status: string; exPaise: number; gstPaise: number; totalPaise: number; gstInclusive?: boolean;
-  invoiceNumber: string; invoiceUrl: string; paidOn: string | null; paidModeLabel: string; paidReference: string; note: string;
+  invoiceNumber: string; invoiceUrl: string; zohoInvoiceId?: string; paidOn: string | null; paidModeLabel: string; paidReference: string; note: string;
 };
 type Data = {
+  zohoOrgId?: string;
   settings: { monthlyAmountInr: number | null; gstInclusive: boolean; gstPercent: number; serviceStart: string };
   paidModes: Array<{ value: string; label: string }>;
   rows: Row[];
@@ -35,6 +36,10 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
   const [rate, setRate] = useState('18');
   const [start, setStart] = useState('');
   const [open, setOpen] = useState<{ kind: 'invoice' | 'paid'; row: Row } | null>(null);
+  const [createInZoho, setCreateInZoho] = useState(true);
+  const [find, setFind] = useState('');
+  const [found, setFound] = useState<Array<{ invoiceNumber: string; customerName: string; date: string; status: string; totalPaise: number }>>([]);
+  const [sync, setSync] = useState<null | { proposals: Array<{ period: string; label: string; invoiceNumber: string; zohoStatus: string; action: string; reason: string; totalPaise: number }>; willLink: number; found: number }>(null);
   const [form, setForm] = useState({ invoiceNumber: '', invoiceUrl: '', issuedOn: '', amountInr: '', paidOn: today(), mode: 'bank', reference: '' });
 
   const load = useCallback(() => {
@@ -48,9 +53,9 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
-  const run = async (fn: () => Promise<any>, ok: string) => {
+  const run = async (fn: () => Promise<any>, ok: string | ((res: any) => string)) => {
     setBusy(true); setNote('');
-    try { const res = await fn(); setNote(res.success ? ok : (res.message || 'That did not work.')); if (res.success) { setOpen(null); load(); } }
+    try { const res = await fn(); setNote(res.success ? (typeof ok === 'function' ? ok(res) : ok) : (res.message || 'That did not work.')); if (res.success) { setOpen(null); setSync(null); load(); } }
     catch (e) { setNote(customerMessage(e)); }
     setBusy(false);
   };
@@ -60,12 +65,27 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
     if (!open) return;
     const base = { invoiceNumber: form.invoiceNumber.trim(), invoiceUrl: form.invoiceUrl.trim() || undefined, issuedOn: form.issuedOn || undefined, amountInr: form.amountInr.trim() ? Number(form.amountInr) : undefined };
     if (open.kind === 'invoice') return run(() => apiService.staffBillingInvoice(id, open.row.period, base), 'Invoice linked.');
-    return run(() => apiService.staffBillingPaid(id, open.row.period, { ...base, invoiceNumber: base.invoiceNumber || undefined, paidOn: form.paidOn, mode: form.mode, reference: form.reference }), 'Marked as paid.');
+    return run(() => apiService.staffBillingPaid(id, open.row.period, { ...base, invoiceNumber: base.invoiceNumber || undefined, paidOn: form.paidOn, mode: form.mode, reference: form.reference, createInZoho: !open.row.invoiceNumber && !base.invoiceNumber ? createInZoho : undefined }),
+      (res) => (res.zoho?.warning ? res.zoho.warning : res.zoho?.created ? `Marked as paid. Invoice ${res.zoho.invoiceNumber} was created in Zoho Books and the payment recorded there.` : 'Marked as paid.'));
   };
   const openForm = (kind: 'invoice' | 'paid', row: Row) => {
     setForm({ invoiceNumber: row.invoiceNumber || '', invoiceUrl: row.invoiceUrl || '', issuedOn: '', amountInr: '', paidOn: today(), mode: 'bank', reference: '' });
+    setCreateInZoho(true); setFind(''); setFound([]);
     setOpen({ kind, row });
   };
+  const search = async (q: string) => {
+    setFind(q);
+    if (q.trim().length < 2) { setFound([]); return; }
+    try { const r = await apiService.staffZohoSearch(q.trim()); setFound(r.invoices || []); } catch { setFound([]); }
+  };
+  const previewSync = async () => {
+    setBusy(true); setNote('');
+    try { const r = await apiService.staffBillingSync(id, false); if (r.success) setSync({ proposals: r.proposals, willLink: r.willLink, found: r.found }); else setNote(r.message || 'Could not read Zoho Books.'); }
+    catch (e) { setNote(customerMessage(e)); }
+    setBusy(false);
+  };
+  const applySync = () => run(() => apiService.staffBillingSync(id, true), (r) => `${r.linked} ${r.linked === 1 ? 'month' : 'months'} linked from Zoho Books.`);
+  const createZoho = (row: Row) => run(() => apiService.staffBillingZohoInvoice(id, row.period), (r) => `Invoice ${r.invoiceNumber} created in Zoho Books for ${row.label}.`);
   const undo = async (row: Row) => { if (await confirm(`Undo the payment for ${row.label}? The month goes back to invoiced.`, { title: 'Undo payment', confirmLabel: 'Undo' })) run(() => apiService.staffBillingUnpay(id, row.period), 'Payment undone.'); };
   const cancelMonth = async (row: Row, voided: boolean) => {
     if (voided && !(await confirm(`Cancel ${row.label}? It will not be billed and will not count in the totals.`, { title: 'Cancel this month', confirmLabel: 'Cancel month', danger: true }))) return;
@@ -102,6 +122,10 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
         <button disabled={busy || !amount || !start} onClick={saveSettings} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold disabled:opacity-50">Save</button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <button disabled={busy} onClick={previewSync} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 inline-flex items-center gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />}Sync from Zoho Books</button>
+        <span className="text-xs text-slate-500">Finds this client's invoices in Zoho Books (by email or business name) and fills in the months. You see what will change first.</span>
+      </div>
       {note && <p className="text-sm text-slate-800">{note}</p>}
 
       {data.rows.length === 0 ? <p className="text-sm text-slate-500">Set the monthly amount and the month service began, and the months will appear here.</p> : (
@@ -116,9 +140,10 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
                   <td className="px-3 py-2 text-right tabular-nums">{formatInr(r.gstPaise)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatInr(r.totalPaise)}</td>
                   <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CHIP[r.status]}`}>{STATUS_LABEL[r.status]}</span></td>
-                  <td className="px-3 py-2">{r.invoiceNumber ? (r.invoiceUrl ? <a href={r.invoiceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#B45309] underline">{r.invoiceNumber}<ExternalLink className="w-3 h-3" /></a> : r.invoiceNumber) : <span className="text-slate-400">—</span>}</td>
+                  <td className="px-3 py-2">{r.invoiceNumber ? (r.invoiceUrl || (r.zohoInvoiceId && data.zohoOrgId) ? <a href={r.invoiceUrl || `https://books.zoho.in/app/${data.zohoOrgId}#/invoices/${r.zohoInvoiceId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#B45309] underline">{r.invoiceNumber}<ExternalLink className="w-3 h-3" /></a> : r.invoiceNumber) : <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2 text-slate-700">{r.status === 'paid' ? <>{r.paidOn ? new Date(r.paidOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}<div className="text-xs text-slate-500">{r.paidModeLabel}{r.paidReference ? ` · ${r.paidReference}` : ''}</div></> : <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right space-x-3">
+                    {!r.invoiceNumber && r.status !== 'void' && <button disabled={busy} onClick={() => createZoho(r)} className="text-slate-700 underline">Create invoice in Zoho</button>}
                     {r.status !== 'paid' && r.status !== 'void' && <button disabled={busy} onClick={() => openForm('invoice', r)} className="text-slate-700 underline">{r.invoiceNumber ? 'Change invoice' : 'Link invoice'}</button>}
                     {r.status !== 'paid' && r.status !== 'void' && <button disabled={busy} onClick={() => openForm('paid', r)} className="font-semibold text-emerald-700 underline">Mark paid</button>}
                     {r.status === 'paid' && <button disabled={busy} onClick={() => undo(r)} className="text-slate-700 underline">Undo</button>}
@@ -132,14 +157,52 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
         </div>
       )}
 
+      {sync && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Sync from Zoho Books">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-3 max-h-[92vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-slate-900">From Zoho Books</h3>
+            {sync.found === 0 ? <p className="text-sm text-slate-700">No invoice was found for this client's email or business name. Use "Find it in Zoho Books" when you link an invoice, or check the email on the Zoho customer.</p> : (
+              <ul className="divide-y divide-slate-100 text-sm rounded-lg border border-slate-200">
+                {sync.proposals.map((p) => (
+                  <li key={p.invoiceNumber} className="px-3 py-2 flex justify-between gap-3">
+                    <span><span className="font-semibold">{p.invoiceNumber}</span> · {p.label} · {formatInr(p.totalPaise)}</span>
+                    <span className={p.action === 'skip' ? 'text-slate-500 text-right' : 'text-emerald-700 font-semibold text-right'}>{p.action === 'link_paid' ? 'Will be marked paid' : p.action === 'link_invoiced' ? 'Will be linked as invoiced' : p.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setSync(null)} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700">Close</button>
+              {sync.willLink > 0 && <button disabled={busy} onClick={applySync} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold disabled:opacity-50">Link {sync.willLink} {sync.willLink === 1 ? 'month' : 'months'}</button>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label={open.kind === 'paid' ? 'Mark as paid' : 'Link invoice'}>
           <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-3 max-h-[92vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-slate-900">{open.kind === 'paid' ? `Mark ${open.row.label} as paid` : `Link the invoice for ${open.row.label}`}</h3>
             <div><label className={lab} htmlFor="f-inv">Invoice number from Zoho Books{open.kind === 'paid' ? ' (optional)' : ''}</label><input id="f-inv" value={form.invoiceNumber} onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })} className={field} placeholder="INV-000016" /></div>
+            {open.kind === 'invoice' && (
+              <div>
+                <label className={lab} htmlFor="f-find">Find it in Zoho Books</label>
+                <input id="f-find" value={find} onChange={(e) => search(e.target.value)} className={field} placeholder="Type a customer name or invoice number" />
+                {found.length > 0 && (
+                  <ul className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100 text-sm">
+                    {found.map((f) => (
+                      <li key={f.invoiceNumber}><button type="button" onClick={() => { setForm({ ...form, invoiceNumber: f.invoiceNumber, issuedOn: f.date }); setFind(''); setFound([]); }} className="w-full text-left px-3 py-2 hover:bg-slate-50"><span className="font-semibold">{f.invoiceNumber}</span> · {f.customerName} · {f.date} · {formatInr(f.totalPaise)} · {f.status}</button></li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <div><label className={lab} htmlFor="f-url">Invoice link (optional)</label><input id="f-url" value={form.invoiceUrl} onChange={(e) => setForm({ ...form, invoiceUrl: e.target.value })} className={field} placeholder="https://..." /></div>
             {open.kind === 'invoice' && <div><label className={lab} htmlFor="f-date">Invoice date (optional)</label><input id="f-date" type="date" value={form.issuedOn} onChange={(e) => setForm({ ...form, issuedOn: e.target.value })} className={field} /></div>}
             <div><label className={lab} htmlFor="f-amt">Amount for this month only (optional, in the client's GST mode)</label><input id="f-amt" inputMode="decimal" value={form.amountInr} onChange={(e) => setForm({ ...form, amountInr: e.target.value.replace(/[^0-9.]/g, '') })} className={field} placeholder={`Leave empty for ${formatInr(open.row.totalPaise)}`} /></div>
+            {open.kind === 'paid' && !open.row.invoiceNumber && !form.invoiceNumber.trim() && (
+              <label className="flex items-start gap-2 text-sm text-slate-800"><input type="checkbox" checked={createInZoho} onChange={(e) => setCreateInZoho(e.target.checked)} className="mt-0.5" /><span>Create the invoice in Zoho Books and record this payment there<span className="block text-xs text-slate-500">Uses the month's amount with GST. Turn it off if you will raise the invoice yourself.</span></span></label>
+            )}
             {open.kind === 'paid' && (<>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={lab} htmlFor="f-paid">Paid on</label><input id="f-paid" type="date" value={form.paidOn} max={today()} onChange={(e) => setForm({ ...form, paidOn: e.target.value })} className={field} /></div>
