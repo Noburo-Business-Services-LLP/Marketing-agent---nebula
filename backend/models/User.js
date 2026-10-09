@@ -264,6 +264,13 @@ const userSchema = new mongoose.Schema({
     exGstAmount: { type: Number },
     paidAt: { type: Date, default: Date.now }
   }],
+  // Managed service billing (set by Owner or Admin): what the client pays each month (with or without GST included), and when service began.
+  managedBilling: {
+    monthlyAmountInr: { type: Number },  // what the client pays each month
+    gstInclusive: { type: Boolean },     // true: the amount already contains GST; false: GST is added on top
+    gstPercent: { type: Number },
+    serviceStart: { type: String } // 'YYYY-MM'
+  },
   // Plan (optional: accounts without plan.tier are treated as managed)
   plan: {
     tier: { type: String },

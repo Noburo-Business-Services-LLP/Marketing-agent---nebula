@@ -1380,6 +1380,12 @@ export const apiService = {
   staffToggleClient: async (id: string, active: boolean): Promise<any> => apiCall(`/staff/clients/${id}/toggle`, { method: 'POST', body: JSON.stringify({ active }) }, true),
   staffAssignCsm: async (id: string, csmId: string | null): Promise<any> => apiCall(`/staff/clients/${id}/assign-csm`, { method: 'POST', body: JSON.stringify({ csmId }) }, true),
   staffBulkClients: async (body: Record<string, unknown>): Promise<any> => apiCall('/staff/clients/bulk', { method: 'POST', body: JSON.stringify(body) }, true),
+  staffBilling: async (id: string): Promise<any> => apiCall(`/staff/clients/${id}/billing`, { method: 'GET' }, true),
+  staffBillingSettings: async (id: string, body: Record<string, unknown>): Promise<any> => apiCall(`/staff/clients/${id}/billing/settings`, { method: 'PUT', body: JSON.stringify(body) }, true),
+  staffBillingInvoice: async (id: string, period: string, body: Record<string, unknown>): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/invoice`, { method: 'POST', body: JSON.stringify(body) }, true),
+  staffBillingPaid: async (id: string, period: string, body: Record<string, unknown>): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/paid`, { method: 'POST', body: JSON.stringify(body) }, true),
+  staffBillingUnpay: async (id: string, period: string): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/unpay`, { method: 'POST', body: '{}' }, true),
+  staffBillingVoid: async (id: string, period: string, voided: boolean): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/void`, { method: 'POST', body: JSON.stringify({ void: voided }) }, true),
   staffCreateClient: async (body: Record<string, unknown>): Promise<any> => apiCall('/staff/clients', { method: 'POST', body: JSON.stringify(body) }, true),
   staffBulkAssign: async (ids: string[], csmId: string | null): Promise<any> => apiCall('/staff/clients/bulk-assign', { method: 'POST', body: JSON.stringify({ ids, csmId }) }, true),
   // Owner tools (the Owner-only ones are refused by the server for everyone else).

@@ -30,6 +30,7 @@ test('the table matches the spec', () => {
     hide_client:        [true, true, false],
     create_client:      [true, true, false],
     set_plan:           [true, true, false],
+    manage_billing:     [true, true, false],
     add_csm:            [true, true, false],
     manage_admins:      [true, false, false],
     reset_accounts:     [true, false, false],

@@ -16,6 +16,7 @@ const { buildUsage, loadUsageData, parseWindow } = require('../services/staff/us
 const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
 const tools = require('../services/staff/tools');
+const billing = require('../services/staff/billingLedger');
 const { bulkClients, createClient } = require('../services/staff/clientBulk');
 const { canonicalEmail } = require('../services/signupGuard');
 
@@ -291,7 +292,7 @@ router.get('/clients/:id', requireStaff('view_clients'), async (req, res) => {
         money: owner ? { payments: (client.payments || []).slice(-20).reverse().map((p) => ({ item: p.item, amount: p.amount, currency: p.currency, status: p.status, at: p.paidAt })), subscriptions: (client.plan && client.plan.subscriptions || []).map((x) => ({ kind: x.kind, key: x.key, active: x.active, since: x.createdAt })) } : null,
         history: (can(req.staff, 'view_activity_all') ? history : history.filter((h) => String(h.actor && h.actor._id) === String(req.staff._id))).map((h) => ({ action: h.action, by: h.actor ? ([h.actor.firstName, h.actor.lastName].filter(Boolean).join(' ') || h.actor.email) : '', at: h.at, details: h.details }))
       },
-      can: Object.fromEntries(['open_client', 'add_quarks', 'toggle_client', 'assign_csm', 'hide_client', 'view_money'].map((a) => [a, can(req.staff, a, client)]))
+      can: Object.fromEntries(['open_client', 'add_quarks', 'toggle_client', 'assign_csm', 'hide_client', 'view_money', 'manage_billing'].map((a) => [a, can(req.staff, a, client)]))
     });
   } catch (error) {
     console.error('[staff] client page failed:', error.message);
@@ -350,6 +351,36 @@ router.post('/clients/:id/assign-csm', requireStaff('assign_csm'), async (req, r
     res.status(500).json({ success: false, message: 'Could not assign the CSM.' });
   }
 });
+
+// ---- Managed client billing: the month-by-month ledger (Owner, Admin) ----
+const OBJECT_ID = /^[a-f0-9]{24}$/i;
+const billingRepo = () => {
+  const ClientInvoice = require('../models/ClientInvoice');
+  return {
+    getClient: (id) => (OBJECT_ID.test(String(id)) ? User.findById(id).select('staffRole isCsm managedBilling plan').lean() : null),
+    listRecords: (id) => ClientInvoice.find({ client: id }).lean(),
+    getRecord: (id, period) => ClientInvoice.findOne({ client: id, period }).lean(),
+    upsertRecord: (id, period, set) => ClientInvoice.updateOne({ client: id, period }, { $set: set, $setOnInsert: { client: id, period } }, { upsert: true }),
+    deleteRecord: (id, period) => ClientInvoice.deleteOne({ client: id, period }),
+    setSettings: (id, settings) => User.updateOne({ _id: id }, { $set: { managedBilling: settings } }),
+    markClientPaying: (id) => User.updateOne({ _id: id }, { $set: { 'plan.paidManually': true } })
+  };
+};
+const billingRoute = (handler) => async (req, res) => {
+  try {
+    const out = await handler({ actor: req.staff, clientId: req.params.id, period: req.params.period, input: req.body || {}, repo: billingRepo(), record: (row) => recordStaffAction(row) });
+    res.status(out.status).json(out.body);
+  } catch (error) {
+    console.error('[staff] billing failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not complete that billing action. Please try again.' });
+  }
+};
+router.get('/clients/:id/billing', requireStaff('manage_billing'), billingRoute((a) => billing.viewBilling(a)));
+router.put('/clients/:id/billing/settings', requireStaff('manage_billing'), billingRoute((a) => billing.saveSettings(a)));
+router.post('/clients/:id/billing/:period/invoice', requireStaff('manage_billing'), billingRoute((a) => billing.linkInvoice(a)));
+router.post('/clients/:id/billing/:period/paid', requireStaff('manage_billing'), billingRoute((a) => billing.markPaid(a)));
+router.post('/clients/:id/billing/:period/unpay', requireStaff('manage_billing'), billingRoute((a) => billing.undoPaid(a)));
+router.post('/clients/:id/billing/:period/void', requireStaff('manage_billing'), billingRoute((a) => billing.setVoid({ ...a, voided: a.input.void !== false })));
 
 // POST /api/staff/clients { email, firstName, lastName?, companyName?, csmId?, tier?, quarks? }: add a client by hand, on the
 // Managed plan unless another is chosen. No payment gateway is involved. Owner, Admin.

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, Check, Minus, AlertTriangle } from 'lucide-react';
+import StaffBilling from './StaffBilling';
 import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
 import PlatformIcon from '../../components/PlatformIcon';
@@ -168,6 +169,9 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
           )}
         </Card>
 
+        {can.manage_billing && c.tier === 'managed' && (
+          <div className="md:col-span-2"><Card title="Billing"><StaffBilling id={id} /></Card></div>
+        )}
         {c.money && (
           <Card title="Money">
             {c.money.subscriptions.length > 0 && <p className="text-sm mb-2 text-slate-700">Subscriptions: {c.money.subscriptions.map((s: any) => `${s.key || s.kind}${s.active ? '' : ' (not active)'}`).join(', ')}</p>}
