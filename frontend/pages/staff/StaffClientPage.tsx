@@ -24,7 +24,7 @@ const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, valu
 const ACTION_LABEL: Record<string, string> = {
   add_quarks: 'Added Quarks', disable_client: 'Switched the account off', enable_client: 'Switched the account on',
   assign_csm: 'Changed the CSM', bulk_assign_csm: 'Changed the CSM', open_client: 'Opened the account', role_change: 'Changed a role',
-  create_client: 'Added the client', bulk_add_quarks: 'Added Quarks', bulk_set_plan: 'Changed the plan', bulk_set_features: 'Changed the features',
+  create_client: 'Added the client', mark_paying: 'Marked as a paying customer', mark_not_paying: 'Marked as not paying', bulk_add_quarks: 'Added Quarks', bulk_set_plan: 'Changed the plan', bulk_set_features: 'Changed the features',
   hide_client: 'Left the client out of the numbers', show_client: 'Counted the client in the numbers again'
 };
 

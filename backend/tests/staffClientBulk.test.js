@@ -145,3 +145,26 @@ test('a failed welcome email does not undo adding the client', async () => {
   const out = await createClient({ actor: owner, input: { email: 'm@b.co', firstName: 'A' }, ...f, canonicalEmail });
   assert.equal(out.status, 201); assert.equal(out.body.emailed, false);
 });
+
+test('mark clients as paying (invoice or bank transfer) and back; the note is kept short and cleared on undo', async () => {
+  const f = fake();
+  const out = await bulkClients({ actor: admin, input: { ids: [hex('1'), hex('2')], op: 'set_billing', paying: true, note: '  Invoice INV-000016, Oct 2026  ' }, ...f });
+  assert.equal(out.body.updated, 2);
+  assert.deepEqual(f.calls.updates[0].update, { $set: { 'plan.paidManually': true, 'plan.paidNote': 'Invoice INV-000016, Oct 2026' } });
+  assert.equal(f.calls.records[0].action, 'mark_paying');
+  const back = fake();
+  await bulkClients({ actor: owner, input: { ids: [hex('1')], op: 'set_billing', paying: false }, ...back });
+  assert.deepEqual(back.calls.updates[0].update, { $set: { 'plan.paidManually': false }, $unset: { 'plan.paidNote': '' } });
+  assert.equal(back.calls.records[0].action, 'mark_not_paying');
+  assert.equal(parseOperation({ op: 'set_billing' }).ok, false);
+  assert.equal((await bulkClients({ actor: csm, input: { ids: [hex('1')], op: 'set_billing', paying: true }, ...fake() })).status, 403);
+});
+
+test('a new client can be created already marked as paying', async () => {
+  const f = fake();
+  await createClient({ actor: owner, input: { email: 'p@b.co', firstName: 'A', paying: true }, ...f, canonicalEmail });
+  assert.deepEqual(f.calls.created[0].plan, { tier: 'managed', paidManually: true });
+  const g = fake();
+  await createClient({ actor: owner, input: { email: 'q@b.co', firstName: 'A' }, ...g, canonicalEmail });
+  assert.deepEqual(g.calls.created[0].plan, { tier: 'managed' });
+});

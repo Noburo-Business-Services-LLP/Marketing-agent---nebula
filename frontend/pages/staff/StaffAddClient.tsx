@@ -24,6 +24,7 @@ const StaffAddClient: React.FC<Props> = ({ can, csms, onClose, onAdded, onOpenEx
   const [csmId, setCsmId] = useState('');
   const [tier, setTier] = useState('managed');
   const [quarks, setQuarks] = useState('');
+  const [paying, setPaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [existingId, setExistingId] = useState<string | null>(null);
@@ -35,7 +36,7 @@ const StaffAddClient: React.FC<Props> = ({ can, csms, onClose, onAdded, onOpenEx
     try {
       const res = await apiService.staffCreateClient({
         email, firstName, lastName, companyName, tier,
-        csmId: csmId || undefined,
+        csmId: csmId || undefined, paying: paying || undefined,
         quarks: can.add_quarks && quarks.trim() !== '' ? Number(quarks) : undefined
       });
       setDone({ name: res.client?.name || firstName, emailed: Boolean(res.emailed) });
@@ -87,6 +88,10 @@ const StaffAddClient: React.FC<Props> = ({ can, csms, onClose, onAdded, onOpenEx
                 </select>
               </div>
             </div>
+            <label className="flex items-start gap-2 text-sm text-slate-800">
+              <input type="checkbox" checked={paying} onChange={(e) => setPaying(e.target.checked)} className="mt-0.5" />
+              <span>Paying customer, billed by invoice or bank transfer<span className="block text-xs text-slate-500">Shows as Paying in the staff area. Nobody is charged by the app.</span></span>
+            </label>
             {can.add_quarks && (
               <div><label className={label} htmlFor="ac-quarks">Starting Quarks (optional)</label><input id="ac-quarks" inputMode="numeric" value={quarks} onChange={(e) => setQuarks(e.target.value.replace(/[^0-9]/g, ''))} className={field} placeholder="Leave empty for the standard amount" /></div>
             )}

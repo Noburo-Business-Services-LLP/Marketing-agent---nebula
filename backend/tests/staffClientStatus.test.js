@@ -22,6 +22,10 @@ test('paying needs a paid payment or an active subscription; refunded or failed 
   assert.strictEqual(s.isPaying({ plan: { subscriptions: [{ active: true }] } }), true);
   assert.strictEqual(s.isPaying({ payments: [{ status: 'failed' }, { status: 'refunded' }] }), false);
   assert.strictEqual(s.isPaying({}), false);
+  // A managed client who pays by invoice or bank transfer is marked by staff.
+  assert.strictEqual(s.isPaying({ plan: { tier: 'managed', paidManually: true } }), true);
+  assert.strictEqual(s.isPaying({ plan: { tier: 'managed', paidManually: false } }), false);
+  assert.strictEqual(s.classifyClient({ plan: { tier: 'managed', paidManually: true } }).trial, false);
 });
 
 test('trial is not paying and the trial has not ended', () => {

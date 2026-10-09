@@ -1,8 +1,8 @@
 // Bulk actions on the staff client list: which actions a person may use, the request each one sends, and the plain
 // sentence that asks "are you sure". Pure, so the rules are tested without a screen.
 
-export type BulkChoice = 'on' | 'off' | 'csm' | 'quarks' | 'plan' | 'features_add' | 'features_remove' | 'hide' | 'show';
-export type BulkValues = { csmId: string; amount: string; tier: string; addons: string[] };
+export type BulkChoice = 'on' | 'off' | 'csm' | 'quarks' | 'plan' | 'features_add' | 'features_remove' | 'paying_on' | 'paying_off' | 'hide' | 'show';
+export type BulkValues = { csmId: string; amount: string; tier: string; addons: string[]; note?: string };
 
 export const PLAN_CHOICES: Array<{ value: string; label: string }> = [
   { value: 'managed', label: 'Managed (everything on, no payment)' },
@@ -20,11 +20,11 @@ export const FEATURE_CHOICES: Array<{ value: string; label: string }> = [
 
 const NEEDS: Record<BulkChoice, string> = {
   on: 'toggle_client', off: 'toggle_client', csm: 'assign_csm', quarks: 'add_quarks', plan: 'set_plan',
-  features_add: 'set_plan', features_remove: 'set_plan', hide: 'hide_client', show: 'hide_client'
+  features_add: 'set_plan', features_remove: 'set_plan', paying_on: 'set_plan', paying_off: 'set_plan', hide: 'hide_client', show: 'hide_client'
 };
 const LABEL: Record<BulkChoice, string> = {
   on: 'Switch accounts on', off: 'Switch accounts off', csm: 'Change CSM', quarks: 'Add Quarks', plan: 'Set plan',
-  features_add: 'Add features', features_remove: 'Remove features', hide: 'Leave out of the numbers', show: 'Count in the numbers'
+  features_add: 'Add features', features_remove: 'Remove features', paying_on: 'Mark as paying (invoice or bank)', paying_off: 'Mark as not paying', hide: 'Leave out of the numbers', show: 'Count in the numbers'
 };
 
 /** The actions this person may use, in a sensible order. */
@@ -49,6 +49,8 @@ export function bulkRequest(choice: BulkChoice, v: BulkValues, ids: string[]): {
     case 'plan':
       if (!PLAN_CHOICES.some((p) => p.value === v.tier)) return { ok: false, message: 'Choose a plan.' };
       return { ok: true, body: { ids, op: 'set_plan', tier: v.tier } };
+    case 'paying_on': return { ok: true, body: { ids, op: 'set_billing', paying: true, ...(v.note && v.note.trim() ? { note: v.note.trim() } : {}) } };
+    case 'paying_off': return { ok: true, body: { ids, op: 'set_billing', paying: false } };
     case 'features_add':
     case 'features_remove':
       if (v.addons.length === 0) return { ok: false, message: 'Choose at least one feature.' };
@@ -70,6 +72,8 @@ export function bulkSummary(choice: BulkChoice, v: BulkValues, count: number, cs
     case 'csm': return v.csmId ? `Assign ${csmName || 'this CSM'} to ${who}?` : `Remove the CSM from ${who}?`;
     case 'quarks': return `Add ${Number(v.amount).toLocaleString('en-IN')} Quarks to each of ${who}? That is ${(Number(v.amount) * count).toLocaleString('en-IN')} Quarks in total.`;
     case 'plan': return `Set the plan of ${who} to ${PLAN_CHOICES.find((p) => p.value === v.tier)?.label.split(' (')[0] || v.tier}?${v.tier === 'managed' ? ' Managed accounts have every feature on and are not asked to pay.' : ''}`;
+    case 'paying_on': return `Mark ${who} as paying customers? They will show as Paying in the staff area. Nobody is charged.`;
+    case 'paying_off': return `Mark ${who} as not paying? They will no longer show as Paying.`;
     case 'features_add': return `Add ${v.addons.map((a) => FEATURE_CHOICES.find((f) => f.value === a)?.label || a).join(', ')} to ${who}?`;
     case 'features_remove': return `Remove ${v.addons.map((a) => FEATURE_CHOICES.find((f) => f.value === a)?.label || a).join(', ')} from ${who}?`;
     default: return `Apply to ${who}?`;

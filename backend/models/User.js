@@ -268,6 +268,9 @@ const userSchema = new mongoose.Schema({
   plan: {
     tier: { type: String },
     addons: [{ type: String }],
+    // Set by Nebulaa staff for a managed client who pays by invoice or bank transfer (no online payment is recorded for them).
+    paidManually: { type: Boolean },
+    paidNote: { type: String, maxlength: 200 },
     subscriptionId: { type: String },
     welcomeEmailSentAt: { type: Date },
     // Razorpay subscriptions this account started (the plan, and each add-on).

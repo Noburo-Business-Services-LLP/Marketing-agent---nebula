@@ -7,7 +7,7 @@ const v = { csmId: '', amount: '', tier: '', addons: [] };
 test('each role sees only the actions it may use', () => {
   const owner = { toggle_client: true, add_quarks: true, assign_csm: true, set_plan: true, hide_client: true };
   const admin = { ...owner, add_quarks: false };
-  assert.deepEqual(bulkChoices(owner).map((c) => c.value), ['on', 'off', 'csm', 'quarks', 'plan', 'features_add', 'features_remove', 'hide', 'show']);
+  assert.deepEqual(bulkChoices(owner).map((c) => c.value), ['on', 'off', 'csm', 'quarks', 'plan', 'features_add', 'features_remove', 'paying_on', 'paying_off', 'hide', 'show']);
   assert.equal(bulkChoices(admin).some((c) => c.value === 'quarks'), false);
   assert.deepEqual(bulkChoices({}), []);
 });
@@ -37,4 +37,12 @@ test('the confirmation sentence says what will happen and to how many', () => {
 test('the result note counts what changed and why some were skipped', () => {
   assert.equal(bulkResultNote({ updated: 1, skipped: [] }), '1 client updated.');
   assert.equal(bulkResultNote({ updated: 3, skipped: [{ reason: 'Not a client account.' }, { reason: 'Not a client account.' }] }), '3 clients updated. 2 skipped: Not a client account.');
+});
+
+test('marking clients as paying sends the right request and asks in plain words', () => {
+  assert.deepEqual(bulkRequest('paying_on', { ...v, note: ' INV-16 ' }, ['1']).body, { ids: ['1'], op: 'set_billing', paying: true, note: 'INV-16' });
+  assert.deepEqual(bulkRequest('paying_on', v, ['1']).body, { ids: ['1'], op: 'set_billing', paying: true });
+  assert.deepEqual(bulkRequest('paying_off', v, ['1']).body, { ids: ['1'], op: 'set_billing', paying: false });
+  assert.match(bulkSummary('paying_on', v, 9), /Mark 9 clients as paying customers\? They will show as Paying in the staff area\. Nobody is charged\./);
+  assert.match(bulkSummary('paying_off', v, 1), /Mark 1 client as not paying/);
 });

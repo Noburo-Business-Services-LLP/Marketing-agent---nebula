@@ -20,6 +20,7 @@ const OP_PERMISSION = {
   assign_csm: 'assign_csm',
   set_plan: 'set_plan',
   set_features: 'set_plan',
+  set_billing: 'set_plan',
   set_hidden: 'hide_client'
 };
 
@@ -62,6 +63,15 @@ function parseOperation(input = {}) {
     case 'set_plan':
       if (!TIERS.includes(input.tier)) return { ok: false, message: 'Choose a plan: Managed, Free, Starter or Professional.' };
       return { ok: true, op, params: { tier: input.tier }, update: { $set: { 'plan.tier': input.tier } } };
+    case 'set_billing': {
+      if (typeof input.paying !== 'boolean') return { ok: false, message: 'Say whether these clients are paying or not.' };
+      const note = typeof input.note === 'string' ? input.note.trim().slice(0, 200) : '';
+      const set = { 'plan.paidManually': input.paying };
+      if (input.paying && note) set['plan.paidNote'] = note;
+      const update = { $set: set };
+      if (!input.paying) update.$unset = { 'plan.paidNote': '' };
+      return { ok: true, op, params: { paying: input.paying, ...(note ? { note } : {}) }, update };
+    }
     case 'set_features': {
       const addons = (Array.isArray(input.addons) ? input.addons : []).filter((a) => ADDONS.includes(a));
       if (addons.length === 0) return { ok: false, message: 'Choose at least one feature.' };
@@ -108,7 +118,7 @@ async function bulkClients({ actor, input = {}, repo, record }) {
 
   if (eligible.length > 0) {
     await repo.applyUpdate(eligible, parsed.update);
-    const label = { set_active: parsed.params.active ? 'enable_client' : 'disable_client', set_hidden: parsed.params.hidden ? 'hide_client' : 'show_client' }[parsed.op] || `bulk_${parsed.op}`;
+    const label = { set_active: parsed.params.active ? 'enable_client' : 'disable_client', set_hidden: parsed.params.hidden ? 'hide_client' : 'show_client', set_billing: parsed.params.paying ? 'mark_paying' : 'mark_not_paying' }[parsed.op] || `bulk_${parsed.op}`;
     for (const id of eligible) {
       try { await record({ actor, action: label, client: id, details: { bulk: true, op: parsed.op, ...parsed.params } }); } catch (_) { /* logging never undoes the change */ }
     }
@@ -163,7 +173,7 @@ async function createClient({ actor, input = {}, repo, record, invite, canonical
   const doc = {
     email, emailKey: canonicalEmail ? canonicalEmail(email) : email, password: unknownPassword(),
     firstName, lastName, companyName, isVerified: true, isActive: true, onboardingCompleted: false,
-    plan: { tier }, assignedCsm: csmId
+    plan: { tier, ...(input.paying === true ? { paidManually: true } : {}) }, assignedCsm: csmId
   };
   if (quarks !== null) doc.credits = { balance: quarks, totalUsed: 0 };
   const user = await repo.createUser(doc);

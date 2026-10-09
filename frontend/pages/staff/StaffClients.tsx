@@ -48,6 +48,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
   const [bulkAmount, setBulkAmount] = useState('');
   const [bulkTier, setBulkTier] = useState('managed');
   const [bulkAddons, setBulkAddons] = useState<string[]>([]);
+  const [bulkNote, setBulkNote] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const options = bulkChoices(can);
@@ -78,7 +79,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
   const applyBulk = async () => {
     setNote('');
     if (!choice) { setNote('Choose what to do first.'); return; }
-    const values = { csmId: bulkCsm, amount: bulkAmount, tier: bulkTier, addons: bulkAddons };
+    const values = { csmId: bulkCsm, amount: bulkAmount, tier: bulkTier, addons: bulkAddons, note: bulkNote };
     const req = bulkRequest(choice, values, picked);
     if (req.ok === false) { setNote(req.message); return; }
     const csmName = csms.find((c) => c.id === bulkCsm)?.name || '';
@@ -150,6 +151,9 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
             <select value={bulkTier} onChange={(e) => setBulkTier(e.target.value)} aria-label="Plan" className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
               {PLAN_CHOICES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
+          )}
+          {choice === 'paying_on' && (
+            <input value={bulkNote} onChange={(e) => setBulkNote(e.target.value.slice(0, 200))} placeholder="Note, for example the invoice number (optional)" aria-label="Note" className="w-72 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" />
           )}
           {(choice === 'features_add' || choice === 'features_remove') && (
             <div className="flex flex-wrap gap-3">

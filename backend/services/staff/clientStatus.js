@@ -22,11 +22,12 @@ function lastActiveAt(user, lastEventAt) {
   return times.length ? new Date(Math.max(...times)) : null;
 }
 
-/** Paying = at least one paid payment record, or an active subscription. */
+/** Paying = at least one paid payment record, an active subscription, or marked as paying by staff (invoice or bank transfer). */
 function isPaying(user) {
   const paid = Array.isArray(user && user.payments) && user.payments.some((p) => p && p.status === 'paid');
   const subs = Array.isArray(user && user.plan && user.plan.subscriptions) && user.plan.subscriptions.some((s) => s && s.active);
-  return Boolean(paid || subs);
+  const manual = Boolean(user && user.plan && user.plan.paidManually === true);
+  return Boolean(paid || subs || manual);
 }
 
 function connectedCount(user) {
