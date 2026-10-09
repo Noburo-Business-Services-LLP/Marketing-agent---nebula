@@ -222,3 +222,14 @@ test('quarkTotals ignores entries with no usable date', () => {
   const t = quarkTotals([mk('a', { credits: { history: [{ action: 'image', amount: -5 }] } })], NOW);
   assert.strictEqual(t.spent, 0);
 });
+
+test('payments recorded on managed-client invoices count as collected money', async () => {
+  const { loadMoneyData, buildMoney } = require('../services/staff/money');
+  const u = { _id: 'u1', email: 'a@x.test', companyName: 'Aval', payments: [] };
+  const User = { find: () => ({ lean: async () => [u] }), countDocuments: async () => 0 };
+  const ClientInvoice = { find: () => ({ lean: async () => [{ client: 'u1', status: 'paid', totalPaise: 11800, exPaise: 10000, invoiceNumber: 'INV-1', payments: [{ amountPaise: 11800, paidOn: new Date() }] }] }) };
+  const data = await loadMoneyData({ models: { User, ClientInvoice } });
+  const out = buildMoney({ users: data.users });
+  assert.equal(out.revenue.allTime.totalPaise, 11800);
+  assert.equal(out.revenue.allTime.gstPaise, 1800);
+});

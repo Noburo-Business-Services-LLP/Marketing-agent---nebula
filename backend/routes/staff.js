@@ -184,7 +184,7 @@ router.get('/home', requireStaff('view_home'), async (req, res) => {
 // GET /api/staff/money: revenue, plan mix, payments, renewals, failures, Quarks, Ayrshare profiles (Owner only).
 router.get('/money', requireStaff('view_money'), async (req, res) => {
   try {
-    const data = await loadMoneyData({ models: { User } });
+    const data = await loadMoneyData({ models: { User, ClientInvoice: require('../models/ClientInvoice') } });
     const q = req.query || {};
     res.json({ success: true, ...buildMoney({ ...data, page: q.page, pageSize: q.pageSize }) });
   } catch (error) {
@@ -196,7 +196,7 @@ router.get('/money', requireStaff('view_money'), async (req, res) => {
 // GET /api/staff/money/payments?page=&pageSize=: one page of the payments table (Owner only).
 router.get('/money/payments', requireStaff('view_money'), async (req, res) => {
   try {
-    const { users } = await loadMoneyData({ models: { User } });
+    const { users } = await loadMoneyData({ models: { User, ClientInvoice: require('../models/ClientInvoice') } });
     const q = req.query || {};
     res.json({ success: true, ...buildPayments({ users: users.filter((u) => !u.staffRole && !u.isCsm && !u.isHidden), page: q.page, pageSize: q.pageSize }) });
   } catch (error) {

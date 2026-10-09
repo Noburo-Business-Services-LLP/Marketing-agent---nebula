@@ -41,6 +41,7 @@ function describePayment(user, p) {
   const rec = subs.find((s) => s && p.razorpayOrderId && s.subscriptionId === p.razorpayOrderId);
   if (rec && rec.kind === 'plan' && PLAN_PRESENTATION[rec.key]) return `${PLAN_PRESENTATION[rec.key].name} plan`;
   if (rec && rec.kind === 'addon' && ADDONS[rec.key]) return `${ADDONS[rec.key].label} add-on`;
+  if (p.item === 'managed_invoice') return p.label ? `Managed plan, ${p.label}` : 'Managed plan';
   if (p.item === INVOICE_ITEMS.topup) {
     const pack = TOPUP_PACKS.find((k) => k.quarks === Number(p.credits));
     return pack ? `Quark pack, ${pack.quarks.toLocaleString('en-IN')} Quarks` : 'Quark pack';
@@ -271,6 +272,23 @@ async function loadMoneyData({ models }) {
     email: 1, firstName: 1, lastName: 1, companyName: 1, 'businessProfile.name': 1, isHidden: 1, staffRole: 1, isCsm: 1,
     plan: 1, subscription: 1, payments: 1, 'credits.history': 1
   }).lean();
+  // Money recorded by hand or synced from Zoho Books for managed clients counts as collected money too.
+  if (models.ClientInvoice) {
+    try {
+      const rows = await models.ClientInvoice.find({ status: { $in: ['paid', 'partial'] } }).lean();
+      const byId = new Map(users.map((u) => [String(u._id), u]));
+      for (const r of rows) {
+        const u = byId.get(String(r.client));
+        if (!u || !r.totalPaise) continue;
+        u.payments = Array.isArray(u.payments) ? u.payments : [];
+        const list = Array.isArray(r.payments) && r.payments.length ? r.payments : (r.paidPaise ? [{ amountPaise: r.paidPaise, paidOn: r.paidOn }] : []);
+        for (const x of list) {
+          const total = x.amountPaise / 100;
+          u.payments.push({ item: 'managed_invoice', label: r.invoiceNumber || r.period, amount: total, exGstAmount: Math.round((x.amountPaise * r.exPaise) / r.totalPaise) / 100, currency: 'INR', status: 'paid', paidAt: x.paidOn || r.paidOn || r.updatedAt });
+        }
+      }
+    } catch (error) { console.error('[staff] could not read managed invoices for the money page:', error.message); }
+  }
   let ayrshareProfiles = null;
   try { ayrshareProfiles = await User.countDocuments({ 'ayrshare.profileKey': { $exists: true, $nin: ['', null] } }); }
   catch (error) { console.error('[staff] could not count social profiles:', error.message); }
