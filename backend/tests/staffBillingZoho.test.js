@@ -220,3 +220,13 @@ test('a ledger invoice shown as sent that Zoho now shows fully paid is upgraded 
   const out = await Z.syncFromZoho({ actor: owner, clientId: hex('1'), apply: false, ...f });
   assert.equal(out.body.proposals[0].action, 'link_invoiced');
 });
+
+test('invoices picked by hand are included even when Zoho names the customer differently', async () => {
+  const f = fake({ zohoInvoices: [inv({ invoiceId: 'x1', invoiceNumber: 'INV-000042', email: '', customerName: 'Totally Different Name' })] });
+  const none = await Z.syncFromZoho({ actor: owner, clientId: hex('1'), apply: false, ...f });
+  assert.equal(none.body.found, 0);
+  const picked = await Z.syncFromZoho({ actor: owner, clientId: hex('1'), apply: false, invoiceNumbers: ['INV-000042', 'INV-NOPE'], ...f });
+  assert.equal(picked.body.found, 1);
+  assert.equal(picked.body.proposals[0].invoiceNumber, 'INV-000042');
+  assert.equal(picked.body.proposals[0].matchedBy, 'chosen');
+});

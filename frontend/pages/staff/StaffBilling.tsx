@@ -109,13 +109,22 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
     if (q.trim().length < 2) { setFound([]); return; }
     try { const r = await apiService.staffZohoSearch(q.trim()); setFound(r.invoices || []); } catch { setFound([]); }
   };
-  const previewSync = async () => {
+  const [picked, setPicked] = useState<string[]>([]);
+  const [syncFind, setSyncFind] = useState('');
+  const [syncFound, setSyncFound] = useState<any[]>([]);
+  const searchSync = async (q: string) => {
+    setSyncFind(q);
+    if (q.trim().length < 2) { setSyncFound([]); return; }
+    try { const r = await apiService.staffZohoSearch(q.trim()); setSyncFound(r.invoices || []); } catch { setSyncFound([]); }
+  };
+  const togglePick = (n: string) => setPicked((p) => (p.includes(n) ? p.filter((x) => x !== n) : [...p, n]));
+  const previewSync = async (numbers: string[] = picked) => {
     setBusy(true); setNote('');
-    try { const r = await apiService.staffBillingSync(id, false); if (r.success) setSync({ proposals: r.proposals, willLink: r.willLink, found: r.found }); else setNote(r.message || 'Could not read Zoho Books.'); }
+    try { const r = await apiService.staffBillingSync(id, false, numbers); if (r.success) setSync({ proposals: r.proposals, willLink: r.willLink, found: r.found }); else setNote(r.message || 'Could not read Zoho Books.'); }
     catch (e) { setNote(customerMessage(e)); }
     setBusy(false);
   };
-  const applySync = () => run(() => apiService.staffBillingSync(id, true), (r) => `${r.linked} ${r.linked === 1 ? 'period' : 'periods'} linked from Zoho Books.`);
+  const applySync = () => run(() => apiService.staffBillingSync(id, true, picked), (r) => `${r.linked} ${r.linked === 1 ? 'period' : 'periods'} linked from Zoho Books.`);
   const createZoho = (row: Row) => run(() => apiService.staffBillingZohoInvoice(id, row.period), (r) => `Invoice ${r.invoiceNumber} created in Zoho Books for ${row.label}.`);
   const undo = async (row: Row) => { if (await confirm(`Undo the latest payment for ${row.label}?`, { title: 'Undo payment', confirmLabel: 'Undo' })) run(() => apiService.staffBillingUnpay(id, row.period), 'Payment undone.'); };
   const cancelMonth = async (row: Row, voided: boolean) => {
@@ -183,7 +192,7 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button disabled={busy} onClick={previewSync} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 inline-flex items-center gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />}Sync from Zoho Books</button>
+        <button disabled={busy} onClick={() => { setPicked([]); setSyncFind(''); setSyncFound([]); previewSync([]); }} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 inline-flex items-center gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />}Sync from Zoho Books</button>
         <span className="text-xs text-slate-500">Finds this client's invoices in Zoho Books (by email or business name) and fills in the periods, with what has been paid. You see what will change first.</span>
       </div>
       {note && <p className="text-sm text-slate-800">{note}</p>}
@@ -250,7 +259,7 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Sync from Zoho Books">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-3 max-h-[92vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-slate-900">From Zoho Books</h3>
-            {sync.found === 0 ? <p className="text-sm text-slate-700">No invoice was found for this client's email or business name. Use "Find it in Zoho Books" when you link an invoice, or check the email on the Zoho customer.</p> : (
+            {sync.found === 0 ? <p className="text-sm text-slate-700">No invoice was found for this client's email or business name. Search below and pick the invoices yourself.</p> : (
               <ul className="divide-y divide-slate-100 text-sm rounded-lg border border-slate-200">
                 {sync.proposals.map((p) => (
                   <li key={p.invoiceNumber} className="px-3 py-2 flex justify-between gap-3">
@@ -260,6 +269,21 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
                 ))}
               </ul>
             )}
+            <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+              <p className="text-sm font-semibold text-slate-800">Not the right invoices? Pick them yourself</p>
+              <input value={syncFind} onChange={(e) => searchSync(e.target.value)} placeholder="Search Zoho Books by customer name or invoice number" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              {syncFound.length > 0 && (
+                <ul className="divide-y divide-slate-100 text-sm rounded-lg border border-slate-200 max-h-48 overflow-y-auto">
+                  {syncFound.map((i) => (
+                    <li key={i.invoiceNumber}><label className="px-3 py-2 flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={picked.includes(i.invoiceNumber)} onChange={() => togglePick(i.invoiceNumber)} />
+                      <span className="flex-1"><span className="font-semibold">{i.invoiceNumber}</span> · {i.customerName} · {formatInr(i.totalPaise)} · {i.status}</span>
+                    </label></li>
+                  ))}
+                </ul>
+              )}
+              {picked.length > 0 && <button disabled={busy} onClick={() => previewSync(picked)} className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 disabled:opacity-50">Include {picked.length} chosen {picked.length === 1 ? 'invoice' : 'invoices'} and preview</button>}
+            </div>
             <div className="flex justify-end gap-2">
               <button onClick={() => setSync(null)} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700">Close</button>
               {sync.willLink > 0 && <button disabled={busy} onClick={applySync} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold disabled:opacity-50">Link {sync.willLink} {sync.willLink === 1 ? 'period' : 'periods'}</button>}

@@ -88,12 +88,16 @@ function planSync({ client, matches, records, details }) {
 }
 
 /** Preview or apply: pull this client's invoices from Zoho into the ledger. */
-async function syncFromZoho({ actor, clientId, apply, repo, zoho, record }) {
+async function syncFromZoho({ actor, clientId, apply, invoiceNumbers, repo, zoho, record }) {
   const t = await L.loadTarget({ actor, clientId, repo });
   if (t.error) return t.error;
   let matches; const details = {};
   try {
-    matches = matchInvoices(t.client, await zoho.listInvoices({ force: true }));
+    const all = await zoho.listInvoices({ force: true });
+    matches = matchInvoices(t.client, all);
+    // Invoices the staff member picked by hand, for a customer Zoho names differently.
+    const picks = new Set((Array.isArray(invoiceNumbers) ? invoiceNumbers : []).slice(0, 30).map((n) => String(n).trim()).filter(Boolean));
+    for (const inv of all) if (picks.has(String(inv.invoiceNumber)) && !matches.some((m) => m.inv.invoiceId === inv.invoiceId)) matches.push({ inv, reason: 'chosen' });
     for (const m of matches.slice(0, 30)) if (m.inv.status !== 'draft' && m.inv.status !== 'void') details[m.inv.invoiceId] = await zoho.getInvoice(m.inv.invoiceId);
   } catch (e) {
     console.error('[billing] zoho sync failed:', e.message);

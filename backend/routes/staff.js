@@ -228,7 +228,7 @@ router.get('/usage', requireStaff('view_usage_summary'), async (req, res) => {
 // GET /api/staff/csms: active CSMs, for the "assign a CSM" menus (Owner, Admin).
 router.get('/csms', requireStaff('assign_csm'), async (req, res) => {
   try {
-    const rows = await User.find({ staffRole: 'csm', isActive: { $ne: false } }, { firstName: 1, lastName: 1, email: 1 }).sort({ firstName: 1 }).lean();
+    const rows = await User.find({ $or: [{ staffRole: 'csm' }, { isCsm: true }], isActive: { $ne: false } }, { firstName: 1, lastName: 1, email: 1 }).sort({ firstName: 1 }).lean();
     res.json({ success: true, csms: rows.map((r) => ({ id: String(r._id), name: [r.firstName, r.lastName].filter(Boolean).join(' ') || r.email })) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Could not load the CSM list.' });
@@ -293,7 +293,7 @@ router.get('/clients/:id', requireStaff('view_clients'), async (req, res) => {
         money: owner ? { payments: (client.payments || []).slice(-20).reverse().map((p) => ({ item: p.item, amount: p.amount, currency: p.currency, status: p.status, at: p.paidAt })), subscriptions: (client.plan && client.plan.subscriptions || []).map((x) => ({ kind: x.kind, key: x.key, active: x.active, since: x.createdAt })) } : null,
         history: (can(req.staff, 'view_activity_all') ? history : history.filter((h) => String(h.actor && h.actor._id) === String(req.staff._id))).map((h) => ({ action: h.action, by: h.actor ? ([h.actor.firstName, h.actor.lastName].filter(Boolean).join(' ') || h.actor.email) : '', at: h.at, details: h.details }))
       },
-      can: Object.fromEntries(['open_client', 'add_quarks', 'toggle_client', 'assign_csm', 'hide_client', 'view_money', 'manage_billing'].map((a) => [a, can(req.staff, a, client)]))
+      can: Object.fromEntries(['open_client', 'add_quarks', 'toggle_client', 'assign_csm', 'hide_client', 'view_money', 'manage_billing', 'set_plan'].map((a) => [a, can(req.staff, a, client)]))
     });
   } catch (error) {
     console.error('[staff] client page failed:', error.message);
@@ -353,6 +353,22 @@ router.post('/clients/:id/assign-csm', requireStaff('assign_csm'), async (req, r
   }
 });
 
+// POST /api/staff/clients/:id/name { name }: correct the business name shown everywhere for this client (Owner, Admin).
+router.post('/clients/:id/name', requireStaff('set_plan'), async (req, res) => {
+  try {
+    const client = await clientFor(req, res, 'set_plan');
+    if (!client) return;
+    const name = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim();
+    if (name.length < 2 || name.length > 100) return res.status(400).json({ success: false, message: 'Type a name between 2 and 100 characters.' });
+    await User.updateOne({ _id: client._id }, { $set: { 'businessProfile.name': name, companyName: name } });
+    await recordStaffAction({ actor: req.staff, action: 'rename_client', client: client._id, details: { from: (client.businessProfile && client.businessProfile.name) || client.companyName || '', to: name } });
+    res.json({ success: true, name });
+  } catch (error) {
+    console.error('[staff] rename failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not change the name.' });
+  }
+});
+
 // ---- Managed client billing: the month-by-month ledger (Owner, Admin) ----
 const OBJECT_ID = /^[a-f0-9]{24}$/i;
 const billingRepo = () => {
@@ -380,7 +396,7 @@ const billingRoute = (handler) => async (req, res) => {
 router.get('/clients/:id/billing', requireStaff('manage_billing'), billingRoute((a) => billing.viewBilling(a)));
 router.put('/clients/:id/billing/settings', requireStaff('manage_billing'), billingRoute((a) => billing.saveSettings(a)));
 router.post('/clients/:id/billing/:period/invoice', requireStaff('manage_billing'), billingRoute((a) => billing.linkInvoice(a)));
-router.post('/clients/:id/billing/sync', requireStaff('manage_billing'), billingRoute((a) => billingZoho.syncFromZoho({ ...a, apply: a.input.apply === true })));
+router.post('/clients/:id/billing/sync', requireStaff('manage_billing'), billingRoute((a) => billingZoho.syncFromZoho({ ...a, apply: a.input.apply === true, invoiceNumbers: a.input.invoiceNumbers })));
 router.post('/clients/:id/billing/:period/zoho-invoice', requireStaff('manage_billing'), billingRoute((a) => billingZoho.createZohoInvoice(a)));
 router.post('/clients/:id/billing/:period/paid', requireStaff('manage_billing'), billingRoute((a) => billingZoho.markPaidWithZoho(a)));
 router.get('/zoho/items', requireStaff('manage_billing'), async (req, res) => {

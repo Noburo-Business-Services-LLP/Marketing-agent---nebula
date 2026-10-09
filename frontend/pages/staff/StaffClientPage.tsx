@@ -28,7 +28,7 @@ const ACTION_LABEL: Record<string, string> = {
   billing_void: 'Cancelled a billing period', billing_restore: 'Restored a billing period', billing_edit_dates: 'Changed billing dates',
   billing_zoho_sync: 'Linked invoices from Zoho Books', billing_zoho_invoice: 'Created an invoice in Zoho Books', bulk_add_quarks: 'Added Quarks', bulk_set_plan: 'Changed the plan', bulk_set_features: 'Changed the features',
   add_quarks: 'Added Quarks', disable_client: 'Switched the account off', enable_client: 'Switched the account on',
-  assign_csm: 'Changed the CSM', bulk_assign_csm: 'Changed the CSM', open_client: 'Opened the account', role_change: 'Changed a role',
+  assign_csm: 'Changed the CSM', rename_client: 'Changed the name', bulk_assign_csm: 'Changed the CSM', open_client: 'Opened the account', role_change: 'Changed a role',
   hide_client: 'Left the client out of the numbers', show_client: 'Counted the client in the numbers again'
 };
 
@@ -76,7 +76,9 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
       <button onClick={() => navigate('/staff/clients')} className="inline-flex items-center gap-1 text-sm text-slate-600"><ArrowLeft className="w-4 h-4" /> All clients</button>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">{c.name}</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{c.name}{can.set_plan && (
+            <button disabled={busy} onClick={() => { const n = window.prompt('Business name for this client', c.business?.name || c.name); if (n && n.trim() && n.trim() !== c.name) run(() => apiService.staffRenameClient(id, n.trim()), 'Name changed.'); }} className="ml-3 align-middle text-sm font-semibold text-slate-600 underline disabled:opacity-50">Change name</button>
+          )}</h2>
           <p className="text-sm text-slate-500">{c.email}{c.mobile ? ` · ${c.mobile}` : ''}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -125,6 +127,7 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
             {can.assign_csm ? (
               <select disabled={busy} value={c.csm?.id || ''} onChange={(e) => run(() => apiService.staffAssignCsm(id, e.target.value || null), 'CSM updated.')} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm">
                 <option value="">None</option>
+                {c.csm && !csms.some((m) => m.id === c.csm.id) && <option value={c.csm.id}>{c.csm.name}</option>}
                 {csms.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             ) : <span className="text-slate-900">{c.csm?.name || '—'}</span>}
