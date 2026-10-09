@@ -8,7 +8,8 @@
 # Before you run it, in the Zoho account that OWNS the organisation (the one that sees your real invoices):
 #   1. Open https://api-console.zoho.in  ->  Add Client  ->  Self Client  (note the Client ID and Client Secret).
 #   2. Generate Code, with this scope (one line, no spaces) and 10 minutes validity:
-#        ZohoBooks.invoices.ALL,ZohoBooks.contacts.ALL,ZohoBooks.customerpayments.ALL,ZohoBooks.settings.READ
+#        ZohoBooks.invoices.CREATE,ZohoBooks.invoices.READ,ZohoBooks.invoices.UPDATE,ZohoBooks.contacts.CREATE,ZohoBooks.contacts.READ,ZohoBooks.customerpayments.CREATE,ZohoBooks.customerpayments.READ,ZohoBooks.settings.READ
+#      (create, read and update only: the app can never delete anything in Zoho Books)
 #      Scope description: Nebulaa billing. Pick the organisation from the list if it asks.
 #   3. Copy the code, run this script, and paste the values when asked (secret and code are hidden).
 set -euo pipefail
