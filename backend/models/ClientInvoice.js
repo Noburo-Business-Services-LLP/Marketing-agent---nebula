@@ -10,9 +10,16 @@ const clientInvoiceSchema = new mongoose.Schema({
   gstInclusive: { type: Boolean, default: false }, // the amount typed by staff already contained the GST
   gstPaise: { type: Number, required: true, min: 0 },
   totalPaise: { type: Number, required: true, min: 0 },
-  months: { type: Number, enum: [1, 3, 6, 12], default: 1 }, // how many months this billing period covers
+  months: { type: Number, min: 1, max: 36, default: 1 }, // how many months this billing period covers
   planName: { type: String, default: '', maxlength: 80 },
-  status: { type: String, enum: ['invoiced', 'paid', 'void'], default: 'invoiced' },
+  status: { type: String, enum: ['invoiced', 'partial', 'paid', 'void'], default: 'invoiced' },
+  // Every payment received for this period (a part payment now, the rest later). paidPaise is their sum.
+  payments: [{
+    amountPaise: { type: Number, required: true, min: 1 }, paidOn: { type: Date }, mode: { type: String },
+    reference: { type: String, default: '', maxlength: 100 }, note: { type: String, default: '', maxlength: 300 }
+  }],
+  paidPaise: { type: Number, default: 0 },
+  balanceDueOn: { type: Date }, // when the rest of a part payment is expected
   invoiceNumber: { type: String, default: '', maxlength: 40 },
   invoiceUrl: { type: String, default: '', maxlength: 500 },
   zohoInvoiceId: { type: String, default: '' },

@@ -1386,6 +1386,7 @@ export const apiService = {
   staffBillingPaid: async (id: string, period: string, body: Record<string, unknown>): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/paid`, { method: 'POST', body: JSON.stringify(body) }, true),
   staffBillingSync: async (id: string, apply: boolean): Promise<any> => apiCall(`/staff/clients/${id}/billing/sync`, { method: 'POST', body: JSON.stringify({ apply }) }, true),
   staffBillingZohoInvoice: async (id: string, period: string): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/zoho-invoice`, { method: 'POST', body: '{}' }, true),
+  staffZohoItems: async (): Promise<any> => apiCall('/staff/zoho/items', { method: 'GET' }, true),
   staffZohoSearch: async (q: string): Promise<any> => apiCall(`/staff/zoho/invoices?q=${encodeURIComponent(q)}`, { method: 'GET' }, true),
   staffBillingDates: async (id: string, period: string, body: Record<string, unknown>): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/dates`, { method: 'POST', body: JSON.stringify(body) }, true),
   staffBillingUnpay: async (id: string, period: string): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/unpay`, { method: 'POST', body: '{}' }, true),

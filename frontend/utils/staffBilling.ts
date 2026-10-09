@@ -1,7 +1,7 @@
 // Billing screen helpers for managed clients: money in whole paise, the GST split, and the plain labels. Pure.
 
 export const STATUS_LABEL: Record<string, string> = {
-  not_invoiced: 'Not invoiced', invoiced: 'Invoiced', overdue: 'Overdue', paid: 'Paid', void: 'Cancelled'
+  not_invoiced: 'Not invoiced', invoiced: 'Invoiced', overdue: 'Overdue', partial: 'Part paid', paid: 'Paid', void: 'Cancelled'
 };
 
 /** Whole paise as rupees with Indian grouping and two decimals, for example 2118644 -> "₹21,186.44". */

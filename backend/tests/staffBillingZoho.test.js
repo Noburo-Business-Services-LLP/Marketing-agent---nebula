@@ -187,3 +187,36 @@ test('the Zoho invoice names the plan, uses its product, and says what period it
   assert.equal(c.date, '2026-08-04');
   assert.equal(f.records.get('2026-08').months, 12);
 });
+
+test('a part payment on an invoice made here is recorded in Zoho for exactly the amount received', async () => {
+  const f = fake({ clientOver: { managedBilling: { monthlyAmountInr: 295000, gstInclusive: true, gstPercent: 18, billingStart: '2026-08-04', serviceStart: '2026-08', cycleMonths: 12 } } });
+  const out = await Z.markPaidWithZoho({ actor: owner, clientId: hex('1'), period: '2026-08', input: { mode: 'bank', paymentAmountInr: 100000, paidOn: '2026-08-10', balanceDueOn: '2026-11-10' }, ...f, now: NOW });
+  assert.equal(out.status, 200); assert.equal(out.body.partial, true);
+  assert.equal(f.calls.zoho.find((c) => c[0] === 'payment')[1].amount, 100000);
+  assert.equal(f.records.get('2026-08').status, 'partial'); assert.equal(f.records.get('2026-08').paidPaise, 10000000);
+  f.calls.zoho.length = 0;
+  await Z.markPaidWithZoho({ actor: owner, clientId: hex('1'), period: '2026-08', input: { mode: 'upi', paidOn: '2026-09-05' }, ...f, now: NOW });
+  assert.equal(f.calls.zoho.find((c) => c[0] === 'payment')[1].amount, 195000, 'the rest of the balance, not the whole invoice');
+  assert.equal(f.records.get('2026-08').status, 'paid');
+});
+
+test('too much, or a payment on a fully paid period, is refused before Zoho is touched', async () => {
+  const f = fake();
+  const over = await Z.markPaidWithZoho({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'bank', paymentAmountInr: 99999999 }, ...f, now: NOW });
+  assert.equal(over.status, 400); assert.equal(f.calls.zoho.length, 0);
+});
+
+test('syncing a part-paid invoice from Zoho records what was paid and what is left', async () => {
+  const f = fake({ zohoInvoices: [inv({ invoiceId: 'zp', invoiceNumber: 'INV-000011', date: '2026-08-04', status: 'partially_paid', total: 295000, balance: 195000, lastPaymentDate: '2026-08-10' })] });
+  f.zoho.getInvoice = async () => ({ invoiceId: 'zp', customerId: 'cu1', subTotal: 250000, taxTotal: 45000, total: 295000, balance: 195000, invoiceUrl: '', lineItems: [{ name: 'SCALE', description: 'Annual Plan' }] });
+  const prev = await Z.syncFromZoho({ actor: owner, clientId: hex('1'), apply: false, ...f });
+  assert.equal(prev.body.proposals[0].action, 'link_partial'); assert.equal(prev.body.proposals[0].paidPaise, 10000000);
+  await Z.syncFromZoho({ actor: owner, clientId: hex('1'), apply: true, ...f });
+  const r = f.records.get('2026-08'); assert.equal(r.status, 'partial'); assert.equal(r.paidPaise, 10000000); assert.equal(r.months, 12); assert.equal(r.payments[0].amountPaise, 10000000);
+});
+
+test('a ledger invoice shown as sent that Zoho now shows fully paid is upgraded to paid; a sent one with a balance equal to the total stays invoiced', async () => {
+  const f = fake({ zohoInvoices: [inv({ invoiceId: 'z9', invoiceNumber: 'INV-000009', date: '2026-09-05', status: 'sent', total: 25000, balance: 25000 })] });
+  const out = await Z.syncFromZoho({ actor: owner, clientId: hex('1'), apply: false, ...f });
+  assert.equal(out.body.proposals[0].action, 'link_invoiced');
+});

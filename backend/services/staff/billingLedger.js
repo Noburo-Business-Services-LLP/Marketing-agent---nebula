@@ -46,7 +46,9 @@ const periodOf = (date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth()
 function labelOf(period) { const [y, m] = period.split('-'); return `${MONTHS[Number(m) - 1]} ${y}`; }
 function nextPeriod(period) { const [y, m] = period.split('-').map(Number); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`; }
 
-const CYCLES = [1, 3, 6, 12];
+const CYCLES = [1, 3, 6, 12]; // the usual choices; any whole number of months from 1 to 36 is allowed
+/** A valid number of months (1 to 36) or 0. */
+const validMonths = (n) => (Number.isInteger(Number(n)) && Number(n) >= 1 && Number(n) <= 36 ? Number(n) : 0);
 const CYCLE_LABEL = { 1: 'Monthly', 3: 'Quarterly', 6: 'Half-yearly', 12: 'Yearly' };
 /** The month `n` months after `period` (n may be 0). */
 function addMonths(period, n) { let p = period; for (let i = 0; i < n; i += 1) p = nextPeriod(p); return p; }
@@ -65,7 +67,7 @@ function isCovered(records, period) {
 function cycleStarts(settings, upTo) {
   const start = settings && (settings.billingStart ? settings.billingStart.slice(0, 7) : settings.serviceStart);
   if (!start || !PERIOD.test(start)) return [];
-  const step = CYCLES.includes(Number(settings.cycleMonths)) ? Number(settings.cycleMonths) : 1;
+  const step = validMonths(settings.cycleMonths) || 1;
   const out = [];
   for (let p = start; p <= upTo && out.length < 600; p = addMonths(p, step)) out.push(p);
   return out;
@@ -126,7 +128,7 @@ function parseSettings(input = {}) {
   if (!Number.isInteger(termsDays) || termsDays < 0 || termsDays > 90) return { ok: false, message: 'Payment terms must be a whole number of days from 0 to 90.' };
   if (input.autoInvoice !== undefined && typeof input.autoInvoice !== 'boolean') return { ok: false, message: 'Say whether invoices are made automatically or not.' };
   const cycleMonths = input.cycleMonths === undefined || input.cycleMonths === '' ? 1 : Number(input.cycleMonths);
-  if (!CYCLES.includes(cycleMonths)) return { ok: false, message: 'Choose how often they are billed: monthly, quarterly, half-yearly or yearly.' };
+  if (!validMonths(cycleMonths)) return { ok: false, message: 'Choose how often they are billed: every 1 to 36 months (monthly, quarterly, half-yearly, yearly or your own).' };
   const planName = String(input.planName || '').trim().slice(0, 80);
   const zohoItemId = /^[0-9]{6,30}$/.test(String(input.zohoItemId || '').trim()) ? String(input.zohoItemId).trim() : '';
   return { ok: true, settings: { monthlyAmountInr: amount / 100, gstPercent, gstInclusive: input.gstInclusive === true, billingStart, serviceStart: billingStart.slice(0, 7), termsDays, autoInvoice: input.autoInvoice === true, cycleMonths, planName, zohoItemId } };
@@ -158,7 +160,36 @@ function parsePayment(input = {}, now = Date.now()) {
   const paid = parseDate(input.paidOn || new Date(now).toISOString().slice(0, 10));
   if (!paid.ok || !paid.date) return { ok: false, message: 'The payment date is not a valid date.' };
   if (paid.date.getTime() > now + DAY) return { ok: false, message: 'The payment date cannot be in the future.' };
-  return { ok: true, payment: { paidOn: paid.date, mode: input.mode, reference: String(input.reference || '').trim().slice(0, 100), note: String(input.note || '').trim().slice(0, 300) } };
+  let amountPaise = null;
+  if (input.paymentAmountInr !== undefined && input.paymentAmountInr !== null && input.paymentAmountInr !== '') {
+    amountPaise = toPaise(input.paymentAmountInr);
+    if (amountPaise === null) return { ok: false, message: 'The amount received is not valid.' };
+  }
+  const due = parseDate(input.balanceDueOn);
+  if (!due.ok) return { ok: false, message: 'The date the balance is expected is not a valid date.' };
+  return { ok: true, payment: { paidOn: paid.date, mode: input.mode, reference: String(input.reference || '').trim().slice(0, 100), note: String(input.note || '').trim().slice(0, 300), amountPaise, balanceDueOn: due.date } };
+}
+
+/** The payments recorded on a period, as a list. An older fully-paid record without a list counts as one payment of the whole total. */
+function paymentsOf(r) {
+  if (!r) return [];
+  if (Array.isArray(r.payments) && r.payments.length) return r.payments.map((p) => ({ amountPaise: p.amountPaise, paidOn: p.paidOn, mode: p.mode, reference: p.reference || '', note: p.note || '' }));
+  if (r.status === 'paid') return [{ amountPaise: r.totalPaise, paidOn: r.paidOn, mode: r.paidMode || 'other', reference: r.paidReference || '', note: '' }];
+  return [];
+}
+const paidPaiseOf = (r) => paymentsOf(r).reduce((n, p) => n + (p.amountPaise || 0), 0);
+
+/**
+ * How much a new payment is and what is left: the amount typed (default: the whole balance), never more than the balance.
+ * Returns { amt, balance, paidBefore } or { error }.
+ */
+function planPayment({ existing, totalPaise, requestedPaise }) {
+  const paidBefore = paidPaiseOf(existing);
+  const balance = totalPaise - paidBefore;
+  if (balance <= 0) return { error: 'This period is already fully paid.' };
+  const amt = requestedPaise == null ? balance : requestedPaise;
+  if (amt > balance) return { error: `That is more than the balance of ${(balance / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })} rupees.` };
+  return { amt, balance, paidBefore };
 }
 
 /**
@@ -174,21 +205,28 @@ function buildLedger({ settings, records = [], now = Date.now() }) {
   if (s.monthlyAmountInr) for (const p of cycleStarts({ ...s, billingStart: s.billingStart || (s.serviceStart ? `${s.serviceStart}-01` : '') }, thisMonth)) if (!isCovered(records, p)) periods.add(p);
   const feePaise = s.monthlyAmountInr ? Math.round(s.monthlyAmountInr * 100) : 0;
   const terms = s.termsDays == null ? DEFAULT_DUE_DAYS : s.termsDays;
-  const cycle = CYCLES.includes(Number(s.cycleMonths)) ? Number(s.cycleMonths) : 1;
+  const cycle = validMonths(s.cycleMonths) || 1;
   const plan = (period) => plannedInvoiceDate(s.billingStart ? s : (s.serviceStart ? { ...s, billingStart: `${s.serviceStart}-01` } : s), period);
   const iso = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
   const rows = [...periods].sort().reverse().map((period) => {
     const r = byPeriod.get(period);
     const amounts = r ? { exPaise: r.exPaise, gstPercent: r.gstPercent, gstPaise: r.gstPaise, totalPaise: r.totalPaise, gstInclusive: Boolean(r.gstInclusive) } : amountsFor(feePaise, s.gstPercent == null ? DEFAULT_GST : s.gstPercent, Boolean(s.gstInclusive));
     let status = 'not_invoiced';
+    let late = false;
     if (r) {
       status = r.status;
+      if (status === 'partial') {
+        const owed = r.balanceDueOn ? new Date(r.balanceDueOn).getTime() : (r.dueOn ? new Date(r.dueOn).getTime() : null);
+        late = owed !== null && owed < now;
+      }
       if (status === 'invoiced') {
         const due = r.dueOn ? new Date(r.dueOn).getTime() : (r.issuedOn ? new Date(r.issuedOn).getTime() + terms * DAY : null);
         if (due !== null && due < now) status = 'overdue';
       }
     }
     const months = (r && r.months) || cycle;
+    const payments = paymentsOf(r);
+    const paidPaise = payments.reduce((n, x) => n + x.amountPaise, 0);
     return {
       period, label: coverageLabel(period, months), months, cycleLabel: CYCLE_LABEL[months] || `${months} months`, planName: (r && r.planName) || s.planName || '', status, ...amounts,
       invoiceNumber: (r && r.invoiceNumber) || '', invoiceUrl: (r && r.invoiceUrl) || '', zohoInvoiceId: (r && r.zohoInvoiceId) || '',
@@ -197,7 +235,10 @@ function buildLedger({ settings, records = [], now = Date.now() }) {
       dueDate: r && r.dueOn ? iso(r.dueOn) : (r && r.issuedOn ? iso(new Date(r.issuedOn).getTime() + terms * DAY) : (plan(period) ? iso(new Date(`${plan(period)}T00:00:00Z`).getTime() + terms * DAY) : '')),
       paidDate: r && r.paidOn ? iso(r.paidOn) : '',
       paidMode: (r && r.paidMode) || null, paidModeLabel: r && r.paidMode ? MODE_LABEL[r.paidMode] : '',
-      paidReference: (r && r.paidReference) || '', note: (r && r.note) || ''
+      paidReference: (r && r.paidReference) || '', note: (r && r.note) || '',
+      paidPaise, balancePaise: r && status !== 'void' ? Math.max(0, amounts.totalPaise - paidPaise) : amounts.totalPaise, late,
+      balanceDueOn: r && r.balanceDueOn ? iso(r.balanceDueOn) : '',
+      payments: payments.map((x) => ({ amountPaise: x.amountPaise, paidDate: iso(x.paidOn), modeLabel: MODE_LABEL[x.mode] || '', reference: x.reference }))
     };
   });
   const counted = rows.filter((x) => x.status !== 'void');
@@ -206,8 +247,8 @@ function buildLedger({ settings, records = [], now = Date.now() }) {
     rows,
     totals: {
       billedPaise: sum(counted.filter((x) => x.status !== 'not_invoiced')),
-      paidPaise: sum(counted.filter((x) => x.status === 'paid')),
-      outstandingPaise: sum(counted.filter((x) => x.status === 'invoiced' || x.status === 'overdue')),
+      paidPaise: counted.reduce((n, x) => n + (x.paidPaise || 0), 0),
+      outstandingPaise: counted.filter((x) => ['invoiced', 'overdue', 'partial'].includes(x.status)).reduce((n, x) => n + x.balancePaise, 0),
       notInvoicedPaise: sum(counted.filter((x) => x.status === 'not_invoiced')),
     }
   };
@@ -239,7 +280,7 @@ async function viewBilling({ actor, clientId, repo, now = Date.now() }) {
   if (t.error) return t.error;
   const records = await repo.listRecords(clientId);
   const settings = t.client.managedBilling || {};
-  return { status: 200, body: { success: true, cycles: CYCLES.map((m) => ({ value: m, label: CYCLE_LABEL[m] })), settings: { monthlyAmountInr: settings.monthlyAmountInr || null, gstInclusive: Boolean(settings.gstInclusive), gstPercent: settings.gstPercent == null ? DEFAULT_GST : settings.gstPercent, billingStart: settings.billingStart || (settings.serviceStart ? `${settings.serviceStart}-01` : ''), termsDays: settings.termsDays == null ? DEFAULT_DUE_DAYS : settings.termsDays, cycleMonths: CYCLES.includes(Number(settings.cycleMonths)) ? Number(settings.cycleMonths) : 1, planName: settings.planName || '', zohoItemId: settings.zohoItemId || '', autoInvoice: Boolean(settings.autoInvoice), autoFrom: settings.autoFrom || '' }, nextInvoiceDate: nextInvoiceDate(settings, records, now), paidModes: PAID_MODES.map((m) => ({ value: m, label: MODE_LABEL[m] })), ...buildLedger({ settings, records, now }) } };
+  return { status: 200, body: { success: true, cycles: CYCLES.map((m) => ({ value: m, label: CYCLE_LABEL[m] })), settings: { monthlyAmountInr: settings.monthlyAmountInr || null, gstInclusive: Boolean(settings.gstInclusive), gstPercent: settings.gstPercent == null ? DEFAULT_GST : settings.gstPercent, billingStart: settings.billingStart || (settings.serviceStart ? `${settings.serviceStart}-01` : ''), termsDays: settings.termsDays == null ? DEFAULT_DUE_DAYS : settings.termsDays, cycleMonths: validMonths(settings.cycleMonths) || 1, planName: settings.planName || '', zohoItemId: settings.zohoItemId || '', autoInvoice: Boolean(settings.autoInvoice), autoFrom: settings.autoFrom || '' }, nextInvoiceDate: nextInvoiceDate(settings, records, now), paidModes: PAID_MODES.map((m) => ({ value: m, label: MODE_LABEL[m] })), ...buildLedger({ settings, records, now }) } };
 }
 
 async function saveSettings({ actor, clientId, input, repo, record, now = Date.now() }) {
@@ -268,11 +309,10 @@ function monthAmounts({ client, existing, override }) {
 
 /** How many months a record covers: typed now, else what it already had, else the client's billing cycle. */
 function recordMonths({ existing, input, client }) {
-  const typed = Number(input && input.months);
-  if (CYCLES.includes(typed)) return typed;
+  const typed = validMonths(input && input.months);
+  if (typed) return typed;
   if (existing && existing.months) return existing.months;
-  const c = Number((client.managedBilling || {}).cycleMonths);
-  return CYCLES.includes(c) ? c : 1;
+  return validMonths((client.managedBilling || {}).cycleMonths) || 1;
 }
 
 /** Link an invoice from Zoho Books to a month (no payment yet). */
@@ -286,14 +326,19 @@ async function linkInvoice({ actor, clientId, period, input, repo, record, now =
   if (existing && existing.status === 'paid') return refuse(409, 'This month is already paid. Undo the payment first if you need to change the invoice.');
   const amounts = monthAmounts({ client: t.client, existing, override: p.invoice.enteredPaise });
   if (!amounts) return refuse(400, 'Set the client\'s monthly amount first, or type the amount for this invoice.');
-  const issuedOn = p.invoice.issuedOn || (existing && existing.issuedOn) || new Date(now);
+  const plannedDay = plannedInvoiceDate(t.client.managedBilling, period);
+  const issuedOn = p.invoice.issuedOn || (existing && existing.issuedOn) || (plannedDay ? new Date(`${plannedDay}T00:00:00Z`) : new Date(now));
   const months = recordMonths({ existing, input, client: t.client });
-  await repo.upsertRecord(clientId, period, { ...amounts, months, planName: (existing && existing.planName) || (t.client.managedBilling || {}).planName || '', status: 'invoiced', invoiceNumber: p.invoice.invoiceNumber, invoiceUrl: p.invoice.invoiceUrl, issuedOn, dueOn: new Date(new Date(issuedOn).getTime() + (((t.client.managedBilling || {}).termsDays == null ? DEFAULT_DUE_DAYS : t.client.managedBilling.termsDays)) * DAY), note: p.invoice.note || (existing && existing.note) || '', recordedBy: idOf(actor) });
+  await repo.upsertRecord(clientId, period, { ...amounts, months, planName: (existing && existing.planName) || (t.client.managedBilling || {}).planName || '', status: existing && existing.status === 'partial' ? 'partial' : 'invoiced', invoiceNumber: p.invoice.invoiceNumber, invoiceUrl: p.invoice.invoiceUrl, issuedOn, dueOn: new Date(new Date(issuedOn).getTime() + (((t.client.managedBilling || {}).termsDays == null ? DEFAULT_DUE_DAYS : t.client.managedBilling.termsDays)) * DAY), note: p.invoice.note || (existing && existing.note) || '', recordedBy: idOf(actor) });
   await record({ actor, action: 'billing_link_invoice', client: clientId, details: { period, invoiceNumber: p.invoice.invoiceNumber } });
   return { status: 200, body: { success: true } };
 }
 
-/** Mark a month as paid. An invoice can be linked in the same step. */
+/**
+ * Record a payment on a billing period. The amount received defaults to the whole balance and may be less (a part
+ * payment): the period then shows "part paid" with what is left, and the next payment continues from there. An invoice
+ * can be linked in the same step.
+ */
 async function markPaid({ actor, clientId, period, input, repo, record, now = Date.now() }) {
   const t = await loadTarget({ actor, clientId, repo });
   if (t.error) return t.error;
@@ -309,25 +354,42 @@ async function markPaid({ actor, clientId, period, input, repo, record, now = Da
     invoice = link.invoice;
   }
   const amounts = monthAmounts({ client: t.client, existing, override: invoice ? invoice.enteredPaise : null });
-  if (!amounts) return refuse(400, 'Set the client\'s monthly amount first, or type the amount.');
-  const set = { ...amounts, months: recordMonths({ existing, input, client: t.client }), planName: (existing && existing.planName) || (t.client.managedBilling || {}).planName || '', status: 'paid', paidOn: pay.payment.paidOn, paidMode: pay.payment.mode, paidReference: pay.payment.reference, recordedBy: idOf(actor) };
-  if (invoice) Object.assign(set, { invoiceNumber: invoice.invoiceNumber, invoiceUrl: invoice.invoiceUrl, issuedOn: invoice.issuedOn || (existing && existing.issuedOn) || pay.payment.paidOn });
+  if (!amounts) return refuse(400, 'Set the client\'s amount first, or type the amount.');
+  const plan = planPayment({ existing, totalPaise: amounts.totalPaise, requestedPaise: pay.payment.amountPaise });
+  if (plan.error) return refuse(existing && paidPaiseOf(existing) >= amounts.totalPaise ? 409 : 400, plan.error);
+  const payments = [...paymentsOf(existing), { amountPaise: plan.amt, paidOn: pay.payment.paidOn, mode: pay.payment.mode, reference: pay.payment.reference, note: pay.payment.note }];
+  const paidPaise = plan.paidBefore + plan.amt;
+  const full = paidPaise >= amounts.totalPaise;
+  const set = {
+    ...amounts, months: recordMonths({ existing, input, client: t.client }), planName: (existing && existing.planName) || (t.client.managedBilling || {}).planName || '',
+    status: full ? 'paid' : 'partial', payments, paidPaise, paidOn: pay.payment.paidOn, paidMode: pay.payment.mode, paidReference: pay.payment.reference,
+    balanceDueOn: full ? null : (pay.payment.balanceDueOn || (existing && existing.balanceDueOn) || null), recordedBy: idOf(actor)
+  };
+  const planned = plannedInvoiceDate(t.client.managedBilling, period);
+  if (invoice) Object.assign(set, { invoiceNumber: invoice.invoiceNumber, invoiceUrl: invoice.invoiceUrl, issuedOn: invoice.issuedOn || (existing && existing.issuedOn) || (planned ? new Date(`${planned}T00:00:00Z`) : pay.payment.paidOn) });
   if (pay.payment.note || invoice?.note) set.note = pay.payment.note || invoice.note;
   await repo.upsertRecord(clientId, period, set);
   await repo.markClientPaying(clientId);
-  await record({ actor, action: 'billing_mark_paid', client: clientId, details: { period, mode: pay.payment.mode, totalPaise: amounts.totalPaise, invoiceNumber: (invoice && invoice.invoiceNumber) || (existing && existing.invoiceNumber) || '' } });
-  return { status: 200, body: { success: true } };
+  await record({ actor, action: 'billing_mark_paid', client: clientId, details: { period, mode: pay.payment.mode, amountPaise: plan.amt, balancePaise: amounts.totalPaise - paidPaise, totalPaise: amounts.totalPaise, invoiceNumber: (invoice && invoice.invoiceNumber) || (existing && existing.invoiceNumber) || '' } });
+  return { status: 200, body: { success: true, partial: !full, balancePaise: amounts.totalPaise - paidPaise } };
 }
 
-/** Undo a payment: the month goes back to invoiced (or to not invoiced when it never had an invoice). */
+/** Undo the latest payment of a period. With none left it goes back to invoiced (or to not invoiced if it never had an invoice). */
 async function undoPaid({ actor, clientId, period, repo, record }) {
   const t = await loadTarget({ actor, clientId, repo });
   if (t.error) return t.error;
   if (!PERIOD.test(period)) return refuse(400, 'That month is not valid.');
   const existing = await repo.getRecord(clientId, period);
-  if (!existing || existing.status !== 'paid') return refuse(409, 'This month is not marked as paid.');
-  if (existing.invoiceNumber) await repo.upsertRecord(clientId, period, { status: 'invoiced', paidOn: null, paidMode: null, paidReference: '' });
-  else await repo.deleteRecord(clientId, period);
+  const payments = paymentsOf(existing);
+  if (!existing || !['paid', 'partial'].includes(existing.status) || payments.length === 0) return refuse(409, 'This month has no payment to undo.');
+  payments.pop();
+  if (payments.length === 0) {
+    if (existing.invoiceNumber) await repo.upsertRecord(clientId, period, { status: 'invoiced', payments: [], paidPaise: 0, paidOn: null, paidMode: null, paidReference: '', balanceDueOn: null });
+    else await repo.deleteRecord(clientId, period);
+  } else {
+    const last = payments[payments.length - 1];
+    await repo.upsertRecord(clientId, period, { status: 'partial', payments, paidPaise: payments.reduce((n, p) => n + p.amountPaise, 0), paidOn: last.paidOn, paidMode: last.mode, paidReference: last.reference || '' });
+  }
   await record({ actor, action: 'billing_undo_paid', client: clientId, details: { period } });
   return { status: 200, body: { success: true } };
 }
@@ -338,7 +400,7 @@ async function setVoid({ actor, clientId, period, voided, repo, record }) {
   if (t.error) return t.error;
   if (!PERIOD.test(period)) return refuse(400, 'That month is not valid.');
   const existing = await repo.getRecord(clientId, period);
-  if (existing && existing.status === 'paid') return refuse(409, 'This month is paid. Undo the payment first.');
+  if (existing && ['paid', 'partial'].includes(existing.status)) return refuse(409, 'This month has a payment. Undo the payment first.');
   if (voided) {
     const amounts = monthAmounts({ client: t.client, existing, override: null }) || amountsFor(0, DEFAULT_GST, false);
     await repo.upsertRecord(clientId, period, { ...amounts, status: 'void', recordedBy: idOf(actor) });
@@ -363,16 +425,17 @@ async function editDates({ actor, clientId, period, input = {}, repo, record, no
   const due = dateOf('dueDate', 'due date'); if (!due.ok) return refuse(400, due.message); if (!due.skip) set.dueOn = due.date;
   const paid = dateOf('paidDate', 'paid date'); if (!paid.ok) return refuse(400, paid.message);
   if (!paid.skip) {
-    if (existing.status !== 'paid') return refuse(409, 'Only a paid month has a paid date. Mark it paid first.');
+    if (!['paid', 'partial'].includes(existing.status)) return refuse(409, 'Only a month with a payment has a paid date. Record the payment first.');
     if (paid.date.getTime() > now + DAY) return refuse(400, 'The paid date cannot be in the future.');
-    set.paidOn = paid.date;
+    const list = paymentsOf(existing); list[list.length - 1] = { ...list[list.length - 1], paidOn: paid.date };
+    set.paidOn = paid.date; set.payments = list;
   }
   if (Object.keys(set).length === 0) return refuse(400, 'Choose a date to change.');
   const issued = set.issuedOn || existing.issuedOn; const dueOn = set.dueOn || existing.dueOn;
   if (issued && dueOn && new Date(dueOn).getTime() < new Date(issued).getTime()) return refuse(400, 'The due date cannot be before the invoice date.');
   await repo.upsertRecord(clientId, period, set);
-  await record({ actor, action: 'billing_edit_dates', client: clientId, details: { period, ...Object.fromEntries(Object.entries(set).map(([k, v]) => [k, new Date(v).toISOString().slice(0, 10)])) } });
+  await record({ actor, action: 'billing_edit_dates', client: clientId, details: { period, ...Object.fromEntries(['issuedOn', 'dueOn', 'paidOn'].filter((k) => set[k]).map((k) => [k, new Date(set[k]).toISOString().slice(0, 10)])) } });
   return { status: 200, body: { success: true, inZoho: Boolean(existing.zohoInvoiceId), note: existing.zohoInvoiceId ? 'Changed here. The invoice and payment dates in Zoho Books are not changed: update them there too if they need to match.' : '' } };
 }
 
-module.exports = { CYCLES, CYCLE_LABEL, addMonths, coverageLabel, isCovered, cycleStarts, recordMonths, plannedInvoiceDate, firstAutoPeriod, nextInvoiceDate, todayIst, editDates, loadTarget, monthAmounts, toPaise, amountsFor, periodOf, labelOf, nextPeriod, parseSettings, parseInvoice, parsePayment, buildLedger, viewBilling, saveSettings, linkInvoice, markPaid, undoPaid, setVoid, PAID_MODES, GST_RATES, DEFAULT_GST, DEFAULT_DUE_DAYS, PERIOD };
+module.exports = { validMonths, paymentsOf, paidPaiseOf, planPayment, CYCLES, CYCLE_LABEL, addMonths, coverageLabel, isCovered, cycleStarts, recordMonths, plannedInvoiceDate, firstAutoPeriod, nextInvoiceDate, todayIst, editDates, loadTarget, monthAmounts, toPaise, amountsFor, periodOf, labelOf, nextPeriod, parseSettings, parseInvoice, parsePayment, buildLedger, viewBilling, saveSettings, linkInvoice, markPaid, undoPaid, setVoid, PAID_MODES, GST_RATES, DEFAULT_GST, DEFAULT_DUE_DAYS, PERIOD };

@@ -383,6 +383,14 @@ router.post('/clients/:id/billing/:period/invoice', requireStaff('manage_billing
 router.post('/clients/:id/billing/sync', requireStaff('manage_billing'), billingRoute((a) => billingZoho.syncFromZoho({ ...a, apply: a.input.apply === true })));
 router.post('/clients/:id/billing/:period/zoho-invoice', requireStaff('manage_billing'), billingRoute((a) => billingZoho.createZohoInvoice(a)));
 router.post('/clients/:id/billing/:period/paid', requireStaff('manage_billing'), billingRoute((a) => billingZoho.markPaidWithZoho(a)));
+router.get('/zoho/items', requireStaff('manage_billing'), async (req, res) => {
+  try {
+    const out = await billingZoho.listZohoItems({ actor: req.staff, zoho: require('../services/zohoBooks') });
+    res.status(out.status).json(out.body);
+  } catch (error) {
+    res.status(200).json({ success: true, items: [] });
+  }
+});
 router.get('/zoho/invoices', requireStaff('manage_billing'), async (req, res) => {
   try {
     const out = await billingZoho.searchZohoInvoices({ actor: req.staff, q: req.query.q, zoho: require('../services/zohoBooks') });

@@ -60,10 +60,13 @@ function planSync({ client, matches, records, details }) {
     if (inv.status === 'draft') { skip('Still a draft in Zoho Books (not issued).'); continue; }
     if (inv.status === 'void') { skip('Cancelled in Zoho Books.'); continue; }
     const have = byPeriod.get(base.period);
-    const paid = inv.status === 'paid';
+    const d0 = details[inv.invoiceId] || {};
+    const totalZ = paise(d0.total != null ? d0.total : inv.total), balZ = paise(d0.balance != null ? d0.balance : inv.balance);
+    const paid = inv.status === 'paid' || (totalZ > 0 && balZ <= 0 && (inv.status === 'partially_paid' || inv.status === 'overdue' || inv.status === 'sent'));
+    const partial = !paid && totalZ > 0 && balZ > 0 && balZ < totalZ;
     if (!have && L.isCovered([...records, ...claimed], base.period)) { skip('Already covered by another invoice.'); continue; }
     if (have && have.invoiceNumber === inv.invoiceNumber) {
-      if (paid && have.status !== 'paid') { /* Zoho says paid, the ledger does not yet: update below */ }
+      if ((paid && have.status !== 'paid') || (partial && have.status === 'invoiced')) { /* Zoho shows more paid than the ledger does: update below */ }
       else { skip('Already linked.'); continue; }
     } else if (have) { skip(`${label} already has ${have.invoiceNumber || 'a record'}.`); continue; }
     if (used.has(base.period)) { skip(`Another invoice is already used for ${label}.`); continue; }
@@ -76,7 +79,7 @@ function planSync({ client, matches, records, details }) {
     const rate = ex > 0 ? Math.round((gst / ex) * 100) : (settings.gstPercent == null ? L.DEFAULT_GST : settings.gstPercent);
     claimed.push({ period: base.period, months, status: 'invoiced' });
     proposals.push({
-      ...base, label: L.coverageLabel(base.period, months), months, planName, action: paid ? 'link_paid' : 'link_invoiced', totalPaise: total,
+      ...base, label: L.coverageLabel(base.period, months), months, planName, action: paid ? 'link_paid' : partial ? 'link_partial' : 'link_invoiced', totalPaise: total, paidPaise: paid ? total : partial ? totalZ - balZ : 0,
       amounts: { exPaise: ex > 0 ? ex : total, gstPercent: L.GST_RATES.includes(rate) ? rate : (settings.gstPercent == null ? L.DEFAULT_GST : settings.gstPercent), gstPaise: ex > 0 ? gst : 0, totalPaise: total, gstInclusive: Boolean(settings.gstInclusive) },
       invoiceUrl: d.invoiceUrl || '', issuedOn: inv.date, dueOn: inv.dueDate || '', paidOn: inv.lastPaymentDate || inv.date,
     });
@@ -106,8 +109,11 @@ async function syncFromZoho({ actor, clientId, apply, repo, zoho, record }) {
       ...p.amounts, months: p.months, planName: p.planName, invoiceNumber: p.invoiceNumber, invoiceUrl: p.invoiceUrl, zohoInvoiceId: p.invoiceId,
       issuedOn: new Date(p.issuedOn), dueOn: p.dueOn ? new Date(p.dueOn) : new Date(new Date(p.issuedOn).getTime() + L.DEFAULT_DUE_DAYS * DAY), recordedBy: idOf(actor),
     };
-    if (p.action === 'link_paid') { Object.assign(set, { status: 'paid', paidOn: new Date(p.paidOn), paidMode: 'other', paidReference: 'Recorded in Zoho Books' }); sawPaid = true; }
-    else Object.assign(set, { status: 'invoiced' });
+    if (p.action === 'link_paid' || p.action === 'link_partial') {
+      const full = p.action === 'link_paid';
+      Object.assign(set, { status: full ? 'paid' : 'partial', payments: [{ amountPaise: p.paidPaise, paidOn: new Date(p.paidOn), mode: 'other', reference: 'Recorded in Zoho Books' }], paidPaise: p.paidPaise, paidOn: new Date(p.paidOn), paidMode: 'other', paidReference: 'Recorded in Zoho Books' });
+      sawPaid = true;
+    } else Object.assign(set, { status: 'invoiced' });
     await repo.upsertRecord(clientId, p.period, set);
   }
   if (sawPaid) await repo.markClientPaying(clientId);
@@ -115,7 +121,7 @@ async function syncFromZoho({ actor, clientId, apply, repo, zoho, record }) {
   return { status: 200, body: { success: true, linked: todo.length, skipped: proposals.length - todo.length } };
 }
 
-const publicProposal = (p) => ({ period: p.period, months: p.months || 1, planName: p.planName || '', label: p.label, invoiceNumber: p.invoiceNumber, zohoStatus: p.zohoStatus, action: p.action, reason: p.reason || '', totalPaise: p.totalPaise, matchedBy: p.matchedBy });
+const publicProposal = (p) => ({ paidPaise: p.paidPaise || 0, period: p.period, months: p.months || 1, planName: p.planName || '', label: p.label, invoiceNumber: p.invoiceNumber, zohoStatus: p.zohoStatus, action: p.action, reason: p.reason || '', totalPaise: p.totalPaise, matchedBy: p.matchedBy });
 
 /** Search the organisation's invoices by number, customer or email (for the "Find in Zoho" box). */
 async function searchZohoInvoices({ actor, q, zoho }) {
@@ -127,6 +133,14 @@ async function searchZohoInvoices({ actor, q, zoho }) {
   try { rows = await zoho.listInvoices(); } catch (e) { console.error('[billing] zoho search failed:', e.message); return refuse(502, ZOHO_DOWN); }
   const hits = rows.filter((i) => [i.invoiceNumber, i.customerName, i.email, i.reference].some((v) => String(v || '').toLowerCase().includes(term))).slice(0, 20);
   return { status: 200, body: { success: true, invoices: hits.map((i) => ({ invoiceNumber: i.invoiceNumber, customerName: i.customerName, date: i.date, status: i.status, totalPaise: paise(i.total), balancePaise: paise(i.balance) })) } };
+}
+
+/** The plans (products) of the Zoho Books organisation, as suggestions for the plan field. Never a limit: any name may be typed. */
+async function listZohoItems({ actor, zoho }) {
+  const { isStaff, can } = require('./permissions');
+  if (!isStaff(actor) || !can(actor, 'manage_billing')) return refuse(403, 'Your role cannot do this.');
+  try { return { status: 200, body: { success: true, items: (await zoho.listItems()).map((i) => ({ itemId: i.itemId, name: i.name, description: i.description, ratePaise: paise(i.rate) })) } }; }
+  catch (e) { console.error('[billing] zoho items failed:', e.message); return { status: 200, body: { success: true, items: [] } }; }
 }
 
 const monthName = (period) => L.labelOf(period);
@@ -194,24 +208,28 @@ async function markPaidWithZoho({ actor, clientId, period, input = {}, repo, zoh
   const existing = await repo.getRecord(clientId, period);
   const typedInvoice = input.invoiceNumber !== undefined && String(input.invoiceNumber).trim() !== '';
   const hasInvoice = typedInvoice || Boolean(existing && existing.invoiceNumber);
-  const ours = Boolean(existing && existing.zohoInvoiceId); // an invoice this app created in Zoho: its payment is recorded there too
+  const ours = Boolean(existing && existing.zohoInvoiceId); // an invoice this app created in Zoho: its payments are recorded there too
   const wantCreate = !hasInvoice && input.createInZoho !== false && !(existing && existing.status === 'void');
+  const amounts = L.monthAmounts({ client: t.client, existing, override: input.amountInr ? L.toPaise(input.amountInr) : null });
+  if (!amounts) return refuse(400, 'Set the client\'s amount first, or type the amount.');
+  // How much this payment is (the whole balance unless a smaller amount was typed), checked before anything is sent to Zoho.
+  const plan = L.planPayment({ existing, totalPaise: amounts.totalPaise, requestedPaise: pay.payment.amountPaise });
+  if (plan.error) return refuse(existing && L.paidPaiseOf(existing) >= amounts.totalPaise ? 409 : 400, plan.error);
+  const day = pay.payment.paidOn.toISOString().slice(0, 10);
   let warning = '';
   let extra = {};
   try {
     if (wantCreate) {
-      const amounts = L.monthAmounts({ client: t.client, existing, override: input.amountInr ? L.toPaise(input.amountInr) : null });
-      if (!amounts) return refuse(400, 'Set the client\'s monthly amount first, or type the amount.');
       const made = await createZohoInvoiceFor({ client: t.client, clientId, period, amounts, zoho, now, months: input.months, issuedOn: (existing && existing.issuedOn) || L.plannedInvoiceDate(t.client.managedBilling, period) || pay.payment.paidOn });
-      await zoho.recordPayment({ customerId: made.detail.customerId || made.made.customerId, invoiceId: made.made.invoiceId, amount: made.amounts.totalPaise / 100, date: pay.payment.paidOn.toISOString().slice(0, 10), mode: pay.payment.mode, reference: pay.payment.reference });
+      await zoho.recordPayment({ customerId: made.detail.customerId || made.made.customerId, invoiceId: made.made.invoiceId, amount: plan.amt / 100, date: day, mode: pay.payment.mode, reference: pay.payment.reference });
       extra = { invoiceNumber: made.made.invoiceNumber, invoiceUrl: made.invoiceUrl, zohoInvoiceId: made.made.invoiceId, amounts: made.amounts, months: made.months };
     } else if (ours && input.recordInZoho !== false) {
       const d = await zoho.getInvoice(existing.zohoInvoiceId);
-      await zoho.recordPayment({ customerId: d.customerId, invoiceId: existing.zohoInvoiceId, amount: existing.totalPaise / 100, date: pay.payment.paidOn.toISOString().slice(0, 10), mode: pay.payment.mode, reference: pay.payment.reference });
+      await zoho.recordPayment({ customerId: d.customerId, invoiceId: existing.zohoInvoiceId, amount: plan.amt / 100, date: day, mode: pay.payment.mode, reference: pay.payment.reference });
     }
   } catch (e) {
     console.error('[billing] zoho step failed:', e.message);
-    warning = `Marked as paid here, but Zoho Books could not be updated (${e.message}). Use "Create invoice in Zoho" to retry.`;
+    warning = `Recorded here, but Zoho Books could not be updated (${e.message}). Use "Create invoice in Zoho" to retry.`;
     extra = {};
   }
   const out = await L.markPaid({ actor, clientId, period, input: { ...input, ...(extra.invoiceNumber ? { invoiceNumber: extra.invoiceNumber, invoiceUrl: extra.invoiceUrl || undefined } : {}) }, repo, record, now });
@@ -221,12 +239,12 @@ async function markPaidWithZoho({ actor, clientId, period, input = {}, repo, zoh
 }
 
 /**
- * The automatic invoice of one month, made by the scheduler (no staff member acting). Nothing is made for a month that
- * already has any record, the invoice carries the month's planned invoice date, and a retry reuses the same Zoho invoice.
+ * The automatic invoice of one billing period, made by the scheduler (no staff member acting). Nothing is made for a period that
+ * already has any record, the invoice carries the period's planned invoice date, and a retry reuses the same Zoho invoice.
  */
 async function createZohoInvoiceAuto({ client, clientId, period, repo, zoho, now = Date.now() }) {
   const existing = await repo.getRecord(clientId, period);
-  if (existing) return { created: false, reason: 'The month already has a record.' };
+  if (existing) return { created: false, reason: 'The period already has a record.' };
   const amounts = L.monthAmounts({ client, existing: null, override: null });
   const day = L.plannedInvoiceDate(client.managedBilling, period);
   if (!amounts || !day) return { created: false, reason: 'Billing is not fully set up.' };
@@ -235,4 +253,4 @@ async function createZohoInvoiceAuto({ client, clientId, period, repo, zoho, now
   return { created: true, invoiceNumber: made.made.invoiceNumber };
 }
 
-module.exports = { detectCycleMonths, createZohoInvoiceAuto, normName, matchInvoices, planSync, syncFromZoho, searchZohoInvoices, createZohoInvoice, markPaidWithZoho, referenceFor };
+module.exports = { listZohoItems, detectCycleMonths, createZohoInvoiceAuto, normName, matchInvoices, planSync, syncFromZoho, searchZohoInvoices, createZohoInvoice, markPaidWithZoho, referenceFor };

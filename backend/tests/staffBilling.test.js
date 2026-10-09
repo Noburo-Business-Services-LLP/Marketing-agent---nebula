@@ -228,7 +228,8 @@ test('billing cycles: the choices, the plan, and a clear message for anything el
   assert.deepEqual(L.CYCLES, [1, 3, 6, 12]);
   const ok = L.parseSettings({ monthlyAmountInr: 250000, billingStart: '2026-08-04', cycleMonths: 12, planName: ' SCALE ', zohoItemId: '3659166000000123456' }).settings;
   assert.equal(ok.cycleMonths, 12); assert.equal(ok.planName, 'SCALE'); assert.equal(ok.zohoItemId, '3659166000000123456');
-  assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-08-04', cycleMonths: 5 }).ok, false);
+  assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-08-04', cycleMonths: 5 }).settings.cycleMonths, 5, 'any whole number of months is allowed');
+  for (const bad of [0, 37, 2.5, 'x']) assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-08-04', cycleMonths: bad }).ok, false, String(bad));
   assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-08-04', zohoItemId: 'x; drop' }).settings.zohoItemId, '', 'a malformed product id is dropped');
 });
 
@@ -262,5 +263,72 @@ test('an invoice or payment records the period length, the typed one first, then
   assert.equal(f.records.get('2026-07').months, 3); assert.equal(f.records.get('2026-07').planName, 'SCALE');
   await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-10', input: { mode: 'bank', invoiceNumber: 'INV-Y', months: 12 }, ...f, now: NOW });
   assert.equal(f.records.get('2026-10').months, 12);
-  assert.equal(L.recordMonths({ existing: null, input: { months: 7 }, client: { managedBilling: { cycleMonths: 6 } } }), 6, 'an invalid typed length is ignored');
+  assert.equal(L.recordMonths({ existing: null, input: { months: 7 }, client: { managedBilling: { cycleMonths: 6 } } }), 7, 'any length from 1 to 36 is accepted');
+  assert.equal(L.recordMonths({ existing: null, input: { months: 99 }, client: { managedBilling: { cycleMonths: 6 } } }), 6, 'an invalid typed length is ignored');
+});
+
+test('part payments: the first payment leaves a balance, the next ones continue from it, and the period is paid only when the total is reached', async () => {
+  const f = fake({ managedBilling: { monthlyAmountInr: 295000, gstInclusive: true, gstPercent: 18, billingStart: '2026-08-04', serviceStart: '2026-08', cycleMonths: 12 } });
+  // a yearly invoice of 2,95,000 where the client pays 1,00,000 now
+  const first = await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-08', input: { mode: 'bank', invoiceNumber: 'INV-11', paymentAmountInr: 100000, paidOn: '2026-08-10', balanceDueOn: '2026-11-10' }, ...f, now: NOW });
+  assert.equal(first.status, 200); assert.equal(first.body.partial, true); assert.equal(first.body.balancePaise, 19500000);
+  let r = f.records.get('2026-08');
+  assert.equal(r.status, 'partial'); assert.equal(r.paidPaise, 10000000); assert.equal(r.payments.length, 1); assert.equal(new Date(r.balanceDueOn).toISOString().slice(0, 10), '2026-11-10'); assert.equal(f.calls.paying, 1);
+  const view = L.buildLedger({ settings: f.client.managedBilling, records: [r], now: NOW });
+  assert.equal(view.rows[0].status, 'partial'); assert.equal(view.rows[0].balancePaise, 19500000); assert.equal(view.rows[0].paidPaise, 10000000); assert.equal(view.rows[0].balanceDueOn, '2026-11-10');
+  assert.equal(view.totals.paidPaise, 10000000); assert.equal(view.totals.outstandingPaise, 19500000); assert.equal(view.totals.billedPaise, 29500000);
+  const second = await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-08', input: { mode: 'upi', paymentAmountInr: 65000, paidOn: '2026-09-20' }, ...f, now: NOW });
+  assert.equal(second.body.partial, true); assert.equal(second.body.balancePaise, 13000000);
+  assert.equal(f.records.get('2026-08').payments.length, 2); assert.equal(new Date(f.records.get('2026-08').balanceDueOn).toISOString().slice(0, 10), '2026-11-10', 'the expected date is kept');
+  const last = await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-08', input: { mode: 'bank', paidOn: '2026-10-05' }, ...f, now: NOW });
+  assert.equal(last.body.partial, false);
+  r = f.records.get('2026-08'); assert.equal(r.status, 'paid'); assert.equal(r.paidPaise, 29500000); assert.equal(r.payments.length, 3); assert.equal(r.balanceDueOn, null);
+  assert.equal((await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-08', input: { mode: 'bank' }, ...f, now: NOW })).status, 409, 'nothing more to pay');
+});
+
+test('a payment can never be more than the balance; a bad amount is refused', async () => {
+  const f = fake();
+  await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'bank', invoiceNumber: 'INV-9', paymentAmountInr: 10000 }, ...f, now: NOW });
+  const over = await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'bank', paymentAmountInr: 20000 }, ...f, now: NOW });
+  assert.equal(over.status, 400); assert.match(over.body.message, /more than the balance/);
+  assert.equal((await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'bank', paymentAmountInr: 'abc' }, ...f, now: NOW })).status, 400);
+  assert.equal((await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'bank', paymentAmountInr: 0 }, ...f, now: NOW })).status, 400);
+});
+
+test('undo removes the latest payment only; with none left it goes back to invoiced; a period with a payment cannot be cancelled', async () => {
+  const f = fake();
+  await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'bank', invoiceNumber: 'INV-9', paymentAmountInr: 10000, paidOn: '2026-09-02' }, ...f, now: NOW });
+  await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'upi', paymentAmountInr: 5000, paidOn: '2026-09-12' }, ...f, now: NOW });
+  assert.equal((await L.setVoid({ actor: owner, clientId: hex('1'), period: '2026-09', voided: true, ...f })).status, 409);
+  await L.undoPaid({ actor: owner, clientId: hex('1'), period: '2026-09', ...f });
+  let r = f.records.get('2026-09'); assert.equal(r.status, 'partial'); assert.equal(r.paidPaise, 1000000); assert.equal(r.payments.length, 1);
+  await L.undoPaid({ actor: owner, clientId: hex('1'), period: '2026-09', ...f });
+  r = f.records.get('2026-09'); assert.equal(r.status, 'invoiced'); assert.equal(r.paidPaise, 0); assert.equal(r.payments.length, 0);
+  assert.equal((await L.undoPaid({ actor: owner, clientId: hex('1'), period: '2026-09', ...f })).status, 409);
+});
+
+test('a discounted or special price is simply the amount typed for that period, and the plan name is free text', async () => {
+  const f = fake({ managedBilling: { monthlyAmountInr: 25000, gstInclusive: true, gstPercent: 18, billingStart: '2026-08-04', serviceStart: '2026-08', cycleMonths: 4, planName: 'Custom (negotiated)' } });
+  await L.linkInvoice({ actor: owner, clientId: hex('1'), period: '2026-08', input: { invoiceNumber: 'INV-S', amountInr: 70000, note: 'Discounted from 1,00,000' }, ...f, now: NOW });
+  const r = f.records.get('2026-08');
+  assert.equal(r.totalPaise, 7000000); assert.equal(r.exPaise + r.gstPaise, 7000000); assert.equal(r.months, 4); assert.equal(r.planName, 'Custom (negotiated)'); assert.equal(r.note, 'Discounted from 1,00,000');
+  assert.deepEqual(L.cycleStarts(f.client.managedBilling, '2027-03'), ['2026-08', '2026-12', '2027-04'].filter((p) => p <= '2027-03'));
+  assert.equal(L.coverageLabel('2026-08', 4), 'Aug – Nov 2026');
+});
+
+test('a part-paid period that is past its balance date shows as late', () => {
+  const rec = { period: '2026-08', months: 12, status: 'partial', exPaise: 1, gstPercent: 18, gstPaise: 0, totalPaise: 29500000, paidPaise: 10000000, payments: [{ amountPaise: 10000000, paidOn: new Date('2026-08-10'), mode: 'bank' }], invoiceNumber: 'INV-1', issuedOn: new Date('2026-08-04'), dueOn: new Date('2026-08-19'), balanceDueOn: new Date('2026-10-01') };
+  assert.equal(L.buildLedger({ settings: { monthlyAmountInr: 295000, billingStart: '2026-08-04', cycleMonths: 12 }, records: [rec], now: NOW }).rows[0].late, true);
+  assert.equal(L.buildLedger({ settings: { monthlyAmountInr: 295000, billingStart: '2026-08-04', cycleMonths: 12 }, records: [{ ...rec, balanceDueOn: new Date('2026-12-01') }], now: NOW }).rows[0].late, false);
+});
+
+test('an invoice with no date typed gets the period\'s planned invoice date, not the date it was linked or paid', async () => {
+  const f = fake({ managedBilling: { monthlyAmountInr: 295000, gstInclusive: true, gstPercent: 18, billingStart: '2026-08-04', serviceStart: '2026-08', cycleMonths: 12 } });
+  await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-08', input: { mode: 'bank', invoiceNumber: 'INV-11', paymentAmountInr: 100000, paidOn: '2026-10-09' }, ...f, now: NOW });
+  assert.equal(new Date(f.records.get('2026-08').issuedOn).toISOString().slice(0, 10), '2026-08-04');
+  const g = fake({ managedBilling: { monthlyAmountInr: 25000, gstPercent: 18, billingStart: '2026-09-07', serviceStart: '2026-09' } });
+  await L.linkInvoice({ actor: owner, clientId: hex('1'), period: '2026-09', input: { invoiceNumber: 'INV-12' }, ...g, now: NOW });
+  assert.equal(new Date(g.records.get('2026-09').issuedOn).toISOString().slice(0, 10), '2026-09-07');
+  await L.linkInvoice({ actor: owner, clientId: hex('1'), period: '2026-10', input: { invoiceNumber: 'INV-13', issuedOn: '2026-10-01' }, ...g, now: NOW });
+  assert.equal(new Date(g.records.get('2026-10').issuedOn).toISOString().slice(0, 10), '2026-10-01', 'a typed date wins');
 });
