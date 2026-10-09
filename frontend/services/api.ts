@@ -1379,6 +1379,8 @@ export const apiService = {
   staffAddQuarks: async (id: string, amount: number): Promise<any> => apiCall(`/staff/clients/${id}/quarks`, { method: 'POST', body: JSON.stringify({ amount }) }, true),
   staffToggleClient: async (id: string, active: boolean): Promise<any> => apiCall(`/staff/clients/${id}/toggle`, { method: 'POST', body: JSON.stringify({ active }) }, true),
   staffAssignCsm: async (id: string, csmId: string | null): Promise<any> => apiCall(`/staff/clients/${id}/assign-csm`, { method: 'POST', body: JSON.stringify({ csmId }) }, true),
+  staffBulkClients: async (body: Record<string, unknown>): Promise<any> => apiCall('/staff/clients/bulk', { method: 'POST', body: JSON.stringify(body) }, true),
+  staffCreateClient: async (body: Record<string, unknown>): Promise<any> => apiCall('/staff/clients', { method: 'POST', body: JSON.stringify(body) }, true),
   staffBulkAssign: async (ids: string[], csmId: string | null): Promise<any> => apiCall('/staff/clients/bulk-assign', { method: 'POST', body: JSON.stringify({ ids, csmId }) }, true),
   // Owner tools (the Owner-only ones are refused by the server for everyone else).
   staffResetAyrshareIds: async (): Promise<any> => apiCall('/staff/ayrshare/reset-ids', { method: 'POST', body: JSON.stringify({ confirm: true }) }, true),

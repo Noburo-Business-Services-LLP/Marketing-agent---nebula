@@ -27,6 +27,16 @@ async function send({ to, subject, text }) {
 const api = {
   inviteText,
   send,
+  /** The welcome email for a new managed client. Never throws. */
+  async sendClientInvite({ email, firstName }) {
+    try {
+      const site = process.env.APP_PUBLIC_URL || 'https://gravity.nebulaa.ai';
+      const text = `Hi ${firstName},\n\nYour Nebulaa account is ready.\n\n1. Open ${site} and choose Sign in.\n2. Select Forgot password and enter this email address (${email}).\n3. Enter the code we email you and choose your own password.\n\nAfter you sign in, your Nebulaa team will help you finish the setup. If anything does not work, just reply to this email.\n\nThe Nebulaa team`;
+      return Boolean(await api.send({ to: email, subject: 'Your Nebulaa account is ready', text }));
+    } catch (_) {
+      return false;
+    }
+  },
   /** Never throws: a failed email must not undo adding the person. */
   async sendInvite({ email, firstName, role }) {
     try {

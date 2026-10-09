@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Search, Check, Minus, AlertTriangle, Download } from 'lucide-react';
+import { Loader2, Search, Check, Minus, AlertTriangle, Download, Plus } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
 import PlatformIcon from '../../components/PlatformIcon';
 import { toCsv, STATUS_TEXT } from '../../utils/staffCsv';
 import { platformLabel } from '../../utils/platforms';
 import { FILTER_LABEL, TIER_LABEL, ACCESS_LABEL, whenLabel, attentionText } from './staffLabels';
+import { useConfirm } from '../../context/ConfirmContext';
+import { bulkChoices, bulkRequest, bulkSummary, bulkResultNote, PLAN_CHOICES, FEATURE_CHOICES, type BulkChoice } from '../../utils/staffBulk';
+import StaffAddClient from './StaffAddClient';
 
 type Row = {
   id: string; name: string; email: string; tier: string; addons: string[]; paying: boolean; trial: boolean;
@@ -40,6 +43,14 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
   const [picked, setPicked] = useState<string[]>([]);
   const [csms, setCsms] = useState<Array<{ id: string; name: string }>>([]);
   const [bulkCsm, setBulkCsm] = useState('');
+  const confirm = useConfirm();
+  const [choice, setChoice] = useState<BulkChoice | ''>('');
+  const [bulkAmount, setBulkAmount] = useState('');
+  const [bulkTier, setBulkTier] = useState('managed');
+  const [bulkAddons, setBulkAddons] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const options = bulkChoices(can);
   const [note, setNote] = useState('');
 
   useEffect(() => { const t = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(t); }, [q]);
@@ -54,7 +65,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
   }, [filter, search, sort, dir, page]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (can.assign_csm) apiService.getStaffCsms().then((r) => setCsms(r.csms || [])).catch(() => undefined); }, [can.assign_csm]);
+  useEffect(() => { if (can.assign_csm || can.create_client) apiService.getStaffCsms().then((r) => setCsms(r.csms || [])).catch(() => undefined); }, [can.assign_csm, can.create_client]);
 
   const sortBy = (key: string) => {
     if (sort === key) setDir(dir === 'asc' ? 'desc' : 'asc'); else { setSort(key); setDir(key === 'name' ? 'asc' : 'desc'); }
@@ -64,13 +75,22 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
   const rows: Row[] = data?.rows || [];
   const allPicked = rows.length > 0 && rows.every((r) => picked.includes(r.id));
 
-  const bulkAssign = async () => {
+  const applyBulk = async () => {
     setNote('');
+    if (!choice) { setNote('Choose what to do first.'); return; }
+    const values = { csmId: bulkCsm, amount: bulkAmount, tier: bulkTier, addons: bulkAddons };
+    const req = bulkRequest(choice, values, picked);
+    if (req.ok === false) { setNote(req.message); return; }
+    const csmName = csms.find((c) => c.id === bulkCsm)?.name || '';
+    const risky = choice === 'off' || choice === 'features_remove' || (choice === 'plan' && bulkTier === 'free');
+    if (!(await confirm(bulkSummary(choice, values, picked.length, csmName), { title: 'Please confirm', confirmLabel: 'Apply', danger: risky }))) return;
+    setBulkBusy(true);
     try {
-      const res = await apiService.staffBulkAssign(picked, bulkCsm || null);
-      setNote(res.success ? `${res.updated} ${res.updated === 1 ? 'client' : 'clients'} updated.` : (res.message || 'Could not assign.'));
-      if (res.success) { setPicked([]); load(); }
+      const res = await apiService.staffBulkClients(req.body);
+      setNote(bulkResultNote(res));
+      setPicked([]); setChoice(''); load();
     } catch (e) { setNote(customerMessage(e)); }
+    finally { setBulkBusy(false); }
   };
 
   const exportCsv = async () => {
@@ -106,17 +126,44 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
         {can.export_csv && (
           <button onClick={exportCsv} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700"><Download className="w-4 h-4" /> Export CSV</button>
         )}
-        {can.assign_csm && picked.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600">{picked.length} selected</span>
-            <select value={bulkCsm} onChange={(e) => setBulkCsm(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+        {can.create_client && (
+          <button onClick={() => setAdding(true)} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold"><Plus className="w-4 h-4" />Add client</button>
+        )}
+      </div>
+      {options.length > 0 && picked.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
+          <span className="text-sm font-semibold text-slate-800">{picked.length} selected</span>
+          <select value={choice} onChange={(e) => setChoice(e.target.value as BulkChoice | '')} aria-label="Action for the selected clients" className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+            <option value="">Choose an action…</option>
+            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          {choice === 'csm' && (
+            <select value={bulkCsm} onChange={(e) => setBulkCsm(e.target.value)} aria-label="CSM" className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
               <option value="">No CSM</option>
               {csms.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <button onClick={bulkAssign} className="px-3 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold">Assign</button>
-          </div>
-        )}
-      </div>
+          )}
+          {choice === 'quarks' && (
+            <input inputMode="numeric" value={bulkAmount} onChange={(e) => setBulkAmount(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Quarks for each" aria-label="Quarks for each client" className="w-40 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm" />
+          )}
+          {choice === 'plan' && (
+            <select value={bulkTier} onChange={(e) => setBulkTier(e.target.value)} aria-label="Plan" className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+              {PLAN_CHOICES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          )}
+          {(choice === 'features_add' || choice === 'features_remove') && (
+            <div className="flex flex-wrap gap-3">
+              {FEATURE_CHOICES.map((f) => (
+                <label key={f.value} className="inline-flex items-center gap-1.5 text-sm text-slate-800">
+                  <input type="checkbox" checked={bulkAddons.includes(f.value)} onChange={() => setBulkAddons((a) => (a.includes(f.value) ? a.filter((x) => x !== f.value) : [...a, f.value]))} />{f.label}
+                </label>
+              ))}
+            </div>
+          )}
+          <button onClick={applyBulk} disabled={bulkBusy || !choice} className="px-3 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold disabled:opacity-50 inline-flex items-center gap-2">{bulkBusy && <Loader2 className="w-4 h-4 animate-spin" />}Apply</button>
+          <button onClick={() => { setPicked([]); setChoice(''); }} className="text-sm text-slate-600 underline">Clear</button>
+        </div>
+      )}
       {note && <p className="text-sm text-slate-700">{note}</p>}
       {error && <p className="text-sm text-red-600">{error} <button onClick={() => load()} className="underline font-semibold">Try again</button></p>}
 
@@ -124,7 +171,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              {can.assign_csm && <th className="w-10 px-3 py-2"><input type="checkbox" checked={allPicked} onChange={() => setPicked(allPicked ? [] : rows.map((r) => r.id))} aria-label="Select all on this page" /></th>}
+              {options.length > 0 && <th className="w-10 px-3 py-2"><input type="checkbox" checked={allPicked} onChange={() => setPicked(allPicked ? [] : rows.map((r) => r.id))} aria-label="Select all on this page" /></th>}
               {SORTABLE.slice(0, 3).map((c) => (
                 <th key={c.key} className="px-3 py-2"><button onClick={() => sortBy(c.key)} className="font-semibold uppercase">{c.label}{sort === c.key ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</button></th>
               ))}
@@ -141,7 +188,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
             {!loading && !error && rows.length === 0 && <tr><td colSpan={9} className="px-3 py-10 text-center text-slate-500">No clients match this view.</td></tr>}
             {!loading && rows.map((r) => (
               <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/staff/clients/${r.id}`)}>
-                {can.assign_csm && (
+                {options.length > 0 && (
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={picked.includes(r.id)} onChange={() => setPicked((p) => (p.includes(r.id) ? p.filter((x) => x !== r.id) : [...p, r.id]))} aria-label={`Select ${r.name}`} />
                   </td>
@@ -188,6 +235,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
           </div>
         </div>
       )}
+    {adding && <StaffAddClient can={can} csms={csms} onClose={() => setAdding(false)} onAdded={load} onOpenExisting={(id) => navigate(`/staff/clients/${id}`)} />}
     </div>
   );
 };

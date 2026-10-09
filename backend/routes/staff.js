@@ -16,6 +16,8 @@ const { buildUsage, loadUsageData, parseWindow } = require('../services/staff/us
 const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
 const tools = require('../services/staff/tools');
+const { bulkClients, createClient } = require('../services/staff/clientBulk');
+const { canonicalEmail } = require('../services/signupGuard');
 
 router.use(protect);
 
@@ -346,6 +348,45 @@ router.post('/clients/:id/assign-csm', requireStaff('assign_csm'), async (req, r
   } catch (error) {
     console.error('[staff] assign failed:', error.message);
     res.status(500).json({ success: false, message: 'Could not assign the CSM.' });
+  }
+});
+
+// POST /api/staff/clients { email, firstName, lastName?, companyName?, csmId?, tier?, quarks? }: add a client by hand, on the
+// Managed plan unless another is chosen. No payment gateway is involved. Owner, Admin.
+router.post('/clients', requireStaff('create_client'), async (req, res) => {
+  try {
+    const repo = {
+      findByEmail: (email) => User.findOne({ email }).select('staffRole isCsm').lean(),
+      findByEmailKey: (key) => User.findOne({ emailKey: key }).select('staffRole isCsm').lean(),
+      findCsm: (id) => (/^[a-f0-9]{24}$/i.test(String(id)) ? User.findById(id).select('staffRole isCsm isActive').lean() : null),
+      createUser: (doc) => User.create(doc)
+    };
+    const out = await createClient({
+      actor: req.staff, input: req.body || {}, repo, canonicalEmail,
+      record: (row) => recordStaffAction(row),
+      invite: (who) => require('../services/staff/invite').sendClientInvite(who)
+    });
+    res.status(out.status).json(out.body);
+  } catch (error) {
+    console.error('[staff] create client failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not add the client. Please try again.' });
+  }
+});
+
+// POST /api/staff/clients/bulk { ids, op, ... }: one action on up to 200 clients (switch on or off, Quarks, CSM, plan, features, hide).
+// Each action needs its own permission; staff accounts are skipped, never changed.
+router.post('/clients/bulk', requireStaff('view_clients'), async (req, res) => {
+  try {
+    const repo = {
+      findCustomers: (ids) => User.find({ _id: { $in: ids } }).select('staffRole isCsm subscription').lean(),
+      findCsm: (id) => (/^[a-f0-9]{24}$/i.test(String(id)) ? User.findById(id).select('staffRole isCsm isActive').lean() : null),
+      applyUpdate: (ids, update) => User.updateMany({ _id: { $in: ids }, staffRole: null, isCsm: { $ne: true } }, update)
+    };
+    const out = await bulkClients({ actor: req.staff, input: req.body || {}, repo, record: (row) => recordStaffAction(row) });
+    res.status(out.status).json(out.body);
+  } catch (error) {
+    console.error('[staff] bulk action failed:', error.message);
+    res.status(500).json({ success: false, message: 'Could not apply that to the clients. Please try again.' });
   }
 });
 

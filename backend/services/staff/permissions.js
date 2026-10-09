@@ -13,6 +13,8 @@ const TABLE = {
   toggle_client:      [true, true, false],
   assign_csm:         [true, true, false],
   hide_client:        [true, true, false],
+  create_client:      [true, true, false],
+  set_plan:           [true, true, false],
   add_csm:            [true, true, false],
   manage_admins:      [true, false, false],
   reset_accounts:     [true, false, false],
