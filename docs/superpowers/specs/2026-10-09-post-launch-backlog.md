@@ -10,8 +10,19 @@ Raw/Strong: contrast 0.84, saturation 0.78, gamma 1.05, warm colorbalance rs=0.0
 The test videos are in the owner's `Downloads/grade-test/`. Work lives in `backend/services/heroVideoFinish.js` (`buildFinishFilterGraph`, `normalizeFinishOptions`); the logo overlay must stay after the grade.
 Also: UGC prompt changes (no grin straight to the lens, mid-action expressions, everyday uneven-light settings, imperfect framing).
 
-## 2. Tamil (and other Indian language) voice for Hero videos
-Seedance generates its own audio (`generate_audio: true`); Tamil speech sounds synthetic. Plan: Stage 1 voice-over with ElevenLabs (Seedance in "Effects only" sound mode, voice mixed in the finish step); Stage 2 lip sync for talking-to-camera clips after testing 3 lip-sync models with Tamil. Needs the owner's OK for a small test spend, and his voice and tone choice. Price from real provider rates in `apiCosts.js`.
+## 2. Regional-language voice for Hero videos (ElevenLabs voice + lip sync)
+Finding (owner, 2026-10-09): Seedance generates its own audio (`generate_audio: true`) and its Tamil speech sounds synthetic; ElevenLabs gives real-sounding Tamil narration with the right voice. The same is expected for other Indian languages.
+
+**Routing rule (owner decision):** use the ElevenLabs + lip-sync path ONLY when BOTH are true:
+1. the video language is a regional language (Tamil, Telugu, Hindi and the other Indian languages we support), AND
+2. the video has a character who speaks (the plan has dialogue lines).
+Everything else is unchanged: English videos, and any video with no talking (actions, silence, music and effects only) stay on the current flow with no ElevenLabs call and no lip-sync call, and no extra cost.
+
+**Pipeline when the rule applies:** (1) Seedance makes the clip as today (the mouth moves; its own speech is discarded). (2) ElevenLabs makes the audio from the dialogue lines in the chosen voice (voice and model per language, chosen by the owner after listening). (3) A lip-sync model re-animates the mouth to the new audio (model chosen after the test below). (4) The existing finishing step adds music and effects and the realism grade.
+
+**Safety:** if ElevenLabs or lip sync fails, the video is still delivered with the Seedance audio (never a failed video) and the extra charge is not made. The extra cost is added to the Quark price ONLY for videos that use the path, derived from real provider rates in `apiCosts.js`. Customer messages never name vendors.
+
+**Test before building (needs the owner's OK for the spend):** run the owner's Pondy clip and his ElevenLabs audio through LatentSync (fal, about US$0.20 per clip up to 40 s), Sync Lipsync 2.0 (about US$3 a minute), Kling LipSync and OmniHuman 1.5 (about US$0.16 a second), estimated total under US$5; fal.ai balance must be topped up first. Output to `Downloads/lipsync-test/`. Then test Hindi and Telugu the same way.
 
 ## 3. Prospect Studio
 See `2026-10-09-prospect-studio.md`.
