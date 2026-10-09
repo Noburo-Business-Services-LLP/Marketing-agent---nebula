@@ -771,6 +771,13 @@ const startServer = async () => {
       console.warn('Performance tracker scheduler failed to start:', schedulerError.message);
     }
 
+    // Monthly invoices for managed clients who have automatic invoices on (hourly check)
+    try {
+      require('./services/billingScheduler').startBillingScheduler();
+    } catch (schedulerError) {
+      console.warn('Billing scheduler failed to start:', schedulerError.message);
+    }
+
     // Start weekly AI memory distillation scheduler
     try {
       startMemoryDistillationScheduler();

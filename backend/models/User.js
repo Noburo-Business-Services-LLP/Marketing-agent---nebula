@@ -269,7 +269,14 @@ const userSchema = new mongoose.Schema({
     monthlyAmountInr: { type: Number },  // what the client pays each month
     gstInclusive: { type: Boolean },     // true: the amount already contains GST; false: GST is added on top
     gstPercent: { type: Number },
-    serviceStart: { type: String } // 'YYYY-MM'
+    serviceStart: { type: String }, // 'YYYY-MM' (the month of billingStart)
+    billingStart: { type: String }, // 'YYYY-MM-DD': the first billing date; its day of the month is the invoice day
+    termsDays: { type: Number },    // days the client has to pay after the invoice date
+    cycleMonths: { type: Number, enum: [1, 3, 6, 12] }, // how often they are billed: monthly, quarterly, half-yearly, yearly
+    planName: { type: String, maxlength: 80 },          // the plan, for example SCALE (a product in Zoho Books)
+    zohoItemId: { type: String },                       // that product's id in Zoho Books
+    autoInvoice: { type: Boolean }, // make each billing period's invoice automatically on the invoice day
+    autoFrom: { type: String }      // 'YYYY-MM': automatic invoices start from this month, never earlier
   },
   // Plan (optional: accounts without plan.tier are treated as managed)
   plan: {

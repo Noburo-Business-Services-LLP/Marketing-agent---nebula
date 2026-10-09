@@ -7,11 +7,13 @@ import { formatInr, previewLine, STATUS_LABEL, today } from '../../utils/staffBi
 
 type Row = {
   period: string; label: string; status: string; exPaise: number; gstPaise: number; totalPaise: number; gstInclusive?: boolean;
+  invoiceDate?: string; dueDate?: string; paidDate?: string;
   invoiceNumber: string; invoiceUrl: string; zohoInvoiceId?: string; paidOn: string | null; paidModeLabel: string; paidReference: string; note: string;
 };
 type Data = {
   zohoOrgId?: string;
-  settings: { monthlyAmountInr: number | null; gstInclusive: boolean; gstPercent: number; serviceStart: string };
+  nextInvoiceDate?: string;
+  settings: { monthlyAmountInr: number | null; gstInclusive: boolean; gstPercent: number; billingStart: string; termsDays: number; autoInvoice: boolean; autoFrom?: string };
   paidModes: Array<{ value: string; label: string }>;
   rows: Row[];
   totals: { billedPaise: number; paidPaise: number; outstandingPaise: number; notInvoicedPaise: number };
@@ -24,6 +26,8 @@ const CHIP: Record<string, string> = {
 const field = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm';
 const lab = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1';
 
+const fmtDate = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
 /** The monthly ledger of one managed client: the fixed amount and GST mode, each month's invoice, and how it was paid. */
 const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
   const confirm = useConfirm();
@@ -35,6 +39,9 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
   const [inclusive, setInclusive] = useState(false);
   const [rate, setRate] = useState('18');
   const [start, setStart] = useState('');
+  const [terms, setTerms] = useState('15');
+  const [auto, setAuto] = useState(false);
+  const [dates, setDates] = useState<{ row: Row; invoiceDate: string; dueDate: string; paidDate: string } | null>(null);
   const [open, setOpen] = useState<{ kind: 'invoice' | 'paid'; row: Row } | null>(null);
   const [createInZoho, setCreateInZoho] = useState(true);
   const [find, setFind] = useState('');
@@ -48,7 +55,9 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
       setAmount(d.settings.monthlyAmountInr ? String(d.settings.monthlyAmountInr) : '');
       setInclusive(Boolean(d.settings.gstInclusive));
       setRate(String(d.settings.gstPercent));
-      setStart(d.settings.serviceStart || '');
+      setStart(d.settings.billingStart || '');
+      setTerms(String(d.settings.termsDays ?? 15));
+      setAuto(Boolean(d.settings.autoInvoice));
     }).catch((e) => setError(customerMessage(e)));
   }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -60,7 +69,8 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
     setBusy(false);
   };
 
-  const saveSettings = () => run(() => apiService.staffBillingSettings(id, { monthlyAmountInr: Number(amount), gstInclusive: inclusive, gstPercent: Number(rate), serviceStart: start }), 'Billing details saved.');
+  const saveSettings = () => run(() => apiService.staffBillingSettings(id, { monthlyAmountInr: Number(amount), gstInclusive: inclusive, gstPercent: Number(rate), billingStart: start, termsDays: Number(terms), autoInvoice: auto }), 'Billing details saved.');
+  const saveDates = () => dates && run(() => apiService.staffBillingDates(id, dates.row.period, { invoiceDate: dates.invoiceDate || undefined, dueDate: dates.dueDate || undefined, paidDate: dates.row.status === 'paid' ? (dates.paidDate || undefined) : undefined }), (r) => r.note ? `Dates changed. ${r.note}` : 'Dates changed.').then(() => setDates(null));
   const submit = () => {
     if (!open) return;
     const base = { invoiceNumber: form.invoiceNumber.trim(), invoiceUrl: form.invoiceUrl.trim() || undefined, issuedOn: form.issuedOn || undefined, amountInr: form.amountInr.trim() ? Number(form.amountInr) : undefined };
@@ -116,10 +126,16 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
             </div>
           </div>
           <div><label className={lab} htmlFor="bl-rate">GST rate</label><select id="bl-rate" value={rate} onChange={(e) => setRate(e.target.value)} className={field}>{[18, 12, 5, 28, 0].map((r) => <option key={r} value={r}>{r}%</option>)}</select></div>
-          <div><label className={lab} htmlFor="bl-start">Service began</label><input id="bl-start" type="month" value={start} onChange={(e) => setStart(e.target.value)} className={field} /></div>
+          <div><label className={lab} htmlFor="bl-start">Billing starts on</label><input id="bl-start" type="date" value={start} onChange={(e) => setStart(e.target.value)} className={field} /></div>
+          <div><label className={lab} htmlFor="bl-terms">Pay within (days)</label><input id="bl-terms" inputMode="numeric" value={terms} onChange={(e) => setTerms(e.target.value.replace(/[^0-9]/g, ''))} className={field} /></div>
         </div>
         {preview && <p className="text-sm text-slate-700">{preview}</p>}
-        <button disabled={busy || !amount || !start} onClick={saveSettings} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold disabled:opacity-50">Save</button>
+        {start && <p className="text-xs text-slate-500">The invoice date each month is the {new Date(`${start}T00:00:00`).getDate()}{[1, 21, 31].includes(new Date(`${start}T00:00:00`).getDate()) ? 'st' : [2, 22].includes(new Date(`${start}T00:00:00`).getDate()) ? 'nd' : [3, 23].includes(new Date(`${start}T00:00:00`).getDate()) ? 'rd' : 'th'} (the last day in a shorter month).</p>}
+        <label className="flex items-start gap-2 text-sm text-slate-800">
+          <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} className="mt-0.5" />
+          <span>Create each month's invoice in Zoho Books automatically on the invoice date<span className="block text-xs text-slate-500">Starts from the next invoice date and never goes back to earlier months.{data.nextInvoiceDate && auto ? ` Next invoice: ${new Date(`${data.nextInvoiceDate}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}.` : ''}</span></span>
+        </label>
+        <button disabled={busy || !amount || !start || !terms} onClick={saveSettings} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold disabled:opacity-50">Save</button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -131,18 +147,20 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
       {data.rows.length === 0 ? <p className="text-sm text-slate-500">Set the monthly amount and the month service began, and the months will appear here.</p> : (
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Month</th><th className="px-3 py-2 text-right">Net</th><th className="px-3 py-2 text-right">GST</th><th className="px-3 py-2 text-right">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Invoice</th><th className="px-3 py-2">Paid</th><th className="px-3 py-2" /></tr></thead>
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Month</th><th className="px-3 py-2">Invoice date</th><th className="px-3 py-2 text-right">Net</th><th className="px-3 py-2 text-right">GST</th><th className="px-3 py-2 text-right">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Invoice</th><th className="px-3 py-2">Paid</th><th className="px-3 py-2" /></tr></thead>
             <tbody>
               {data.rows.map((r) => (
                 <tr key={r.period} className="border-t border-slate-100 align-top">
                   <td className="px-3 py-2 font-medium text-slate-900">{r.label}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-700">{r.invoiceDate ? fmtDate(r.invoiceDate) : '—'}{r.dueDate && r.status !== 'paid' && r.status !== 'void' ? <div className="text-xs text-slate-500">due {fmtDate(r.dueDate)}</div> : null}{!r.invoiceNumber && r.status === 'not_invoiced' && r.invoiceDate ? <div className="text-xs text-slate-400">planned</div> : null}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatInr(r.exPaise)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatInr(r.gstPaise)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatInr(r.totalPaise)}</td>
                   <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CHIP[r.status]}`}>{STATUS_LABEL[r.status]}</span></td>
                   <td className="px-3 py-2">{r.invoiceNumber ? (r.invoiceUrl || (r.zohoInvoiceId && data.zohoOrgId) ? <a href={r.invoiceUrl || `https://books.zoho.in/app/${data.zohoOrgId}#/invoices/${r.zohoInvoiceId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#B45309] underline">{r.invoiceNumber}<ExternalLink className="w-3 h-3" /></a> : r.invoiceNumber) : <span className="text-slate-400">—</span>}</td>
-                  <td className="px-3 py-2 text-slate-700">{r.status === 'paid' ? <>{r.paidOn ? new Date(r.paidOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}<div className="text-xs text-slate-500">{r.paidModeLabel}{r.paidReference ? ` · ${r.paidReference}` : ''}</div></> : <span className="text-slate-400">—</span>}</td>
+                  <td className="px-3 py-2 text-slate-700">{r.status === 'paid' ? <>{r.paidDate ? fmtDate(r.paidDate) : ''}<div className="text-xs text-slate-500">{r.paidModeLabel}{r.paidReference ? ` · ${r.paidReference}` : ''}</div></> : <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-right space-x-3">
+                    {r.invoiceNumber && r.status !== 'void' && <button disabled={busy} onClick={() => setDates({ row: r, invoiceDate: r.invoiceDate || '', dueDate: r.dueDate || '', paidDate: r.paidDate || '' })} className="text-slate-700 underline">Edit dates</button>}
                     {!r.invoiceNumber && r.status !== 'void' && <button disabled={busy} onClick={() => createZoho(r)} className="text-slate-700 underline">Create invoice in Zoho</button>}
                     {r.status !== 'paid' && r.status !== 'void' && <button disabled={busy} onClick={() => openForm('invoice', r)} className="text-slate-700 underline">{r.invoiceNumber ? 'Change invoice' : 'Link invoice'}</button>}
                     {r.status !== 'paid' && r.status !== 'void' && <button disabled={busy} onClick={() => openForm('paid', r)} className="font-semibold text-emerald-700 underline">Mark paid</button>}
@@ -154,6 +172,24 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {dates && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Edit dates">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 p-5 space-y-3">
+            <h3 className="text-lg font-semibold text-slate-900">Dates for {dates.row.label}</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lab} htmlFor="d-inv">Invoice date</label><input id="d-inv" type="date" value={dates.invoiceDate} onChange={(e) => setDates({ ...dates, invoiceDate: e.target.value })} className={field} /></div>
+              <div><label className={lab} htmlFor="d-due">Due date</label><input id="d-due" type="date" value={dates.dueDate} onChange={(e) => setDates({ ...dates, dueDate: e.target.value })} className={field} /></div>
+            </div>
+            {dates.row.status === 'paid' && <div><label className={lab} htmlFor="d-paid">Paid on</label><input id="d-paid" type="date" max={today()} value={dates.paidDate} onChange={(e) => setDates({ ...dates, paidDate: e.target.value })} className={field} /></div>}
+            {dates.row.zohoInvoiceId && <p className="text-xs text-slate-500">This invoice is in Zoho Books. Changing the dates here does not change them in Zoho Books; update them there too if they need to match.</p>}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDates(null)} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700">Cancel</button>
+              <button disabled={busy} onClick={saveDates} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold disabled:opacity-50">Save dates</button>
+            </div>
+          </div>
         </div>
       )}
 

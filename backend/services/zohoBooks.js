@@ -335,7 +335,8 @@ async function getInvoice(invoiceId) {
   const i = d.invoice || {};
   return {
     ...slim(i), subTotal: Number(i.sub_total) || 0, taxTotal: Number(i.tax_total) || 0,
-    invoiceUrl: i.invoice_url || '', paymentsCount: Array.isArray(i.payments) ? i.payments.length : 0
+    invoiceUrl: i.invoice_url || '', paymentsCount: Array.isArray(i.payments) ? i.payments.length : 0,
+    lineItems: (i.line_items || []).map((l) => ({ itemId: l.item_id || '', name: l.name || '', description: l.description || '', rate: Number(l.rate) || 0, quantity: Number(l.quantity) || 1 }))
   };
 }
 
@@ -345,6 +346,16 @@ async function getGstTaxId(percent) {
   const list = await zohoRequest('GET', '/settings/taxes');
   const hit = (list.taxes || []).find((t) => t.tax_percentage === Number(percent));
   return hit ? hit.tax_id : '';
+}
+
+let itemCache = { at: 0, rows: [] };
+/** The products (plans) of the organisation: id, name, description and price before tax. */
+async function listItems({ force = false } = {}) {
+  if (!force && Date.now() - itemCache.at < 300000 && itemCache.rows.length) return itemCache.rows;
+  const d = await zohoRequest('GET', '/items?per_page=200');
+  const rows = (d.items || []).filter((i) => i.status !== 'inactive').map((i) => ({ itemId: i.item_id, name: i.name || '', description: i.description || '', rate: Number(i.rate) || 0 }));
+  itemCache = { at: Date.now(), rows };
+  return rows;
 }
 
 /**
@@ -360,6 +371,7 @@ async function createManagedInvoice(p) {
   if (!taxId) throw new Error(`A ${p.gstPercent}% GST tax is not set up in Zoho Books`);
   const contactId = p.customerId || await getOrCreateContact({ email: p.email, firstName: p.firstName, lastName: p.lastName, companyName: p.companyName });
   const line = { name: p.itemName, description: p.description || p.itemName, rate: p.exInr, quantity: 1 };
+  if (p.itemId) line.item_id = p.itemId; // the plan as a product of the organisation, so reports group by plan
   line.tax_id = taxId;
   const data = {
     customer_id: contactId, date: p.date, due_date: p.dueDate, is_inclusive_tax: false, gst_treatment: 'consumer', place_of_supply: 'TN',
@@ -370,4 +382,4 @@ async function createManagedInvoice(p) {
   return { invoiceId: out.invoice.invoice_id, invoiceNumber: out.invoice.invoice_number, customerId: contactId, reused: false };
 }
 
-module.exports = { createInvoice, listInvoices, getInvoice, createManagedInvoice, markInvoiceSent, recordPayment, sharingUrl, getGstTaxId };
+module.exports = { createInvoice, listItems, listInvoices, getInvoice, createManagedInvoice, markInvoiceSent, recordPayment, sharingUrl, getGstTaxId };

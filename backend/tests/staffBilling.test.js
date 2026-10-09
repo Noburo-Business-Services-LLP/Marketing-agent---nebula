@@ -41,7 +41,8 @@ test('rupee amounts become whole paise; nonsense is refused', () => {
 });
 
 test('settings: amount, includes-GST switch, GST rate and start month are all checked', () => {
-  assert.deepEqual(L.parseSettings({ monthlyAmountInr: 25000, gstInclusive: true, serviceStart: '2026-06-15' }).settings, { monthlyAmountInr: 25000, gstPercent: 18, gstInclusive: true, serviceStart: '2026-06' });
+  assert.deepEqual(L.parseSettings({ monthlyAmountInr: 25000, gstInclusive: true, billingStart: '2026-06-15' }).settings, { monthlyAmountInr: 25000, gstPercent: 18, gstInclusive: true, billingStart: '2026-06-15', serviceStart: '2026-06', termsDays: 15, autoInvoice: false, cycleMonths: 1, planName: '', zohoItemId: '' });
+  assert.equal(L.parseSettings({ monthlyAmountInr: 25000, serviceStart: '2026-06' }).settings.billingStart, '2026-06-01', 'an older month-only entry means the 1st');
   assert.equal(L.parseSettings({ monthlyAmountInr: 25000, serviceStart: '2026-06' }).settings.gstInclusive, false);
   assert.equal(L.parseSettings({ monthlyAmountInr: 0, serviceStart: '2026-06' }).ok, false);
   assert.equal(L.parseSettings({ monthlyAmountInr: 100, serviceStart: 'June' }).ok, false);
@@ -85,7 +86,7 @@ test('saving settings stores the amount and the includes-GST switch, and logs it
   const f = fake();
   const out = await L.saveSettings({ actor: admin, clientId: hex('1'), input: { monthlyAmountInr: 25000, gstInclusive: true, serviceStart: '2026-06' }, ...f });
   assert.equal(out.status, 200);
-  assert.deepEqual(f.calls.settings, { monthlyAmountInr: 25000, gstPercent: 18, gstInclusive: true, serviceStart: '2026-06' });
+  assert.deepEqual(f.calls.settings, { monthlyAmountInr: 25000, gstPercent: 18, gstInclusive: true, billingStart: '2026-06-01', serviceStart: '2026-06', termsDays: 15, autoInvoice: false, cycleMonths: 1, planName: '', zohoItemId: '' });
   assert.equal(f.calls.logs[0].action, 'billing_settings');
   assert.equal((await L.saveSettings({ actor: admin, clientId: hex('1'), input: { monthlyAmountInr: 'x', serviceStart: '2026-06' }, ...f })).status, 400);
 });
@@ -149,4 +150,117 @@ test('without a monthly amount a month cannot be billed by guesswork', async () 
   const f = fake({ managedBilling: {} });
   assert.equal((await L.linkInvoice({ actor: owner, clientId: hex('1'), period: '2026-09', input: { invoiceNumber: 'INV-1' }, ...f })).status, 400);
   assert.equal((await L.linkInvoice({ actor: owner, clientId: hex('1'), period: '2026-09', input: { invoiceNumber: 'INV-1', amountInr: 5000 }, ...f })).status, 200);
+});
+
+test('the billing day comes from the start date; the 29th to 31st become the last day of a short month', () => {
+  const s = { billingStart: '2026-01-31' };
+  assert.equal(L.plannedInvoiceDate(s, '2026-02'), '2026-02-28'); assert.equal(L.plannedInvoiceDate(s, '2026-03'), '2026-03-31'); assert.equal(L.plannedInvoiceDate(s, '2026-04'), '2026-04-30');
+  assert.equal(L.plannedInvoiceDate({ billingStart: '2026-06-05' }, '2026-10'), '2026-10-05');
+  assert.equal(L.plannedInvoiceDate({}, '2026-10'), null);
+  assert.equal(L.plannedInvoiceDate({ billingStart: '2024-01-31' }, '2028-02'), '2028-02-29', 'leap years');
+});
+
+test('start dates are checked: real dates only; the payment terms and the automatic switch too', () => {
+  for (const bad of ['2026-02-30', '2026-13-01', '05/06/2026', 'June 5', '']) assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: bad }).ok, false, bad);
+  assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-06-05', termsDays: 91 }).ok, false);
+  assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-06-05', termsDays: 7.5 }).ok, false);
+  assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-06-05', autoInvoice: 'yes' }).ok, false);
+  const ok = L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-06-05', termsDays: 30, autoInvoice: true }).settings;
+  assert.equal(ok.termsDays, 30); assert.equal(ok.autoInvoice, true);
+});
+
+test('each month shows its invoice date, due date and paid date; planned ones follow the billing day and the terms', () => {
+  const settings = { monthlyAmountInr: 25000, gstPercent: 18, billingStart: '2026-08-05', serviceStart: '2026-08', termsDays: 10 };
+  const records = [{ period: '2026-09', status: 'paid', exPaise: 1, gstPercent: 18, gstPaise: 0, totalPaise: 1, invoiceNumber: 'INV-2', issuedOn: new Date('2026-09-07'), dueOn: new Date('2026-09-17'), paidOn: new Date('2026-09-12') }];
+  const { rows } = L.buildLedger({ settings, records, now: NOW });
+  const by = Object.fromEntries(rows.map((r) => [r.period, r]));
+  assert.equal(by['2026-10'].invoiceDate, '2026-10-05'); assert.equal(by['2026-10'].dueDate, '2026-10-15'); assert.equal(by['2026-10'].paidDate, '');
+  assert.equal(by['2026-09'].invoiceDate, '2026-09-07'); assert.equal(by['2026-09'].dueDate, '2026-09-17'); assert.equal(by['2026-09'].paidDate, '2026-09-12');
+  assert.equal(by['2026-08'].invoiceDate, '2026-08-05');
+});
+
+test('automatic invoices start from the next invoice day and never reach back; turning it on keeps the first start month', async () => {
+  const f = fake({ managedBilling: {} });
+  await L.saveSettings({ actor: owner, clientId: hex('1'), input: { monthlyAmountInr: 25000, billingStart: '2026-06-05', autoInvoice: true }, ...f, now: Date.parse('2026-10-20T10:00:00Z') });
+  assert.equal(f.calls.settings.autoFrom, '2026-11', 'the 5th of October has passed, so the first automatic invoice is November');
+  const g = fake({ managedBilling: {} });
+  await L.saveSettings({ actor: owner, clientId: hex('1'), input: { monthlyAmountInr: 25000, billingStart: '2026-06-25', autoInvoice: true }, ...g, now: Date.parse('2026-10-20T10:00:00Z') });
+  assert.equal(g.calls.settings.autoFrom, '2026-10', 'the 25th is still ahead, so October counts');
+  await L.saveSettings({ actor: owner, clientId: hex('1'), input: { monthlyAmountInr: 26000, billingStart: '2026-06-25', autoInvoice: true }, ...g, now: Date.parse('2026-12-01T10:00:00Z') });
+  assert.equal(g.calls.settings.autoFrom, '2026-10', 'saving again does not move it');
+  const h = fake({ managedBilling: {} });
+  await L.saveSettings({ actor: owner, clientId: hex('1'), input: { monthlyAmountInr: 25000, billingStart: '2026-06-05' }, ...h, now: NOW });
+  assert.equal(h.calls.settings.autoFrom, undefined);
+});
+
+test('the next invoice date is the next planned day with no invoice yet', () => {
+  const s = { monthlyAmountInr: 1, billingStart: '2026-08-05' };
+  assert.equal(L.nextInvoiceDate(s, [], NOW), '2026-11-05');
+  assert.equal(L.nextInvoiceDate(s, [{ period: '2026-11' }], NOW), '2026-12-05');
+  assert.equal(L.nextInvoiceDate({}, [], NOW), '');
+});
+
+test('editing dates: invoice, due and paid dates change; the paid date only on a paid month; order and future are checked', async () => {
+  const f = fake();
+  await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'bank', invoiceNumber: 'INV-2', paidOn: '2026-10-02' }, ...f, now: NOW });
+  const ok = await L.editDates({ actor: owner, clientId: hex('1'), period: '2026-09', input: { invoiceDate: '2026-09-05', dueDate: '2026-09-20', paidDate: '2026-09-18' }, ...f, now: NOW });
+  assert.equal(ok.status, 200);
+  const r = f.records.get('2026-09');
+  assert.equal(new Date(r.issuedOn).toISOString().slice(0, 10), '2026-09-05'); assert.equal(new Date(r.paidOn).toISOString().slice(0, 10), '2026-09-18');
+  assert.equal(f.calls.logs.at(-1).action, 'billing_edit_dates');
+  assert.equal((await L.editDates({ actor: owner, clientId: hex('1'), period: '2026-09', input: { paidDate: '2027-01-01' }, ...f, now: NOW })).status, 400);
+  assert.equal((await L.editDates({ actor: owner, clientId: hex('1'), period: '2026-09', input: { dueDate: '2026-09-01' }, ...f, now: NOW })).status, 400);
+  assert.equal((await L.editDates({ actor: owner, clientId: hex('1'), period: '2026-09', input: { invoiceDate: 'nope' }, ...f, now: NOW })).status, 400);
+  assert.equal((await L.editDates({ actor: owner, clientId: hex('1'), period: '2026-09', input: {}, ...f, now: NOW })).status, 400);
+  const g = fake(); await L.linkInvoice({ actor: owner, clientId: hex('1'), period: '2026-09', input: { invoiceNumber: 'INV-3' }, ...g, now: NOW });
+  assert.equal((await L.editDates({ actor: owner, clientId: hex('1'), period: '2026-09', input: { paidDate: '2026-10-01' }, ...g, now: NOW })).status, 409);
+  assert.equal((await L.editDates({ actor: owner, clientId: hex('1'), period: '2026-07', input: { invoiceDate: '2026-07-01' }, ...g, now: NOW })).status, 409, 'a month with no invoice has nothing to change');
+  assert.equal((await L.editDates({ actor: csm, clientId: hex('1'), period: '2026-09', input: { invoiceDate: '2026-09-01' }, ...g, now: NOW })).status, 403);
+});
+
+test('a Zoho-linked month says the dates in Zoho are not changed', async () => {
+  const f = fake(); f.records.set('2026-09', { period: '2026-09', status: 'invoiced', invoiceNumber: 'INV-4', zohoInvoiceId: 'z4', exPaise: 1, gstPercent: 18, gstPaise: 0, totalPaise: 1, issuedOn: new Date('2026-09-01'), dueOn: new Date('2026-09-16') });
+  const out = await L.editDates({ actor: owner, clientId: hex('1'), period: '2026-09', input: { invoiceDate: '2026-09-03' }, ...f, now: NOW });
+  assert.equal(out.body.inZoho, true); assert.match(out.body.note, /Zoho Books are not changed/);
+});
+
+test('billing cycles: the choices, the plan, and a clear message for anything else', () => {
+  assert.deepEqual(L.CYCLES, [1, 3, 6, 12]);
+  const ok = L.parseSettings({ monthlyAmountInr: 250000, billingStart: '2026-08-04', cycleMonths: 12, planName: ' SCALE ', zohoItemId: '3659166000000123456' }).settings;
+  assert.equal(ok.cycleMonths, 12); assert.equal(ok.planName, 'SCALE'); assert.equal(ok.zohoItemId, '3659166000000123456');
+  assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-08-04', cycleMonths: 5 }).ok, false);
+  assert.equal(L.parseSettings({ monthlyAmountInr: 100, billingStart: '2026-08-04', zohoItemId: 'x; drop' }).settings.zohoItemId, '', 'a malformed product id is dropped');
+});
+
+test('what a period covers is shown in words', () => {
+  assert.equal(L.coverageLabel('2026-10', 1), 'Oct 2026'); assert.equal(L.coverageLabel('2026-10', 3), 'Oct – Dec 2026');
+  assert.equal(L.coverageLabel('2026-08', 12), 'Aug 2026 – Jul 2027'); assert.equal(L.coverageLabel('2026-11', 6), 'Nov 2026 – Apr 2027');
+  assert.equal(L.addMonths('2026-11', 3), '2027-02');
+});
+
+test('a yearly invoice covers its twelve months: no empty monthly rows appear inside it, and the next one is a year later', () => {
+  const settings = { monthlyAmountInr: 295000, gstInclusive: true, gstPercent: 18, billingStart: '2026-08-04', cycleMonths: 12, termsDays: 15 };
+  const records = [{ period: '2026-08', months: 12, status: 'paid', exPaise: 25000000, gstPercent: 18, gstPaise: 4500000, totalPaise: 29500000, invoiceNumber: 'INV-11', issuedOn: new Date('2026-08-04'), paidOn: new Date('2026-08-20') }];
+  const { rows } = L.buildLedger({ settings, records, now: NOW });
+  assert.equal(rows.length, 1); assert.equal(rows[0].label, 'Aug 2026 – Jul 2027'); assert.equal(rows[0].cycleLabel, 'Yearly'); assert.equal(rows[0].months, 12);
+  assert.equal(L.nextInvoiceDate(settings, records, NOW), '2027-08-04');
+  assert.equal(L.isCovered(records, '2027-07'), true); assert.equal(L.isCovered(records, '2027-08'), false);
+});
+
+test('a quarterly client has a row every three months from the start, not every month', () => {
+  const settings = { monthlyAmountInr: 60000, gstPercent: 18, billingStart: '2026-04-10', cycleMonths: 3 };
+  assert.deepEqual(L.cycleStarts(settings, '2026-10'), ['2026-04', '2026-07', '2026-10']);
+  const { rows } = L.buildLedger({ settings, records: [], now: NOW });
+  assert.deepEqual(rows.map((r) => r.period), ['2026-10', '2026-07', '2026-04']); assert.equal(rows[0].label, 'Oct – Dec 2026'); assert.equal(rows[0].invoiceDate, '2026-10-10');
+  assert.equal(L.firstAutoPeriod(settings, NOW), '2027-01', 'the 10th of October has passed: the next quarter');
+  assert.equal(L.firstAutoPeriod({ ...settings, billingStart: '2026-04-25' }, NOW), '2026-10', 'the 25th is still ahead');
+});
+
+test('an invoice or payment records the period length, the typed one first, then the client\'s cycle', async () => {
+  const f = fake({ managedBilling: { monthlyAmountInr: 60000, gstInclusive: false, gstPercent: 18, billingStart: '2026-07-01', serviceStart: '2026-07', cycleMonths: 3, planName: 'SCALE' } });
+  await L.linkInvoice({ actor: owner, clientId: hex('1'), period: '2026-07', input: { invoiceNumber: 'INV-Q' }, ...f, now: NOW });
+  assert.equal(f.records.get('2026-07').months, 3); assert.equal(f.records.get('2026-07').planName, 'SCALE');
+  await L.markPaid({ actor: owner, clientId: hex('1'), period: '2026-10', input: { mode: 'bank', invoiceNumber: 'INV-Y', months: 12 }, ...f, now: NOW });
+  assert.equal(f.records.get('2026-10').months, 12);
+  assert.equal(L.recordMonths({ existing: null, input: { months: 7 }, client: { managedBilling: { cycleMonths: 6 } } }), 6, 'an invalid typed length is ignored');
 });

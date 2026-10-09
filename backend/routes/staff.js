@@ -392,6 +392,7 @@ router.get('/zoho/invoices', requireStaff('manage_billing'), async (req, res) =>
     res.status(500).json({ success: false, message: 'Could not search Zoho Books. Please try again.' });
   }
 });
+router.post('/clients/:id/billing/:period/dates', requireStaff('manage_billing'), billingRoute((a) => billing.editDates(a)));
 router.post('/clients/:id/billing/:period/unpay', requireStaff('manage_billing'), billingRoute((a) => billing.undoPaid(a)));
 router.post('/clients/:id/billing/:period/void', requireStaff('manage_billing'), billingRoute((a) => billing.setVoid({ ...a, voided: a.input.void !== false })));
 

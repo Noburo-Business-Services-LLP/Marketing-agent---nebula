@@ -29,6 +29,16 @@ function matchInvoices(client, invoices) {
   return out;
 }
 
+/** The billing period an invoice covers, read from its product and description ("Annual Plan", "Quarterly"...), else the fallback. */
+function detectCycleMonths(lineItems, fallback = 1) {
+  const text = (lineItems || []).map((l) => `${l.name} ${l.description}`).join(' ').toLowerCase();
+  if (/half[\s-]*year|semi[\s-]*annual|6\s*months?/.test(text)) return 6;
+  if (/quarter|3\s*months?/.test(text)) return 3;
+  if (/annual|yearly|12\s*months?|per\s*year/.test(text)) return 12;
+  if (/monthly|per\s*month|1\s*month/.test(text)) return 1;
+  return L.CYCLES.includes(fallback) ? fallback : 1;
+}
+
 const periodOfInvoice = (inv) => String(inv.date || '').slice(0, 7);
 const paise = (n) => Math.round(Number(n || 0) * 100);
 
@@ -39,6 +49,7 @@ const paise = (n) => Math.round(Number(n || 0) * 100);
 function planSync({ client, matches, records, details }) {
   const byPeriod = new Map(records.map((r) => [r.period, r]));
   const used = new Set();
+  const claimed = []; // periods this run already links, so a yearly invoice covers the months inside it
   const settings = client.managedBilling || {};
   const proposals = [];
   for (const { inv, reason } of [...matches].sort((a, b) => String(a.inv.date).localeCompare(String(b.inv.date)))) {
@@ -50,6 +61,7 @@ function planSync({ client, matches, records, details }) {
     if (inv.status === 'void') { skip('Cancelled in Zoho Books.'); continue; }
     const have = byPeriod.get(base.period);
     const paid = inv.status === 'paid';
+    if (!have && L.isCovered([...records, ...claimed], base.period)) { skip('Already covered by another invoice.'); continue; }
     if (have && have.invoiceNumber === inv.invoiceNumber) {
       if (paid && have.status !== 'paid') { /* Zoho says paid, the ledger does not yet: update below */ }
       else { skip('Already linked.'); continue; }
@@ -57,11 +69,14 @@ function planSync({ client, matches, records, details }) {
     if (used.has(base.period)) { skip(`Another invoice is already used for ${label}.`); continue; }
     used.add(base.period);
     const d = details[inv.invoiceId] || {};
+    const months = detectCycleMonths(d.lineItems, Number(settings.cycleMonths) || 1);
+    const planName = (d.lineItems && d.lineItems[0] && d.lineItems[0].name) || settings.planName || '';
     // The net is the total minus the GST: an invoice with a discount has a larger sub-total than what was actually charged.
     const total = paise(d.total != null ? d.total : inv.total), gst = paise(d.taxTotal), ex = total > gst ? total - gst : 0;
     const rate = ex > 0 ? Math.round((gst / ex) * 100) : (settings.gstPercent == null ? L.DEFAULT_GST : settings.gstPercent);
+    claimed.push({ period: base.period, months, status: 'invoiced' });
     proposals.push({
-      ...base, label, action: paid ? 'link_paid' : 'link_invoiced', totalPaise: total,
+      ...base, label: L.coverageLabel(base.period, months), months, planName, action: paid ? 'link_paid' : 'link_invoiced', totalPaise: total,
       amounts: { exPaise: ex > 0 ? ex : total, gstPercent: L.GST_RATES.includes(rate) ? rate : (settings.gstPercent == null ? L.DEFAULT_GST : settings.gstPercent), gstPaise: ex > 0 ? gst : 0, totalPaise: total, gstInclusive: Boolean(settings.gstInclusive) },
       invoiceUrl: d.invoiceUrl || '', issuedOn: inv.date, dueOn: inv.dueDate || '', paidOn: inv.lastPaymentDate || inv.date,
     });
@@ -88,7 +103,7 @@ async function syncFromZoho({ actor, clientId, apply, repo, zoho, record }) {
   let sawPaid = false;
   for (const p of todo) {
     const set = {
-      ...p.amounts, invoiceNumber: p.invoiceNumber, invoiceUrl: p.invoiceUrl, zohoInvoiceId: p.invoiceId,
+      ...p.amounts, months: p.months, planName: p.planName, invoiceNumber: p.invoiceNumber, invoiceUrl: p.invoiceUrl, zohoInvoiceId: p.invoiceId,
       issuedOn: new Date(p.issuedOn), dueOn: p.dueOn ? new Date(p.dueOn) : new Date(new Date(p.issuedOn).getTime() + L.DEFAULT_DUE_DAYS * DAY), recordedBy: idOf(actor),
     };
     if (p.action === 'link_paid') { Object.assign(set, { status: 'paid', paidOn: new Date(p.paidOn), paidMode: 'other', paidReference: 'Recorded in Zoho Books' }); sawPaid = true; }
@@ -100,7 +115,7 @@ async function syncFromZoho({ actor, clientId, apply, repo, zoho, record }) {
   return { status: 200, body: { success: true, linked: todo.length, skipped: proposals.length - todo.length } };
 }
 
-const publicProposal = (p) => ({ period: p.period, label: p.label, invoiceNumber: p.invoiceNumber, zohoStatus: p.zohoStatus, action: p.action, reason: p.reason || '', totalPaise: p.totalPaise, matchedBy: p.matchedBy });
+const publicProposal = (p) => ({ period: p.period, months: p.months || 1, planName: p.planName || '', label: p.label, invoiceNumber: p.invoiceNumber, zohoStatus: p.zohoStatus, action: p.action, reason: p.reason || '', totalPaise: p.totalPaise, matchedBy: p.matchedBy });
 
 /** Search the organisation's invoices by number, customer or email (for the "Find in Zoho" box). */
 async function searchZohoInvoices({ actor, q, zoho }) {
@@ -121,24 +136,27 @@ const referenceFor = (clientId, period) => `NEB-${clientId}-${period}`;
  * Creates the Zoho invoice of one month (marked sent) and returns what to store. Throws a plain Error on any Zoho problem.
  * `existing` is the month's record, whose amounts win over the client's current amount.
  */
-async function createZohoInvoiceFor({ client, clientId, period, amounts, zoho, now, issuedOn }) {
+async function createZohoInvoiceFor({ client, clientId, period, amounts, zoho, now, issuedOn, months }) {
+  const b = client.managedBilling || {};
+  const span = L.CYCLES.includes(Number(months)) ? Number(months) : (L.CYCLES.includes(Number(b.cycleMonths)) ? Number(b.cycleMonths) : 1);
   const date = new Date(issuedOn || now).toISOString().slice(0, 10);
-  const due = new Date(new Date(date).getTime() + L.DEFAULT_DUE_DAYS * DAY).toISOString().slice(0, 10);
+  const terms = (client.managedBilling && client.managedBilling.termsDays) == null ? L.DEFAULT_DUE_DAYS : client.managedBilling.termsDays;
+  const due = new Date(new Date(date).getTime() + terms * DAY).toISOString().slice(0, 10);
   // A client who already has invoices in Zoho keeps that customer record, whatever email it holds (no duplicate customers).
   const known = matchInvoices(client, await zoho.listInvoices()).map((m) => m.inv.customerId).filter(Boolean);
   const counts = known.reduce((m, c) => ((m[c] = (m[c] || 0) + 1), m), {});
   const customerId = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || undefined;
   const made = await zoho.createManagedInvoice({
     customerId, email: client.email, firstName: client.firstName || '', lastName: client.lastName || '', companyName: client.companyName || (client.businessProfile && client.businessProfile.name) || '',
-    exInr: amounts.exPaise / 100, gstPercent: amounts.gstPercent, itemName: `Nebulaa managed marketing service, ${monthName(period)}`,
-    description: `Monthly managed marketing service for ${monthName(period)}`, reference: referenceFor(clientId, period), date, dueDate: due,
+    exInr: amounts.exPaise / 100, gstPercent: amounts.gstPercent, itemId: b.zohoItemId || undefined,
+    itemName: b.planName || 'Nebulaa managed marketing service', description: `${L.CYCLE_LABEL[span]} plan: ${L.coverageLabel(period, span)}`, reference: referenceFor(clientId, period), date, dueDate: due,
   });
   if (!made.reused) await zoho.markInvoiceSent(made.invoiceId);
   const d = await zoho.getInvoice(made.invoiceId);
   const url = d.invoiceUrl || (await zoho.sharingUrl(made.invoiceId)) || '';
   const total = paise(d.total), gst = paise(d.taxTotal), ex = total > gst ? total - gst : 0;
   return {
-    made, detail: d, invoiceUrl: url, issuedOn: new Date(date), dueOn: new Date(due),
+    made, detail: d, months: span, planName: b.planName || '', invoiceUrl: url, issuedOn: new Date(date), dueOn: new Date(due),
     amounts: total > 0 && ex > 0 ? { exPaise: ex, gstPercent: amounts.gstPercent, gstPaise: gst, totalPaise: total, gstInclusive: amounts.gstInclusive } : amounts,
   };
 }
@@ -154,9 +172,10 @@ async function createZohoInvoice({ actor, clientId, period, input = {}, repo, zo
   const amounts = L.monthAmounts({ client: t.client, existing, override: null });
   if (!amounts) return refuse(400, 'Set the client\'s monthly amount first.');
   let made;
-  try { made = await createZohoInvoiceFor({ client: t.client, clientId, period, amounts, zoho, now, issuedOn: input.issuedOn }); }
+  const invoiceDay = input.issuedOn || (existing && existing.issuedOn) || L.plannedInvoiceDate(t.client.managedBilling, period) || L.todayIst(now);
+  try { made = await createZohoInvoiceFor({ client: t.client, clientId, period, amounts, zoho, now, issuedOn: invoiceDay }); }
   catch (e) { console.error('[billing] zoho invoice failed:', e.message); return refuse(502, `The invoice could not be created in Zoho Books: ${e.message}`); }
-  await repo.upsertRecord(clientId, period, { ...made.amounts, status: existing && existing.status === 'paid' ? 'paid' : 'invoiced', invoiceNumber: made.made.invoiceNumber, invoiceUrl: made.invoiceUrl, zohoInvoiceId: made.made.invoiceId, issuedOn: made.issuedOn, dueOn: made.dueOn, recordedBy: idOf(actor) });
+  await repo.upsertRecord(clientId, period, { ...made.amounts, months: made.months, planName: made.planName, status: existing && existing.status === 'paid' ? 'paid' : 'invoiced', invoiceNumber: made.made.invoiceNumber, invoiceUrl: made.invoiceUrl, zohoInvoiceId: made.made.invoiceId, issuedOn: made.issuedOn, dueOn: made.dueOn, recordedBy: idOf(actor) });
   await record({ actor, action: 'billing_zoho_invoice', client: clientId, details: { period, invoiceNumber: made.made.invoiceNumber } });
   return { status: 200, body: { success: true, invoiceNumber: made.made.invoiceNumber } };
 }
@@ -183,9 +202,9 @@ async function markPaidWithZoho({ actor, clientId, period, input = {}, repo, zoh
     if (wantCreate) {
       const amounts = L.monthAmounts({ client: t.client, existing, override: input.amountInr ? L.toPaise(input.amountInr) : null });
       if (!amounts) return refuse(400, 'Set the client\'s monthly amount first, or type the amount.');
-      const made = await createZohoInvoiceFor({ client: t.client, clientId, period, amounts, zoho, now, issuedOn: pay.payment.paidOn });
+      const made = await createZohoInvoiceFor({ client: t.client, clientId, period, amounts, zoho, now, months: input.months, issuedOn: (existing && existing.issuedOn) || L.plannedInvoiceDate(t.client.managedBilling, period) || pay.payment.paidOn });
       await zoho.recordPayment({ customerId: made.detail.customerId || made.made.customerId, invoiceId: made.made.invoiceId, amount: made.amounts.totalPaise / 100, date: pay.payment.paidOn.toISOString().slice(0, 10), mode: pay.payment.mode, reference: pay.payment.reference });
-      extra = { invoiceNumber: made.made.invoiceNumber, invoiceUrl: made.invoiceUrl, zohoInvoiceId: made.made.invoiceId, amounts: made.amounts };
+      extra = { invoiceNumber: made.made.invoiceNumber, invoiceUrl: made.invoiceUrl, zohoInvoiceId: made.made.invoiceId, amounts: made.amounts, months: made.months };
     } else if (ours && input.recordInZoho !== false) {
       const d = await zoho.getInvoice(existing.zohoInvoiceId);
       await zoho.recordPayment({ customerId: d.customerId, invoiceId: existing.zohoInvoiceId, amount: existing.totalPaise / 100, date: pay.payment.paidOn.toISOString().slice(0, 10), mode: pay.payment.mode, reference: pay.payment.reference });
@@ -196,9 +215,24 @@ async function markPaidWithZoho({ actor, clientId, period, input = {}, repo, zoh
     extra = {};
   }
   const out = await L.markPaid({ actor, clientId, period, input: { ...input, ...(extra.invoiceNumber ? { invoiceNumber: extra.invoiceNumber, invoiceUrl: extra.invoiceUrl || undefined } : {}) }, repo, record, now });
-  if (out.status === 200 && extra.zohoInvoiceId) await repo.upsertRecord(clientId, period, { zohoInvoiceId: extra.zohoInvoiceId, ...extra.amounts });
+  if (out.status === 200 && extra.zohoInvoiceId) await repo.upsertRecord(clientId, period, { zohoInvoiceId: extra.zohoInvoiceId, months: extra.months, ...extra.amounts });
   if (out.status === 200 && (warning || extra.invoiceNumber)) out.body = { ...out.body, zoho: { created: Boolean(extra.invoiceNumber), invoiceNumber: extra.invoiceNumber || '', warning } };
   return out;
 }
 
-module.exports = { normName, matchInvoices, planSync, syncFromZoho, searchZohoInvoices, createZohoInvoice, markPaidWithZoho, referenceFor };
+/**
+ * The automatic invoice of one month, made by the scheduler (no staff member acting). Nothing is made for a month that
+ * already has any record, the invoice carries the month's planned invoice date, and a retry reuses the same Zoho invoice.
+ */
+async function createZohoInvoiceAuto({ client, clientId, period, repo, zoho, now = Date.now() }) {
+  const existing = await repo.getRecord(clientId, period);
+  if (existing) return { created: false, reason: 'The month already has a record.' };
+  const amounts = L.monthAmounts({ client, existing: null, override: null });
+  const day = L.plannedInvoiceDate(client.managedBilling, period);
+  if (!amounts || !day) return { created: false, reason: 'Billing is not fully set up.' };
+  const made = await createZohoInvoiceFor({ client, clientId, period, amounts, zoho, now, issuedOn: day });
+  await repo.upsertRecord(clientId, period, { ...made.amounts, months: made.months, planName: made.planName, status: 'invoiced', invoiceNumber: made.made.invoiceNumber, invoiceUrl: made.invoiceUrl, zohoInvoiceId: made.made.invoiceId, issuedOn: made.issuedOn, dueOn: made.dueOn, note: 'Created automatically' });
+  return { created: true, invoiceNumber: made.made.invoiceNumber };
+}
+
+module.exports = { detectCycleMonths, createZohoInvoiceAuto, normName, matchInvoices, planSync, syncFromZoho, searchZohoInvoices, createZohoInvoice, markPaidWithZoho, referenceFor };

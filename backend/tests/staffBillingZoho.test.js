@@ -100,7 +100,7 @@ test('mark paid with no invoice creates it in Zoho, marks it sent, records the p
   const out = await Z.markPaidWithZoho({ actor: owner, clientId: hex('1'), period: '2026-09', input: { mode: 'bank', paidOn: '2026-10-02', reference: 'UTR 99' }, ...f, now: NOW });
   assert.equal(out.status, 200); assert.equal(out.body.zoho.created, true); assert.equal(out.body.zoho.warning, '');
   const kinds = f.calls.zoho.map((c) => c[0]); assert.deepEqual(kinds, ['create', 'sent', 'payment']);
-  const create = f.calls.zoho[0][1]; assert.equal(create.exInr, 21186.44); assert.equal(create.gstPercent, 18); assert.equal(create.reference, `NEB-${hex('1')}-2026-09`); assert.match(create.itemName, /Sep 2026/);
+  const create = f.calls.zoho[0][1]; assert.equal(create.exInr, 21186.44); assert.equal(create.gstPercent, 18); assert.equal(create.reference, `NEB-${hex('1')}-2026-09`); assert.match(create.description, /Monthly plan: Sep 2026/);
   const pay = f.calls.zoho[2][1]; assert.equal(pay.amount, 25000); assert.equal(pay.mode, 'bank'); assert.equal(pay.reference, 'UTR 99'); assert.equal(pay.date, '2026-10-02');
   const r = f.records.get('2026-09'); assert.equal(r.status, 'paid'); assert.match(r.invoiceNumber, /^INV-/); assert.ok(r.zohoInvoiceId); assert.equal(r.totalPaise, 2500000); assert.equal(f.calls.paying, 1);
 });
@@ -158,4 +158,32 @@ test('a client who already has invoices in Zoho keeps their existing Zoho custom
   const b = fake();
   await Z.createZohoInvoice({ actor: owner, clientId: hex('1'), period: '2026-10', ...b, now: NOW });
   assert.equal(b.calls.zoho[0][1].customerId, undefined);
+});
+
+test('billing cycles are read from the product and description, falling back to the client\'s own cycle', () => {
+  assert.equal(Z.detectCycleMonths([{ name: 'SCALE (Content + Outreach limit 10000)', description: 'Annual Plan' }], 1), 12);
+  assert.equal(Z.detectCycleMonths([{ name: 'GROWTH', description: 'Half Yearly Plan' }], 1), 6);
+  assert.equal(Z.detectCycleMonths([{ name: 'PRO', description: 'Quarterly billing' }], 1), 3);
+  assert.equal(Z.detectCycleMonths([{ name: 'PRO (Content Only)', description: 'Content Only.' }], 1), 1);
+  assert.equal(Z.detectCycleMonths([{ name: 'Scale', description: 'Nebulaa Scale Plan' }], 3), 3);
+  assert.equal(Z.detectCycleMonths([], 7), 1);
+});
+
+test('syncing an annual invoice records twelve months and the plan, and a monthly invoice inside it is not added again', async () => {
+  const f = fake({ zohoInvoices: [inv({ invoiceId: 'zY', invoiceNumber: 'INV-000011', date: '2026-08-04', status: 'sent', total: 295000 }), inv({ invoiceId: 'zM', invoiceNumber: 'INV-000099', date: '2026-10-04', status: 'sent', total: 25000 })] });
+  f.zoho.getInvoice = async (id) => (id === 'zY' ? { invoiceId: id, customerId: 'cu1', subTotal: 250000, taxTotal: 45000, total: 295000, invoiceUrl: '', lineItems: [{ name: 'SCALE (Content + Outreach limit 10000)', description: 'Annual Plan' }] } : { invoiceId: id, customerId: 'cu1', subTotal: 21186.44, taxTotal: 3813.56, total: 25000, invoiceUrl: '', lineItems: [{ name: 'SCALE', description: 'Monthly' }] });
+  const out = await Z.syncFromZoho({ actor: owner, clientId: hex('1'), apply: true, ...f });
+  assert.equal(out.body.linked, 1);
+  const r = f.records.get('2026-08');
+  assert.equal(r.months, 12); assert.equal(r.planName, 'SCALE (Content + Outreach limit 10000)'); assert.equal(r.totalPaise, 29500000); assert.equal(r.exPaise, 25000000);
+  assert.equal(f.records.has('2026-10'), false, 'October is inside the yearly invoice');
+});
+
+test('the Zoho invoice names the plan, uses its product, and says what period it covers', async () => {
+  const f = fake({ clientOver: { managedBilling: { monthlyAmountInr: 295000, gstInclusive: true, gstPercent: 18, billingStart: '2026-08-04', serviceStart: '2026-08', cycleMonths: 12, planName: 'SCALE (Content + Outreach limit 10000)', zohoItemId: '3659166000000111111' } } });
+  await Z.createZohoInvoice({ actor: owner, clientId: hex('1'), period: '2026-08', ...f, now: NOW });
+  const c = f.calls.zoho[0][1];
+  assert.equal(c.itemName, 'SCALE (Content + Outreach limit 10000)'); assert.equal(c.itemId, '3659166000000111111'); assert.equal(c.description, 'Yearly plan: Aug 2026 – Jul 2027'); assert.equal(c.exInr, 250000);
+  assert.equal(c.date, '2026-08-04');
+  assert.equal(f.records.get('2026-08').months, 12);
 });

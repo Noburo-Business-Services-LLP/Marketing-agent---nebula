@@ -14,7 +14,8 @@ const LABELS = {
   payment: 'Payments',
   ai_text: 'AI writing',
   video: 'Video generation',
-  hero_video: 'Hero videos'
+  hero_video: 'Hero videos',
+  billing: 'Automatic monthly invoices'
 };
 
 function createAlerter({ env = process.env, now = () => Date.now(), send = null } = {}) {
