@@ -332,3 +332,19 @@ test('an invoice with no date typed gets the period\'s planned invoice date, not
   await L.linkInvoice({ actor: owner, clientId: hex('1'), period: '2026-10', input: { invoiceNumber: 'INV-13', issuedOn: '2026-10-01' }, ...g, now: NOW });
   assert.equal(new Date(g.records.get('2026-10').issuedOn).toISOString().slice(0, 10), '2026-10-01', 'a typed date wins');
 });
+
+test('ending billing stores the last month and a reason; resuming clears it; no new periods appear after it', async () => {
+  const L = require('../services/staff/billingLedger');
+  const calls = [];
+  const repo = { getClient: async () => ({ _id: hex('1'), managedBilling: { monthlyAmountInr: 10000, billingStart: '2026-05-01', cycleMonths: 1 } }), setEnded: async (...a) => { calls.push(a); } };
+  const logs = [];
+  const bad = await L.endBilling({ actor: { _id: hex('a'), staffRole: 'owner' }, clientId: hex('1'), input: { endedMonth: 'soon' }, repo, record: async () => {} });
+  assert.equal(bad.status, 400);
+  const ok = await L.endBilling({ actor: { _id: hex('a'), staffRole: 'owner' }, clientId: hex('1'), input: { endedMonth: '2026-08', reason: 'Too costly' }, repo, record: async (r) => logs.push(r.action) });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(calls[0].slice(1), ['2026-08', 'Too costly']);
+  await L.endBilling({ actor: { _id: hex('a'), staffRole: 'owner' }, clientId: hex('1'), input: { endedMonth: '' }, repo, record: async (r) => logs.push(r.action) });
+  assert.deepEqual(logs, ['billing_end', 'billing_resume']);
+  const ledger = L.buildLedger({ settings: { monthlyAmountInr: 10000, billingStart: '2026-05-01', cycleMonths: 1, endedMonth: '2026-08' }, records: [], now: Date.parse('2026-10-15T00:00:00Z') });
+  assert.deepEqual(ledger.rows.map((r) => r.period), ['2026-08', '2026-07', '2026-06', '2026-05']);
+});

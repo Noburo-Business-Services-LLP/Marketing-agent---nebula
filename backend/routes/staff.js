@@ -12,6 +12,7 @@ const { classifyClient } = require('../services/staff/clientStatus');
 const { buildHome, loadDailyActive, activityIds } = require('../services/staff/home');
 const { buildHealth } = require('../services/staff/health');
 const { buildMoney, buildPayments, loadMoneyData } = require('../services/staff/money');
+const { buildRecurring } = require('../services/staff/recurring');
 const { buildUsage, loadUsageData, parseWindow } = require('../services/staff/usage');
 const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
@@ -186,7 +187,7 @@ router.get('/money', requireStaff('view_money'), async (req, res) => {
   try {
     const data = await loadMoneyData({ models: { User, ClientInvoice: require('../models/ClientInvoice') } });
     const q = req.query || {};
-    res.json({ success: true, ...buildMoney({ ...data, page: q.page, pageSize: q.pageSize }) });
+    res.json({ success: true, ...buildMoney({ ...data, page: q.page, pageSize: q.pageSize }), recurring: buildRecurring({ users: data.users, records: data.invoices }) });
   } catch (error) {
     console.error('[staff] money failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the Money numbers. Please try again.' });
@@ -380,6 +381,7 @@ const billingRepo = () => {
     upsertRecord: (id, period, set) => ClientInvoice.updateOne({ client: id, period }, { $set: set, $setOnInsert: { client: id, period } }, { upsert: true }),
     deleteRecord: (id, period) => ClientInvoice.deleteOne({ client: id, period }),
     setSettings: (id, settings) => User.updateOne({ _id: id }, { $set: { managedBilling: settings } }),
+    setEnded: (id, endedMonth, reason) => User.updateOne({ _id: id }, endedMonth ? { $set: { 'managedBilling.endedMonth': endedMonth, 'managedBilling.endReason': reason } } : { $unset: { 'managedBilling.endedMonth': '', 'managedBilling.endReason': '' } }),
     markClientPaying: (id) => User.updateOne({ _id: id }, { $set: { 'plan.paidManually': true } })
   };
 };
@@ -395,6 +397,7 @@ const billingRoute = (handler) => async (req, res) => {
 };
 router.get('/clients/:id/billing', requireStaff('manage_billing'), billingRoute((a) => billing.viewBilling(a)));
 router.put('/clients/:id/billing/settings', requireStaff('manage_billing'), billingRoute((a) => billing.saveSettings(a)));
+router.post('/clients/:id/billing/end', requireStaff('manage_billing'), billingRoute((a) => billing.endBilling(a)));
 router.post('/clients/:id/billing/:period/invoice', requireStaff('manage_billing'), billingRoute((a) => billing.linkInvoice(a)));
 router.post('/clients/:id/billing/sync', requireStaff('manage_billing'), billingRoute((a) => billingZoho.syncFromZoho({ ...a, apply: a.input.apply === true, invoiceNumbers: a.input.invoiceNumbers })));
 router.post('/clients/:id/billing/:period/zoho-invoice', requireStaff('manage_billing'), billingRoute((a) => billingZoho.createZohoInvoice(a)));

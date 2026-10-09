@@ -1385,6 +1385,7 @@ export const apiService = {
   staffBillingInvoice: async (id: string, period: string, body: Record<string, unknown>): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/invoice`, { method: 'POST', body: JSON.stringify(body) }, true),
   staffBillingPaid: async (id: string, period: string, body: Record<string, unknown>): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/paid`, { method: 'POST', body: JSON.stringify(body) }, true),
   staffBillingSync: async (id: string, apply: boolean, invoiceNumbers: string[] = []): Promise<any> => apiCall(`/staff/clients/${id}/billing/sync`, { method: 'POST', body: JSON.stringify({ apply, invoiceNumbers }) }, true),
+  staffBillingEnd: async (id: string, endedMonth: string, reason: string): Promise<any> => apiCall(`/staff/clients/${id}/billing/end`, { method: 'POST', body: JSON.stringify({ endedMonth, reason }) }, true),
   staffRenameClient: async (id: string, name: string): Promise<any> => apiCall(`/staff/clients/${id}/name`, { method: 'POST', body: JSON.stringify({ name }) }, true),
   staffBillingZohoInvoice: async (id: string, period: string): Promise<any> => apiCall(`/staff/clients/${id}/billing/${period}/zoho-invoice`, { method: 'POST', body: '{}' }, true),
   staffZohoItems: async (): Promise<any> => apiCall('/staff/zoho/items', { method: 'GET' }, true),

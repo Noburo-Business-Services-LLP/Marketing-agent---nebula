@@ -24,7 +24,7 @@ const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, valu
 
 const ACTION_LABEL: Record<string, string> = {
   create_client: 'Added the client', mark_paying: 'Marked as a paying customer', mark_not_paying: 'Marked as not paying',
-  billing_settings: 'Changed the billing details', billing_link_invoice: 'Linked an invoice', billing_mark_paid: 'Recorded a payment', billing_undo_paid: 'Undid a payment',
+  billing_settings: 'Changed the billing details', billing_end: 'Stopped billing', billing_resume: 'Resumed billing', billing_link_invoice: 'Linked an invoice', billing_mark_paid: 'Recorded a payment', billing_undo_paid: 'Undid a payment',
   billing_void: 'Cancelled a billing period', billing_restore: 'Restored a billing period', billing_edit_dates: 'Changed billing dates',
   billing_zoho_sync: 'Linked invoices from Zoho Books', billing_zoho_invoice: 'Created an invoice in Zoho Books', bulk_add_quarks: 'Added Quarks', bulk_set_plan: 'Changed the plan', bulk_set_features: 'Changed the features',
   add_quarks: 'Added Quarks', disable_client: 'Switched the account off', enable_client: 'Switched the account on',

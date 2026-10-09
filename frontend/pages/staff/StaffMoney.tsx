@@ -300,6 +300,48 @@ const StaffMoney: React.FC = () => {
         </button>
       </div>
 
+      {data.recurring && (() => {
+        const rc = data.recurring; const n = rc.now; const ms = rc.months || [];
+        const top = Math.max(1, ...ms.map((m: any) => m.mrrPaise));
+        return (
+          <Section title="Business at a glance" hint="Monthly value before GST">
+            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
+              <Tile label="MRR, monthly recurring" value={formatInr(n.mrrPaise)} sub={`Managed ${formatInr(n.managedMrrPaise)} · Online ${formatInr(n.onlineMrrPaise)}`} />
+              <Tile label="ARR, yearly" value={formatInr(n.arrPaise)} sub="MRR × 12" />
+              <Tile label="Paying customers" value={n.payingCustomers} sub={`${n.managedBilled} billed by invoice · ${n.onlineSubscribers} online`} />
+              <Tile label="Free, not paying yet" value={n.onTrial} sub={`${n.stopped} stopped paying`} />
+            </div>
+            <div className="mt-4 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-4 overflow-x-auto">
+              <h3 className="mb-2 text-sm font-semibold text-[var(--gv-text-primary)]">MRR by month</h3>
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-[var(--gv-text-tertiary)]"><tr><th className="py-1 pr-3">Month</th><th className="py-1 pr-3 w-1/3"> </th><th className="py-1 pr-3 text-right">MRR</th><th className="py-1 pr-3 text-right">Clients</th><th className="py-1 pr-3 text-right">New</th><th className="py-1 text-right">Stopped</th></tr></thead>
+                <tbody>
+                  {[...ms].reverse().map((m: any) => (
+                    <tr key={m.period} className="border-t border-[var(--gv-border-subtle)]">
+                      <td className="py-1.5 pr-3 whitespace-nowrap">{m.label}</td>
+                      <td className="py-1.5 pr-3"><div className="h-2 rounded bg-[#F5A623]" style={{ width: `${Math.round((m.mrrPaise / top) * 100)}%` }} /></td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{formatInr(m.mrrPaise)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{m.clients}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-emerald-700">{m.newClients ? `+${m.newClients} · ${formatInr(m.newMrrPaise)}` : '—'}</td>
+                      <td className="py-1.5 text-right tabular-nums text-red-700">{m.lostClients ? `${m.lostClients} · −${formatInr(m.lostMrrPaise)}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {rc.stopped?.length > 0 && (
+              <div className="mt-4 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-4">
+                <h3 className="mb-2 text-sm font-semibold text-[var(--gv-text-primary)]">Clients who stopped</h3>
+                <ul className="text-sm divide-y divide-[var(--gv-border-subtle)]">
+                  {rc.stopped.map((c: any) => <li key={c.clientId} className="py-1.5 flex justify-between gap-3"><span>{c.name} · after {c.endedLabel}{c.reason ? ` · ${c.reason}` : ''}</span><span className="tabular-nums text-red-700">−{formatInr(c.mrrLostPaise)} a month</span></li>)}
+                </ul>
+              </div>
+            )}
+            <Note>{rc.note}</Note>
+          </Section>
+        );
+      })()}
+
       <Section title="Money collected" hint="Rupees, India time">
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
           {revenueTile('This month', r.thisMonth)}

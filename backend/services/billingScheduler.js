@@ -31,6 +31,7 @@ async function runBillingOnce({ now = Date.now(), deps = {} } = {}) {
     const records = await repo.listRecords(String(client._id));
     for (const p of L.cycleStarts(s, today.slice(0, 7))) {
       if (p < from || L.isCovered(records, p)) continue;
+      if (s.endedMonth && p > s.endedMonth) continue;
       const day = L.plannedInvoiceDate(s, p);
       if (!day || day > today) continue;
       if (made >= MAX_PER_RUN) { log.warn('[billing] run limit reached; the rest continues next hour'); break outer; }

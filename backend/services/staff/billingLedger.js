@@ -202,7 +202,8 @@ function buildLedger({ settings, records = [], now = Date.now() }) {
   const thisMonth = periodOf(new Date(now));
   const periods = new Set(records.map((r) => r.period));
   // The billing periods still to come or not yet invoiced: every cycle start up to this month that no invoice already covers.
-  if (s.monthlyAmountInr) for (const p of cycleStarts({ ...s, billingStart: s.billingStart || (s.serviceStart ? `${s.serviceStart}-01` : '') }, thisMonth)) if (!isCovered(records, p)) periods.add(p);
+  const lastMonth = s.endedMonth && PERIOD.test(s.endedMonth) && s.endedMonth < thisMonth ? s.endedMonth : thisMonth;
+  if (s.monthlyAmountInr) for (const p of cycleStarts({ ...s, billingStart: s.billingStart || (s.serviceStart ? `${s.serviceStart}-01` : '') }, lastMonth)) if (!isCovered(records, p)) periods.add(p);
   const feePaise = s.monthlyAmountInr ? Math.round(s.monthlyAmountInr * 100) : 0;
   const terms = s.termsDays == null ? DEFAULT_DUE_DAYS : s.termsDays;
   const cycle = validMonths(s.cycleMonths) || 1;
@@ -280,7 +281,7 @@ async function viewBilling({ actor, clientId, repo, now = Date.now() }) {
   if (t.error) return t.error;
   const records = await repo.listRecords(clientId);
   const settings = t.client.managedBilling || {};
-  return { status: 200, body: { success: true, cycles: CYCLES.map((m) => ({ value: m, label: CYCLE_LABEL[m] })), settings: { monthlyAmountInr: settings.monthlyAmountInr || null, gstInclusive: Boolean(settings.gstInclusive), gstPercent: settings.gstPercent == null ? DEFAULT_GST : settings.gstPercent, billingStart: settings.billingStart || (settings.serviceStart ? `${settings.serviceStart}-01` : ''), termsDays: settings.termsDays == null ? DEFAULT_DUE_DAYS : settings.termsDays, cycleMonths: validMonths(settings.cycleMonths) || 1, planName: settings.planName || '', zohoItemId: settings.zohoItemId || '', autoInvoice: Boolean(settings.autoInvoice), autoFrom: settings.autoFrom || '' }, nextInvoiceDate: nextInvoiceDate(settings, records, now), paidModes: PAID_MODES.map((m) => ({ value: m, label: MODE_LABEL[m] })), ...buildLedger({ settings, records, now }) } };
+  return { status: 200, body: { success: true, cycles: CYCLES.map((m) => ({ value: m, label: CYCLE_LABEL[m] })), settings: { monthlyAmountInr: settings.monthlyAmountInr || null, gstInclusive: Boolean(settings.gstInclusive), gstPercent: settings.gstPercent == null ? DEFAULT_GST : settings.gstPercent, billingStart: settings.billingStart || (settings.serviceStart ? `${settings.serviceStart}-01` : ''), termsDays: settings.termsDays == null ? DEFAULT_DUE_DAYS : settings.termsDays, cycleMonths: validMonths(settings.cycleMonths) || 1, planName: settings.planName || '', zohoItemId: settings.zohoItemId || '', autoInvoice: Boolean(settings.autoInvoice), autoFrom: settings.autoFrom || '', endedMonth: settings.endedMonth || '', endReason: settings.endReason || '' }, nextInvoiceDate: nextInvoiceDate(settings, records, now), paidModes: PAID_MODES.map((m) => ({ value: m, label: MODE_LABEL[m] })), ...buildLedger({ settings, records, now }) } };
 }
 
 async function saveSettings({ actor, clientId, input, repo, record, now = Date.now() }) {
@@ -291,10 +292,27 @@ async function saveSettings({ actor, clientId, input, repo, record, now = Date.n
   // Turning automatic invoices on never reaches back: it starts from the next invoice day.
   const before = t.client.managedBilling || {};
   const settings = { ...p.settings };
+  if (before.endedMonth) { settings.endedMonth = before.endedMonth; settings.endReason = before.endReason || ''; }
   if (settings.autoInvoice) settings.autoFrom = before.autoInvoice && before.autoFrom ? before.autoFrom : firstAutoPeriod(settings, now);
   await repo.setSettings(clientId, settings);
   await record({ actor, action: 'billing_settings', client: clientId, details: { monthlyAmountInr: settings.monthlyAmountInr, gstInclusive: settings.gstInclusive, gstPercent: settings.gstPercent, billingStart: settings.billingStart, termsDays: settings.termsDays, autoInvoice: settings.autoInvoice } });
   return { status: 200, body: { success: true, settings } };
+}
+
+/**
+ * End a client's billing after `endedMonth` (the last month they are served and billed), with an optional reason, or
+ * resume it (endedMonth empty). Nothing already invoiced or paid is touched; no new periods appear after the end month.
+ */
+async function endBilling({ actor, clientId, input = {}, repo, record, now = Date.now() }) {
+  const t = await loadTarget({ actor, clientId, repo });
+  if (t.error) return t.error;
+  const raw = String(input.endedMonth || '').trim();
+  const reason = String(input.reason || '').trim().slice(0, 200);
+  if (raw && !PERIOD.test(raw)) return refuse(400, 'Choose the last month they are billed, for example 2026-12.');
+  if (raw && !(t.client.managedBilling && t.client.managedBilling.monthlyAmountInr)) return refuse(400, 'Set the client\'s plan and amount first.');
+  await repo.setEnded(clientId, raw, raw ? reason : '');
+  await record({ actor, action: raw ? 'billing_end' : 'billing_resume', client: clientId, details: raw ? { endedMonth: raw, reason } : {} });
+  return { status: 200, body: { success: true, endedMonth: raw, reason: raw ? reason : '' } };
 }
 
 /** The amounts for a month: an amount typed now (in the client's mode), else the month's own record, else the client's monthly amount. */
@@ -438,4 +456,4 @@ async function editDates({ actor, clientId, period, input = {}, repo, record, no
   return { status: 200, body: { success: true, inZoho: Boolean(existing.zohoInvoiceId), note: existing.zohoInvoiceId ? 'Changed here. The invoice and payment dates in Zoho Books are not changed: update them there too if they need to match.' : '' } };
 }
 
-module.exports = { validMonths, paymentsOf, paidPaiseOf, planPayment, CYCLES, CYCLE_LABEL, addMonths, coverageLabel, isCovered, cycleStarts, recordMonths, plannedInvoiceDate, firstAutoPeriod, nextInvoiceDate, todayIst, editDates, loadTarget, monthAmounts, toPaise, amountsFor, periodOf, labelOf, nextPeriod, parseSettings, parseInvoice, parsePayment, buildLedger, viewBilling, saveSettings, linkInvoice, markPaid, undoPaid, setVoid, PAID_MODES, GST_RATES, DEFAULT_GST, DEFAULT_DUE_DAYS, PERIOD };
+module.exports = { endBilling, validMonths, paymentsOf, paidPaiseOf, planPayment, CYCLES, CYCLE_LABEL, addMonths, coverageLabel, isCovered, cycleStarts, recordMonths, plannedInvoiceDate, firstAutoPeriod, nextInvoiceDate, todayIst, editDates, loadTarget, monthAmounts, toPaise, amountsFor, periodOf, labelOf, nextPeriod, parseSettings, parseInvoice, parsePayment, buildLedger, viewBilling, saveSettings, linkInvoice, markPaid, undoPaid, setVoid, PAID_MODES, GST_RATES, DEFAULT_GST, DEFAULT_DUE_DAYS, PERIOD };

@@ -270,12 +270,14 @@ async function loadMoneyData({ models }) {
   const { User } = models;
   const users = await User.find({ staffRole: null, isCsm: { $ne: true } }, {
     email: 1, firstName: 1, lastName: 1, companyName: 1, 'businessProfile.name': 1, isHidden: 1, staffRole: 1, isCsm: 1,
-    plan: 1, subscription: 1, payments: 1, 'credits.history': 1
+    plan: 1, subscription: 1, payments: 1, 'credits.history': 1, managedBilling: 1, trial: 1, isActive: 1
   }).lean();
   // Money recorded by hand or synced from Zoho Books for managed clients counts as collected money too.
+  let invoices = [];
   if (models.ClientInvoice) {
     try {
-      const rows = await models.ClientInvoice.find({ status: { $in: ['paid', 'partial'] } }).lean();
+      invoices = await models.ClientInvoice.find({ status: { $ne: 'void' } }).lean();
+      const rows = invoices.filter((r) => r.status === 'paid' || r.status === 'partial');
       const byId = new Map(users.map((u) => [String(u._id), u]));
       for (const r of rows) {
         const u = byId.get(String(r.client));
@@ -292,7 +294,7 @@ async function loadMoneyData({ models }) {
   let ayrshareProfiles = null;
   try { ayrshareProfiles = await User.countDocuments({ 'ayrshare.profileKey': { $exists: true, $nin: ['', null] } }); }
   catch (error) { console.error('[staff] could not count social profiles:', error.message); }
-  return { users, ayrshareProfiles };
+  return { users, ayrshareProfiles, invoices };
 }
 
 module.exports = { buildMoney, buildPayments, describePayment, monthStart, quarkTotals, loadMoneyData, HISTORY_CAP_WARN };

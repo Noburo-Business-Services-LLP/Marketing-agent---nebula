@@ -15,7 +15,7 @@ type Row = {
 type Data = {
   zohoOrgId?: string;
   nextInvoiceDate?: string;
-  settings: { monthlyAmountInr: number | null; gstInclusive: boolean; gstPercent: number; billingStart: string; termsDays: number; autoInvoice: boolean; cycleMonths: number; planName: string; zohoItemId: string };
+  settings: { monthlyAmountInr: number | null; gstInclusive: boolean; gstPercent: number; billingStart: string; termsDays: number; autoInvoice: boolean; cycleMonths: number; planName: string; zohoItemId: string; endedMonth?: string; endReason?: string };
   paidModes: Array<{ value: string; label: string }>;
   rows: Row[];
   totals: { billedPaise: number; paidPaise: number; outstandingPaise: number; notInvoicedPaise: number };
@@ -31,6 +31,8 @@ const lab = 'block text-xs font-semibold uppercase tracking-wide text-slate-500 
 const COMMON = ['1', '3', '6', '12'];
 const CYCLE_NAME: Record<string, string> = { '1': 'Monthly', '3': 'Quarterly', '6': 'Half-yearly', '12': 'Yearly' };
 
+const monthName = (p: string) => new Date(`${p}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+const daysLate = (iso: string) => Math.max(1, Math.floor((Date.now() - new Date(`${iso.slice(0, 10)}T23:59:59`).getTime()) / 86400000));
 const fmtDate = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 const monthsFrom = (choice: string, other: string) => (choice === 'other' ? Number(other) : Number(choice));
 
@@ -109,6 +111,9 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
     if (q.trim().length < 2) { setFound([]); return; }
     try { const r = await apiService.staffZohoSearch(q.trim()); setFound(r.invoices || []); } catch { setFound([]); }
   };
+  const [ending, setEnding] = useState(false);
+  const [endMonth, setEndMonth] = useState('');
+  const [endReason, setEndReason] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [syncFind, setSyncFind] = useState('');
   const [syncFound, setSyncFound] = useState<any[]>([]);
@@ -191,6 +196,30 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
         <button disabled={busy || !amount || !start || !terms || cycleBad} onClick={saveSettings} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black text-sm font-bold disabled:opacity-50">Save</button>
       </div>
 
+      <div className={`rounded-xl border p-4 space-y-2 ${data.settings.endedMonth ? 'border-red-200 bg-red-50' : 'border-slate-200'}`}>
+        {data.settings.endedMonth ? (
+          <>
+            <p className="text-sm font-semibold text-red-900">Billing ends after {monthName(data.settings.endedMonth)}{data.settings.endReason ? ` · ${data.settings.endReason}` : ''}</p>
+            <p className="text-xs text-red-900">No new periods or invoices after that month, and they leave MRR and ARR. Earlier invoices and payments stay as they are.</p>
+            <button disabled={busy} onClick={() => run(() => apiService.staffBillingEnd(id, '', ''), 'Billing resumed.')} className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 disabled:opacity-50">Resume billing</button>
+          </>
+        ) : ending ? (
+          <>
+            <p className="text-sm font-semibold text-slate-900">Stop billing this client</p>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div><label className={lab} htmlFor="end-month">Last month they are billed</label><input id="end-month" type="month" value={endMonth} onChange={(e) => setEndMonth(e.target.value)} className={field} /></div>
+              <div className="sm:col-span-2"><label className={lab} htmlFor="end-why">Reason (optional)</label><input id="end-why" value={endReason} onChange={(e) => setEndReason(e.target.value)} maxLength={200} className={field} placeholder="For example: too costly, went elsewhere, business closed" /></div>
+            </div>
+            <div className="flex gap-2">
+              <button disabled={busy || !endMonth} onClick={() => run(() => apiService.staffBillingEnd(id, endMonth, endReason), 'Billing ended.')} className="px-3 py-1.5 rounded-lg bg-red-700 text-white text-sm font-bold disabled:opacity-50">Stop billing</button>
+              <button onClick={() => setEnding(false)} className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700">Cancel</button>
+            </div>
+          </>
+        ) : (
+          <button onClick={() => { setEnding(true); setEndMonth(''); setEndReason(''); }} className="text-sm font-semibold text-slate-700 underline">Client has stopped paying? Stop billing</button>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <button disabled={busy} onClick={() => { setPicked([]); setSyncFind(''); setSyncFound([]); previewSync([]); }} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-800 inline-flex items-center gap-2">{busy && <Loader2 className="w-4 h-4 animate-spin" />}Sync from Zoho Books</button>
         <span className="text-xs text-slate-500">Finds this client's invoices in Zoho Books (by email or business name) and fills in the periods, with what has been paid. You see what will change first.</span>
@@ -200,13 +229,15 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
       {data.rows.length === 0 ? <p className="text-sm text-slate-500">Set the amount and the date billing starts, and the billing periods will appear here.</p> : (
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Period</th><th className="px-3 py-2">Invoice date</th><th className="px-3 py-2 text-right">Net</th><th className="px-3 py-2 text-right">GST</th><th className="px-3 py-2 text-right">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Invoice</th><th className="px-3 py-2">Payments</th></tr></thead>
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-3 py-2">Period</th><th className="px-3 py-2">Invoice date</th><th className="px-3 py-2">Due date</th><th className="px-3 py-2">Paid on</th><th className="px-3 py-2 text-right">Net</th><th className="px-3 py-2 text-right">GST</th><th className="px-3 py-2 text-right">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Invoice</th><th className="px-3 py-2">Payments</th></tr></thead>
             <tbody>
               {data.rows.map((r) => (
                 <React.Fragment key={r.period}>
                 <tr className="border-t border-slate-100 align-top">
                   <td className="px-3 py-2 font-medium text-slate-900">{r.label}<div className="text-xs font-normal text-slate-500">{r.cycleLabel}{r.planName ? ` · ${r.planName}` : ''}</div></td>
-                  <td className="px-3 py-2 whitespace-nowrap text-slate-700">{r.invoiceDate ? fmtDate(r.invoiceDate) : '—'}{r.dueDate && r.status !== 'paid' && r.status !== 'void' ? <div className="text-xs text-slate-500">due {fmtDate(r.dueDate)}</div> : null}{!r.invoiceNumber && r.status === 'not_invoiced' && r.invoiceDate ? <div className="text-xs text-slate-400">planned</div> : null}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-700">{r.invoiceDate ? fmtDate(r.invoiceDate) : '—'}{!r.invoiceNumber && r.status === 'not_invoiced' && r.invoiceDate ? <div className="text-xs text-slate-400">planned, not created yet</div> : null}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-700">{r.dueDate && r.status !== 'void' ? <span className={r.status === 'overdue' ? 'font-semibold text-red-700' : ''}>{fmtDate(r.dueDate)}</span> : '—'}{r.status === 'overdue' && r.dueDate ? <div className="text-xs font-semibold text-red-700">{daysLate(r.dueDate)} days late</div> : null}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-700">{r.payments.length ? fmtDate(r.payments[r.payments.length - 1].paidDate || r.paidDate || '') : '—'}{r.status === 'partial' ? <div className="text-xs text-amber-800">part paid</div> : null}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatInr(r.exPaise)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatInr(r.gstPaise)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatInr(r.totalPaise)}</td>
@@ -221,7 +252,7 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
                     )}
                   </td>
                 </tr>
-                <tr><td colSpan={8} className="px-3 pb-3"><div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <tr><td colSpan={10} className="px-3 pb-3"><div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                     {r.invoiceNumber && r.status !== 'void' && <button disabled={busy} onClick={() => setDates({ row: r, invoiceDate: r.invoiceDate || '', dueDate: r.dueDate || '', paidDate: r.paidDate || '' })} className="text-slate-700 underline">Edit dates</button>}
                     {!r.invoiceNumber && r.status !== 'void' && <button disabled={busy} onClick={() => createZoho(r)} className="text-slate-700 underline">Create invoice in Zoho</button>}
                     {r.status !== 'paid' && r.status !== 'void' && <button disabled={busy} onClick={() => openForm('invoice', r)} className="text-slate-700 underline">{r.invoiceNumber ? 'Change invoice' : 'Link invoice'}</button>}

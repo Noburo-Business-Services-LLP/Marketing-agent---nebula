@@ -276,7 +276,9 @@ const userSchema = new mongoose.Schema({
     planName: { type: String, maxlength: 80 },          // the plan, for example SCALE (a product in Zoho Books)
     zohoItemId: { type: String },                       // that product's id in Zoho Books
     autoInvoice: { type: Boolean }, // make each billing period's invoice automatically on the invoice day
-    autoFrom: { type: String }      // 'YYYY-MM': automatic invoices start from this month, never earlier
+    autoFrom: { type: String },     // 'YYYY-MM': automatic invoices start from this month, never earlier
+    endedMonth: { type: String },   // 'YYYY-MM': the last month they are billed; they have stopped after it
+    endReason: { type: String, maxlength: 200 }
   },
   // Plan (optional: accounts without plan.tier are treated as managed)
   plan: {
