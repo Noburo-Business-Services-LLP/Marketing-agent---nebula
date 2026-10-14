@@ -5,7 +5,12 @@ const OPENAI_IMAGE_URL = 'https://api.openai.com/v1/images/generations';
 const OPENAI_IMAGE_EDIT_URL = 'https://api.openai.com/v1/images/edits';
 // The edit endpoint takes several reference photos; more than this adds cost without helping.
 const MAX_REFERENCE_IMAGES = 6;
-const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+// The newest image model is the default for post pictures. If the account cannot use it (not enabled, wrong name),
+// the call is repeated once with gpt-image-1 so a picture still comes back.
+const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
+const OPENAI_IMAGE_SAFE_MODEL = 'gpt-image-1';
+// The designed Blueprint PDF keeps its own model, because its price per page was worked out on gpt-image-1.
+const BLUEPRINT_IMAGE_MODEL = process.env.OPENAI_BLUEPRINT_IMAGE_MODEL || 'gpt-image-1';
 
 function fetchWithTimeout(url, opts = {}, timeoutMs = 120000) {
   return new Promise(async (resolve, reject) => {
@@ -51,9 +56,9 @@ function referencesFromParts(parts) {
   return out;
 }
 
-function buildEditForm(prompt, size, references) {
+function buildEditForm(prompt, size, references, model = OPENAI_IMAGE_MODEL) {
   const form = new FormData();
-  form.append('model', OPENAI_IMAGE_MODEL);
+  form.append('model', model);
   form.append('prompt', String(prompt || '').slice(0, 4000));
   form.append('size', size);
   form.append('n', '1');
@@ -88,27 +93,38 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
   try {
     const refs = Array.isArray(references) ? references.slice(0, MAX_REFERENCE_IMAGES) : [];
     const size = sizeForAspectRatio(aspectRatio);
-    // With reference photos, use the edit endpoint so the product, cast and place are matched.
-    const res = refs.length > 0
-      ? await fetchWithTimeout(OPENAI_IMAGE_EDIT_URL, {
+    const call = (model) => (refs.length > 0
+      // With reference photos, use the edit endpoint so the product, cast and place are matched.
+      ? fetchWithTimeout(OPENAI_IMAGE_EDIT_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-        body: buildEditForm(prompt, size, refs)
+        body: buildEditForm(prompt, size, refs, model)
       }, 180000)
-      : await fetchWithTimeout(OPENAI_IMAGE_URL, {
+      : fetchWithTimeout(OPENAI_IMAGE_URL, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: OPENAI_IMAGE_MODEL,
+          model,
           prompt: String(prompt || '').slice(0, 4000),
           size,
           n: 1,
           quality: 'high'
         })
-      }, 120000);
+      }, 120000));
+
+    let usedModel = OPENAI_IMAGE_MODEL;
+    let res = await call(usedModel);
+    if (!res.ok && usedModel !== OPENAI_IMAGE_SAFE_MODEL && [400, 403, 404].includes(res.status)) {
+      const why = await res.clone().text().catch(() => '');
+      if (/model|not found|does not exist|access|verif/i.test(why)) {
+        console.warn(`[OpenAI Image] ${usedModel} was refused (HTTP ${res.status}); retrying with ${OPENAI_IMAGE_SAFE_MODEL}`);
+        usedModel = OPENAI_IMAGE_SAFE_MODEL;
+        res = await call(usedModel);
+      }
+    }
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -125,12 +141,12 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
     try {
       const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
       if (uploadResult.success && uploadResult.url) {
-        return { success: true, imageUrl: uploadResult.url, model: OPENAI_IMAGE_MODEL };
+        return { success: true, imageUrl: uploadResult.url, model: usedModel };
       }
     } catch (uploadErr) {
       console.warn('[OpenAI Image] Cloudinary upload failed, returning base64:', uploadErr.message);
     }
-    return { success: true, imageUrl: base64Image, model: OPENAI_IMAGE_MODEL };
+    return { success: true, imageUrl: base64Image, model: usedModel };
   } catch (error) {
     console.error('[OpenAI Image] Generation failed:', error.message);
     return { success: false, error: error.message };
@@ -147,13 +163,13 @@ async function generateOpenAIImageBuffer(prompt, { size = '1024x1536', model } =
     const res = await fetchWithTimeout(OPENAI_IMAGE_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: model || OPENAI_IMAGE_MODEL, prompt: String(prompt || '').slice(0, 4000), size, n: 1, quality: 'high' })
+      body: JSON.stringify({ model: model || BLUEPRINT_IMAGE_MODEL, prompt: String(prompt || '').slice(0, 4000), size, n: 1, quality: 'high' })
     }, 180000);
     if (!res.ok) throw new Error(`OpenAI image HTTP ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
     const data = await res.json();
     const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
     if (!b64) throw new Error('OpenAI returned no image data');
-    return { success: true, buffer: Buffer.from(b64, 'base64'), model: model || OPENAI_IMAGE_MODEL };
+    return { success: true, buffer: Buffer.from(b64, 'base64'), model: model || BLUEPRINT_IMAGE_MODEL };
   } catch (error) {
     console.error('[OpenAI Image] page generation failed:', error.message);
     return { success: false, error: error.message };

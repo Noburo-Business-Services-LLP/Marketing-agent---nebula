@@ -40,3 +40,23 @@ test('without references the plain generation endpoint is used', async () => {
     assert.match(calls[0].url, /images\/generations$/);
   } finally { global.fetch = realFetch; }
 });
+
+test('the newest model is tried first and gpt-image-1 is used once if the account is refused', async () => {
+  const models = [];
+  const realFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    const model = JSON.parse(opts.body).model;
+    models.push(model);
+    if (model === 'gpt-image-2') {
+      const body = JSON.stringify({ error: { message: 'The model `gpt-image-2` does not exist or you do not have access to it.' } });
+      return { ok: false, status: 404, text: async () => body, clone() { return { text: async () => body }; } };
+    }
+    return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: PNG }] }) };
+  };
+  try {
+    const out = await generateOpenAIImage('a scene', { aspectRatio: '1:1' });
+    assert.strictEqual(out.success, true);
+    assert.deepStrictEqual(models, ['gpt-image-2', 'gpt-image-1']);
+    assert.strictEqual(out.model, 'gpt-image-1');
+  } finally { global.fetch = realFetch; }
+});

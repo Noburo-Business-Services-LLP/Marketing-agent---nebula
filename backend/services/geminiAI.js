@@ -4939,6 +4939,9 @@ Treat this as an image editing task where the original person must remain identi
   // "parts is not defined" instead of retrying, and the primary model being
   // busy meant no image at all.
   let parts = [];
+  // OpenAI is the first image provider unless IMAGE_PROVIDER_FIRST=google; Google's models are then the backup.
+  const openAiFirst = String(process.env.IMAGE_PROVIDER_FIRST || 'openai').toLowerCase() !== 'google';
+  let openAiTried = false;
 
   try {
     console.log(`[NanoBananaPro] Generating post ${postIndex + 1}/${totalPosts} in ${aspectRatio}...`);
@@ -5125,6 +5128,16 @@ Only the visual language should carry over, not the specific scene.`);
       textLength: p.text ? p.text.length : 0
     })), null, 2));
 
+    if (openAiFirst) {
+      openAiTried = true;
+      const first = await generateOpenAIImage(promptUsed, { aspectRatio, references: referencesFromParts(parts) });
+      if (first && first.success && first.imageUrl) {
+        console.log(`[ImageFirst] Post ${postIndex + 1} made by ${first.model}`);
+        return { success: true, imageUrl: first.imageUrl, model: first.model, promptUsed };
+      }
+      console.warn(`[ImageFirst] OpenAI did not return a picture (${first && first.error}); trying Google's models`);
+    }
+
     const requestBody = {
       contents: [{ parts }],
       generationConfig: {
@@ -5229,6 +5242,7 @@ Only the visual language should carry over, not the specific scene.`);
     // Nano Banana attempts above have failed. Text-only (see openaiImage.js
     // for why); still worth trying over returning nothing.
     try {
+      if (openAiTried) throw new Error('OpenAI was already tried first');
       console.log('[NanoBanana2] Both Nano Banana attempts failed, trying OpenAI image generation...');
       const openAiResult = await generateOpenAIImage(promptUsed, { aspectRatio, references: referencesFromParts(parts) });
       if (openAiResult?.success && openAiResult?.imageUrl) {
@@ -5236,7 +5250,7 @@ Only the visual language should carry over, not the specific scene.`);
       }
       console.warn('[NanoBanana2] OpenAI fallback also failed:', openAiResult?.error);
     } catch (openAiErr) {
-      console.error('[NanoBanana2] OpenAI fallback threw:', openAiErr.message);
+      if (!openAiTried) console.error('[NanoBanana2] OpenAI fallback threw:', openAiErr.message);
     }
 
     require('./opsAlerts').recordFailure('image', error.message);
