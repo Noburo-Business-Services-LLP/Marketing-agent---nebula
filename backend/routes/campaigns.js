@@ -2174,7 +2174,11 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       console.error('[CAMPAIGN_IMAGE] Visual plan failed, each slot will fall back to its own plain image description:', err.message);
     }
 
-    for (let i = 0; i < postsToProcess.length; i++) {
+    // One post, start to finish. Posts that share a slot (one picture, several platforms) are run one after the
+    // other by their slot's task below, so the picture is made once; different slots run together.
+    let postsFinished = 0;
+    let postsEmitted = 0;
+    const processPost = async (i) => {
       // if (aborted) break; // Removed to allow background generation
 
       const post = postsToProcess[i];
@@ -2231,8 +2235,9 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         if (process.env.IMAGE_MODE !== 'pipeline') {
           try {
             const { generateDirectSeriesImage } = require('../services/directImage');
-            let continuityUrl;
-            for (const cached of slotImageCache.values()) { if (cached && cached.success && cached.imageUrl) continuityUrl = cached.imageUrl; }
+            // The first post sets the look; every other post is matched to it.
+            const firstCached = slotIndex === 0 ? null : slotImageCache.get(0);
+            const continuityUrl = firstCached && firstCached.success && firstCached.imageUrl ? firstCached.imageUrl : undefined;
             const direct = await generateDirectSeriesImage({
               brief: [campaignName, campaignDescription, (visualPlan && visualPlan.slots && visualPlan.slots[slotIndex] && visualPlan.slots[slotIndex].imagePrompt) || post.imageDescription].filter(Boolean).join('. '),
               imageText: resolvedImageText,
@@ -2359,7 +2364,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
           generationProgress: {
             index: i,
             total: postsToProcess.length,
-            completed: i + 1 === postsToProcess.length
+            completed: (postsFinished += 1) === postsToProcess.length
           }
         };
 
@@ -2380,7 +2385,32 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         ...postData,
         draftId
       });
-    }
+      postsEmitted += 1;
+    };
+
+    // The first slot first (it sets the look), then the rest together, CAMPAIGN_PARALLEL slots at a time (default 3).
+    const slotTotal = Math.ceil(postsToProcess.length / postsPerSlot);
+    const runSlot = async (s) => {
+      const from = s * postsPerSlot;
+      const to = Math.min(from + postsPerSlot, postsToProcess.length);
+      for (let i = from; i < to; i++) {
+        try { await processPost(i); } catch (postErr) { console.error(`[CAMPAIGN_IMAGE] post ${i + 1} failed:`, postErr.message); }
+      }
+    };
+    await runSlot(0);
+    const restSlots = [];
+    for (let s = 1; s < slotTotal; s++) restSlots.push(s);
+    const campaignWidth = Math.max(1, Math.min(6, Number(process.env.CAMPAIGN_PARALLEL) || 3));
+    let slotCursor = 0;
+    await Promise.all(Array.from({ length: Math.min(campaignWidth, restSlots.length) }, async () => {
+      while (slotCursor < restSlots.length) {
+        const s = restSlots[slotCursor];
+        slotCursor += 1;
+        await runSlot(s);
+      }
+    }));
+
+    if (!postsEmitted) throw new Error('No posts could be created. Please try again.');
 
     // Done
     const updatedUser = await User.findById(userId).select('credits.balance');
