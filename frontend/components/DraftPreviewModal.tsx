@@ -1,7 +1,7 @@
 import PlatformIcon from './PlatformIcon';
 import { choicesFor } from '../utils/platforms';
 import React, { useState, useEffect } from 'react';
-import { X, Save, Download, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Save, Download, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
 import { Draft } from '../types';
 import { downloadImage, downloadAll } from '../utils/download';
 import { draftsAPI } from '../services/api';
@@ -12,9 +12,13 @@ interface DraftPreviewModalProps {
   draft: Draft;
   onClose: () => void;
   onSuccess: () => void;
+  /** other pictures in the same list (a campaign's posts, say): the arrows step to them when this one has no slides */
+  onPrev?: () => void;
+  onNext?: () => void;
+  position?: string;
 }
 
-export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onClose, onSuccess }) => {
+export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onClose, onSuccess, onPrev, onNext, position }) => {
   // Regenerate re-runs the full generation pipeline, so it costs the same
   // Quarks as the original — campaign-type drafts are billed through the
   // legacy Campaigns flow already (matches backend/routes/drafts.js).
@@ -35,6 +39,22 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
     .map((x: any) => String((x && x.imageUrl) || '')).filter((u: string) => /^https?:\/\//i.test(u));
   const [slideIdx, setSlideIdx] = useState(0);
   const shownUrl = slideUrls.length ? slideUrls[Math.min(slideIdx, slideUrls.length - 1)] : imageUrl;
+  // Arrows: through the slides of a carousel; otherwise to the neighbouring picture in the list, if there is one.
+  const hasSlides = slideUrls.length > 1;
+  const canPrev = hasSlides ? slideIdx > 0 : Boolean(onPrev);
+  const canNext = hasSlides ? slideIdx < slideUrls.length - 1 : Boolean(onNext);
+  const goPrev = () => { if (hasSlides) setSlideIdx((i) => Math.max(0, i - 1)); else if (onPrev) onPrev(); };
+  const goNext = () => { if (hasSlides) setSlideIdx((i) => Math.min(slideUrls.length - 1, i + 1)); else if (onNext) onNext(); };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      if (e.key === 'ArrowLeft' && canPrev) { e.preventDefault(); goPrev(); }
+      if (e.key === 'ArrowRight' && canNext) { e.preventDefault(); goNext(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
   
   // Scheduling state
   const [showScheduler, setShowScheduler] = useState(false);
@@ -369,6 +389,21 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
                 <img src={shownUrl} alt={title || 'Draft'} className="w-full h-full object-contain" />
               ) : (
                 <p className="text-[13px] text-white/30 px-8 text-center">No artwork yet.</p>
+              )}
+              {(canPrev || canNext) && (
+                <>
+                  <button type="button" onClick={goPrev} disabled={!canPrev} aria-label={hasSlides ? 'Previous slide' : 'Previous post'}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur disabled:opacity-25 disabled:cursor-default">
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button type="button" onClick={goNext} disabled={!canNext} aria-label={hasSlides ? 'Next slide' : 'Next post'}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur disabled:opacity-25 disabled:cursor-default">
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                  <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-2.5 py-0.5 text-[11.5px] font-semibold text-white">
+                    {hasSlides ? `${slideIdx + 1} / ${slideUrls.length}` : (position || '')}
+                  </span>
+                </>
               )}
             </div>
 

@@ -168,7 +168,21 @@ const Library: React.FC = () => {
       )}
 
       {open && open.source === 'post' && open.raw && (
-        <DraftPreviewModal draft={open.raw} onClose={() => setOpen(null)} onSuccess={() => { setOpen(null); load(true); }} />
+        (() => {
+          const posts = shown.filter((x) => x.source === 'post' && x.raw && x.status !== 'creating');
+          const at = posts.findIndex((x) => x.id === open.id);
+          return (
+            <DraftPreviewModal
+              key={open.id}
+              draft={open.raw}
+              onClose={() => setOpen(null)}
+              onSuccess={() => { setOpen(null); load(true); }}
+              onPrev={at > 0 ? () => setOpen(posts[at - 1]) : undefined}
+              onNext={at >= 0 && at < posts.length - 1 ? () => setOpen(posts[at + 1]) : undefined}
+              position={at >= 0 ? `${at + 1} / ${posts.length}` : undefined}
+            />
+          );
+        })()
       )}
 
       {open && !(open.source === 'post' && open.raw) && (

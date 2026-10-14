@@ -88,7 +88,21 @@ const CreateGenerations: React.FC<{ category: CreateCategory; refreshKey: number
           );
         })}
       </ul>
-      {open && <DraftPreviewModal draft={open} onClose={() => setOpen(null)} onSuccess={() => { setOpen(null); load(true); }} />}
+      {open && (() => {
+        const ready = drafts.filter((d) => String(d.status || '').toLowerCase() !== 'processing');
+        const at = ready.findIndex((d) => d._id === open._id);
+        return (
+          <DraftPreviewModal
+            key={open._id}
+            draft={open}
+            onClose={() => setOpen(null)}
+            onSuccess={() => { setOpen(null); load(true); }}
+            onPrev={at > 0 ? () => setOpen(ready[at - 1]) : undefined}
+            onNext={at >= 0 && at < ready.length - 1 ? () => setOpen(ready[at + 1]) : undefined}
+            position={at >= 0 ? `${at + 1} / ${ready.length}` : undefined}
+          />
+        );
+      })()}
     </section>
   );
 };
