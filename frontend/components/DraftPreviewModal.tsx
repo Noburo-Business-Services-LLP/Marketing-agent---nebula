@@ -1,8 +1,9 @@
 import PlatformIcon from './PlatformIcon';
 import { choicesFor } from '../utils/platforms';
 import React, { useState, useEffect } from 'react';
-import { X, Save, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
+import { X, Save, Download, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
 import { Draft } from '../types';
+import { downloadImage, downloadAll } from '../utils/download';
 import { draftsAPI } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
@@ -406,6 +407,29 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
               </div>
             )}
 
+            {draft.status !== 'processing' && shownUrl && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadImage(shownUrl, `${title || 'post'}${slideUrls.length > 1 ? `-slide-${slideIdx + 1}` : ''}`)}
+                  className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  {slideUrls.length > 1 ? 'Download this slide' : 'Download image'}
+                </button>
+                {slideUrls.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => downloadAll(slideUrls, title || 'carousel')}
+                    className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download all {slideUrls.length} slides
+                  </button>
+                )}
+              </div>
+            )}
+
             {imageUrl && draft.status !== 'processing' && (
               <div className="mt-3 flex items-center gap-2">
                 <button
@@ -603,7 +627,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             className="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.09] text-[13px] font-semibold text-[#F5F4F1] transition-colors disabled:opacity-40"
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save
+            Save changes
           </button>
 
           <button
