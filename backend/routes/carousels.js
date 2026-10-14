@@ -215,7 +215,8 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     // continuity alongside the plan's text-level continuity, so a character
     // or environment the plan says should persist actually looks the same
     // from one slide to the next, not just described the same way.
-    let previousSlideImageUrl = null;
+    // Slide 1 is drawn first and sets the look; the rest are then drawn together, each matched to slide 1.
+    let firstSlideImageUrl = null;
 
     // Explicitly chosen in Create takes priority over whatever the plan
     // itself selected — a user who picked a product meant that product,
@@ -225,8 +226,9 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       ...(Array.isArray(productReferenceImages) ? productReferenceImages.slice(1) : [])
     ].filter(Boolean);
 
-    for (let i = 0; i < plan.slides.length; i++) {
+    const renderSlide = async (i) => {
       const slide = plan.slides[i];
+      const previousSlideImageUrl = i === 0 ? null : firstSlideImageUrl;
       send('generating', {
         order: slide.order,
         message: `Rendering slide ${slide.order} of ${plan.slides.length}…`
@@ -320,14 +322,11 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           console.warn(`[Carousel] slide ${slide.order} returned inline image data, not a URL — dropping it.`);
         }
         draft.carouselSlides[i].imageUrl = imageUrl;
-        // Feeds the NEXT slide's call — a slide with no image (failed
-        // render) is skipped as a reference rather than passing along an
-        // empty string, so continuity just carries from the last one that
-        // actually rendered.
-        if (imageUrl) previousSlideImageUrl = imageUrl;
-        // Written per slide, not once at the end: a run that dies halfway
-        // keeps the slides it already paid for.
-        await draft.save();
+        // Slide 1 is the look every other slide is matched to.
+        if (i === 0 && imageUrl) firstSlideImageUrl = imageUrl;
+        // Written per slide, not once at the end: a run that dies halfway keeps the slides it already paid for.
+        // An atomic update, because several slides now finish at the same time.
+        await Draft.updateOne({ _id: draft._id, 'carouselSlides.order': slide.order }, { $set: { 'carouselSlides.$.imageUrl': imageUrl } });
 
         if (imageUrl) rendered += 1;
         send('slide', {
@@ -349,11 +348,25 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           failed: true
         });
       }
-    }
+    };
+
+    // Slide 1 first, then the others together (CAROUSEL_PARALLEL at a time, default 3).
+    await renderSlide(0);
+    const rest = [];
+    for (let i = 1; i < plan.slides.length; i++) rest.push(i);
+    const width = Math.max(1, Math.min(6, Number(process.env.CAROUSEL_PARALLEL) || 3));
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(width, rest.length) }, async () => {
+      while (cursor < rest.length) {
+        const i = rest[cursor];
+        cursor += 1;
+        await renderSlide(i);
+      }
+    }));
 
     draft.status = rendered > 0 ? 'draft' : 'failed';
     if (rendered === 0) draft.errorMessage = 'No slides could be rendered.';
-    await draft.save();
+    await Draft.updateOne({ _id: draft._id }, { $set: { status: draft.status, errorMessage: draft.errorMessage || '' } });
 
     send('complete', {
       draftId: draft._id,
@@ -365,9 +378,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     console.error('Carousel generation error:', error);
     if (draft) {
       try {
-        draft.status = 'failed';
-        draft.errorMessage = error.message || 'Generation failed.';
-        await draft.save();
+        await Draft.updateOne({ _id: draft._id }, { $set: { status: 'failed', errorMessage: error.message || 'Generation failed.' } });
       } catch (_) { /* the stream error matters more than this bookkeeping */ }
     } else {
       // Failed before any draft existed — planning itself threw, so nothing
