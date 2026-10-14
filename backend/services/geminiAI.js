@@ -4259,6 +4259,14 @@ QUALITY REQUIREMENTS:
 Create a poster that someone would think "this looks like it was designed by the same person who made the reference".`;
 
   try {
+    if (String(process.env.IMAGE_PROVIDER_FIRST || 'openai').toLowerCase() !== 'google') {
+      const first = await generateOpenAIImage(prompt, { aspectRatio: aspectRatio || '4:5', references: [{ mimeType, data: imageData }] });
+      if (first && first.success && first.imageBase64) {
+        console.log(`✅ Poster from reference made by ${first.model} in ${Date.now() - startTime}ms`);
+        return { success: true, imageBase64: first.imageBase64, model: first.model };
+      }
+      console.warn(`[ImageFirst] OpenAI did not return a poster from the reference (${first && first.error}); trying Google's models`);
+    }
     console.log('🎨 Generating poster from reference with Nano Banana Pro...');
 
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/nano-banana-pro-preview:generateContent';
@@ -4651,11 +4659,8 @@ async function generateCampaignImageNanoBanana(imageDescription, options = {}) {
   let description = imageDescription;
   const directive = postStyle ? buildStyleDirective(postStyle, postDetails, { language: options.targetLanguage || 'English' }) : '';
   if (directive) description = `${description}\n\n${directive}`;
-  const H = POST_HEIGHT_BY_ASPECT[options.aspectRatio || '1:1'] || 1080;
-  const bands = [];
-  if (headerUrl) bands.push(`the top ${Math.round(frameShare('header', 1080, H) * 100)}%`);
-  if (footerUrl) bands.push(`the bottom ${Math.round(frameShare('footer', 1080, H) * 100)}%`);
-  if (bands.length) description = `${description}\n\nA header and footer will be added over this image afterwards. Keep ${bands.join(' and ')} of the picture calm and free of text and important detail, and place all text and subjects inside the middle of the frame.`;
+  const reserve = require('./postFrames').frameInstruction({ headerUrl, footerUrl, aspectRatio: options.aspectRatio });
+  if (reserve) description = `${description}\n\n${reserve}`;
 
   const result = await generateCampaignImageNanoBananaCore(description, options);
   if (!result || !result.success || !result.imageUrl || (!headerUrl && !footerUrl)) return result;

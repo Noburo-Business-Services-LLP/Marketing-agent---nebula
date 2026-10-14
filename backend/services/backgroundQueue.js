@@ -341,7 +341,8 @@ async function processDraftImageGenerationJob(job) {
         user?.companyName ? `Brand: ${user.companyName}` : '',
         bp.industry ? `Industry: ${bp.industry}` : '',
         'Recreate the layout, composition, colour mood and typographic style of the reference with this brand, its products and its details. Do not copy any logo, name, price or contact text that is in the reference.',
-        styleText
+        styleText,
+        require('./postFrames').frameInstruction({ headerUrl: designOpts.headerUrl, footerUrl: designOpts.footerUrl, aspectRatio: job.aspectRatio || '1:1' })
       ].filter(Boolean).join('\n');
 
       const genRes = await Promise.race([

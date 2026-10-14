@@ -65,3 +65,13 @@ test('frames: the file must be a readable picture', async () => {
   assert.equal(r.code, 400);
   assert.match(r.body.message, /could not be read/);
 });
+
+test('the image model is told which bands to keep free, and nothing is said without frames', () => {
+  const { frameInstruction } = require('../services/postFrames');
+  assert.strictEqual(frameInstruction({ aspectRatio: '4:5' }), '');
+  const both = frameInstruction({ headerUrl: 'https://x/h.png', footerUrl: 'https://x/f.png', aspectRatio: '4:5' });
+  assert.match(both, /top 10%/);
+  assert.match(both, /bottom 15%/);
+  assert.match(both, /continue/);
+  assert.match(frameInstruction({ headerUrl: 'https://x/h.png', aspectRatio: '1:1' }), /top 13%/);
+});

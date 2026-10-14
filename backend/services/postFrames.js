@@ -90,4 +90,20 @@ async function addFramesToImage(imageSrc, { headerUrl, footerUrl } = {}, io = {}
   }
 }
 
-module.exports = { addFramesToImage, FRAME_SPECS, BASE_WIDTH, frameShare, compositeFrames, cropToFrame };
+const POST_HEIGHT_BY_ASPECT = { '1:1': 1080, '4:5': 1350, '9:16': 1920, '16:9': 608, '3:4': 1440 };
+
+/**
+ * What to tell the image model so the picture is designed AROUND the header and footer rather than having them
+ * dropped over its title: keep exactly those bands free, and let the background run on into them.
+ * Empty when there is neither a header nor a footer.
+ */
+function frameInstruction({ headerUrl, footerUrl, aspectRatio } = {}) {
+  const H = POST_HEIGHT_BY_ASPECT[aspectRatio || '1:1'] || 1080;
+  const bands = [];
+  if (headerUrl) bands.push(`the top ${Math.round(frameShare('header', BASE_WIDTH, H) * 100)}%`);
+  if (footerUrl) bands.push(`the bottom ${Math.round(frameShare('footer', BASE_WIDTH, H) * 100)}%`);
+  if (!bands.length) return '';
+  return `LAYOUT RESERVE: a brand ${headerUrl && footerUrl ? 'header strip and footer strip are' : (headerUrl ? 'header strip is' : 'footer strip is')} added over this picture afterwards. Keep ${bands.join(' and ')} of the picture free of any headline, text, face, product or logo: let the background colour and pattern simply continue there so the strips sit on it naturally. Put every headline, face, product and table fully inside the middle of the frame, with a clear margin from those bands.`;
+}
+
+module.exports = { frameInstruction, addFramesToImage, FRAME_SPECS, BASE_WIDTH, frameShare, compositeFrames, cropToFrame };

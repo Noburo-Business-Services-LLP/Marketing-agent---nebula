@@ -141,12 +141,12 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
     try {
       const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
       if (uploadResult.success && uploadResult.url) {
-        return { success: true, imageUrl: uploadResult.url, model: usedModel };
+        return { success: true, imageUrl: uploadResult.url, imageBase64: base64Image, model: usedModel };
       }
     } catch (uploadErr) {
       console.warn('[OpenAI Image] Cloudinary upload failed, returning base64:', uploadErr.message);
     }
-    return { success: true, imageUrl: base64Image, model: usedModel };
+    return { success: true, imageUrl: base64Image, imageBase64: base64Image, model: usedModel };
   } catch (error) {
     console.error('[OpenAI Image] Generation failed:', error.message);
     return { success: false, error: error.message };
