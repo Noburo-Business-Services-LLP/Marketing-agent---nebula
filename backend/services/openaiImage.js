@@ -144,6 +144,9 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
+      if (res.status === 429 && /insufficient_quota|credit_balance|no credits/i.test(text)) {
+        try { require('./opsAlerts').recordCritical('OpenAI', 'The account has no credits remaining.'); } catch (_) { /* alerting never blocks */ }
+      }
       throw new Error(`OpenAI image HTTP ${res.status}: ${text.slice(0, 300)}`);
     }
 

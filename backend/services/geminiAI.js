@@ -5197,6 +5197,9 @@ Only the visual language should carry over, not the specific scene.`);
 
   } catch (error) {
     console.error(`[NanoBanana2] Post ${postIndex + 1} failed:`, error.message);
+    if (/prepayment credits are depleted|billing#prepay|RESOURCE_EXHAUSTED.*(billing|quota)/i.test(String(error.message))) {
+      try { require('./opsAlerts').recordCritical('Google AI', error.message); } catch (_) { /* alerting never blocks */ }
+    }
 
     try {
       console.log('[NanoBanana2] Trying fallback gemini-2.5-flash-image WITH reference images...');

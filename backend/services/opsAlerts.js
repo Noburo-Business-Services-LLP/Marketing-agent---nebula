@@ -15,7 +15,8 @@ const LABELS = {
   ai_text: 'AI writing',
   video: 'Video generation',
   hero_video: 'Hero videos',
-  billing: 'Automatic monthly invoices'
+  billing: 'Automatic monthly invoices',
+  provider_credits: 'A provider account has run out of credits'
 };
 
 function createAlerter({ env = process.env, now = () => Date.now(), send = null } = {}) {
@@ -63,6 +64,33 @@ function createAlerter({ env = process.env, now = () => Date.now(), send = null 
     }
   }
 
+  /**
+   * Something that needs a person at once, such as a provider account out of credits. One occurrence is enough,
+   * and the same provider is not repeated for six hours.
+   */
+  async function recordCritical(provider, detail = '') {
+    try {
+      const t = now();
+      const key = `provider_credits:${provider}`;
+      const past = (history.get('provider_credits') || []).filter((x) => t - x.at < 86400000);
+      past.push({ at: t, detail: `${provider}: ${String(detail || '').slice(0, 260)}` });
+      history.set('provider_credits', past.slice(-60));
+      if (t - (lastSent.get(key) ?? -Infinity) < 6 * 3600000) return false;
+      const to = recipients();
+      if (to.length === 0) return false;
+      lastSent.set(key, t);
+      await sendEmail({
+        to,
+        subject: `Nebulaa alert: ${provider} has run out of credits`,
+        text: `${provider} refused a request because the account has no credits left. Images and other generation that depends on it will fail or fall back to a weaker option until credits are added.\n\nLatest message: ${String(detail || '').slice(0, 300)}\n\nAdd credits in the provider's billing page and switch on auto-recharge. You will not get another alert for ${provider} for 6 hours.`
+      });
+      return true;
+    } catch (error) {
+      console.error('[opsAlerts] could not send critical alert:', error.message);
+      return false;
+    }
+  }
+
   /** Failures seen since this server started: counts for the last hour and day, and the latest few. */
   function snapshot() {
     const t = now();
@@ -78,8 +106,8 @@ function createAlerter({ env = process.env, now = () => Date.now(), send = null 
     return { since: new Date(startedAt).toISOString(), categories: out };
   }
 
-  return { recordFailure, snapshot };
+  return { recordFailure, recordCritical, snapshot };
 }
 
 const shared = createAlerter();
-module.exports = { createAlerter, recordFailure: (...args) => shared.recordFailure(...args), snapshot: () => shared.snapshot() };
+module.exports = { createAlerter, recordFailure: (...args) => shared.recordFailure(...args), recordCritical: (...args) => shared.recordCritical(...args), snapshot: () => shared.snapshot() };

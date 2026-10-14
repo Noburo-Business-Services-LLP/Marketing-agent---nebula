@@ -41,3 +41,16 @@ test('no recipients means no email, and a send error never throws', async () => 
   const broken = createAlerter({ env: { ALERT_EMAILS: 'a@x.com' }, now: () => 0, send: async () => { throw new Error('down'); } });
   for (let i = 0; i < 3; i++) await broken.recordFailure('image');
 });
+
+test('a provider out of credits alerts at once, and not again for six hours', async () => {
+  const { createAlerter } = require('../services/opsAlerts');
+  let t = 1000;
+  const sent = [];
+  const a = createAlerter({ env: { ALERT_EMAILS: 'o@x.test' }, now: () => t, send: async (m) => sent.push(m) });
+  assert.strictEqual(await a.recordCritical('OpenAI', 'no credits'), true);
+  assert.strictEqual(await a.recordCritical('OpenAI', 'no credits'), false);
+  assert.strictEqual(await a.recordCritical('Google AI', 'depleted'), true);
+  t += 6 * 3600000 + 1;
+  assert.strictEqual(await a.recordCritical('OpenAI', 'no credits'), true);
+  assert.match(sent[0].subject, /OpenAI has run out of credits/);
+});
