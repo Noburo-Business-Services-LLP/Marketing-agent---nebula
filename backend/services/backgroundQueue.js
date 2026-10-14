@@ -418,6 +418,54 @@ async function processDraftImageGenerationJob(job) {
       if (!hadExistingCaption && Array.isArray(contentPrompt?.hashtags) && contentPrompt.hashtags.length) {
         draft.hashtags = contentPrompt.hashtags;
       }
+      // Default route: the person's own brief, real brand facts and the logo go straight to the image model in
+      // one request (see directImage.js). Only if that fails does the older chain below run.
+      if (process.env.IMAGE_MODE !== 'pipeline') {
+        try {
+          const { generateDirectPost } = require('./directImage');
+          const { frameInstruction } = require('./postFrames');
+          const { buildStyleDirective, normalisePostDetails } = require('../config/postStyles');
+          let colours = [];
+          try {
+            const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
+            const bip = await BrandIntelligenceProfile.findOne({ userId: draft.userId }).select('assets').lean();
+            colours = [bip?.assets?.primaryColor, bip?.assets?.secondaryColor].filter(Boolean);
+          } catch (_) { /* colours are a nicety */ }
+          const details = normalisePostDetails(designOpts.postDetails);
+          const direct = await Promise.race([
+            generateDirectPost({
+              brief: draft.imagePrompt || draft.caption || '',
+              brand: { name: bp.name || user?.companyName, industry: bp.industry, location: bp.businessLocation, about: bp.description, website: bp.website, colours },
+              language: effectiveLanguage,
+              aspectRatio: job.aspectRatio || '1:1',
+              logoUrl: effectiveLogo?.url || (job.logoUrl === '' ? '' : undefined),
+              noLogo: job.logoUrl === '',
+              productUrls: [job.linkedProduct?.imageUrl, ...(Array.isArray(job.productReferenceImages) ? job.productReferenceImages.slice(1) : [])].filter(Boolean),
+              details,
+              designText: designOpts.postStyle ? buildStyleDirective(designOpts.postStyle, designOpts.postDetails, { language: effectiveLanguage }) : '',
+              reserve: frameInstruction({ headerUrl: designOpts.headerUrl, footerUrl: designOpts.footerUrl, aspectRatio: job.aspectRatio || '1:1' })
+            }),
+            timeoutPromise
+          ]);
+          if (direct && direct.success && direct.imageUrl) {
+            let url = direct.imageUrl;
+            if (designOpts.headerUrl || designOpts.footerUrl) {
+              const framed = await addFramesToImage(url, designOpts);
+              if (framed.applied) url = framed.imageUrl;
+            }
+            imageResult = { imageUrl: url, promptUsed: direct.promptUsed };
+            // The model placed the logo itself; recording that stops Create from stamping a second one on top.
+            if (direct.logoPlacedByModel) logoWasComposited = true;
+            console.log(`[DirectImage] draft ${draft._id} made by ${direct.model}${direct.checked ? (direct.missing.length ? ` (numbers not found: ${direct.missing.join(', ')})` : ' (numbers verified)') : ''}`);
+          } else {
+            console.warn(`[DirectImage] direct route failed (${direct && direct.error}); using the older chain`);
+          }
+        } catch (directErr) {
+          console.warn('[DirectImage] direct route threw; using the older chain:', directErr.message);
+        }
+      }
+
+      if (!imageResult) {
       // What the visual should actually be is a separate decision from what
       // the post says. The Creative Director makes it — reading the brand's
       // full asset library once, choosing only what this specific idea
@@ -506,6 +554,7 @@ async function processDraftImageGenerationJob(job) {
           size: effectiveLogo.size
         });
         logoWasComposited = true;
+      }
       }
     }
 

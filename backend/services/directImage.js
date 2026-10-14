@@ -1,0 +1,128 @@
+/**
+ * The default way a single post's picture is made: the person's own brief, a few real brand facts and the
+ * logo go straight to the image model in one request, the way a person would ask ChatGPT. The model does the
+ * design. This replaced a chain of rewriting steps that turned briefs into mood pictures and lost the offer.
+ *
+ * Rules that keep it honest: only supplied details are printed (no invented phone numbers, prices or claims),
+ * and a quick read of the finished picture checks that the numbers in the brief really appear on it.
+ * Set IMAGE_MODE=pipeline to go back to the older chain.
+ */
+const LANGUAGE_WORDS = {
+  english: 'English',
+  tamil: 'Tamil (Tamil script)',
+  hindi: 'Hindi (Devanagari script)',
+  telugu: 'Telugu (Telugu script)',
+  kannada: 'Kannada (Kannada script)',
+  malayalam: 'Malayalam (Malayalam script)',
+};
+
+function languageWords(code) {
+  const c = String(code || 'english').toLowerCase();
+  if (c.endsWith('_english_mix')) {
+    const base = LANGUAGE_WORDS[c.replace('_english_mix', '')] || c.replace('_english_mix', '');
+    return `a natural mix of ${base} and English words`;
+  }
+  return LANGUAGE_WORDS[c] || String(code || 'English');
+}
+
+const tidy = (v) => String(v == null ? '' : v).replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+const ASPECT_WORDS = { '1:1': 'square', '4:5': '4:5 portrait', '9:16': '9:16 vertical story', '16:9': '16:9 landscape', '3:4': '3:4 portrait' };
+
+/** The one request sent to the image model. Plain language, no rule lists. */
+function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, noLogo, details = {}, designText = '', reserve = '', productCount = 0 }) {
+  const lines = [];
+  const kind = tidy(brand.industry) || 'local business';
+  lines.push(`Create a finished, professional social media post (${ASPECT_WORDS[aspectRatio] || '4:5 portrait'}) for ${tidy(brand.name) || 'the business'}, a ${kind} business${tidy(brand.location) ? ' in ' + tidy(brand.location) : ''}.`);
+  lines.push(`What the post is about: ${tidy(brief)}`);
+  if (tidy(brand.about)) lines.push(`About the business: ${tidy(brand.about).slice(0, 300)}`);
+  if (brand.colours && brand.colours.length) lines.push(`Brand colours to lean on: ${brand.colours.join(', ')}.`);
+  lines.push(`All words on the image must be in ${languageWords(language)}, spelled correctly, in large readable type.`);
+  const facts = [];
+  if (details.headline) facts.push(`headline "${details.headline}"`);
+  if (details.offer) facts.push(`offer "${details.offer}"`);
+  if (details.phone) facts.push(`phone number "${details.phone}"`);
+  if (details.address) facts.push(`address "${details.address}"`);
+  if (details.hours) facts.push(`opening hours "${details.hours}"`);
+  if (brand.website) facts.push(`website "${brand.website}"`);
+  if (facts.length) lines.push(`Show these exact details, spelled character for character: ${facts.join('; ')}.`);
+  lines.push('Use only the details given here. Do not invent phone numbers, addresses, websites, prices, discounts, years, customer counts or claims. If a detail is not given, leave that space out.');
+  if (hasLogo) lines.push('The first attached picture is the business logo. Place it cleanly in one corner exactly as it is, with its colours and lettering unchanged, and do not draw any other logo or brand mark.');
+  else if (noLogo) lines.push('Do not add any logo or brand mark.');
+  if (productCount > 0) lines.push(`The other attached ${productCount === 1 ? 'picture shows' : 'pictures show'} the real product${productCount === 1 ? '' : 's'}: keep ${productCount === 1 ? 'its' : 'their'} shape, colour and details faithfully.`);
+  if (designText) lines.push(designText);
+  lines.push('It must look like one cohesive, polished design made by a professional agency, with real-looking people or products where it helps. Not a template, not stock clip art, no watermarks.');
+  if (reserve) lines.push(reserve);
+  return lines.join('\n');
+}
+
+/** Numbers that must appear on the picture: those the person typed in the brief or the exact details. */
+function requiredNumbers({ brief = '', details = {} } = {}) {
+  const text = [brief, details.headline, details.offer, details.phone].filter(Boolean).join(' ');
+  const found = (text.match(/\d[\d,.]*\d|\d/g) || []).map((n) => n.replace(/[,.]/g, ''));
+  return Array.from(new Set(found.filter((n) => n.length >= 2 || /%/.test(text)))).slice(0, 8);
+}
+
+/** The required numbers that do not appear anywhere in the text read from the picture. */
+function missingNumbers(required, readText) {
+  const digits = String(readText || '').replace(/[,.\s]/g, '');
+  return required.filter((n) => !digits.includes(n));
+}
+
+async function fetchReference(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const mimeType = (res.headers.get('content-type') || 'image/png').split(';')[0];
+    if (!/^image\//.test(mimeType)) return null;
+    return { mimeType, data: buf.toString('base64') };
+  } catch (_) { return null; }
+}
+
+/**
+ * Makes the picture. `io` injects the network for tests. Returns { success, imageUrl, model, promptUsed, checked }.
+ * Never throws; on failure returns { success:false, error } so the caller can fall back to the older chain.
+ */
+async function generateDirectPost(input, io = {}) {
+  const gen = io.generate || require('./openaiImage').generateOpenAIImage;
+  const read = io.readText || (async (url) => {
+    const buf = await (io.fetchBuffer ? io.fetchBuffer(url) : fetch(url).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)));
+    return require('./openaiImage').readTextFromImage(buf);
+  });
+  const getRef = io.fetchReference || fetchReference;
+  try {
+    const refs = [];
+    if (input.logoUrl) { const l = await getRef(input.logoUrl); if (l) refs.push(l); }
+    for (const url of (input.productUrls || []).slice(0, 4)) { const p = await getRef(url); if (p) refs.push(p); }
+    const hasLogo = Boolean(input.logoUrl) && refs.length > 0;
+    const productCount = Math.max(0, refs.length - (hasLogo ? 1 : 0));
+    const prompt = buildDirectPrompt({ ...input, hasLogo, noLogo: input.logoUrl === '' || input.noLogo, productCount });
+    let result = await gen(prompt, { aspectRatio: input.aspectRatio, references: refs });
+    if (!result || !result.success || !result.imageUrl) return { success: false, error: (result && result.error) || 'no picture' };
+
+    // Read the picture back: the numbers from the brief must be there. One retry, then keep the better of the two.
+    const required = requiredNumbers({ brief: input.brief, details: input.details });
+    let checked = false;
+    let missing = [];
+    if (required.length && result.imageUrl.startsWith('http')) {
+      const text = await read(result.imageUrl).catch(() => '');
+      if (text) {
+        checked = true;
+        missing = missingNumbers(required, text);
+        if (missing.length) {
+          const again = await gen(`${prompt}\nImportant: the picture must clearly show these numbers exactly: ${missing.join(', ')}.`, { aspectRatio: input.aspectRatio, references: refs });
+          if (again && again.success && again.imageUrl) {
+            const text2 = again.imageUrl.startsWith('http') ? await read(again.imageUrl).catch(() => '') : '';
+            const missing2 = text2 ? missingNumbers(required, text2) : missing;
+            if (missing2.length <= missing.length) { result = again; missing = missing2; }
+          }
+        }
+      }
+    }
+    return { success: true, imageUrl: result.imageUrl, model: result.model, promptUsed: prompt, checked, missing, logoPlacedByModel: hasLogo };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+module.exports = { buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, languageWords };

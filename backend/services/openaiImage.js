@@ -29,6 +29,12 @@ function fetchWithTimeout(url, opts = {}, timeoutMs = 120000) {
 
 // gpt-image-1 only accepts these three sizes — map the app's aspect ratios to
 // the closest one rather than failing on anything else.
+// gpt-image-2 accepts free sizes (multiples of 16), so posts are made at their true shape instead of the nearest of three.
+function exactSizeForAspectRatio(aspectRatio) {
+  const ratio = String(aspectRatio || '1:1').trim();
+  return { '1:1': '1024x1024', '4:5': '1024x1280', '9:16': '1024x1824', '16:9': '1824x1024', '3:4': '1024x1360' }[ratio] || null;
+}
+
 function sizeForAspectRatio(aspectRatio) {
   const ratio = String(aspectRatio || '1:1').trim();
   if (ratio === '9:16' || ratio === '4:5') return '1024x1536';
@@ -92,7 +98,8 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
 
   try {
     const refs = Array.isArray(references) ? references.slice(0, MAX_REFERENCE_IMAGES) : [];
-    const size = sizeForAspectRatio(aspectRatio);
+    const legacySize = sizeForAspectRatio(aspectRatio);
+    let size = /gpt-image-2/.test(OPENAI_IMAGE_MODEL) && exactSizeForAspectRatio(aspectRatio) || legacySize;
     const call = (model) => (refs.length > 0
       // With reference photos, use the edit endpoint so the product, cast and place are matched.
       ? fetchWithTimeout(OPENAI_IMAGE_EDIT_URL, {
@@ -122,6 +129,15 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
       if (/model|not found|does not exist|access|verif/i.test(why)) {
         console.warn(`[OpenAI Image] ${usedModel} was refused (HTTP ${res.status}); retrying with ${OPENAI_IMAGE_SAFE_MODEL}`);
         usedModel = OPENAI_IMAGE_SAFE_MODEL;
+        res = await call(usedModel);
+      }
+    }
+
+    if (!res.ok && res.status === 400 && size !== legacySize) {
+      const why = await res.clone().text().catch(() => '');
+      if (/size/i.test(why)) {
+        console.warn(`[OpenAI Image] size ${size} was refused; retrying at ${legacySize}`);
+        size = legacySize;
         res = await call(usedModel);
       }
     }

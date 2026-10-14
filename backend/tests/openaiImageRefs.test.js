@@ -26,7 +26,7 @@ test('with references the edit endpoint is used with every photo attached', asyn
     assert.match(calls[0].url, /images\/edits$/);
     assert.ok(calls[0].opts.body instanceof FormData);
     assert.strictEqual(calls[0].opts.body.getAll('image[]').length, 2);
-    assert.strictEqual(calls[0].opts.body.get('size'), '1024x1536');
+    assert.strictEqual(calls[0].opts.body.get('size'), '1024x1824');
     assert.strictEqual(calls[0].opts.headers['Content-Type'], undefined);
   } finally { global.fetch = realFetch; }
 });
@@ -58,5 +58,24 @@ test('the newest model is tried first and gpt-image-1 is used once if the accoun
     assert.strictEqual(out.success, true);
     assert.deepStrictEqual(models, ['gpt-image-2', 'gpt-image-1']);
     assert.strictEqual(out.model, 'gpt-image-1');
+  } finally { global.fetch = realFetch; }
+});
+
+test('a refused exact size falls back once to the older fixed size', async () => {
+  const sizes = [];
+  const realFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    const size = JSON.parse(opts.body).size;
+    sizes.push(size);
+    if (size === '1024x1280') {
+      const body = JSON.stringify({ error: { message: 'Invalid value for size' } });
+      return { ok: false, status: 400, text: async () => body, clone() { return { text: async () => body }; } };
+    }
+    return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: PNG }] }) };
+  };
+  try {
+    const out = await generateOpenAIImage('a scene', { aspectRatio: '4:5' });
+    assert.strictEqual(out.success, true);
+    assert.deepStrictEqual(sizes, ['1024x1280', '1024x1536']);
   } finally { global.fetch = realFetch; }
 });
