@@ -439,6 +439,9 @@ async function processDraftImageGenerationJob(job) {
               language: effectiveLanguage,
               aspectRatio: job.aspectRatio || '1:1',
               logoUrl: effectiveLogo?.url || (job.logoUrl === '' ? '' : undefined),
+              // The real logo file goes on afterwards by default (exact, never redrawn); IMAGE_LOGO_MODE=model lets the model place it.
+              overlayLogo: process.env.IMAGE_LOGO_MODE !== 'model',
+              logoPosition: effectiveLogo?.position,
               noLogo: job.logoUrl === '',
               productUrls: [job.linkedProduct?.imageUrl, ...(Array.isArray(job.productReferenceImages) ? job.productReferenceImages.slice(1) : [])].filter(Boolean),
               details,
@@ -454,8 +457,14 @@ async function processDraftImageGenerationJob(job) {
               if (framed.applied) url = framed.imageUrl;
             }
             imageResult = { imageUrl: url, promptUsed: direct.promptUsed };
-            // The model placed the logo itself; recording that stops Create from stamping a second one on top.
-            if (direct.logoPlacedByModel) logoWasComposited = true;
+            if (process.env.IMAGE_LOGO_MODE !== 'model' && effectiveLogo?.url) {
+              preLogoImageUrl = imageResult.imageUrl;
+              imageResult.imageUrl = await overlayBrandLogoIfPresent(imageResult.imageUrl, { logoUrl: effectiveLogo.url, position: effectiveLogo.position, size: effectiveLogo.size });
+              logoWasComposited = true;
+            } else if (direct.logoPlacedByModel) {
+              // The model placed the logo itself; recording that stops Create from stamping a second one on top.
+              logoWasComposited = true;
+            }
             console.log(`[DirectImage] draft ${draft._id} made by ${direct.model}${direct.checked ? (direct.missing.length ? ` (numbers not found: ${direct.missing.join(', ')})` : ' (numbers verified)') : ''}`);
           } else {
             console.warn(`[DirectImage] direct route failed (${direct && direct.error}); using the older chain`);

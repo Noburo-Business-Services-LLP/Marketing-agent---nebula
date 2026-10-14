@@ -75,7 +75,8 @@ async function main() {
     } catch (e) { row.a = { error: e.message }; }
     console.log(`  A: ${row.a.status || 'error'} ${row.a.url || row.a.error || ''}`);
 
-    // B: the simple route
+    // B: the simple route (SKIP_B=1 leaves it out)
+    if (process.env.SKIP_B) { rows.push(row); fs.writeFileSync(out + '.json', JSON.stringify(rows, null, 2)); continue; }
     try {
       const prompt = [
         `Create a finished, professional social media post, 4:5 portrait, for ${bp.name}, a ${String(bp.industry || 'local business').replace(/&amp;/g, '&')} business${bp.businessLocation ? ' in ' + bp.businessLocation : ''}.`,
@@ -101,7 +102,7 @@ body{font:15px system-ui;margin:24px;background:#faf6ee;color:#222}h1{font-size:
 </style><h1>Image test: the app's pipeline (A) against a direct request (B)</h1>
 ${rows.map((r) => `<div class="row"><h2>${r.n}. ${r.brand}</h2><p class="meta">${r.brief}</p><div class="pair">
 <div><h3>A: current pipeline <span class="meta">(${(r.a && r.a.seconds) || '?'}s)</span></h3>${cell(r.a)}</div>
-<div><h3>B: direct to ${(r.b && r.b.model) || 'model'} <span class="meta">(${(r.b && r.b.seconds) || '?'}s)</span></h3>${cell(r.b)}</div></div></div>`).join('')}`;
+${r.b ? `<div><h3>B: direct to ${r.b.model || 'model'} <span class="meta">(${r.b.seconds || '?'}s)</span></h3>${cell(r.b)}</div>` : ''}</div></div>`).join('')}`;
   fs.writeFileSync(out, html);
   console.log('Wrote', out);
   process.exit(0);

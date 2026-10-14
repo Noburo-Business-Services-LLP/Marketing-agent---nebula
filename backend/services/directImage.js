@@ -29,7 +29,7 @@ const tidy = (v) => String(v == null ? '' : v).replace(/&amp;/g, '&').replace(/\
 const ASPECT_WORDS = { '1:1': 'square', '4:5': '4:5 portrait', '9:16': '9:16 vertical story', '16:9': '16:9 landscape', '3:4': '3:4 portrait' };
 
 /** The one request sent to the image model. Plain language, no rule lists. */
-function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, noLogo, details = {}, designText = '', reserve = '', productCount = 0 }) {
+function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, noLogo, logoCorner = '', details = {}, designText = '', reserve = '', productCount = 0 }) {
   const lines = [];
   const kind = tidy(brand.industry) || 'local business';
   lines.push(`Create a finished, professional social media post (${ASPECT_WORDS[aspectRatio] || '4:5 portrait'}) for ${tidy(brand.name) || 'the business'}, a ${kind} business${tidy(brand.location) ? ' in ' + tidy(brand.location) : ''}.`);
@@ -46,7 +46,8 @@ function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, 
   if (brand.website) facts.push(`website "${brand.website}"`);
   if (facts.length) lines.push(`Show these exact details, spelled character for character: ${facts.join('; ')}.`);
   lines.push('Use only the details given here. Do not invent phone numbers, addresses, websites, prices, discounts, years, customer counts or claims. If a detail is not given, leave that space out.');
-  if (hasLogo) lines.push('The first attached picture is the business logo. Place it cleanly in one corner exactly as it is, with its colours and lettering unchanged, and do not draw any other logo or brand mark.');
+  if (logoCorner) lines.push(`Keep the ${String(logoCorner).replace('-', ' ')} corner of the picture calm and free of text or important detail: the real business logo is placed there afterwards. Do not draw any logo, brand mark or emblem yourself.`);
+  else if (hasLogo) lines.push('The first attached picture is the business logo. Place it cleanly in one corner exactly as it is, with its colours and lettering unchanged, and do not draw any other logo or brand mark.');
   else if (noLogo) lines.push('Do not add any logo or brand mark.');
   if (productCount > 0) lines.push(`The other attached ${productCount === 1 ? 'picture shows' : 'pictures show'} the real product${productCount === 1 ? '' : 's'}: keep ${productCount === 1 ? 'its' : 'their'} shape, colour and details faithfully.`);
   if (designText) lines.push(designText);
@@ -92,37 +93,56 @@ async function generateDirectPost(input, io = {}) {
   const getRef = io.fetchReference || fetchReference;
   try {
     const refs = [];
-    if (input.logoUrl) { const l = await getRef(input.logoUrl); if (l) refs.push(l); }
+    // Overlay mode: the exact logo file is placed afterwards, so the model only reserves the corner for it.
+    const overlay = Boolean(input.overlayLogo && input.logoUrl);
+    if (input.logoUrl && !overlay) { const l = await getRef(input.logoUrl); if (l) refs.push(l); }
     for (const url of (input.productUrls || []).slice(0, 4)) { const p = await getRef(url); if (p) refs.push(p); }
-    const hasLogo = Boolean(input.logoUrl) && refs.length > 0;
+    const hasLogo = !overlay && Boolean(input.logoUrl) && refs.length > 0;
     const productCount = Math.max(0, refs.length - (hasLogo ? 1 : 0));
-    const prompt = buildDirectPrompt({ ...input, hasLogo, noLogo: input.logoUrl === '' || input.noLogo, productCount });
+    const prompt = buildDirectPrompt({ ...input, hasLogo, noLogo: input.logoUrl === '' || input.noLogo, logoCorner: overlay ? (input.logoPosition || 'bottom-right') : '', productCount });
     let result = await gen(prompt, { aspectRatio: input.aspectRatio, references: refs });
     if (!result || !result.success || !result.imageUrl) return { success: false, error: (result && result.error) || 'no picture' };
 
-    // Read the picture back: the numbers from the brief must be there. One retry, then keep the better of the two.
+    // Read the picture back: the numbers from the brief must be there, and no number nobody supplied may be.
+    // One retry, then keep the better of the two.
     const required = requiredNumbers({ brief: input.brief, details: input.details });
+    const allowedText = [input.brief, input.brand && input.brand.name, input.brand && input.brand.location, input.brand && input.brand.website, ...Object.values(input.details || {}).map((v) => (Array.isArray(v) ? v.join(' ') : v))].filter(Boolean).join(' ');
     let checked = false;
     let missing = [];
-    if (required.length && result.imageUrl.startsWith('http')) {
+    let extra = [];
+    if (result.imageUrl.startsWith('http')) {
       const text = await read(result.imageUrl).catch(() => '');
       if (text) {
         checked = true;
         missing = missingNumbers(required, text);
-        if (missing.length) {
-          const again = await gen(`${prompt}\nImportant: the picture must clearly show these numbers exactly: ${missing.join(', ')}.`, { aspectRatio: input.aspectRatio, references: refs });
+        extra = extraNumbers(allowedText, text);
+        if (missing.length || extra.length) {
+          const fixes = [];
+          if (missing.length) fixes.push(`the picture must clearly show these numbers exactly: ${missing.join(', ')}`);
+          if (extra.length) fixes.push(`do not show any number that was not given, such as: ${extra.join(', ')}; remove those claims entirely`);
+          const again = await gen(`${prompt}\nImportant: ${fixes.join('; ')}.`, { aspectRatio: input.aspectRatio, references: refs });
           if (again && again.success && again.imageUrl) {
             const text2 = again.imageUrl.startsWith('http') ? await read(again.imageUrl).catch(() => '') : '';
-            const missing2 = text2 ? missingNumbers(required, text2) : missing;
-            if (missing2.length <= missing.length) { result = again; missing = missing2; }
+            if (text2) {
+              const m2 = missingNumbers(required, text2);
+              const e2 = extraNumbers(allowedText, text2);
+              if (m2.length + e2.length <= missing.length + extra.length) { result = again; missing = m2; extra = e2; }
+            }
           }
         }
       }
     }
-    return { success: true, imageUrl: result.imageUrl, model: result.model, promptUsed: prompt, checked, missing, logoPlacedByModel: hasLogo };
+    return { success: true, imageUrl: result.imageUrl, model: result.model, promptUsed: prompt, checked, missing, extra, logoPlacedByModel: hasLogo };
   } catch (error) {
     return { success: false, error: error.message };
   }
 }
 
-module.exports = { buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, languageWords };
+/** Numbers on the picture that nobody supplied (a made-up "18+ years", a made-up discount). Two digits or more only. */
+function extraNumbers(allowedText, readText) {
+  const allowed = new Set((String(allowedText || '').match(/\d[\d,.]*\d|\d/g) || []).map((n) => n.replace(/[,.]/g, '')));
+  const seen = (String(readText || '').match(/\d[\d,.]*\d|\d/g) || []).map((n) => n.replace(/[,.]/g, ''));
+  return Array.from(new Set(seen.filter((n) => n.length >= 2 && !allowed.has(n)))).slice(0, 6);
+}
+
+module.exports = { extraNumbers, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, languageWords };
