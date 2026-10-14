@@ -55,3 +55,13 @@ test('a reel draft from the plan is a video with its job and file', () => {
   const img = fromPostDraft({ _id: 'i1', imageUrl: 'https://i/a.jpg', status: 'draft' });
   assert.equal(img.source, 'post'); assert.equal(img.kind, 'image');
 });
+
+test('a carousel uses its first rendered slide as the cover and reports how many slides it has', () => {
+  const c = fromPostDraft({
+    _id: 'c1', title: 'Story', status: 'draft', contentType: 'carousel', createdAt: '2026-10-14',
+    carouselSlides: [{ order: 2, imageUrl: 'https://i/2.jpg' }, { order: 1, imageUrl: 'https://i/1.jpg' }, { order: 3, imageUrl: '' }],
+  });
+  assert.equal(c.thumbnailUrl, 'https://i/1.jpg');
+  assert.deepEqual(c.slides, ['https://i/1.jpg', 'https://i/2.jpg']);
+  assert.equal(c.slideTotal, 3);
+});

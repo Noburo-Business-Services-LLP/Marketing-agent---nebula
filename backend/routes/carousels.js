@@ -36,8 +36,11 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
   res.flushHeaders?.();
 
   const send = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch (_) { /* the browser left; the run carries on and is saved slide by slide */ }
   };
+  // A slide can take over a minute with nothing to send, and a proxy closes a quiet connection after 60 seconds.
+  const keepAlive = setInterval(() => { try { res.write(': keep-alive\n\n'); } catch (_) { /* gone */ } }, 15000);
+  res.on('close', () => clearInterval(keepAlive));
 
   let draft = null;
   // Declared out here, not inside the try: the outer catch below needs it

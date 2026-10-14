@@ -152,12 +152,12 @@ const Library: React.FC = () => {
                     : i.kind === 'video' ? <Film className="w-8 h-8 text-[var(--gv-text-tertiary)]" /> : <ImageIcon className="w-8 h-8 text-[var(--gv-text-tertiary)]" />}
                   {i.kind === 'video' && i.mediaUrl && <span className="absolute bottom-2 left-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center"><Play className="w-3.5 h-3.5" /></span>}
                   <span className="absolute top-2 left-2 rounded-full bg-[var(--gv-panel)] border border-[var(--gv-border-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--gv-text-primary)]">{STATUS_WORD[i.status]}</span>
-                  {i.status === 'creating' && <div className="absolute inset-x-2 bottom-2"><GenerationTimer minSeconds={i.kind === 'video' ? 300 : 20} maxSeconds={i.kind === 'video' ? 600 : 60} /></div>}
+                  {i.status === 'creating' && <div className="absolute inset-x-2 bottom-2"><GenerationTimer startedAt={i.createdAt || undefined} minSeconds={i.slideTotal ? 20 * i.slideTotal : (i.kind === 'video' ? 300 : 20)} maxSeconds={i.slideTotal ? 60 * i.slideTotal : (i.kind === 'video' ? 600 : 60)} /></div>}
                 </div>
                 <div className="px-3 py-2.5 space-y-1">
                   <p className="text-[13px] font-semibold text-[var(--gv-text-primary)] line-clamp-2">{i.title}</p>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11.5px] text-[var(--gv-text-muted)]">{fmtDate(i.createdAt)}</p>
+                    <p className="text-[11.5px] text-[var(--gv-text-muted)]">{fmtDate(i.createdAt)}{i.slideTotal ? ` · ${i.slides && i.slides.length < i.slideTotal && i.status === 'creating' ? `${i.slides.length} of ${i.slideTotal}` : i.slideTotal} slides` : ''}</p>
                     <span className="flex items-center gap-1 text-[var(--gv-text-tertiary)]">{i.platforms.slice(0, 4).map((p) => <PlatformIcon key={p} platform={p} className="w-3.5 h-3.5" />)}</span>
                   </div>
                 </div>

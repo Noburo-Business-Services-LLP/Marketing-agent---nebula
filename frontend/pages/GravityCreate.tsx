@@ -12,6 +12,7 @@ import PostDesignPanel from '../components/PostDesignPanel';
 import { DEFAULT_DESIGN, PostDesign, designRequestFields } from '../utils/postDesign';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
+import CreateGenerations from '../components/CreateGenerations';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import PromptStudio from '../components/PromptStudio';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
@@ -174,6 +175,51 @@ const PendingSlot: React.FC<{ position: number; active: boolean; etaSeconds: num
   );
 };
 
+/** A small "where does the logo go" control: one compact button that opens a 3 x 2 grid on hover or tap. */
+const LogoPositionPicker: React.FC<{ value: LogoGridPosition; onChange: (p: LogoGridPosition) => void }> = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const index = LOGO_GRID.indexOf(value);
+  return (
+    <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onBlur={(e) => { if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) setOpen(false); }}
+        aria-haspopup="true"
+        aria-expanded={open}
+        className="h-11 inline-flex items-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-2.5 text-[12px] font-semibold text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
+      >
+        <span className="grid grid-cols-3 grid-rows-2 gap-px w-[21px] h-[14px] rounded-[3px] border border-[var(--gv-border-default)] p-px" aria-hidden="true">
+          {LOGO_GRID.map((pos, i) => <span key={pos} className={i === index ? 'rounded-[1px] bg-[var(--gv-accent)]' : ''} />)}
+        </span>
+        {LOGO_GRID_LABELS[value]}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-20 pt-1.5">
+          <div className="grid grid-cols-3 gap-1 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] p-2 shadow-lg" role="radiogroup" aria-label="Logo position">
+            {LOGO_GRID.map((pos) => (
+              <button
+                key={pos}
+                type="button"
+                role="radio"
+                aria-checked={value === pos}
+                aria-label={LOGO_GRID_LABELS[pos]}
+                title={LOGO_GRID_LABELS[pos]}
+                onClick={() => { onChange(pos); setOpen(false); }}
+                className={`w-9 h-7 rounded-md border flex items-center justify-center transition-colors ${
+                  value === pos ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-sm ${value === pos ? 'bg-[var(--gv-accent)]' : 'bg-[var(--gv-surface-3)]'}`} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const GravityCreate: React.FC = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<CreateMode>('campaign');
@@ -190,6 +236,18 @@ const GravityCreate: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [progressMsg, setProgressMsg] = useState<string>('');
   const [postsGenerated, setPostsGenerated] = useState<number>(0);
+  // Bumped when a run is handed over to the list of generations below the form, so it reloads at once.
+  const [galleryKey, setGalleryKey] = useState(0);
+  // Once the server has the work and is making it, the form is free again: another one can be started,
+  // and the finished or still-running ones are shown in the list below, not tied to this run.
+  const handoff = () => {
+    setSubmitting(false);
+    setProgressMsg('');
+    setPostsGenerated(0);
+    setResults([]);
+    setActioned({});
+    setGalleryKey((k) => k + 1);
+  };
   // Timing for the queue display: when the run began, and how long each post
   // took, so the one in flight can show a real estimate rather than a guess.
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
@@ -598,11 +656,9 @@ const GravityCreate: React.FC = () => {
       logoPosition: selectedLogo ? logoPosition : undefined,
       ...designRequestFields(design),
     });
-    if (res?.draft) {
-      setResults([res.draft]);
-      setActioned({});
-    }
-    setProgressMsg('');
+    // The picture is made in the background; the list below shows it and keeps the form free.
+    handoff();
+    return true;
   };
 
   // LinkedIn mode — long-form text post. No image call at generation time;
@@ -652,10 +708,12 @@ const GravityCreate: React.FC = () => {
     const token = getToken();
     if (!token) throw new Error('Please log in again.');
 
+    let detached = false;
     runStartRef.current = Date.now();
     setRunStartedAt(Date.now());
     setPostDurations([]);
     setProgressMsg('Planning the carousel…');
+    try {
 
     const response = await fetch(`${API_BASE}/carousels/generate-stream`, {
       method: 'POST',
@@ -706,9 +764,14 @@ const GravityCreate: React.FC = () => {
           try {
             const data = JSON.parse(line.slice(6));
             if (currentEvent === 'status' || currentEvent === 'generating') {
-              setProgressMsg(data.message || 'Generating the images…');
+              if (!detached) setProgressMsg(data.message || 'Generating the images…');
+            } else if (currentEvent === 'plan') {
+              // The carousel is saved and is being drawn; carry on in the list below.
+              detached = true;
+              handoff();
             } else if (currentEvent === 'slide') {
               landed += 1;
+              if (detached) continue;
               setPostDurations((prev) => {
                 const startedAt = runStartRef.current ?? Date.now();
                 const priorTotal = prev.reduce((a, b) => a + b, 0);
@@ -743,9 +806,16 @@ const GravityCreate: React.FC = () => {
       }
     }
 
+    if (detached) return true;
     if (serverError) throw new Error(serverError);
     if (!complete && landed === 0) throw new Error('Generation finished without creating any slides.');
     setProgressMsg('');
+    } catch (e) {
+      // After the hand-over the server carries on by itself; a dropped connection is not an error then.
+      if (detached) return true;
+      throw e;
+    }
+    return false;
   };
 
   // Campaign mode — real AI generation via the streaming endpoint used
@@ -790,10 +860,12 @@ const GravityCreate: React.FC = () => {
       productReferenceImages: productImageUrls,
     };
 
+    let detached = false;
     runStartRef.current = Date.now();
     setRunStartedAt(Date.now());
     setPostDurations([]);
     setProgressMsg('Starting campaign generation…');
+    try {
     const response = await fetch(`${API_BASE}/campaigns/generate-campaign-stream`, {
       method: 'POST',
       headers: {
@@ -828,9 +900,12 @@ const GravityCreate: React.FC = () => {
           try {
             const data = JSON.parse(line.slice(6));
             if (currentEvent === 'status' || currentEvent === 'generating') {
-              setProgressMsg(data.message || 'Generating the posts…');
+              if (!detached) setProgressMsg(data.message || 'Generating the posts…');
             } else if (currentEvent === 'post') {
               postCount += 1;
+              // The first post is saved: from here the list below follows the rest.
+              if (!detached) { detached = true; handoff(); }
+              continue;
               // How long this one took, for estimating the next.
               setPostDurations((prev) => {
                 const startedAt = runStartRef.current ?? Date.now();
@@ -873,6 +948,7 @@ const GravityCreate: React.FC = () => {
         }
       }
     }
+    if (detached) return true;
     if (serverError) throw new Error(serverError);
     if (!complete && postCount === 0) {
       throw new Error('Generation finished without creating any posts.');
@@ -892,9 +968,14 @@ const GravityCreate: React.FC = () => {
     } catch {
       // If the fetch fails the posts still exist — fall back to Approve.
       navigate('/drafts');
-      return;
+      return false;
     }
     setProgressMsg('');
+    } catch (e) {
+      if (detached) return true;
+      throw e;
+    }
+    return false;
   };
 
   const handleDraft = async () => {
@@ -911,20 +992,22 @@ const GravityCreate: React.FC = () => {
     // or the new ones would append underneath them.
     setResults([]);
     setActioned({});
+    let handedOver = false;
     try {
       if (mode === 'carousel') {
-        await handleDraftCarousel();
+        handedOver = Boolean(await handleDraftCarousel());
       } else if (mode === 'single') {
-        await handleDraftSinglePost();
+        handedOver = Boolean(await handleDraftSinglePost());
       } else if (mode === 'linkedin') {
         await handleDraftLinkedInPost();
       } else {
-        await handleDraftCampaign();
+        handedOver = Boolean(await handleDraftCampaign());
       }
     } catch (e: any) {
       setError(e?.message || 'The content could not be created. Please try again.');
     } finally {
-      setSubmitting(false);
+      // A handed-over run already freed the form; do not touch a newer run's state.
+      if (!handedOver) setSubmitting(false);
     }
   };
 
@@ -1294,6 +1377,9 @@ const GravityCreate: React.FC = () => {
                 <img src={l.url} alt={l.name} className="w-full h-full object-contain p-1" />
               </button>
             ))}
+            {/* Only relevant once a logo is actually going on the image. Defaults to that
+                logo's own Brand assets position; a small hover/tap popover keeps it out of the page flow. */}
+            {selectedLogo && <LogoPositionPicker value={logoPosition} onChange={setLogoPosition} />}
             {logos.length === 0 && (
               <button
                 onClick={() => navigate('/brand-assets')}
@@ -1304,30 +1390,6 @@ const GravityCreate: React.FC = () => {
             )}
           </div>
 
-          {/* Only relevant once a logo is actually going on the image.
-              Defaults to that logo's own Brand Assets position, overridable
-              here for just this run. */}
-          {selectedLogo && (
-            <div className="mt-3">
-              <div className="gravity-label mb-1.5 text-[var(--gv-text-muted)]">Logo position</div>
-              <div className="grid grid-cols-3 gap-1.5 max-w-[220px]">
-                {LOGO_GRID.map((pos) => (
-                  <button
-                    key={pos}
-                    onClick={() => setLogoPosition(pos)}
-                    title={LOGO_GRID_LABELS[pos]}
-                    className={`aspect-[4/3] rounded-md border flex items-center justify-center transition-colors ${
-                      logoPosition === pos
-                        ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]'
-                        : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:border-[var(--gv-border-strong)]'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-sm ${logoPosition === pos ? 'bg-[var(--gv-accent)]' : 'bg-[var(--gv-surface-3)]'}`} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
       </div>
@@ -1754,6 +1816,9 @@ const GravityCreate: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Everything made in this category — still-running work included — so the form above stays free. */}
+      <CreateGenerations category={mode} refreshKey={galleryKey} />
 
     </div>
   );

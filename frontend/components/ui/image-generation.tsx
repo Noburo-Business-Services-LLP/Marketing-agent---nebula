@@ -1,3 +1,4 @@
+import React from 'react';
 /**
  * Pure-CSS "generating image" placeholder — a faint dot matrix with a bright
  * cluster drifting through it.
@@ -10,10 +11,13 @@ export function ImageGeneration({
   prompt = "a calm mountain lake at dawn",
   resolution = "1024 × 1024",
   label = "Generating image",
+  children,
 }: {
   prompt?: string;
   resolution?: string;
   label?: string;
+  /** shown under the label, inside the same block, so nothing can overlap it */
+  children?: React.ReactNode;
 }) {
   return (
     <div className="igWrap">
@@ -25,6 +29,7 @@ export function ImageGeneration({
       <div className="igMeta">
         <span className="igLabel">{label}</span>
         {prompt ? <span className="igPrompt">“{prompt}”</span> : null}
+        {children}
       </div>
     </div>
   );

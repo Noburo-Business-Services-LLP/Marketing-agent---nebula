@@ -193,7 +193,7 @@ Prioritize:
 
 Only include text that is explicitly supplied or clearly required by the concept.
 
-Ensure all visible text is correctly rendered in the specified language.
+Ensure all visible text is correctly rendered in the specified language, and ONLY that language. Never add translations or a second or third language to the image, even if the brand guidance or concept mentions several languages.
 
 The final image should feel intentionally art-directed for this specific brand and content idea, not like a generic AI-generated social media template.
 

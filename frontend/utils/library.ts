@@ -20,6 +20,9 @@ export interface LibraryItem {
   createdAt: number;
   /** the original post draft, kept so the editing sheet can open it; only for posts and images */
   raw?: any;
+  /** carousels: the rendered slide pictures, in order, and how many slides it will have */
+  slides?: string[];
+  slideTotal?: number;
   /** a step-by-step video job this draft belongs to, if any */
   jobId?: string;
   /** Hero videos: the finishing options it was made with, for the edit panel */
@@ -49,7 +52,10 @@ export function fromPostDraft(d: any): LibraryItem | null {
   const status: LibraryStatus =
     s === 'processing' ? 'creating' : s === 'failed' ? 'failed' : s === 'scheduled' ? 'scheduled'
       : s === 'published' ? 'posted' : s === 'archived' ? 'archived' : s === 'completed' ? 'ready' : 'draft';
-  const url = String(d.imageUrl || '');
+  const slideList: any[] = Array.isArray(d.carouselSlides) ? d.carouselSlides : [];
+  const slides = slideList.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).map((x) => String(x && x.imageUrl || '')).filter((u) => /^https?:\/\//i.test(u));
+  // A carousel keeps its pictures per slide; the first one stands in as its cover.
+  const url = String(d.imageUrl || '') || slides[0] || '';
   const reelKind = ['reel', 'video'].includes(String(d.contentType || d.sourceType || '').toLowerCase());
   const videoFile = VIDEO_FILE.test(url) ? url : String((d.creative && d.creative.videoUrl) || '');
   const isVideo = reelKind || Boolean(videoFile);
@@ -61,6 +67,7 @@ export function fromPostDraft(d: any): LibraryItem | null {
     thumbnailUrl: isVideo ? stillFor(media) : url, mediaUrl: media,
     caption: text(d.caption, 600), platforms: list(d.platforms), createdAt: ms(d.createdAt || d.updatedAt || d.scheduledDate),
     raw: d, ...(jobId ? { jobId } : {}),
+    ...(slideList.length ? { slides, slideTotal: slideList.length } : {}),
   };
 }
 

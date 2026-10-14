@@ -28,6 +28,12 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   const [cta, setCta] = useState(draft.cta || '');
   const [platforms, setPlatforms] = useState<string[]>(draft.platforms || []);
   const [imageUrl, setImageUrl] = useState(draft.imageUrl || '');
+  // A carousel keeps its pictures per slide, not in one image field.
+  const slideUrls: string[] = (Array.isArray((draft as any).carouselSlides) ? (draft as any).carouselSlides : [])
+    .slice().sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+    .map((x: any) => String((x && x.imageUrl) || '')).filter((u: string) => /^https?:\/\//i.test(u));
+  const [slideIdx, setSlideIdx] = useState(0);
+  const shownUrl = slideUrls.length ? slideUrls[Math.min(slideIdx, slideUrls.length - 1)] : imageUrl;
   
   // Scheduling state
   const [showScheduler, setShowScheduler] = useState(false);
@@ -86,7 +92,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
         type: draft.creative?.type || 'image',
         textContent: caption,
         captions: caption,
-        imageUrls: imageUrl ? [imageUrl] : [],
+        imageUrls: slideUrls.length ? slideUrls : (imageUrl ? [imageUrl] : []),
         hashtags: hashtags.map(h => h.startsWith('#') ? h : `#${h}`),
         callToAction: cta
       }
@@ -358,12 +364,23 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
                     Regenerate
                   </button>
                 </div>
-              ) : imageUrl ? (
-                <img src={imageUrl} alt={title || 'Draft'} className="w-full h-full object-contain" />
+              ) : shownUrl ? (
+                <img src={shownUrl} alt={title || 'Draft'} className="w-full h-full object-contain" />
               ) : (
                 <p className="text-[13px] text-white/30 px-8 text-center">No artwork yet.</p>
               )}
             </div>
+
+            {slideUrls.length > 1 && (
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="Carousel slides">
+                {slideUrls.map((u, i) => (
+                  <button key={u} type="button" onClick={() => setSlideIdx(i)} aria-label={`Slide ${i + 1}`}
+                    className={`shrink-0 w-14 h-[70px] rounded-lg overflow-hidden border ${i === slideIdx ? 'border-[#F5A623]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
+                    <img src={u} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* What was actually sent to the image model — editable, so
                 "regenerate" means "try this specific change" instead of

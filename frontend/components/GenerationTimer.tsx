@@ -11,7 +11,9 @@ const GenerationTimer: React.FC<{
   maxSeconds: number;
   startedAt?: number;
   className?: string;
-}> = ({ minSeconds, maxSeconds, startedAt, className = '' }) => {
+  /** true on a dark artwork placeholder, where the theme's text colours would not be readable */
+  onDark?: boolean;
+}> = ({ minSeconds, maxSeconds, startedAt, className = '', onDark = false }) => {
   const [t0] = useState(() => startedAt || Date.now());
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -21,10 +23,10 @@ const GenerationTimer: React.FC<{
   const s = etaState((now - t0) / 1000, minSeconds, maxSeconds);
   return (
     <div className={className} role="timer" aria-live="off">
-      <div className="h-1.5 w-full rounded-full overflow-hidden bg-[var(--gv-border-subtle)]">
+      <div className={`h-1.5 w-full rounded-full overflow-hidden ${onDark ? 'bg-white/20' : 'bg-[var(--gv-border-subtle)]'}`}>
         <div className="h-full rounded-full bg-[var(--gv-accent)] transition-all duration-1000" style={{ width: `${s.percent}%` }} />
       </div>
-      <p className="mt-1.5 text-[12.5px] text-[var(--gv-text-secondary)]">
+      <p className="mt-1.5 text-[12.5px] leading-snug text-[var(--gv-text-secondary)]" style={onDark ? { color: 'rgba(255,255,255,0.88)' } : undefined}>
         {s.over
           ? `Time so far ${s.elapsed}. This is taking longer than usual, but it is still working. If it fails, your Quarks are returned.`
           : `Time so far ${s.elapsed} · usually ${s.range}`}

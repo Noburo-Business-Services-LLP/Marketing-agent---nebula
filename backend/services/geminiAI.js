@@ -4836,7 +4836,7 @@ INSTRUCTIONS:
       languageRule: resolvedTargetLanguage.toLowerCase().includes('mix')
         ? 'You may mix English and native script fluidly.'
         : resolvedTargetLanguage === 'English'
-          ? 'English is allowed.'
+          ? 'ALL visible text must be in English only. Do not add translations or any other language or script (Hindi, Tamil, Telugu, etc.), even if the brand or audience is multilingual.'
           : 'Do NOT render English text on the image (except unavoidable brand names/logos).',
       overlayTextRule: preferredImageText
         ? `4C. REQUIRED OVERLAY TEXT: Render this exact text on the image as the main headline: "${preferredImageText}". Do not translate it and do not replace it with English.`

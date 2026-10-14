@@ -531,10 +531,9 @@ const ConnectSocials: React.FC = () => {
 
   const tabs = [
     { id: 'accounts', label: 'Accounts', icon: ShieldCheck, path: '/connect-socials' },
-    { id: 'permissions', label: 'Permissions', icon: KeyRound, path: '/connect-socials?tab=permissions' },
-    { id: 'sync', label: 'Sync status', icon: Activity, path: '/connect-socials?tab=sync' },
   ];
-  const activeTab = isInboxRoute ? 'inbox' : new URLSearchParams(location.search).get('tab') || 'accounts';
+  const tabParam = new URLSearchParams(location.search).get('tab') || 'accounts';
+  const activeTab = isInboxRoute ? 'inbox' : (['accounts', 'inbox', 'auto-reply'].includes(tabParam) ? tabParam : 'accounts');
 
   const handleTabClick = (tab: typeof tabs[number]) => {
     navigate(tab.path);
@@ -611,7 +610,7 @@ const ConnectSocials: React.FC = () => {
 
       {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
           toggle — the one tab control style the whole app should share. */}
-      <div className="mb-6 overflow-x-auto">
+      {tabs.length > 1 && <div className="mb-6 overflow-x-auto">
         <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -631,7 +630,7 @@ const ConnectSocials: React.FC = () => {
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {activeTab === 'accounts' && (
         <>
@@ -735,80 +734,7 @@ const ConnectSocials: React.FC = () => {
           ))}
       </div>
 
-      <div className={`mt-8 rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-        <div className="flex items-start gap-4">
-          <div className="w-11 h-11 rounded-xl bg-[#F5A623] text-[#070A12] flex items-center justify-center shrink-0">
-            <Inbox className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className={`text-lg font-semibold ${theme.text}`}>Your inbox has its own place now</h2>
-            <p className={`mt-1 text-sm ${theme.textSecondary}`}>Comments, messages and Google reviews are in <strong>Inbox</strong> in the left menu.{unreadMessageCount > 0 ? ` ${unreadMessageCount} waiting for a reply.` : ''}</p>
-          </div>
-        </div>
-        <button type="button" onClick={() => navigate('/inbox')} className="px-5 py-3 rounded-lg bg-[#F5A623] text-[#070A12] font-bold text-sm inline-flex items-center justify-center gap-2">
-          Open inbox <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
         </>
-      )}
-
-      {activeTab === 'permissions' && (
-        <div className={`rounded-2xl border p-6 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-          <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Permissions</h2>
-          <p className={`mt-1 text-sm ${theme.textSecondary}`}>Nebulaa requests only the scopes needed for publishing, analytics, comments, mentions, webhooks, and inbox replies.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
-            {[
-              ['OAuth authentication', 'Secure account linking through provider-approved OAuth flows.'],
-              ['Webhook registration', 'Incoming messages, comments, mentions, and replies are delivered to Nebulaa in real time.'],
-              ['Reply access', 'Replies are sent back through the original connected platform API.'],
-              ['Analytics read access', 'Used to show performance, follower, and sync health signals.'],
-            ].map(([title, description]) => (
-              <div key={title} className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-green-400 mt-0.5" />
-                  <div>
-                    <p className={`font-semibold ${theme.text}`}>{title}</p>
-                    <p className={`text-sm mt-1 ${theme.textSecondary}`}>{description}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'sync' && (
-        <div className={`rounded-2xl border p-6 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Sync status</h2>
-              <p className={`mt-1 text-sm ${theme.textSecondary}`}>Track social account syncs, webhook health, and inbox readiness.</p>
-            </div>
-            <button onClick={() => { loadSocials(); loadInboxSummary(); }} className="px-4 py-2 rounded-lg bg-[#F5A623] text-[#070A12] text-sm font-bold flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" /> Refresh
-            </button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
-            <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-              <Activity className="w-5 h-5 text-[#F5A623]" />
-              <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Sync</p>
-              <p className={`mt-1 text-lg font-bold capitalize ${theme.text}`}>{inboxSummary?.syncStatus?.status || 'Not started'}</p>
-              <p className={`text-xs mt-1 ${theme.textSecondary}`}>Last sync: {inboxSummary?.syncStatus?.lastSyncAt ? new Date(inboxSummary.syncStatus.lastSyncAt).toLocaleString() : 'Not available'}</p>
-            </div>
-            <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-              <RadioTower className="w-5 h-5 text-[#F5A623]" />
-              <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Webhooks</p>
-              <p className={`mt-1 text-lg font-bold ${inboxSummary?.webhookStatus?.registered ? 'text-green-400' : theme.text}`}>{inboxSummary?.webhookStatus?.registered ? 'Registered' : 'Pending'}</p>
-              <p className={`text-xs mt-1 ${theme.textSecondary}`}>{inboxSummary?.webhookStatus?.activePlatforms?.length || 0} active platform hooks</p>
-            </div>
-            <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-slate-700/50 bg-[#0f1419]' : 'border-slate-200 bg-white'}`}>
-              <Clock3 className="w-5 h-5 text-[#F5A623]" />
-              <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${theme.textSecondary}`}>Next sync</p>
-              <p className={`mt-1 text-lg font-bold ${theme.text}`}>{inboxSummary?.syncStatus?.nextSyncAt ? new Date(inboxSummary.syncStatus.nextSyncAt).toLocaleTimeString() : 'On demand'}</p>
-              <p className={`text-xs mt-1 ${theme.textSecondary}`}>Background queue runs for connected platforms.</p>
-            </div>
-          </div>
-        </div>
       )}
 
       {activeTab === 'inbox' && (

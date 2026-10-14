@@ -13,10 +13,11 @@ const PHASES = ['Reading your brief', 'Composing the frame', 'Painting it', 'Fin
  * dependency, nothing extra to download, and it degrades gracefully under
  * prefers-reduced-motion.
  */
-const GeneratingFill: React.FC<{ label?: string; prompt?: string; resolution?: string }> = ({
+const GeneratingFill: React.FC<{ label?: string; prompt?: string; resolution?: string; startedAt?: number }> = ({
   label,
   prompt,
-  resolution
+  resolution,
+  startedAt
 }) => {
   const [phase, setPhase] = useState(0);
 
@@ -33,10 +34,9 @@ const GeneratingFill: React.FC<{ label?: string; prompt?: string; resolution?: s
         label={label || PHASES[phase]}
         prompt={prompt || ''}
         resolution={resolution || ''}
-      />
-      <div className="absolute inset-x-3 bottom-2 pointer-events-none">
-        <GenerationTimer minSeconds={20} maxSeconds={60} />
-      </div>
+      >
+        <GenerationTimer className="mt-1" minSeconds={20} maxSeconds={60} startedAt={startedAt} onDark />
+      </ImageGeneration>
     </div>
   );
 };
