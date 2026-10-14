@@ -106,7 +106,7 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
         method: 'POST',
         headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
         body: buildEditForm(prompt, size, refs, model)
-      }, 180000)
+      }, 240000)
       : fetchWithTimeout(OPENAI_IMAGE_URL, {
         method: 'POST',
         headers: {
@@ -120,7 +120,7 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
           n: 1,
           quality: 'high'
         })
-      }, 120000));
+      }, 240000));
 
     let usedModel = OPENAI_IMAGE_MODEL;
     let res = await call(usedModel);

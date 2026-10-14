@@ -102,3 +102,23 @@ test('a series picture carries the shared look, its own exact text, the previous
   assert.match(sent[0], /LAYOUT RESERVE/);
   assert.deepStrictEqual(refsSeen, ['https://p/1.png', 'https://img/prev.jpg']);
 });
+
+test('a longer number does not count as showing a shorter required one', () => {
+  assert.deepStrictEqual(missingNumbers(['1499'], 'Diwali feast ₹14999 only'), ['1499']);
+  assert.deepStrictEqual(missingNumbers(['1499'], 'Diwali feast ₹1,499 only'), []);
+  assert.deepStrictEqual(missingNumbers(['200000'], '₹2,00,000 chit'), []);
+  assert.deepStrictEqual(missingNumbers(['299'], 'Rs. 299/-'), []);
+});
+
+test('in a series an extra number alone does not cause a second picture', async () => {
+  const { generateDirectSeriesImage } = require('../services/directImage');
+  let calls = 0;
+  const io = {
+    fetchReference: async () => null,
+    generate: async () => { calls += 1; return { success: true, imageUrl: `https://img/${calls}.jpg`, model: 'gpt-image-2' }; },
+    readText: async () => 'Up to 30% off. 18+ years of trust',
+  };
+  const out = await generateDirectSeriesImage({ brief: 'Sale up to 30% off', brand: { name: 'TRM' }, language: 'english', aspectRatio: '4:5', details: {} }, io);
+  assert.strictEqual(calls, 1);
+  assert.deepStrictEqual(out.extra, ['18']);
+});

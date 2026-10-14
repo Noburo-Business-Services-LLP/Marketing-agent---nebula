@@ -778,6 +778,13 @@ const startServer = async () => {
       console.warn('Billing scheduler failed to start:', schedulerError.message);
     }
 
+    // Drafts left "creating" by a restart or a lost connection are closed, and their Quarks returned
+    try {
+      require('./services/staleDrafts').startStaleDraftReaper();
+    } catch (reaperError) {
+      console.warn('Unfinished-draft cleanup failed to start:', reaperError.message);
+    }
+
     // Start weekly AI memory distillation scheduler
     try {
       startMemoryDistillationScheduler();

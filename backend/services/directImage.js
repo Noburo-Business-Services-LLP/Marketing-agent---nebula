@@ -69,10 +69,13 @@ function requiredNumbers({ brief = '', details = {} } = {}) {
   return Array.from(new Set(found.filter((n) => n.length >= 2 || /%/.test(text)))).slice(0, 8);
 }
 
-/** The required numbers that do not appear anywhere in the text read from the picture. */
+/**
+ * The required numbers that do not appear as a whole number in the text read from the picture. Whole numbers only:
+ * "14999" must not count as showing "1499". A price printed with a currency sign or Indian commas still matches.
+ */
 function missingNumbers(required, readText) {
-  const digits = String(readText || '').replace(/[,.\s]/g, '');
-  return required.filter((n) => !digits.includes(n));
+  const tokens = new Set((String(readText || '').match(/\d[\d,.]*\d|\d/g) || []).map((n) => n.replace(/[,.]/g, '')));
+  return required.filter((n) => !tokens.has(n));
 }
 
 async function fetchReference(url) {
@@ -126,10 +129,13 @@ async function generateDirectPost(input, io = {}) {
         checked = true;
         missing = missingNumbers(required, text);
         extra = extraNumbers(allowedText, text);
-        if (missing.length || extra.length) {
+        // A single post is remade for either problem. Pictures in a series are remade only for a missing number:
+        // an extra number is logged, but a second picture would double the wait for every slide.
+        const retryExtra = input.retryOnExtra !== false;
+        if (missing.length || (retryExtra && extra.length)) {
           const fixes = [];
           if (missing.length) fixes.push(`the picture must clearly show these numbers exactly: ${missing.join(', ')}`);
-          if (extra.length) fixes.push(`do not show any number that was not given, such as: ${extra.join(', ')}; remove those claims entirely`);
+          if (retryExtra && extra.length) fixes.push(`do not show any number that was not given, such as: ${extra.join(', ')}; remove those claims entirely`);
           const again = await gen(`${prompt}\nImportant: ${fixes.join('; ')}.`, { aspectRatio: input.aspectRatio, references: refs });
           if (again && again.success && again.imageUrl) {
             const text2 = again.imageUrl.startsWith('http') ? await read(again.imageUrl).catch(() => '') : '';
@@ -163,7 +169,7 @@ function extraNumbers(allowedText, readText) {
 async function generateDirectSeriesImage(input, io = {}) {
   const { frameInstruction, addFramesToImage } = require('./postFrames');
   const reserve = frameInstruction({ headerUrl: input.headerUrl, footerUrl: input.footerUrl, aspectRatio: input.aspectRatio });
-  const out = await generateDirectPost({ ...input, reserve }, io);
+  const out = await generateDirectPost({ ...input, reserve, retryOnExtra: false }, io);
   if (!out.success) return out;
   let url = out.imageUrl;
   if (input.headerUrl || input.footerUrl) {
