@@ -224,6 +224,8 @@ const GravityCreate: React.FC = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<CreateMode>('campaign');
   const [name, setName] = useState('');
+  // An optional label that ties posts together by subject (a festival, an offer): they are then listed together.
+  const [theme, setTheme] = useState('');
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('2 weeks');
   const [cadence, setCadence] = useState('3 posts / week');
@@ -635,6 +637,7 @@ const GravityCreate: React.FC = () => {
     const res: any = await draftsAPI.generateImageBg({
       type: 'post',
       title: name.trim() || 'Untitled post',
+      theme: theme.trim() || undefined,
       caption: description.trim() || name.trim() || '',
       hashtags: [],
       platforms: selectedPlatforms,
@@ -720,6 +723,7 @@ const GravityCreate: React.FC = () => {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: name.trim(),
+        theme: theme.trim() || undefined,
         brief: description.trim() || name.trim(),
         slideCount,
         platforms: selectedPlatforms,
@@ -827,6 +831,7 @@ const GravityCreate: React.FC = () => {
 
     const body = {
       campaignName: name.trim(),
+      theme: theme.trim() || undefined,
       campaignDescription: description.trim() || name.trim(),
       objective: ideaContext.objective || 'awareness',
       platforms: selectedPlatforms,
@@ -1305,6 +1310,18 @@ const GravityCreate: React.FC = () => {
           <MetaBox label="Language" value={language} Icon={Globe} onClick={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
           <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} />
         </div>
+      </div>
+
+      {/* Theme — optional; posts that share one are listed together, next to each other. */}
+      <div className="max-w-xs mx-auto mb-6">
+        <label className="gravity-label block mb-1.5" htmlFor="create-theme">Theme or festival <span className="normal-case text-[var(--gv-text-muted)]">· optional</span></label>
+        <input
+          id="create-theme"
+          value={theme}
+          onChange={(e) => setTheme(e.target.value.slice(0, 60))}
+          placeholder="For example Diwali, Monsoon sale"
+          className="w-full h-11 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-3 text-[13.5px] text-[var(--gv-text-primary)] outline-none focus:border-[var(--gv-accent)]"
+        />
       </div>
 
       {/* Platforms — not shown in LinkedIn mode, where the platform is

@@ -4703,6 +4703,8 @@ export const draftsAPI = {
     // fall back to the brand's primary logo (legacy behavior).
     logoUrl?: string;
     logoPosition?: string;
+    /** an optional label that ties posts together by subject */
+    theme?: string;
   }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',

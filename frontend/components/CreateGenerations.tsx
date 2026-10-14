@@ -82,7 +82,7 @@ const CreateGenerations: React.FC<{ category: CreateCategory; refreshKey: number
                 <div className="px-3 py-2.5 space-y-1">
                   <p className="text-[13px] font-semibold text-[var(--gv-text-primary)] line-clamp-2">{item.title}</p>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11.5px] text-[var(--gv-text-muted)]">{d.__group ? `${d.__group.name} · ${d.__group.position} of ${d.__group.size}` : item.slideTotal ? `${item.slideTotal} slides` : new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                    <p className="text-[11.5px] text-[var(--gv-text-muted)]">{d.__group ? (d.__group.size > 1 ? `${d.__group.name} · ${d.__group.position} of ${d.__group.size}` : d.__group.name) : item.slideTotal ? `${item.slideTotal} slides` : new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                     <span className="flex items-center gap-1 text-[var(--gv-text-tertiary)]">{item.platforms.slice(0, 4).map((p) => <PlatformIcon key={p} platform={p} className="w-3.5 h-3.5" />)}</span>
                   </div>
                 </div>

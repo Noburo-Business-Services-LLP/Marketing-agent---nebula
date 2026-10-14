@@ -77,7 +77,8 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       postDetails: postDetailsIn,
       headerUrl: headerUrlIn,
       footerUrl: footerUrlIn,
-      referenceImage: referenceImageIn
+      referenceImage: referenceImageIn,
+      theme: themeIn
     } = req.body || {};
     const styleReference = typeof referenceImageIn === 'string' && /^data:image\/(png|jpe?g|webp);base64,/i.test(referenceImageIn) && referenceImageIn.length < 7000000 ? referenceImageIn : undefined;
     const { isPostStyle, normalisePostDetails } = require('../config/postStyles');
@@ -184,6 +185,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       aspectRatio,
       sourceType: 'carousel',
       contentType: 'carousel',
+      theme: String(themeIn || '').replace(/\s+/g, ' ').trim().slice(0, 60),
       status: 'processing',
       carouselStyleGuide: styleGuide,
       carouselSlides: plan.slides.map((s, i) => ({

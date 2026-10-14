@@ -31,6 +31,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   const [hashtags, setHashtags] = useState<string[]>(draft.hashtags || []);
   const [newHashtag, setNewHashtag] = useState('');
   const [cta, setCta] = useState(draft.cta || '');
+  const [theme, setTheme] = useState((draft as any).theme || '');
   const [platforms, setPlatforms] = useState<string[]>(draft.platforms || []);
   const [imageUrl, setImageUrl] = useState(draft.imageUrl || '');
   // A carousel keeps its pictures per slide, not in one image field.
@@ -106,6 +107,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
       caption,
       hashtags: hashtags.map(h => h.startsWith('#') ? h : `#${h}`),
       cta,
+      theme: theme.trim(),
       platforms,
       imageUrl,
       creative: {
@@ -530,6 +532,19 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Give it a name…"
                 className="w-full px-0 py-2 bg-transparent border-0 border-b border-white/[0.12] text-[19px] font-semibold text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623] transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2" htmlFor="draft-theme">Theme or festival <span className="normal-case text-white/30">· groups posts together</span></label>
+              <input
+                id="draft-theme"
+                type="text"
+                value={theme}
+                maxLength={60}
+                onChange={(e) => setTheme(e.target.value)}
+                placeholder="For example Diwali, Monsoon sale"
+                className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13.5px] text-[#F5F4F1] placeholder:text-white/25 focus:outline-none focus:border-[#F5A623]/50"
               />
             </div>
 

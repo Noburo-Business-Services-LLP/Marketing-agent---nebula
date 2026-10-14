@@ -153,6 +153,13 @@ const draftSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  // A short label that ties posts together by subject: a festival, an offer, a launch ("Diwali", "Monsoon sale").
+  theme: {
+    type: String,
+    trim: true,
+    maxlength: 60,
+    default: ''
+  },
   campaignId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Campaign',

@@ -1526,6 +1526,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     // Parse params from request body (POST)
     const {
       campaignName, campaignDescription, objective,
+      theme: themeInput,
       platforms: platformsInput, tone, aspectRatio,
       keyMessages, duration, startDate: startDateParam,
       preferredDays: daysInput, targetAge, targetGender,
@@ -1660,6 +1661,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         const draft = await DraftModel.create({
           userId,
           title: `${campaignName || 'Campaign'} - Post ${i + 1}`,
+          theme: String(themeInput || '').replace(/\s+/g, ' ').trim().slice(0, 60),
           status: 'processing',
           sourceType: 'campaign',
           contentType: 'campaign',
@@ -2337,6 +2339,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         const existingDraftId = preCreatedDraftIds[i];
         const updateData = {
           title: `${campaignName || 'Campaign'} - Post ${i + 1}`,
+          theme: String(themeInput || '').replace(/\s+/g, ' ').trim().slice(0, 60),
           caption: postData.caption || '',
           hashtags: postData.hashtags || [],
           cta: '',
