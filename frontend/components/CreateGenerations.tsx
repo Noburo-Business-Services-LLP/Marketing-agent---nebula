@@ -5,12 +5,13 @@ import { fromPostDraft, STATUS_WORD } from '../utils/library';
 import GeneratingFill from './GeneratingFill';
 import { DraftPreviewModal } from './DraftPreviewModal';
 import PlatformIcon from './PlatformIcon';
+import { orderForViewing } from '../utils/postOrder';
 
 export type CreateCategory = 'single' | 'carousel' | 'campaign' | 'linkedin';
 
 const TYPE: Record<CreateCategory, string> = { single: 'post', linkedin: 'post', carousel: 'carousel', campaign: 'campaign' };
 const TITLE: Record<CreateCategory, string> = { single: 'Your single posts', linkedin: 'Your LinkedIn posts', carousel: 'Your carousels', campaign: 'Your campaigns' };
-const SHOWN = 12;
+const SHOWN = 24;
 
 /**
  * Everything made in this category, newest first, below the form. Work that is still being made shows its
@@ -34,7 +35,9 @@ const CreateGenerations: React.FC<{ category: CreateCategory; refreshKey: number
       if (category === 'linkedin') list = list.filter(isLinkedin);
       else if (category === 'single') list = list.filter((d) => !isLinkedin(d));
       list = list.filter((d) => String(d.status || '').toLowerCase() !== 'archived');
-      if (alive.current) { setDrafts(list.slice(0, SHOWN)); setFailed(false); }
+      // Campaign posts together and in story order; everything else as it came.
+      const ordered = orderForViewing(list).map((o) => ({ ...o.draft, __group: o.group }));
+      if (alive.current) { setDrafts(ordered.slice(0, SHOWN)); setFailed(false); }
     } catch {
       if (alive.current) setFailed(true);
     }
@@ -79,7 +82,7 @@ const CreateGenerations: React.FC<{ category: CreateCategory; refreshKey: number
                 <div className="px-3 py-2.5 space-y-1">
                   <p className="text-[13px] font-semibold text-[var(--gv-text-primary)] line-clamp-2">{item.title}</p>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11.5px] text-[var(--gv-text-muted)]">{item.slideTotal ? `${item.slideTotal} slides` : new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                    <p className="text-[11.5px] text-[var(--gv-text-muted)]">{d.__group ? `${d.__group.name} · ${d.__group.position} of ${d.__group.size}` : item.slideTotal ? `${item.slideTotal} slides` : new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                     <span className="flex items-center gap-1 text-[var(--gv-text-tertiary)]">{item.platforms.slice(0, 4).map((p) => <PlatformIcon key={p} platform={p} className="w-3.5 h-3.5" />)}</span>
                   </div>
                 </div>

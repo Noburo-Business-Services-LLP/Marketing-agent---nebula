@@ -7,6 +7,7 @@ import GenerationTimer from '../components/GenerationTimer';
 import HeroShare from '../components/HeroShare';
 import HeroEdit from '../components/HeroEdit';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
+import { orderForViewing } from '../utils/postOrder';
 import PlatformIcon from '../components/PlatformIcon';
 import { draftsAPI, videoGenerationAPI, heroVideoAPI } from '../services/api';
 import { platformLabel } from '../utils/platforms';
@@ -169,7 +170,10 @@ const Library: React.FC = () => {
 
       {open && open.source === 'post' && open.raw && (
         (() => {
-          const posts = shown.filter((x) => x.source === 'post' && x.raw && x.status !== 'creating');
+          // Story order: a campaign's posts together in their planned order, other posts as listed.
+          const eligible = shown.filter((x) => x.source === 'post' && x.raw && x.status !== 'creating');
+          const byId = new Map(eligible.map((x) => [String(x.raw._id), x]));
+          const posts = orderForViewing(eligible.map((x) => x.raw)).map((o) => byId.get(String(o.draft._id))!).filter(Boolean);
           const at = posts.findIndex((x) => x.id === open.id);
           return (
             <DraftPreviewModal
