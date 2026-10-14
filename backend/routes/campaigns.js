@@ -2197,10 +2197,13 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         let slotAssets = { productImages: [], environmentImage: null, logoUrl: null };
         if (visualPlan?.slots?.[slotIndex]) {
           try {
-            finalPrompt = await renderCampaignSlotImage(req.user.id, visualPlan, slotIndex, {
-              aspectRatio: aspectRatio || '1:1',
-              language: selectedLanguage
-            });
+            // The direct route below does not need this rewriting step; it is kept for IMAGE_MODE=pipeline.
+            if (process.env.IMAGE_MODE === 'pipeline') {
+              finalPrompt = await renderCampaignSlotImage(req.user.id, visualPlan, slotIndex, {
+                aspectRatio: aspectRatio || '1:1',
+                language: selectedLanguage
+              });
+            }
             slotAssets = assetsToImageOptions([
               ...visualPlan.slots[slotIndex].requiredAssets,
               ...visualPlan.slots[slotIndex].optionalAssets
@@ -2222,10 +2225,48 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         const slotLogoPosition = slotAssets.logoPosition || logoPositionOverride || brandCtx.primaryLogoPosition;
         const slotLogoSize = slotAssets.logoSize || brandCtx.primaryLogoSize;
 
+        // Default route: this post's own brief, the campaign's shared look, the previous post and the real brand
+        // facts go straight to the image model (see directImage.js). The older chain runs only if that fails.
+        imageResult = null;
+        if (process.env.IMAGE_MODE !== 'pipeline') {
+          try {
+            const { generateDirectSeriesImage } = require('../services/directImage');
+            let continuityUrl;
+            for (const cached of slotImageCache.values()) { if (cached && cached.success && cached.imageUrl) continuityUrl = cached.imageUrl; }
+            const direct = await generateDirectSeriesImage({
+              brief: [campaignName, campaignDescription, (visualPlan && visualPlan.slots && visualPlan.slots[slotIndex] && visualPlan.slots[slotIndex].imagePrompt) || post.imageDescription].filter(Boolean).join('. '),
+              imageText: resolvedImageText,
+              brand: { name: brandDisplayName, industry: bp.industry, location: bp.businessLocation, about: bp.description, website: bp.website },
+              language: selectedLanguage,
+              aspectRatio: aspectRatio || '1:1',
+              series: { label: `post ${slotIndex + 1} of ${numSlots} in a campaign`, role: post.campaignRole || post.contentTheme, concept: visualPlan && visualPlan.campaignVisualConcept, visualSystem: visualPlan && visualPlan.visualSystem, mechanism: visualPlan && visualPlan.recurringDevice },
+              logoUrl: slotLogoUrl || undefined,
+              overlayLogo: true,
+              logoPosition: slotLogoPosition,
+              noLogo: !slotLogoUrl,
+              productUrls: chosenProductImages,
+              environmentUrl: slotAssets.environmentImage || undefined,
+              continuityUrl,
+              details: designStyle ? designDetails : {},
+              designText: designStyle ? require('../config/postStyles').buildStyleDirective(designStyle, designDetails, { language: selectedLanguage }) : '',
+              headerUrl: designHeader,
+              footerUrl: designFooter
+            });
+            if (direct && direct.success && direct.imageUrl) {
+              imageResult = { success: true, imageUrl: direct.imageUrl, model: direct.model, promptUsed: direct.promptUsed };
+              console.log(`[CAMPAIGN_IMAGE] slot ${slotIndex + 1}/${numSlots} made by ${direct.model}${direct.checked ? (direct.missing.length || direct.extra.length ? ' (number check flagged something)' : ' (numbers verified)') : ''}`);
+            } else {
+              console.warn(`[CAMPAIGN_IMAGE] direct route failed for slot ${slotIndex + 1} (${direct && direct.error}); using the older chain`);
+            }
+          } catch (directErr) {
+            console.warn(`[CAMPAIGN_IMAGE] direct route threw for slot ${slotIndex + 1}; using the older chain:`, directErr.message);
+          }
+        }
+
         // No brandLogo reference — the model redraws anything it's shown,
         // logos included (softened, recolored, wordmark sometimes dropped).
         // Composited pixel-exact after rendering instead, below.
-        imageResult = await generateCampaignImageNanoBanana(finalPrompt || post.imageDescription, {
+        if (!imageResult) imageResult = await generateCampaignImageNanoBanana(finalPrompt || post.imageDescription, {
           userId: req.user.id,
           useRawPrompt: Boolean(finalPrompt),
           aspectRatio: aspectRatio || '1:1',

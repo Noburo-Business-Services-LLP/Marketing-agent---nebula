@@ -233,7 +233,6 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       });
 
       try {
-        const finalPrompt = await renderCarouselSlideImage(req.user.id, plan, i);
         const { productImages, environmentImage, logoUrl, logoPosition: resolvedLogoPosition, logoSize } = assetsToImageOptions([
           ...slide.requiredAssets,
           ...slide.optionalAssets
@@ -241,12 +240,52 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
         const logoPosition = logoPositionOverride || resolvedLogoPosition;
         const chosenProductImages = explicitProductImages.length ? explicitProductImages : productImages;
 
+        // Default route: the slide's own brief, the series look, the previous slide and the brand facts go
+        // straight to the image model (see directImage.js). The older Art Director chain runs only if this fails.
+        let result = null;
+        if (process.env.IMAGE_MODE !== 'pipeline') {
+          try {
+            const { generateDirectSeriesImage } = require('../services/directImage');
+            const brandUser = await require('../models/User').findById(req.user.id).select('companyName businessProfile').lean();
+            const bpDirect = (brandUser && brandUser.businessProfile) || {};
+            const direct = await generateDirectSeriesImage({
+              brief: [slide.storyPurpose, slide.creativeConcept || slide.imagePrompt].filter(Boolean).join('. '),
+              imageText: slide.imageText || '',
+              brand: { name: bpDirect.name || (brandUser && brandUser.companyName), industry: bpDirect.industry, location: bpDirect.businessLocation, about: bpDirect.description, website: bpDirect.website },
+              language: normalizedLanguage,
+              aspectRatio,
+              series: { label: `slide ${slide.order} of ${plan.slides.length} in a swipe carousel`, role: slide.role, concept: plan.creativeConcept, visualSystem: plan.visualSystem, mechanism: plan.swipeMechanism },
+              logoUrl: logoUrl || undefined,
+              overlayLogo: true,
+              logoPosition,
+              noLogo: !logoUrl,
+              productUrls: chosenProductImages,
+              environmentUrl: environmentImage || undefined,
+              continuityUrl: previousSlideImageUrl || undefined,
+              details: designStyle ? slideDetails(i, plan.slides.length) : {},
+              designText: designStyle ? require('../config/postStyles').buildStyleDirective(designStyle, slideDetails(i, plan.slides.length), { language: normalizedLanguage }) : '',
+              headerUrl: designHeader,
+              footerUrl: designFooter
+            });
+            if (direct && direct.success && direct.imageUrl) {
+              result = { imageUrl: direct.imageUrl, model: direct.model, promptUsed: direct.promptUsed };
+              console.log(`[Carousel] slide ${slide.order} made by ${direct.model}${direct.checked ? (direct.missing.length || direct.extra.length ? ' (number check flagged something)' : ' (numbers verified)') : ''}`);
+            } else {
+              console.warn(`[Carousel] direct route failed for slide ${slide.order} (${direct && direct.error}); using the older chain`);
+            }
+          } catch (directErr) {
+            console.warn(`[Carousel] direct route threw for slide ${slide.order}; using the older chain:`, directErr.message);
+          }
+        }
+
+        if (!result) {
+        const finalPrompt = await renderCarouselSlideImage(req.user.id, plan, i);
         // No brandLogo reference — the model redraws anything it's shown,
         // logos included. Composited pixel-exact after rendering instead.
         // logoReservedPosition tells it where that composite will land, so
         // it can keep the corner clear instead of putting its own headline
         // there and colliding with the real logo once pasted on top.
-        const result = await generateCampaignImageNanoBanana(finalPrompt, {
+        result = await generateCampaignImageNanoBanana(finalPrompt, {
           userId: req.user.id,
           useRawPrompt: true,
           aspectRatio,
@@ -266,6 +305,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
           footerUrl: designFooter,
           styleReferenceImage: styleReference
         });
+        }
 
         // Image generation falls back to an inline base64 data URI when the
         // Cloudinary upload fails. One of those is ~1MB; ten in a single

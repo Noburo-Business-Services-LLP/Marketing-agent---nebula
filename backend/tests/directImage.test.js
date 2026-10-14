@@ -17,7 +17,7 @@ test('the request carries the brief and real facts, forbids invented details, an
 
 test('without a logo it says so, and nothing about a logo reference appears', () => {
   const p = buildDirectPrompt({ brief: 'x', brand: { name: 'A' }, language: 'english', aspectRatio: '1:1', hasLogo: false, noLogo: true });
-  assert.match(p, /Do not add any logo/);
+  assert.match(p, /Do not draw any logo, emblem or brand mark/);
   assert.doesNotMatch(p, /first attached picture/);
 });
 
@@ -74,4 +74,31 @@ test('a number nobody supplied is caught, and the picture is remade without it',
   assert.match(calls[1], /do not show any number that was not given, such as: 18/);
   assert.strictEqual(out.imageUrl, 'https://img/2.jpg');
   assert.deepStrictEqual(out.extra, []);
+});
+
+test('a series picture carries the shared look, its own exact text, the previous picture and the frames', async () => {
+  const sent = [];
+  const refsSeen = [];
+  const io = {
+    fetchReference: async (u) => { refsSeen.push(u); return { mimeType: 'image/png', data: 'AA==' }; },
+    generate: async (prompt, o) => { sent.push(prompt); return { success: true, imageUrl: 'https://img/1.jpg', model: 'gpt-image-2' }; },
+    readText: async () => 'Fresh bread every morning',
+    addFrames: async (url) => ({ applied: true, imageUrl: url + '?framed' }),
+  };
+  const { generateDirectSeriesImage } = require('../services/directImage');
+  const out = await generateDirectSeriesImage({
+    brief: 'Show the morning bake', imageText: 'Fresh bread every morning', brand: { name: 'Sunrise Bakery' }, language: 'english', aspectRatio: '4:5',
+    series: { label: 'slide 2 of 5 in a swipe carousel', role: 'build', concept: 'Warm morning light', visualSystem: 'Cream and terracotta', mechanism: 'a line carries across slides' },
+    logoUrl: 'https://l/logo.png', overlayLogo: true, logoPosition: 'bottom-right', productUrls: ['https://p/1.png'], continuityUrl: 'https://img/prev.jpg',
+    headerUrl: 'https://h/h.png', details: {},
+  }, io);
+  assert.strictEqual(out.success, true);
+  assert.strictEqual(out.imageUrl, 'https://img/1.jpg?framed');
+  assert.match(sent[0], /slide 2 of 5 in a swipe carousel/);
+  assert.match(sent[0], /Warm morning light/);
+  assert.match(sent[0], /"Fresh bread every morning"/);
+  assert.match(sent[0], /last attached picture is the previous one/);
+  assert.match(sent[0], /bottom right corner of the picture calm/);
+  assert.match(sent[0], /LAYOUT RESERVE/);
+  assert.deepStrictEqual(refsSeen, ['https://p/1.png', 'https://img/prev.jpg']);
 });
