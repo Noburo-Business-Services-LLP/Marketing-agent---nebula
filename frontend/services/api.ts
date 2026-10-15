@@ -4843,6 +4843,8 @@ export const studioVideosAPI = {
   get: async (id: string): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
     apiCall(`/videos/${encodeURIComponent(id)}`, {}, true),
   list: async (): Promise<{ success: boolean; videos: StudioVideo[] }> => apiCall('/videos', {}, true),
+  cast: async (idea: string): Promise<{ success: boolean; cast: Array<{ role: string; description: string }> }> =>
+    apiCall('/videos/cast', { method: 'POST', body: JSON.stringify({ idea }) }, true),
   makeReference: async (kind: 'person' | 'place', description: string): Promise<{ success: boolean; url?: string; quarks?: number; message?: string }> =>
     apiCall('/videos/reference', { method: 'POST', body: JSON.stringify({ kind, description }) }, true),
   approveReference: async (kind: 'person' | 'place', url: string, name: string): Promise<{ success: boolean; asset?: { id: string; name: string; url: string }; message?: string }> =>

@@ -65,8 +65,8 @@ async function resolveReferences(userId, { characterIds = [], placeIds = [], pro
   const chars = take(characterIds).length ? await BrandAsset.find({ _id: { $in: take(characterIds) }, user: userId, type: 'character' }).select('url name').lean() : [];
   const places = take(placeIds).length ? await BrandAsset.find({ _id: { $in: take(placeIds) }, user: userId, type: 'environment' }).select('url name').lean() : [];
   const prods = take(productIds).length ? await Product.find({ _id: { $in: take(productIds) }, user: userId }).select('imageUrl images name').lean() : [];
-  if (chars[0]) out.push({ kind: 'person', name: chars[0].name, url: chars[0].url });
-  if (places[0]) out.push({ kind: 'place', name: places[0].name, url: places[0].url });
+  for (const c of chars.slice(0, 2)) out.push({ kind: 'person', name: c.name, url: c.url });
+  if (places[0]) out.splice(Math.min(out.length, 2), 0, { kind: 'place', name: places[0].name, url: places[0].url });
   for (const p of prods) {
     const url = p.imageUrl || (Array.isArray(p.images) ? p.images[0] : '');
     if (url && out.length < MAX_REFS) out.push({ kind: 'product', name: p.name, url });
@@ -183,6 +183,29 @@ router.post('/create', protect, async (req, res) => {
   } catch (e) {
     console.error('[videos] create failed:', e.message);
     res.status(500).json({ success: false, message: 'We could not start the video. Please try again.' });
+  }
+});
+
+// Who could appear in this idea: up to three roles with a short description each. Free: a short text call.
+router.post('/cast', protect, async (req, res) => {
+  try {
+    const userId = userIdOf(req);
+    if (!allowed('cast', userId, 40)) return res.status(429).json({ success: false, message: 'Please wait a little.' });
+    const idea = sv.clip(req.body && req.body.idea, 1000);
+    if (!idea) return res.json({ success: true, cast: [] });
+    const brand = await brandOf(userId);
+    const raw = await callTextLLM(`A small Indian business wants a 10 second video. Suggest who could appear in it: at most 3 different people, each with a role and a one-line look. Base them only on the idea; do not invent facts.
+
+IDEA: ${idea}
+BUSINESS: ${sv.clip(brand.name, 80)} (${sv.clip(brand.industry, 60)}) in ${sv.clip(brand.location, 60)}
+
+Return JSON only: {"cast":[{"role":"2 to 4 words","description":"age, looks, clothing and manner in one line, believable for a local setting"}]}`, { jsonMode: true, maxTokens: 500, purpose: 'plan' });
+    let cast = [];
+    try { const s = String(raw); const o = JSON.parse(s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1)); cast = (o.cast || []).slice(0, 3).map((c) => ({ role: sv.clip(c.role, 40), description: sv.clip(c.description, 200) })).filter((c) => c.role && c.description); } catch (_) { cast = []; }
+    res.json({ success: true, cast });
+  } catch (e) {
+    console.error('[videos] cast failed:', e.message);
+    res.json({ success: true, cast: [] });
   }
 });
 

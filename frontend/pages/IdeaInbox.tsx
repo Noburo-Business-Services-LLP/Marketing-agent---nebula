@@ -252,7 +252,7 @@ const IdeaInbox: React.FC = () => {
           onChange={(e) => setText(e.target.value)}
           placeholder="For example: Create a post like the ad I saw about founder burnout, but for our onboarding flow."
           rows={3}
-          className="w-full bg-transparent text-[14px] text-[#F5F4F1] placeholder-white/30 outline-none resize-none"
+          className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-[var(--gv-text-primary)] leading-relaxed resize-none placeholder:text-[var(--gv-text-muted)]"
         />
         <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-white/[0.06]">
           <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-semibold border border-white/[0.10] text-white/70 hover:bg-white/[0.04] cursor-pointer">

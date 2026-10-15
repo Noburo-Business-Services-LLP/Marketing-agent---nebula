@@ -46,8 +46,12 @@ const ReferenceMaker: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/55 p-4" role="dialog" aria-modal="true" aria-label={person ? 'Create a person' : 'Create a place'}>
-      <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] p-5 shadow-2xl">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={person ? 'Create a person' : 'Create a place'}>
+      <div
+        className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--gv-border-default)] p-5 shadow-2xl"
+        // Solid, not the translucent panel colour: the page behind must not show through a dialog.
+        style={{ background: typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? '#15171c' : '#fffdf8' }}
+      >
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="font-serif-display text-[22px] text-[var(--gv-text-primary)]">{person ? 'Create the person' : 'Create the place'}</h3>

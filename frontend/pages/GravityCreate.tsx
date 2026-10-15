@@ -225,7 +225,7 @@ const LogoPositionPicker: React.FC<{ value: LogoGridPosition; onChange: (p: Logo
 
 const GravityCreate: React.FC = () => {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<CreateMode>('campaign');
+  const [mode, setMode] = useState<CreateMode>('single');
   const [name, setName] = useState('');
   // An optional label that ties posts together by subject (a festival, an offer): they are then listed together.
   const [theme, setTheme] = useState('');
@@ -1094,15 +1094,6 @@ const GravityCreate: React.FC = () => {
       <div className="flex items-center justify-center mb-5 mt-1">
         <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--gv-surface-1)] border border-[var(--gv-border-subtle)]">
           <button
-            onClick={() => setMode('campaign')}
-            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              mode === 'campaign' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            Campaign
-          </button>
-          <button
             onClick={() => setMode('single')}
             className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
               mode === 'single' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
@@ -1110,6 +1101,15 @@ const GravityCreate: React.FC = () => {
           >
             <Sparkles className="w-3.5 h-3.5" />
             Single post
+          </button>
+          <button
+            onClick={() => setMode('campaign')}
+            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
+              mode === 'campaign' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Campaign
           </button>
           <button
             onClick={() => setMode('carousel')}

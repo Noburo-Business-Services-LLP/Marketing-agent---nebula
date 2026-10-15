@@ -79,6 +79,9 @@ const CreateVideo: React.FC = () => {
   const [ideaPickerOpen, setIdeaPickerOpen] = useState(false);
   const [pickedIdea, setPickedIdea] = useState('');
   const [refCost, setRefCost] = useState(0);
+  const [cast, setCast] = useState<Array<{ role: string; description: string }>>([]);
+  const [castFor, setCastFor] = useState('');
+  const [makerSeed, setMakerSeed] = useState('');
 
   const [concept, setConcept] = useState<StudioConcept | null>(null);
   const [title, setTitle] = useState('');
@@ -201,6 +204,13 @@ const CreateVideo: React.FC = () => {
     } finally { setPlanning(false); }
   };
 
+  // Suggest who could appear, once per idea, when the person reaches the second step.
+  useEffect(() => {
+    if (step !== 'yours' || castFor === idea || !canPlan(idea)) return;
+    setCastFor(idea);
+    studioVideosAPI.cast(idea).then((r) => setCast(r?.cast || [])).catch(() => setCast([]));
+  }, [step, idea, castFor]);
+
   const startOver = () => { setCurrent(null); setConcept(null); setStep('idea'); setError(''); };
   const stepIndex = STEPS.findIndex((s) => s.key === step);
   const left = balance != null && cost ? videosLeft(balance, cost) : null;
@@ -285,7 +295,21 @@ const CreateVideo: React.FC = () => {
         <div className="space-y-4">
           <p className="text-center text-[13.5px] text-[var(--gv-text-secondary)]">Add your own people, place and products so the video looks like your business. Skip any of these and we will choose something believable.</p>
           <PickRow Icon={UserIcon} title="Who appears" hint="A photo of the person: you, your team or a customer who agreed." picked={people}
-            onPick={() => setPicker('character')} onClear={() => setPeople([])} pickLabel="Choose a photo" onCreate={() => setMaker('person')} createLabel="Create with AI" text={who} onText={setWho} placeholder="Or describe them: a smiling shopkeeper in her 40s, in a cotton saree" />
+            onPick={() => setPicker('character')} onClear={() => setPeople([])} pickLabel="Choose a photo" onCreate={people.length < 2 ? () => { setMakerSeed(who); setMaker('person'); } : undefined} createLabel={people.length ? 'Add another person' : 'Create with AI'} text={who} onText={setWho} placeholder="Or describe them: a smiling shopkeeper in her 40s, in a cotton saree" />
+          {cast.length > 0 && people.length < 2 && (
+            <div className="-mt-1 rounded-2xl border border-dashed border-[var(--gv-border-default)] px-4 py-3">
+              <div className="text-[12.5px] font-semibold text-[var(--gv-text-primary)]">Suggested for your idea</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {cast.map((c) => (
+                  <button key={c.role} type="button" onClick={() => { setMakerSeed(c.description); setMaker('person'); }} title={c.description}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[var(--gv-border-default)] bg-[var(--gv-surface-2)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]">
+                    <Sparkles className="h-3.5 w-3.5 text-[var(--gv-accent)]" /> {c.role}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11.5px] text-[var(--gv-text-tertiary)]">Pick one to see them, then keep them or make another. You can have up to two people.</p>
+            </div>
+          )}
           <PickRow Icon={ImageIcon} title="Where it happens" hint="A photo of your shop, kitchen, studio or anywhere you work." picked={places}
             onPick={() => setPicker('environment')} onClear={() => setPlaces([])} pickLabel="Choose a photo" onCreate={() => setMaker('place')} createLabel="Create with AI" text={where} onText={setWhere} placeholder="Or describe it: a busy sweet shop with brass lamps" />
           <PickRow Icon={Package} title="Your product" hint="The exact product to show. It will match your photo." picked={products}
@@ -419,14 +443,14 @@ const CreateVideo: React.FC = () => {
       {maker && (
         <ReferenceMaker
           kind={maker}
-          initialDescription={maker === 'person' ? who : where}
+          initialDescription={makerSeed || (maker === 'person' ? who : where)}
           quarks={refCost}
-          onClose={() => setMaker(null)}
-          onUse={(a) => { if (maker === 'person') setPeople([a]); else setPlaces([a]); setMaker(null); }}
+          onClose={() => { setMaker(null); setMakerSeed(''); }}
+          onUse={(a) => { if (maker === 'person') setPeople((p) => [...p, a].slice(0, 2)); else setPlaces([a]); setMaker(null); setMakerSeed(''); }}
         />
       )}
       <AssetPicker
-        open={picker === 'character'} onClose={() => setPicker(null)} source="character" max={1}
+        open={picker === 'character'} onClose={() => setPicker(null)} source="character" max={2}
         selected={people} onChange={(a) => { setPeople(a); setPicker(null); }}
       />
       <AssetPicker
