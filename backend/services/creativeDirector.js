@@ -128,8 +128,8 @@ function toText(value) {
  * object in the prompt itself causes OpenAI to error), so callers must say
  * which they need rather than this guessing from the prompt text.
  */
-async function getJSONWithRetry(prompt, isUsable, label = 'CreativeDirector') {
-  const attempt1 = await callTextLLM(prompt, { jsonMode: true });
+async function getJSONWithRetry(prompt, isUsable, label = 'CreativeDirector', language = '') {
+  const attempt1 = await callTextLLM(prompt, { jsonMode: true, language });
   let result = parseGeminiJSON(attempt1) || {};
   if (isUsable(result)) return result;
 
@@ -145,7 +145,7 @@ async function getJSONWithRetry(prompt, isUsable, label = 'CreativeDirector') {
   console.warn(`[${label}] First attempt returned no usable JSON, retrying once.`);
   const attempt2 = await callTextLLM(
     `${prompt}\n\nReturn ONLY the JSON object. No explanation, no reasoning, no markdown — the response must start with { and end with }.`,
-    { jsonMode: true, skipCache: true }
+    { jsonMode: true, skipCache: true, language }
   );
   result = parseGeminiJSON(attempt2) || {};
   if (!isUsable(result)) {
@@ -326,7 +326,7 @@ async function planCarousel(userId, {
     previousCreatives: formatPreviousCreatives(previousCreatives)
   });
 
-  const plan = await getJSONWithRetry(prompt, (p) => Array.isArray(p?.slides) && p.slides.length > 0, 'CarouselPlan');
+  const plan = await getJSONWithRetry(prompt, (p) => Array.isArray(p?.slides) && p.slides.length > 0, 'CarouselPlan', language);
 
   const slides = (Array.isArray(plan.slides) ? plan.slides : []).map((s) => ({
     order: Number(s.order) || 0,
@@ -446,7 +446,7 @@ async function planCampaignVisuals(userId, {
     posts: JSON.stringify(posts, null, 2)
   });
 
-  const plan = await getJSONWithRetry(prompt, (p) => Array.isArray(p?.posts) && p.posts.length > 0, 'CampaignVisualPlan');
+  const plan = await getJSONWithRetry(prompt, (p) => Array.isArray(p?.posts) && p.posts.length > 0, 'CampaignVisualPlan', language);
 
   const byIndex = new Map((Array.isArray(plan.posts) ? plan.posts : []).map((p) => [Number(p.index), p]));
 

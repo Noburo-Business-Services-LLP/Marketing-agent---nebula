@@ -396,7 +396,7 @@ async function processDraftImageGenerationJob(job) {
           language: effectiveLanguage,
           brandContextBlock
         });
-        const raw = await callTextLLM(planPrompt, { jsonMode: true, maxTokens: 2000 });
+        const raw = await callTextLLM(planPrompt, { jsonMode: true, maxTokens: 2000, language: effectiveLanguage });
         contentPrompt = parseGeminiJSON(raw);
       } catch (err) {
         console.error('[BackgroundQueue] Content-writing pass failed, using the raw idea instead:', err.message);

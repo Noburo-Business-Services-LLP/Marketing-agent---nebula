@@ -1912,7 +1912,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         jsonMode: true,
         maxTokens: captionMaxTokens,
         temperature: 0.85,
-        skipCache: true
+        skipCache: true,
+        language: selectedLanguage
       });
       parsed = parseGeminiJSON(textRes);
 

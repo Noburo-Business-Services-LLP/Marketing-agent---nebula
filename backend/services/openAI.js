@@ -1,5 +1,28 @@
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
+
+// The writing models. English copy and plans use one, Indian-language copy uses a stronger one; both are settings,
+// so a model can be changed without a release. OPENAI_MODEL is left alone for code that names it directly.
+const TEXT_MODEL_ENGLISH = () => process.env.TEXT_MODEL_ENGLISH || 'gpt-5.5';
+const TEXT_MODEL_REGIONAL = () => process.env.TEXT_MODEL_REGIONAL || 'gpt-6.1-sol';
+// If the writing model fails, these Gemini models take over (in this order).
+const TEXT_BACKUP_MODELS = () => String(process.env.TEXT_BACKUP_MODELS || 'gemini-3.8-flash,gemini-3.7-flash').split(',').map((m) => m.trim()).filter(Boolean);
+
+/** Anything that is not plain English (Tamil, Hindi, Telugu... or a mix with English) is written by the regional model. */
+function isRegionalLanguage(language) {
+  const c = String(language || '').trim().toLowerCase();
+  if (!c) return false;
+  if (c === 'english' || c === 'en') return false;
+  return true;
+}
+
+function textModelFor(language) {
+  return isRegionalLanguage(language) ? TEXT_MODEL_REGIONAL() : TEXT_MODEL_ENGLISH();
+}
+
+// gpt-4 and older take max_tokens and a temperature; the newer families take max_completion_tokens, a fixed
+// temperature, and spend part of that budget thinking.
+const isLegacyChatModel = (model) => /^(gpt-3|gpt-4|chatgpt-4o)/.test(String(model || ''));
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
 function fetchWithTimeout(url, opts = {}, timeoutMs = 90000) {
@@ -37,24 +60,40 @@ async function callOpenAI(prompt, options = {}) {
   }
   messages.push({ role: 'user', content: prompt });
 
-  const body = {
-    model,
-    messages,
-    temperature,
-    max_tokens: maxTokens
-  };
+  const legacy = isLegacyChatModel(model);
+  const body = { model, messages };
+  if (legacy) {
+    body.temperature = temperature;
+    body.max_tokens = maxTokens;
+  } else {
+    // Thinking tokens count against this budget, so it is larger than the visible answer needs.
+    body.max_completion_tokens = Math.max(maxTokens * 3, 4000);
+    if (process.env.TEXT_REASONING_EFFORT !== 'off') body.reasoning_effort = process.env.TEXT_REASONING_EFFORT || 'low';
+  }
   if (jsonMode) {
     body.response_format = { type: 'json_object' };
   }
+  // Thinking models are slower than the old ones; give them room.
+  const effectiveTimeout = legacy ? timeout : Math.max(timeout, 180000);
 
-  const res = await fetchWithTimeout(OPENAI_URL, {
+  const send = () => fetchWithTimeout(OPENAI_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
-  }, timeout);
+  }, effectiveTimeout);
+
+  let res = await send();
+  // A model that does not take reasoning_effort: ask again without it.
+  if (!res.ok && res.status === 400 && body.reasoning_effort) {
+    const why = await res.clone().text().catch(() => '');
+    if (/reasoning_effort|unsupported|not supported/i.test(why)) {
+      delete body.reasoning_effort;
+      res = await send();
+    }
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -86,14 +125,15 @@ async function callOpenAI(prompt, options = {}) {
  * JSON-mode request whose prompt doesn't itself ask for JSON, so this
  * can't safely guess it from the prompt text.
  */
-async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false } = {}) {
+async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false, language = '', model = '' } = {}) {
+  const chosen = model || textModelFor(language);
   try {
-    return await callOpenAI(prompt, { model: OPENAI_MODEL, temperature, maxTokens, timeout, jsonMode });
+    return await callOpenAI(prompt, { model: chosen, temperature, maxTokens, timeout, jsonMode });
   } catch (openAiErr) {
-    console.warn(`[TextLLM] OpenAI call failed, falling back to Gemini: ${openAiErr.message}`);
+    console.warn(`[TextLLM] ${chosen} call failed, falling back to Gemini: ${openAiErr.message}`);
     const { callGemini } = require('./geminiAI');
     try {
-      return await callGemini(prompt, { skipCache });
+      return await callGemini(prompt, { skipCache, models: TEXT_BACKUP_MODELS() });
     } catch (geminiErr) {
       // Both writers failed: this is the case customers notice.
       require('./opsAlerts').recordFailure('ai_text', `OpenAI: ${openAiErr.message} | Gemini: ${geminiErr.message}`);
@@ -104,5 +144,7 @@ async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, tempera
 
 module.exports = {
   callOpenAI,
-  callTextLLM
+  callTextLLM,
+  textModelFor,
+  isRegionalLanguage
 };
