@@ -36,11 +36,11 @@ const ModeExplainer: React.FC<{ mode: CreateModeKey }> = ({ mode }) => {
   const Icon = c.Icon;
   return (
     <div className="max-w-2xl mx-auto mb-6 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-4 py-3" aria-live="polite">
-      <p className="flex items-center gap-2 text-[13px] leading-snug text-[var(--gv-text-secondary)]">
+      <p className="flex items-center justify-center gap-2 text-center text-[13px] leading-snug text-[var(--gv-text-secondary)]">
         <Icon className="h-4 w-4 shrink-0 text-[var(--gv-accent)]" />
         <span>{c.what}</span>
       </p>
-      <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Good for">
+      <ul className="mt-2.5 flex flex-wrap justify-center gap-1.5" aria-label="Good for">
         {c.best.map((b) => (
           <li key={b} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--gv-border-default)] bg-[var(--gv-surface-2)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--gv-text-secondary)]">
             <Check className="h-3 w-3 text-[var(--gv-accent)]" aria-hidden="true" />
