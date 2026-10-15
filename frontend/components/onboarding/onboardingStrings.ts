@@ -236,7 +236,7 @@ const en: OnboardingStrings = {
   upcomingHint: 'A festival, an offer or a new product. We will plan posts around it.',
 
   step4Heading: 'Connect Your Accounts',
-  freeConnectNote: 'Connecting your social media accounts comes with the Publish and schedule add-on, which you can add to a Starter or Professional plan at any time. You can continue without connecting an account.',
+  freeConnectNote: 'Connecting your social media accounts comes with the Publish and schedule add-on, which you can add to a Starter or Growth plan at any time. You can continue without connecting an account.',
   connectIntro: 'Link your social media accounts to enable seamless publishing and analytics.',
   connectOptional: 'This step is optional.',
   connectedCount: '{n} account(s) connected',

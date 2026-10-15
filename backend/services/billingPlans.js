@@ -4,7 +4,7 @@
  * nothing here accepts an amount from a request.
  */
 const crypto = require('crypto');
-const { PLANS, TOPUP_PACKS, ADDONS, GST_RATE, gstPaise, chargePaise } = require('../config/apiCosts');
+const { PLANS, TOPUP_PACKS, ADDONS, GST_RATE, gstPaise, chargePaise, outputsFor } = require('../config/apiCosts');
 const { PLAN_PRESENTATION, ADDON_ENV_VARS, INVOICE_ITEMS } = require('../config/plans');
 const { resolveTier, addonsOf } = require('../config/entitlements');
 const buckets = require('./quarkBuckets');
@@ -18,9 +18,13 @@ function isPlanId(id) { return typeof id === 'string' && PLAN_IDS.includes(id); 
 function isAddonId(id) { return typeof id === 'string' && ADDON_IDS.includes(id); }
 
 function planFeatures(id) {
-  const plan = PLANS[id];
-  const c = plan.commits;
-  const out = [`${fmt(plan.quarks)} Quarks every month`, `Enough for about ${c.image_generated} image posts and ${c.hero} Hero video${c.hero === 1 ? '' : 's'} a month`, 'Top up with more Quarks any time'];
+  const o = outputsFor(PLANS[id].quarks);
+  const out = [
+    `Up to ${fmt(o.posts)} posts a month, or`,
+    `up to ${fmt(o.videos)} short videos with voice and music`,
+    'Spend it on posts or videos, in any mix',
+    'Top up any time'
+  ];
   return out.concat(PLAN_PRESENTATION[id].extraFeatures);
 }
 
@@ -39,9 +43,9 @@ function planCatalogue() {
   return {
     plans: PLAN_IDS.map((id) => ({
       id, name: PLAN_PRESENTATION[id].name, description: PLAN_PRESENTATION[id].description,
-      ...planQuote(id), features: planFeatures(id)
+      ...planQuote(id), outputs: outputsFor(PLANS[id].quarks), features: planFeatures(id)
     })),
-    topups: TOPUP_PACKS.map((p) => ({ ...priceBlock(p.inr), quarks: p.quarks })),
+    topups: TOPUP_PACKS.map((p) => ({ ...priceBlock(p.inr), quarks: p.quarks, outputs: outputsFor(p.quarks) })),
     addons: ADDON_IDS.map((id) => ({
       id, label: ADDONS[id].label, ...priceBlock(ADDONS[id].inr),
       requires: [...(ADDONS[id].requires || [])], includes: [...(ADDONS[id].includes || [])]
@@ -67,7 +71,7 @@ function canBuyAddon(user, addon) {
   if (!isAddonId(addon)) return { ok: false, message: 'Please choose one of the available add-ons.' };
   const tier = resolveTier(user);
   if (tier !== 'starter' && tier !== 'professional') {
-    return { ok: false, message: 'Add-ons are available on the Starter and Professional plans. Please choose a plan first.' };
+    return { ok: false, message: 'Add-ons are available on the Starter and Growth plans. Please choose a plan first.' };
   }
   const held = addonsOf(user);
   if (heldBy(held, addon)) return { ok: false, message: 'You already have this add-on.' };

@@ -109,7 +109,7 @@ test('payments are named from our own plan, add-on and pack names, never provide
   const user = mk('a', { plan: { tier: 'starter', subscriptions: [{ subscriptionId: 'sub_p', kind: 'plan', key: 'starter' }, { subscriptionId: 'sub_a', kind: 'addon', key: 'publish' }] } });
   assert.strictEqual(describePayment(user, pay({ razorpayOrderId: 'sub_p' })), 'Starter plan');
   assert.strictEqual(describePayment(user, pay({ razorpayOrderId: 'sub_a', item: 'Nebulaa add-on' })), `${ADDONS.publish.label} add-on`);
-  assert.match(describePayment(user, pay({ razorpayOrderId: 'order_1', item: 'Nebulaa Quarks', credits: 500 })), /^Quark pack, 500 Quarks$/);
+  assert.match(describePayment(user, pay({ razorpayOrderId: 'order_1', item: 'Nebulaa Quarks', credits: 475 })), /^Quark pack, 475 Quarks$/);
   for (const raw of ['rzp_live_secret card declined by HDFC', undefined, '']) {
     const name = describePayment(user, pay({ razorpayOrderId: 'order_x', item: raw, credits: 0 }));
     assert.strictEqual(name, 'Payment');
@@ -135,7 +135,7 @@ test('renewals list active plans billing in the next 14 days, soonest first, wit
   const users = [act('a', 'starter', ahead(3)), act('b', 'professional', ahead(1)), act('c', 'starter', ahead(20)), act('d', 'starter', ahead(2), 'halted'), act('e', 'starter', ago(1))];
   const r = buildMoney({ users, now: NOW, ayrshareProfiles: 0 }).renewals;
   assert.deepStrictEqual(r.items.map((i) => i.clientId), ['b', 'a']);
-  assert.strictEqual(r.items[0].what, 'Professional plan');
+  assert.strictEqual(r.items[0].what, 'Growth plan');
   assert.strictEqual(r.items[0].totalPaise, 199900 + Math.floor((199900 * 18 * 2 + 100) / 200));
   assert.strictEqual(r.totalPaise, r.items.reduce((n, i) => n + i.totalPaise, 0));
   assert.strictEqual(r.windowDays, 14);
@@ -162,7 +162,7 @@ test('failures: failed payments and halted or cancelled plans in the last 30 day
 
 test('a stopped plan is still named from the stored subscription record, even after the account went back to free', () => {
   const users = [mk('b', { subscription: { status: 'halted', currentPeriodEnd: ago(5) }, plan: { tier: 'free', subscriptions: [{ subscriptionId: 's1', kind: 'plan', key: 'professional', active: false }] } })];
-  assert.strictEqual(buildMoney({ users, now: NOW, ayrshareProfiles: 0 }).failures.renewals.items[0].what, 'Professional plan');
+  assert.strictEqual(buildMoney({ users, now: NOW, ayrshareProfiles: 0 }).failures.renewals.items[0].what, 'Growth plan');
 });
 
 test('failure reasons come from providerErrors and never repeat raw provider text', () => {

@@ -303,8 +303,8 @@ const generateContextAwareCaption = (topic: string, business?: BusinessProfile) 
 export interface PlanPrice { inr: number; gstPaise: number; chargePaise: number }
 export interface PlansResponse {
   success: boolean;
-  plans: Array<PlanPrice & { id: 'starter' | 'professional'; name: string; description: string; quarks: number; features: string[] }>;
-  topups: Array<PlanPrice & { quarks: number }>;
+  plans: Array<PlanPrice & { id: 'starter' | 'professional'; name: string; description: string; quarks: number; outputs?: { posts: number; videos: number }; features: string[] }>;
+  topups: Array<PlanPrice & { quarks: number; outputs?: { posts: number; videos: number } }>;
   addons: Array<PlanPrice & { id: 'publish' | 'competitors' | 'inbox' | 'bundle'; label: string; requires: string[]; includes: string[] }>;
 }
 

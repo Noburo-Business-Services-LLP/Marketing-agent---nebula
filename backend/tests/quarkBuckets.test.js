@@ -9,22 +9,22 @@ const DAY = 24 * 60 * 60 * 1000;
 test('a plan charge sets the monthly bucket and ends it a few days after the paid month', () => {
   const end = Math.floor(new Date('2026-11-19T00:00:00Z').getTime() / 1000);
   const b = bp.buildChargeUpdate({ kind: 'plan', key: 'starter', subscriptionId: 's1' }, { paymentId: 'p1', paidPaise: 117882, subscription: { current_end: end }, now: NOW });
-  assert.strictEqual(b.update.$set['credits.planBalance'], 2100);
-  assert.strictEqual(b.update.$inc['credits.balance'], 2100);
+  assert.strictEqual(b.update.$set['credits.planBalance'], 600);
+  assert.strictEqual(b.update.$inc['credits.balance'], 600);
   assert.strictEqual(+b.update.$set['credits.planExpiresAt'], end * 1000 + qb.PLAN_GRACE_DAYS * DAY);
 });
 
 test('a renewal releases held top-up Quarks together with the new allowance', () => {
   const b = bp.buildChargeUpdate({ kind: 'plan', key: 'professional', subscriptionId: 's1' }, { paymentId: 'p2', paidPaise: 235882, now: NOW, heldToRelease: 250 });
-  assert.strictEqual(b.update.$inc['credits.balance'], 3500 + 250);
+  assert.strictEqual(b.update.$inc['credits.balance'], 2000 + 250);
   assert.strictEqual(b.update.$inc['credits.topupBalance'], 250);
   assert.strictEqual(b.update.$inc['credits.topupHeld'], -250);
 });
 
 test('a top-up adds to its bucket and is valid for 60 days from the purchase', () => {
   const b = bp.buildChargeUpdate({ kind: 'topup', key: 1000, orderId: 'o1' }, { paymentId: 'p3', paidPaise: 118000, now: NOW });
-  assert.strictEqual(b.quarks, 500);
-  assert.strictEqual(b.update.$inc['credits.topupBalance'], 500);
+  assert.strictEqual(b.quarks, 475);
+  assert.strictEqual(b.update.$inc['credits.topupBalance'], 475);
   assert.strictEqual(+b.update.$set['credits.topupExpiresAt'], NOW.getTime() + 60 * DAY);
 });
 

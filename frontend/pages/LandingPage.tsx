@@ -113,14 +113,14 @@ const PLANS = [
     name: 'Starter',
     price: 999,
     note: 'For one person getting started',
-    features: ['2,100 Quarks a month', 'Quarks for about 30 image posts and 1 Hero video a month', '1 team member'],
+    features: ['Up to 54 posts a month, or', 'up to 3 short videos with voice and music', 'Spend it on posts or videos, in any mix', '1 team member'],
   },
   {
-    name: 'Professional',
+    name: 'Growth',
     price: 1999,
-    note: 'For more posts and more people',
+    note: 'Over three times the output, for businesses that post every day',
     popular: true,
-    features: ['3,500 Quarks a month', 'Everything in Starter', 'Quarks for about 2 Hero videos a month', 'Extra captions', 'Up to 5 team members'],
+    features: ['Up to 181 posts a month, or', 'up to 12 short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Up to 5 team members'],
   },
 ];
 
@@ -129,7 +129,7 @@ const FAQS = [
   { q: 'Which languages does it write in?', a: 'English, Tamil, Hindi, Telugu, Kannada, Malayalam and more. You choose when you sign up and can change it any time.' },
   { q: 'Do I need a website?', a: 'No. If you have one, add it and Nebulaa fills in most of your details. If you do not, answer a few simple questions.' },
   { q: 'Where do my posts go?', a: 'You connect your Instagram, Facebook and other pages with the Publish and schedule add-on. A post goes out only after you approve it.' },
-  { q: 'What are Quarks?', a: 'Quarks are what the app uses each time it makes something for you. An image post uses 20, a caption uses 1 and a Hero video uses 729. Running low? Add more any time from inside the app.' },
+  { q: 'What are Quarks?', a: 'Quarks are what the app spends each time it makes something for you. You never need to count them: every plan shows how many posts or videos it makes, and the price is shown before you make anything. Running low? Add more any time from inside the app.' },
   { q: 'Do Quarks expire?', a: 'Your monthly Quarks are for that month and are renewed when your plan renews. Quarks you buy as a top-up stay valid for 60 days from the purchase. Both can be used while your plan is active. Prices are shown without GST, and 18% GST is added at checkout.' },
 ];
 

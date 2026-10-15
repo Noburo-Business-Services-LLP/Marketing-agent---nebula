@@ -165,12 +165,12 @@ test('plans catalogue: only starter and professional, numbers from config', () =
   const c = bp.planCatalogue();
   assert.deepStrictEqual(c.plans.map((p) => p.id), ['starter', 'professional']);
   const [s, p] = c.plans;
-  assert.strictEqual(s.inr, 999); assert.strictEqual(s.gstPaise, 17982); assert.strictEqual(s.chargePaise, 117882); assert.strictEqual(s.quarks, 2100);
-  assert.strictEqual(p.inr, 1999); assert.strictEqual(p.gstPaise, 35982); assert.strictEqual(p.chargePaise, 235882); assert.strictEqual(p.quarks, 3500);
+  assert.strictEqual(s.inr, 999); assert.strictEqual(s.gstPaise, 17982); assert.strictEqual(s.chargePaise, 117882); assert.strictEqual(s.quarks, 600);
+  assert.strictEqual(p.inr, 1999); assert.strictEqual(p.gstPaise, 35982); assert.strictEqual(p.chargePaise, 235882); assert.strictEqual(p.quarks, 2000);
   for (const x of c.plans) { assert.ok(x.name); assert.ok(Array.isArray(x.features) && x.features.length >= 3); }
-  assert.ok(s.features.some((f) => /2,100 Quarks/.test(f)));
-  assert.ok(p.features.some((f) => /3,500 Quarks/.test(f)));
-  assert.deepStrictEqual(c.topups.map((t) => [t.inr, t.quarks, t.chargePaise]), [[500, 250, 59000], [1000, 500, 118000], [2500, 1250, 295000], [5000, 2500, 590000], [10000, 5000, 1180000]]);
+  assert.ok(s.features.some((f) => /Up to 54 posts/.test(f)));
+  assert.ok(p.features.some((f) => /Up to 181 posts/.test(f)));
+  assert.deepStrictEqual(c.topups.map((t) => [t.inr, t.quarks, t.chargePaise]), [[500, 240, 59000], [1000, 475, 118000], [2500, 1190, 295000], [5000, 2380, 590000], [10000, 4760, 1180000]]);
   assert.deepStrictEqual(c.addons.map((a) => a.id), ['publish', 'competitors', 'inbox', 'bundle']);
   assert.strictEqual(c.addons.find((a) => a.id === 'publish').chargePaise, chargePaise(1000));
   assert.deepStrictEqual(c.addons.find((a) => a.id === 'inbox').requires, ['publish']);
@@ -223,7 +223,7 @@ test('GET /plans returns only the new catalogue', async () => {
   assert.deepStrictEqual(res.body.plans.map((p) => p.id), ['starter', 'professional']);
   assert.strictEqual(res.body.topups.length, 5);
   assert.strictEqual(res.body.addons.length, 4);
-  assert.ok(!/plan_Sra|growth|"scale"|7500/i.test(JSON.stringify(res.body)));
+  assert.ok(!/plan_Sra|"scale"|7500/i.test(JSON.stringify(res.body)));
 });
 
 test('unrelated routes are still registered', () => {
@@ -276,7 +276,7 @@ test('create-subscription refuses old plan ids and active subscriptions', async 
 });
 
 test('create-order accepts only the three pack prices and records Quarks server-side', async () => {
-  for (const [pack, paise, quarks] of [[1000, 118000, 500], [2500, 295000, 1250], [5000, 590000, 2500]]) {
+  for (const [pack, paise, quarks] of [[1000, 118000, 475], [2500, 295000, 1190], [5000, 590000, 2380]]) {
     const ctx = setup();
     const res = await call(ctx.r, 'post', '/create-order', { body: { packInr: pack, amount: 1, quarks: 999999, credits: 999999 } });
     assert.strictEqual(res.code, 200, JSON.stringify(res.body));
@@ -307,10 +307,10 @@ test('top-up verify grants the pack Quarks from config, once', async () => {
   const t = await paidTopup(ctx, { pack: 2500, forgeNotes: { quarks: '99999' } });
   const res = await t.verify();
   assert.strictEqual(res.code, 200, JSON.stringify(res.body));
-  assert.strictEqual(ctx.user.credits.balance, 1350);
+  assert.strictEqual(ctx.user.credits.balance, 1290);
   assert.strictEqual(ctx.user.payments.length, 1);
   assert.strictEqual(ctx.user.payments[0].razorpayPaymentId, 'pay_top1');
-  assert.strictEqual(ctx.user.payments[0].credits, 1250);
+  assert.strictEqual(ctx.user.payments[0].credits, 1190);
   assert.strictEqual(ctx.invoices.length, 1);
   assert.strictEqual(ctx.invoices[0].itemName, 'Nebulaa Quarks');
   assert.strictEqual(ctx.invoices[0].amount, 2500);
@@ -319,7 +319,7 @@ test('top-up verify grants the pack Quarks from config, once', async () => {
   const again = await t.verify();
   assert.strictEqual(again.code, 200);
   assert.strictEqual(again.body.alreadyProcessed, true);
-  assert.strictEqual(ctx.user.credits.balance, 1350);
+  assert.strictEqual(ctx.user.credits.balance, 1290);
   assert.strictEqual(ctx.user.payments.length, 1);
   assert.strictEqual(ctx.invoices.length, 1);
 });
@@ -359,7 +359,7 @@ test('webhook: bad or missing signature, and no secret configured, grant nothing
 });
 
 test('webhook subscription.charged grants the plan Quarks from config and is idempotent', async () => {
-  for (const [planId, quarks, tier, inr] of [['starter', 2100, 'starter', 999], ['professional', 3500, 'professional', 1999]]) {
+  for (const [planId, quarks, tier, inr] of [['starter', 600, 'starter', 999], ['professional', 2000, 'professional', 1999]]) {
     const ctx = setup({ user: mkUser({ plan: { tier: 'free', addons: [], subscriptions: [] } }) });
     const s = await startPlan(ctx, planId);
     const forged = hook('subscription.charged', s.id, s.planId, 'pay_A', { amount: chargePaise(inr), extraPayload: { credits: 99999, quarks: 99999 } });
@@ -395,17 +395,17 @@ test('first payment: verify-subscription and the webhook together grant once', a
   const sig = hmac(ENV.RAZORPAY_KEY_SECRET, `pay_first|${s.id}`);
   const v = await call(ctx.r, 'post', '/verify-subscription', { body: { razorpay_payment_id: 'pay_first', razorpay_subscription_id: s.id, razorpay_signature: sig } });
   assert.strictEqual(v.code, 200, JSON.stringify(v.body));
-  assert.strictEqual(ctx.user.credits.balance, 2200);
+  assert.strictEqual(ctx.user.credits.balance, 700);
   assert.strictEqual(ctx.user.plan.tier, 'starter');
   await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_first', { amount: 117882 }));
-  assert.strictEqual(ctx.user.credits.balance, 2200);
+  assert.strictEqual(ctx.user.credits.balance, 700);
   assert.strictEqual(ctx.user.payments.length, 1);
   const bad = await call(ctx.r, 'post', '/verify-subscription', { body: { razorpay_payment_id: 'pay_x', razorpay_subscription_id: s.id, razorpay_signature: 'nope' } });
   assert.strictEqual(bad.code, 400);
   const unknown = hmac(ENV.RAZORPAY_KEY_SECRET, 'pay_y|sub_unknown');
   const u = await call(ctx.r, 'post', '/verify-subscription', { body: { razorpay_payment_id: 'pay_y', razorpay_subscription_id: 'sub_unknown', razorpay_signature: unknown } });
   assert.ok(u.code >= 400);
-  assert.strictEqual(ctx.user.credits.balance, 2200);
+  assert.strictEqual(ctx.user.credits.balance, 700);
 });
 
 test('webhook grants nothing for unknown subscriptions, unknown plan ids or a mismatched owner', async () => {
@@ -472,7 +472,7 @@ test('cancelled or halted plan subscription returns the account to free and clea
     assert.deepStrictEqual([...ctx.user.plan.addons], []);
     assert.strictEqual(ctx.user.subscription.status, status);
     assert.strictEqual(ctx.user.plan.subscriptions[0].active, false);
-    assert.strictEqual(ctx.user.credits.balance, 3600); // Quarks already granted are kept
+    assert.strictEqual(ctx.user.credits.balance, 2100); // Quarks already granted are kept
   }
 });
 
@@ -530,7 +530,7 @@ test('old plan code is gone from the payment routes and plan config', () => {
     assert.ok(!src.includes(needle), `payment.js still mentions ${needle}`);
   }
   const cfg = fs.readFileSync(path.join(__dirname, '../config/plans.js'), 'utf8');
-  assert.ok(!/plan_Sra|Growth|Scale|quarterly|annual/i.test(cfg));
+  assert.ok(!/plan_Sra|Scale|quarterly|annual/i.test(cfg));
 });
 
 // ---------------------------------------------------------------- review fixes
@@ -589,19 +589,19 @@ test('welcome email is sent once on the first verified activation, never on a re
   const sig = hmac(ENV.RAZORPAY_KEY_SECRET, `pay_w1|${s.id}`);
   const body = { razorpay_payment_id: 'pay_w1', razorpay_subscription_id: s.id, razorpay_signature: sig };
   assert.strictEqual((await call(ctx.r, 'post', '/verify-subscription', { body })).code, 200);
-  assert.deepStrictEqual(ctx.welcomes, [{ email: 'a@example.com', tier: 'professional', quarks: 3500 }]);
+  assert.deepStrictEqual(ctx.welcomes, [{ email: 'a@example.com', tier: 'professional', quarks: 2000 }]);
   await call(ctx.r, 'post', '/verify-subscription', { body });
   await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_w1', { amount: chargePaise(1999) }));
   await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_w2', { amount: chargePaise(1999) }));
   assert.strictEqual(ctx.welcomes.length, 1);
-  assert.strictEqual(ctx.user.credits.balance, 100 + 2 * 3500);
+  assert.strictEqual(ctx.user.credits.balance, 100 + 2 * 2000);
 });
 
 test('welcome email is sent from the webhook for a Starter first charge', async () => {
   const ctx = setup({ user: mkUser({ plan: { tier: 'free', addons: [], subscriptions: [] } }) });
   const s = await startPlan(ctx, 'starter');
   await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_s1', { amount: chargePaise(999) }));
-  assert.deepStrictEqual(ctx.welcomes.map((w) => [w.tier, w.quarks]), [['starter', 2100]]);
+  assert.deepStrictEqual(ctx.welcomes.map((w) => [w.tier, w.quarks]), [['starter', 600]]);
 });
 
 test('an email failure never fails the webhook or the verify, and Quarks are still granted', async () => {
@@ -609,7 +609,7 @@ test('an email failure never fails the webhook or the verify, and Quarks are sti
   const s = await startPlan(ctx, 'starter');
   const res = await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_f1', { amount: chargePaise(999) }));
   assert.strictEqual(res.code, 200);
-  assert.strictEqual(ctx.user.credits.balance, 2200);
+  assert.strictEqual(ctx.user.credits.balance, 700);
   assert.strictEqual(ctx.user.plan.tier, 'starter');
 });
 
@@ -625,13 +625,13 @@ test('no welcome email for add-ons or top-ups', async () => {
 });
 
 test('welcome email content: plan, Quarks, Hero count, add-ons, plain voice', () => {
-  for (const [tier, quarks, plan] of [['starter', 2100, 'Starter'], ['professional', 3500, 'Professional']]) {
+  for (const [tier, quarks, plan] of [['starter', 600, 'Starter'], ['professional', 2000, 'Growth']]) {
     const m = we.buildWelcomeEmail({ firstName: 'Asha', tier, quarks });
     const all = `${m.subject}\n${m.text}\n${m.html}`;
     assert.match(m.subject, new RegExp(plan));
     assert.match(m.text, new RegExp(`${quarks.toLocaleString('en-US')} Quarks`));
-    assert.ok(m.text.includes('Hero videos') && !/each month/.test(m.text), 'no monthly Hero cap is promised');
-    assert.ok(m.text.includes('top up with more Quarks'));
+    assert.ok(m.text.includes('short videos') && !/Hero/.test(m.text), 'videos are described plainly');
+    assert.ok(m.text.includes('top up with more'));
     for (const a of ['Publish and schedule', 'Inbox and replies', 'Competitor insights', 'plans page', 'Create content']) assert.ok(m.text.includes(a), a);
     assert.ok(!/[!\u2014\u2013]/.test(all), 'no exclamation marks or dashes');
     assert.ok(!/credit|production|migrat|trial/i.test(all), 'forbidden words');

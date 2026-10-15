@@ -206,7 +206,7 @@ function createPaymentRouter(deps = {}) {
       const { planId, couponCode } = req.body || {};
       const quote = bp.planQuote(planId);
       if (!quote) {
-        return res.status(400).json({ success: false, message: 'Please choose the Starter or Professional plan.' });
+        return res.status(400).json({ success: false, message: 'Please choose the Starter or Growth plan.' });
       }
 
       // Coupons only record discount metadata; the plan price is unchanged.

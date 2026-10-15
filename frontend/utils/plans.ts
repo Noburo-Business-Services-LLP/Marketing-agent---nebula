@@ -62,7 +62,7 @@ export function formatPaise(paise: number): string {
 export function tierLabel(tier?: string): string {
   switch (tier) {
     case 'starter': return 'Starter';
-    case 'professional': return 'Professional';
+    case 'professional': return 'Growth';
     case 'managed': return 'Managed';
     default: return 'Free';
   }

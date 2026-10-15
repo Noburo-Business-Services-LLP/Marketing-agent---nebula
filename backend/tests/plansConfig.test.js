@@ -8,16 +8,16 @@ const { PLANS, TOPUP_PACKS, ADDONS, GST_RATE, gstPaise, chargePaise, assertPlanA
 
 test('plan allowances: starter and professional derive from the existing method', () => {
   assert.equal(RETRY_FACTOR.hero, 1.5);
-  assert.deepEqual(PLANS.starter.commits, { image_generated: 30, hero: 1 });
-  assert.deepEqual(PLANS.professional.commits, { image_generated: 30, hero: 2, captions: 150 });
+  assert.deepEqual(PLANS.starter.commits, { image_generated: 30, studio_video: 1 });
+  assert.deepEqual(PLANS.professional.commits, { image_generated: 100, studio_video: 3 });
   assert.equal(PLANS.starter.inr, 999);
   assert.equal(PLANS.professional.inr, 1999);
-  assert.equal(PLANS.starter.expectedQuarks, 1814);
-  assert.equal(PLANS.professional.expectedQuarks, 3057);
-  assert.equal(PLANS.starter.derivedQuarks, 2100);
-  assert.equal(PLANS.professional.derivedQuarks, 3500);
-  assert.equal(PLANS.starter.quarks, 2100);
-  assert.equal(PLANS.professional.quarks, 3500);
+  assert.equal(PLANS.starter.expectedQuarks, 572);
+  assert.equal(PLANS.professional.expectedQuarks, 1838);
+  assert.equal(PLANS.starter.derivedQuarks, 700);
+  assert.equal(PLANS.professional.derivedQuarks, 2100);
+  assert.equal(PLANS.starter.quarks, 600);
+  assert.equal(PLANS.professional.quarks, 2000);
   assert.ok(PLANS.starter.label && PLANS.professional.label);
 });
 
@@ -46,7 +46,7 @@ test('GST maths is exact integer paise', () => {
 });
 
 test('top-up packs', () => {
-  assert.deepEqual(TOPUP_PACKS.map(p => [p.inr, p.quarks]), [[500, 250], [1000, 500], [2500, 1250], [5000, 2500], [10000, 5000]]);
+  assert.deepEqual(TOPUP_PACKS.map(p => [p.inr, p.quarks]), [[500, 240], [1000, 475], [2500, 1190], [5000, 2380], [10000, 4760]]);
 });
 
 test('add-ons shape', () => {

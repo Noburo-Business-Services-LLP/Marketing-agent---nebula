@@ -28,8 +28,11 @@
 
 const PROVIDER_RATES = {
   // OpenAI gpt-4o — per token, so quoted per million.
-  gpt4o_input_per_mtok: 2.50,
-  gpt4o_output_per_mtok: 10.00,
+  // The text model is now gpt-5.5 (TEXT_MODEL_ENGLISH default): $5 per million tokens in, $30 out, from OpenAI's
+  // pricing page on 2026-10-15. The key names say gpt4o for history; Tamil and other regional text runs on
+  // gpt-6.1-sol ($2 / $10), which is cheaper, so pricing on gpt-5.5 is the safe side.
+  gpt4o_input_per_mtok: 5.00,
+  gpt4o_output_per_mtok: 30.00,
 
   // Google Nano Banana Pro (nano-banana-pro-preview) — flat per generated
   // image up to 2K. This is our PRIMARY image model, so it is the one that
@@ -85,7 +88,18 @@ const PROVIDER_RATES = {
   },
   // The vision pass that reads a finished page back to check its text: an image plus a short answer on a
   // small model. Rounded up generously so the check is never priced at zero.
-  openai_vision_check_per_page: 0.01
+  openai_vision_check_per_page: 0.01,
+
+  // Pictures for posts, campaigns and carousel slides (gpt-image-2, 1024x1280, measured from real responses on
+  // 2026-10-15: output tokens x $30 per million, plus about $0.002 for the prompt).
+  gpt_image_2_per_picture: { low: 0.0056, medium: 0.0457, high: 0.184 },
+  // Reading the picture back (gpt-4o-mini, about $0.004) and proofreading it (gpt-6.1-sol, about $0.009), measured.
+  picture_check_usd: 0.013,
+  // How often a first picture is flagged and made again, measured on 20 test pictures (English 0 of 5 real
+  // problems at low, Tamil 2 of 5 at low and 0 of 5 at medium). Kept a little pessimistic on purpose.
+  picture_remake_rate: { english: 0.2, regional: 0.1 },
+  // Share of customers writing in English. The rest start at medium. Unknown at scale, so it is set to half.
+  picture_english_share: 0.5
 };
 
 // The designed Blueprint PDF: cover, nine content pages and a closing page.
@@ -148,7 +162,17 @@ const gpt4o = (shape) =>
   (shape.in * PROVIDER_RATES.gpt4o_input_per_mtok / 1e6) +
   (shape.out * PROVIDER_RATES.gpt4o_output_per_mtok / 1e6);
 
+// The older scene-by-scene video pipeline still makes its stills with Nano Banana Pro.
 const image = PROVIDER_RATES.nano_banana_pro_per_image;
+
+// What one finished picture costs on the current path: English starts at low and is remade at medium when the
+// proofreader finds a problem; other languages start at medium and are remade at high. Every attempt is checked.
+const picture = (() => {
+  const r = PROVIDER_RATES; const q = r.gpt_image_2_per_picture; const check = r.picture_check_usd;
+  const english = (q.low + check) + r.picture_remake_rate.english * (q.medium + check);
+  const regional = (q.medium + check) + r.picture_remake_rate.regional * (q.high + check);
+  return r.picture_english_share * english + (1 - r.picture_english_share) * regional;
+})();
 
 // ---------------------------------------------------------------------------
 // 2. What one unit of each action costs us
@@ -165,13 +189,13 @@ const ACTION_USD = {
   // --- images and text -----------------------------------------------------
 
   // Two text passes (creative director + art director) then one image.
-  image_generated: gpt4o(TOKENS.creative_director) + gpt4o(TOKENS.art_director) + image + assetCost(INFRA.mb_per_image),
+  image_generated: gpt4o(TOKENS.caption_only) + picture + assetCost(INFRA.mb_per_image),
 
   // Editing re-runs the image model, which is ~92% of the cost of generating.
   // An edit is NOT meaningfully cheaper than a generation, which is exactly
   // what the old 3-vs-5 split got wrong.
-  image_edit: gpt4o(TOKENS.art_director) + image + assetCost(INFRA.mb_per_image),
-  refine_image: gpt4o(TOKENS.art_director) + image + assetCost(INFRA.mb_per_image),
+  image_edit: picture + assetCost(INFRA.mb_per_image),
+  refine_image: picture + assetCost(INFRA.mb_per_image),
 
   // Text-only: ideas and captions, no image model.
   campaign_text: gpt4o(TOKENS.caption_only),
@@ -179,11 +203,11 @@ const ACTION_USD = {
 
   // Per POST of a campaign. The campaign's shared visual plan is one call
   // amortised across the run, so it is a rounding error per post.
-  campaign_full: gpt4o(TOKENS.caption_only) + gpt4o(TOKENS.art_director) + image + assetCost(INFRA.mb_per_image),
+  campaign_full: gpt4o(TOKENS.caption_only) + picture + assetCost(INFRA.mb_per_image),
 
   // Per SLIDE of a carousel. Same shape: one master plan for the deck
   // (amortised over ~5 slides) plus per-slide execution and one image.
-  carousel_generated: gpt4o(TOKENS.art_director) + image + (gpt4o(TOKENS.creative_director) / 5) + assetCost(INFRA.mb_per_image),
+  carousel_generated: picture + (gpt4o(TOKENS.creative_director) / 5) + assetCost(INFRA.mb_per_image),
 
   // --- video: fixed, once per run -----------------------------------------
   // Everything a video pays for exactly once no matter how long it is. This
@@ -475,7 +499,9 @@ function videoWallClockSeconds(scenes = 5, clipConcurrency = PIPELINE_SECONDS.sc
 //
 // hero: 1.5 — ALSO A GUESS. No measured re-roll rate for hero clips yet; this
 // assumes one re-roll in two. Used only for sizing plan allowances.
-const RETRY_FACTOR = { image: 1.2, carousel: 1.2, video_scene: 1.5, hero: 1.5 };
+// image is lower than it was: the proofreader's automatic remakes are now priced into the picture itself, so only
+// the times a customer asks for another one are left here. studio_video: a change or a second try on about 1 in 3.
+const RETRY_FACTOR = { image: 1.1, carousel: 1.2, video_scene: 1.5, hero: 1.5, studio_video: 1.3 };
 
 // Separately from retries: 20% of campaign_full generations were REFUNDED in
 // the same dataset (30 of 151), against 0% for image_generated. That is a
@@ -538,17 +564,19 @@ const PLANS = {
 
   // Customer plans (prices are GST-exclusive; GST is added at checkout).
   // `quarks` for these is a chosen literal, guarded against the expected burn.
+  // Allowances are chosen so the ladder reads like the market's: the bigger plan is 2x the price for 3.3x the
+  // output, and a top-up is dearer per unit than either plan. Customers see pictures and videos, not Quarks.
   starter: {
     inr: 999,
     label: 'Starter',
-    commits: { image_generated: 30, hero: 1 },
-    grant: 2100
+    commits: { image_generated: 30, studio_video: 1 },
+    grant: 600
   },
   professional: {
     inr: 1999,
-    label: 'Professional',
-    commits: { image_generated: 30, hero: 2, captions: 150 },
-    grant: 3500
+    label: 'Growth',
+    commits: { image_generated: 100, studio_video: 3 },
+    grant: 2000
   }
 };
 
@@ -583,6 +611,7 @@ for (const [name, plan] of Object.entries(PLANS)) {
       (c.scenesPerReel || 0) * QUARK_COSTS.video_generated * RETRY_FACTOR.video_scene
     ) +
     (c.hero || 0) * QUARK_COSTS.hero_video_clip * RETRY_FACTOR.hero +
+    (c.studio_video || 0) * QUARK_COSTS.studio_video * RETRY_FACTOR.studio_video +
     (c.captions || 0) * QUARK_COSTS.campaign_text
   );
 
@@ -599,9 +628,19 @@ for (const [name, plan] of Object.entries(PLANS)) {
 // ---------------------------------------------------------------------------
 // 4b. Top-ups, GST and add-ons (all editable here)
 // ---------------------------------------------------------------------------
-// Top-up Quarks are sold at INR 2.00 each, GST-exclusive.
-const TOPUP_PACKS = [500, 1000, 2500, 5000, 10000].map((inr) => ({ inr, quarks: inr / 2 }))
-  .map((p) => ({ inr: p.inr, quarks: Math.round(p.quarks) }));
+// Top-up Quarks are sold at INR 2.10 each, GST-exclusive: dearer per unit than Starter (about INR 1.67) and
+// Growth (INR 1.00), as every reference price list does it. Rounded to the nearest 5.
+const TOPUP_INR_PER_QUARK = 2.1;
+const TOPUP_PACKS = [500, 1000, 2500, 5000, 10000].map((inr) => ({ inr, quarks: Math.round(inr / TOPUP_INR_PER_QUARK / 5) * 5 }));
+
+/** What a number of Quarks buys when spent on one kind of thing: whole posts, or whole videos. */
+function outputsFor(quarks) {
+  const q = Number(quarks) || 0;
+  return {
+    posts: Math.floor(q / QUARK_COSTS.image_generated),
+    videos: Math.floor(q / QUARK_COSTS.studio_video)
+  };
+}
 
 const GST_RATE = 0.18;
 const GST_PERCENT = 18;
@@ -627,7 +666,7 @@ const ADDONS = {
 module.exports = {
   PROVIDER_RATES, HERO_CLIP_SECONDS, STUDIO_CLIP_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
-  assertPlanAllowance, TOPUP_PACKS, GST_RATE, gstPaise, chargePaise, ADDONS,
+  assertPlanAllowance, TOPUP_PACKS, TOPUP_INR_PER_QUARK, outputsFor, GST_RATE, gstPaise, chargePaise, ADDONS,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,
   PIPELINE_SECONDS, videoWallClockSeconds
 };

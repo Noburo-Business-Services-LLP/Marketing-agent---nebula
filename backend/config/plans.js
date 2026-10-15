@@ -5,14 +5,14 @@
 const PLAN_PRESENTATION = {
   starter: {
     name: 'Starter',
-    description: 'Create posters, image posts and a Hero video every month.',
+    description: 'Posts and short videos for one business, every month.',
     extraFeatures: [],
     envVar: 'RAZORPAY_PLAN_ID_STARTER'
   },
   professional: {
-    name: 'Professional',
-    description: 'More Quarks, a second Hero video and room for extra captions.',
-    extraFeatures: ['Extra captions each month'],
+    name: 'Growth',
+    description: 'Over three times the output, for businesses that post every day.',
+    extraFeatures: ['Up to 5 team members'],
     envVar: 'RAZORPAY_PLAN_ID_PROFESSIONAL'
   }
 };

@@ -1,10 +1,10 @@
 /**
- * Welcome email for a new paid subscriber (Starter or Professional).
+ * Welcome email for a new paid subscriber (Starter or Growth).
  * Pure builder plus a sender that takes an injectable transport, so tests never send mail.
  * Voice: docs/superpowers/specs/2026-10-03-nebulaa-app-voice-design.md.
  */
 
-const PLAN_NAMES = { starter: 'Starter', professional: 'Professional' };
+const PLAN_NAMES = { starter: 'Starter', professional: 'Growth' };
 
 function formatQuarks(n) {
   return Number(n).toLocaleString('en-US');
@@ -12,6 +12,7 @@ function formatQuarks(n) {
 
 function buildWelcomeEmail({ firstName, tier, quarks }) {
   const planName = PLAN_NAMES[tier];
+  const outputs = require('../config/apiCosts').outputsFor(quarks);
   if (!planName || !Number.isFinite(quarks) || quarks <= 0) return null;
   const name = String(firstName || '').trim();
   const greeting = name ? `Hello ${name},` : 'Hello,';
@@ -19,8 +20,8 @@ function buildWelcomeEmail({ firstName, tier, quarks }) {
 
   const paragraphs = [
     greeting,
-    `Thank you for subscribing. Your ${planName} plan is now active, and ${formatQuarks(quarks)} Quarks have been added to your account.`,
-    `You can now create content, including posters and image posts, and generate Hero videos. Each task uses Quarks, and the amount is shown before you confirm it. You can top up with more Quarks whenever you need them.`,
+    `Thank you for subscribing. Your ${planName} plan is now active, and ${formatQuarks(quarks)} Quarks have been added to your account. That is enough for up to ${outputs.posts} posts or ${outputs.videos} short videos this month, in any mix.`,
+    `You can now create posts and campaigns, and make short videos with voice and music. Each task uses Quarks, and the amount is shown before you confirm it. Your monthly Quarks are for this month, and you can top up with more whenever you need them.`,
     'Publish and schedule, Inbox and replies, and Competitor insights are add-ons. You can add any of them from the plans page whenever you need them.',
     'To begin, sign in to Nebulaa and open Create content.',
     'If you have any questions, reply to this email and our team will help.',

@@ -296,7 +296,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
 
         {!isManaged && <>
         <h2 className={h2}>Add-ons</h2>
-        <p className={`${muted} text-sm -mt-2 mb-4`}>Add-ons are available with the Starter and Professional plans and renew monthly. Prices are before GST.</p>
+        <p className={`${muted} text-sm -mt-2 mb-4`}>Add-ons are available with the Starter and Growth plans and renew monthly. Prices are before GST.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
           {catalogue.addons.map((a) => {
             const owned = ownsAddon(a.id);
@@ -320,15 +320,18 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
         </>}
 
         <h2 className={h2}>Extra Quarks</h2>
-        <p className={`${muted} text-sm -mt-2 mb-4`}>Unused Quarks carry over and do not expire. Prices are before GST.</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-12">
+        <p className={`${muted} text-sm -mt-2 mb-4`}>Extra Quarks stay valid for 60 days from the purchase and are used after your monthly ones. Prices are before GST.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
           {catalogue.topups.map((t) => (
             <GlassCard key={t.inr}>
               <div className="p-6 flex flex-col h-full">
-                <p className="text-2xl font-extrabold text-white">{t.quarks.toLocaleString('en-IN')} Quarks</p>
-                <p className={`${muted} text-sm mt-1 mb-4 flex-1`}>{formatInr(t.inr)} plus GST ({formatPaise(t.chargePaise)} including GST)</p>
+                <p className="text-xl font-extrabold text-white">
+                  {t.outputs ? <>{t.outputs.posts.toLocaleString('en-IN')} posts</> : <>{t.quarks.toLocaleString('en-IN')} Quarks</>}
+                </p>
+                {t.outputs && <p className={`${muted} text-sm`}>or {t.outputs.videos.toLocaleString('en-IN')} video{t.outputs.videos === 1 ? '' : 's'}</p>}
+                <p className={`${muted} text-xs mt-2 mb-4 flex-1`}>{formatInr(t.inr)} plus GST ({formatPaise(t.chargePaise)} including GST)</p>
                 <button className={SECONDARY_BTN} disabled={!!busy} onClick={() => buyTopup(t.inr)}>
-                  {busy === `topup:${t.inr}` ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing</> : `Buy ${t.quarks.toLocaleString('en-IN')} Quarks`}
+                  {busy === `topup:${t.inr}` ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing</> : `Add for ${formatInr(t.inr)}`}
                 </button>
               </div>
             </GlassCard>

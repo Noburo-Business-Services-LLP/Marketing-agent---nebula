@@ -38,7 +38,7 @@ test('upgradeInfoOf reads the server answer and ignores other errors', () => {
 
 test('tier names', () => {
   assert.equal(tierLabel('starter'), 'Starter');
-  assert.equal(tierLabel('professional'), 'Professional');
+  assert.equal(tierLabel('professional'), 'Growth');
   assert.equal(tierLabel(undefined), 'Free');
 });
 

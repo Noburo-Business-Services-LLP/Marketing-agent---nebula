@@ -7,7 +7,7 @@ const cfg = require('../config/blueprint');
 
 test('blueprint cost is derived, small, and shared with the trial guard', () => {
   assert.equal(QUARK_COSTS.blueprint, Math.max(1, Math.round((ACTION_USD.blueprint * 2.5) / USD_PER_QUARK)));
-  assert.ok(QUARK_COSTS.blueprint >= 1 && QUARK_COSTS.blueprint <= 10);
+  assert.ok(QUARK_COSTS.blueprint >= 1 && QUARK_COSTS.blueprint <= 25);
   assert.equal(ACTION_UNITS.blueprint, 'per blueprint');
   assert.equal(require('../middleware/trialGuard').CREDIT_COSTS.blueprint, QUARK_COSTS.blueprint);
 });

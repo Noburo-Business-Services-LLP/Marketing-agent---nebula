@@ -97,11 +97,14 @@ test('no customer-facing credits, trial or 7-day wording in the frontend', () =>
 test('landing page plan figures come from the backend PLANS config', async () => {
   const cfg = await import(path.resolve(ROOT, '../backend/config/apiCosts.js'));
   const PLANS = (cfg.default || cfg).PLANS;
+  const outputsFor = (cfg.default || cfg).outputsFor;
   const land = fs.readFileSync(path.join(ROOT, 'pages/LandingPage.tsx'), 'utf8');
   for (const id of ['starter', 'professional']) {
     const q = PLANS[id].quarks ?? PLANS[id].credits ?? PLANS[id].allowance;
     assert.ok(Number.isInteger(q), `PLANS.${id} has a Quark allowance`);
-    assert.ok(land.includes(`${q.toLocaleString('en-US')} Quarks a month`), `landing shows ${q} for ${id}`);
+    const o = outputsFor(q);
+    assert.ok(land.includes(`Up to ${o.posts} posts a month`), `landing shows ${o.posts} posts for ${id}`);
+    assert.ok(land.includes(`up to ${o.videos} short videos`), `landing shows ${o.videos} videos for ${id}`);
   }
   assert.ok(!/7 days free|free for 7 days|no card needed/i.test(land));
 });
