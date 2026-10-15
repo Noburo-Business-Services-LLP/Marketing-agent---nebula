@@ -3,7 +3,7 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 
 // The writing models. English copy and plans use one, Indian-language copy uses a stronger one; both are settings,
 // so a model can be changed without a release. OPENAI_MODEL is left alone for code that names it directly.
-const TEXT_MODEL_ENGLISH = () => process.env.TEXT_MODEL_ENGLISH || 'gpt-5.5';
+const TEXT_MODEL_ENGLISH = () => process.env.TEXT_MODEL_ENGLISH || 'gpt-6.1-sol';
 const TEXT_MODEL_REGIONAL = () => process.env.TEXT_MODEL_REGIONAL || 'gpt-6.1-sol';
 // If the writing model fails, these Gemini models take over (in this order).
 const TEXT_BACKUP_MODELS = () => String(process.env.TEXT_BACKUP_MODELS || 'gemini-3.8-flash,gemini-3.7-flash').split(',').map((m) => m.trim()).filter(Boolean);

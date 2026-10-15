@@ -6,8 +6,8 @@ delete process.env.TEXT_MODEL_ENGLISH; delete process.env.TEXT_MODEL_REGIONAL;
 const { callOpenAI, callTextLLM, textModelFor, isRegionalLanguage } = require('../services/openAI');
 
 test('English uses the English writer; anything regional or mixed uses the regional writer', () => {
-  assert.strictEqual(textModelFor('English'), 'gpt-5.5');
-  assert.strictEqual(textModelFor(''), 'gpt-5.5');
+  assert.strictEqual(textModelFor('English'), 'gpt-6.1-sol');
+  assert.strictEqual(textModelFor(''), 'gpt-6.1-sol');
   assert.strictEqual(textModelFor('tamil'), 'gpt-6.1-sol');
   assert.strictEqual(textModelFor('Tamil'), 'gpt-6.1-sol');
   assert.strictEqual(textModelFor('tamil_english_mix'), 'gpt-6.1-sol');
@@ -19,7 +19,7 @@ test('current model families get max_completion_tokens and no temperature; old o
   const real = global.fetch;
   global.fetch = async (url, opts) => { bodies.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) }; };
   try {
-    await callOpenAI('hi', { model: 'gpt-5.5', maxTokens: 1000, temperature: 0.2 });
+    await callOpenAI('hi', { model: 'gpt-6.1-sol', maxTokens: 1000, temperature: 0.2 });
     await callOpenAI('hi', { model: 'gpt-4o', maxTokens: 1000, temperature: 0.2 });
   } finally { global.fetch = real; }
   assert.strictEqual(bodies[0].max_completion_tokens, 4000);
