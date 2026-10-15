@@ -234,7 +234,7 @@ const CreateVideo: React.FC = () => {
       {step === 'idea' && (
         <div className="space-y-6">
           <GravityPanel halo beam>
-            <div className="mb-3 flex flex-wrap items-center gap-3">
+            <div className="mb-4 flex flex-wrap items-center justify-center gap-3">
               <GravityButton variant="ghost" onClick={() => setIdeaPickerOpen(true)} className="!py-2"><CalendarIcon className="h-4 w-4 text-[var(--gv-accent)]" /> Choose an idea from your calendar</GravityButton>
               {pickedIdea && <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Loaded: <span className="text-[var(--gv-accent-text)]">{pickedIdea}</span></span>}
             </div>
