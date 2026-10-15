@@ -58,7 +58,11 @@ async function callOpenAI(prompt, options = {}) {
   if (systemMessage) {
     messages.push({ role: 'system', content: systemMessage });
   }
-  messages.push({ role: 'user', content: prompt });
+  // OpenAI refuses a JSON-mode request whose messages never mention JSON; say so instead of failing over to a weaker model.
+  const userText = jsonMode && !/json/i.test(`${systemMessage || ''} ${prompt}`)
+    ? `${prompt}\n\nReturn your answer as a single JSON object.`
+    : prompt;
+  messages.push({ role: 'user', content: userText });
 
   const legacy = isLegacyChatModel(model);
   const body = { model, messages };

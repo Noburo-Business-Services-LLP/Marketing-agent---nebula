@@ -50,3 +50,15 @@ test('a model that rejects reasoning_effort is asked again without it', async ()
   assert.strictEqual(bodies[0].model, 'gpt-6.1-sol');
   assert.strictEqual(bodies[1].reasoning_effort, undefined);
 });
+
+test('a JSON-mode request whose prompt never says JSON gets that said, so it does not fail over', async () => {
+  const bodies = [];
+  const real = global.fetch;
+  global.fetch = async (url, opts) => { bodies.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{}' } }] }) }; };
+  try {
+    await callOpenAI('Plan the week of posts', { model: 'gpt-5.5', jsonMode: true });
+    await callOpenAI('Return JSON for the plan', { model: 'gpt-5.5', jsonMode: true });
+  } finally { global.fetch = real; }
+  assert.match(bodies[0].messages[bodies[0].messages.length - 1].content, /single JSON object/);
+  assert.doesNotMatch(bodies[1].messages[bodies[1].messages.length - 1].content, /single JSON object/);
+});
