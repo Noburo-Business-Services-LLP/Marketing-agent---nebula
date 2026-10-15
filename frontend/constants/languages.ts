@@ -30,3 +30,20 @@ export const CONTENT_LANGUAGES: { value: string; label: string }[] = [
   { value: 'odia_english_mix', label: 'Odia + English mix' },
   { value: 'urdu_english_mix', label: 'Urdu + English mix' }
 ];
+
+/**
+ * The languages offered in pickers today. The full list above stays, because the backend accepts all of them and
+ * accounts that already use one keep working, but only languages the team can read and check are offered to new
+ * choices. Change this list (or set VITE_OFFERED_LANGUAGES to a comma separated list) to open more up.
+ */
+const DEFAULT_OFFERED = ['english', 'tamil', 'tamil_english_mix'];
+const fromEnv = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_OFFERED_LANGUAGES) || '';
+export const OFFERED_LANGUAGE_VALUES: string[] = String(fromEnv).split(',').map((v) => v.trim()).filter(Boolean).length
+  ? String(fromEnv).split(',').map((v) => v.trim()).filter(Boolean)
+  : DEFAULT_OFFERED;
+
+/** The offered languages, plus the one currently in use if it is not among them, so nothing already chosen disappears. */
+export function offeredLanguages(current?: string): { value: string; label: string }[] {
+  const keep = new Set([...OFFERED_LANGUAGE_VALUES, ...(current ? [current] : [])]);
+  return CONTENT_LANGUAGES.filter((l) => keep.has(l.value));
+}

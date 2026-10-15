@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ImagePlus, X } from 'lucide-react';
+import { ChevronDown, ImagePlus, Sparkles, Loader2, X } from 'lucide-react';
 import PostPreview from './PostPreview';
-import { brandAssetsAPI } from '../services/api';
+import { brandAssetsAPI, apiService } from '../services/api';
 import { PostDesign, PostDetails, referenceFileProblem } from '../utils/postDesign';
 
 const input = 'w-full rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 py-2.5 text-[14px] text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-tertiary)] focus:outline-none focus:border-[var(--gv-accent)]';
@@ -27,11 +27,17 @@ const PostDesignPanel: React.FC<{
   aspect: string;
   logoUrl?: string;
   logoPosition?: string;
-}> = ({ design, onChange, mode, aspect, logoUrl, logoPosition }) => {
+  /** what the person wrote and the language chosen, so suggestions can be made from them */
+  idea?: string;
+  language?: string;
+}> = ({ design, onChange, mode, aspect, logoUrl, logoPosition, idea = '', language = 'English' }) => {
   const navigate = useNavigate();
   const [headers, setHeaders] = useState<any[]>([]);
   const [footers, setFooters] = useState<any[]>([]);
   const [refNote, setRefNote] = useState('');
+  const [open, setOpen] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestNote, setSuggestNote] = useState('');
   const touched = useRef(false);
   const designRef = useRef(design);
   designRef.current = design;
@@ -67,6 +73,36 @@ const PostDesignPanel: React.FC<{
 
   const designed = true;
 
+  // What has been added, in one line, for when the section is closed.
+  const filled = Object.values(design.details).filter((v) => String(v || '').trim()).length;
+  const summary = [
+    filled ? `${filled} text ${filled === 1 ? 'field' : 'fields'}` : '',
+    design.referenceImage ? 'a reference picture' : '',
+    design.headerUrl ? 'a header' : '',
+    design.footerUrl ? 'a footer' : '',
+  ].filter(Boolean).join(' · ') || 'Nothing added. Nebulaa designs from your idea.';
+
+  const suggest = async () => {
+    setSuggesting(true); setSuggestNote('');
+    try {
+      const r = await apiService.suggestPostDetails({ idea, mode, language });
+      if (!r.success || !r.details) { setSuggestNote(r.message || 'Could not suggest details right now.'); return; }
+      const d = r.details;
+      const mine = design.details;
+      const pick = (current: string, next: string) => (String(current || '').trim() ? current : String(next || ''));
+      const items = Array.isArray(d.items) ? d.items.join('\n') : String(d.items || '');
+      set({ details: {
+        headline: pick(mine.headline, d.headline), offer: pick(mine.offer, d.offer), items: pick(mine.items, items),
+        phone: pick(mine.phone, d.phone), address: pick(mine.address, d.address), hours: pick(mine.hours, d.hours), tagline: pick(mine.tagline, d.tagline),
+      } });
+      setSuggestNote(r.phoneFromAccount
+        ? 'Suggested from your idea and profile. Please check the phone number is the one customers should call.'
+        : 'Suggested from your idea and profile. Please check everything, and change what is not right.');
+    } catch {
+      setSuggestNote('Could not suggest details right now. You can type them in.');
+    } finally { setSuggesting(false); }
+  };
+
   const FrameChoice: React.FC<{ title: string; items: any[]; value: string; k: 'headerUrl' | 'footerUrl' }> = ({ title, items, value, k }) => (
     <div>
       <p className={label}>{title}</p>
@@ -98,10 +134,30 @@ const PostDesignPanel: React.FC<{
   );
 
   return (
-    <section className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-5 sm:p-6 space-y-8" aria-label="Post design">
-      <div>
-        <h2 className="text-[18px] font-semibold text-[var(--gv-text-primary)]">Details <span className="text-[13px] font-normal text-[var(--gv-text-tertiary)]">· optional</span></h2>
-        <p className="mt-1 text-[13.5px] text-[var(--gv-text-secondary)]">Nebulaa designs the post from your idea. Add exact words, a picture you like, or a header and footer only if you want them. Anything you leave empty is left out, and nothing is invented.</p>
+    <section className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]" aria-label="Advanced options">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls="advanced-options-body"
+        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left"
+      >
+        <span>
+          <span className="block text-[16px] font-semibold text-[var(--gv-text-primary)]">Advanced options <span className="text-[13px] font-normal text-[var(--gv-text-tertiary)]">· optional</span></span>
+          <span className="block mt-0.5 text-[13px] text-[var(--gv-text-secondary)]">{open ? 'Exact words, a reference picture, a header and footer. Leave empty and nothing is invented.' : summary}</span>
+        </span>
+        <ChevronDown className={`w-5 h-5 shrink-0 text-[var(--gv-text-tertiary)] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
+      {open && (
+      <div id="advanced-options-body" className="border-t border-[var(--gv-border-subtle)] p-5 sm:p-6 space-y-8">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={suggest} disabled={suggesting}
+          className="inline-flex items-center gap-2 rounded-lg border border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] px-3.5 py-2 text-[13px] font-semibold text-[var(--gv-accent-text)] disabled:opacity-60">
+          {suggesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          Suggest with AI
+        </button>
+        <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Fills the empty boxes from your idea and your profile. You can change anything.</span>
+        {suggestNote && <p role="status" className="basis-full text-[12.5px] text-[var(--gv-text-primary)]">{suggestNote}</p>}
       </div>
 
       {designed && (
@@ -159,6 +215,8 @@ const PostDesignPanel: React.FC<{
           </div>
         </div>
       </div>
+      </div>
+      )}
     </section>
   );
 };

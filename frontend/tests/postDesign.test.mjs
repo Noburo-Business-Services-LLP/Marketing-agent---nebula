@@ -42,3 +42,11 @@ test('typed details travel with the request even though no style is chosen any m
   assert.equal(f.postDetails.phone, '98765 43210');
   assert.deepEqual(designRequestFields(DEFAULT_DESIGN), {});
 });
+
+test('only the languages the team can check are offered, and one already in use is never dropped', async () => {
+  const { offeredLanguages, OFFERED_LANGUAGE_VALUES } = await import('../constants/languages.ts');
+  assert.deepEqual(OFFERED_LANGUAGE_VALUES, ['english', 'tamil', 'tamil_english_mix']);
+  assert.deepEqual(offeredLanguages().map((l) => l.value), ['english', 'tamil', 'tamil_english_mix']);
+  assert.ok(offeredLanguages('telugu').some((l) => l.value === 'telugu'));
+  assert.ok(!offeredLanguages('').some((l) => l.value === 'telugu'));
+});

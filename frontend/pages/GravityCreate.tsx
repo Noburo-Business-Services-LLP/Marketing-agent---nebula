@@ -6,9 +6,10 @@ import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, In
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
-import { CONTENT_LANGUAGES } from '../constants/languages';
+import { CONTENT_LANGUAGES, OFFERED_LANGUAGE_VALUES } from '../constants/languages';
 import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 import PostDesignPanel from '../components/PostDesignPanel';
+import ModeExplainer from '../components/ModeExplainer';
 import { DEFAULT_DESIGN, PostDesign, designRequestFields } from '../utils/postDesign';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
@@ -20,10 +21,10 @@ import { BorderBeam } from '../components/ui/border-beam';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 const ASPECTS = [
-  { key: '4:5',  label: '4:5',  hint: 'Portrait' },
-  { key: '1:1',  label: '1:1',  hint: 'Square' },
-  { key: '9:16', label: '9:16', hint: 'Vertical' },
-  { key: '16:9', label: '16:9', hint: 'Landscape' },
+  { key: '4:5',  label: '4:5',  hint: 'Portrait', use: 'Best for the Instagram feed', w: 4, h: 5 },
+  { key: '1:1',  label: '1:1',  hint: 'Square', use: 'Works everywhere', w: 1, h: 1 },
+  { key: '9:16', label: '9:16', hint: 'Full screen', use: 'Stories and reels', w: 9, h: 16 },
+  { key: '16:9', label: '16:9', hint: 'Wide', use: 'YouTube and Facebook', w: 16, h: 9 },
 ];
 
 // Direct fetch to the streaming endpoint — apiService doesn't expose SSE.
@@ -48,7 +49,7 @@ const VISUAL_STYLES = ['4:5 portrait', '1:1 square', '9:16 vertical', '16:9 land
 // same thing everywhere else in the product. Popover works off the labels;
 // the matching stored value ('hindi', 'tamil_english_mix', ...) is looked
 // up at submit time.
-const LANGUAGES = CONTENT_LANGUAGES.map((l) => l.label);
+const LANGUAGES = CONTENT_LANGUAGES.filter((l) => OFFERED_LANGUAGE_VALUES.includes(l.value)).map((l) => l.label);
 const languageValueFromLabel = (label: string) =>
   CONTENT_LANGUAGES.find((l) => l.label === label)?.value || 'english';
 const platformIcon = (key: string): React.ComponentType<{ className?: string }> =>
@@ -1119,6 +1120,8 @@ const GravityCreate: React.FC = () => {
         </div>
       </div>
 
+      <ModeExplainer mode={mode} />
+
       {/* Hero */}
       <GravityHero
         eyebrow={
@@ -1351,25 +1354,39 @@ const GravityCreate: React.FC = () => {
       <div className="max-w-2xl mx-auto mt-8 grid gap-4 sm:grid-cols-2">
         <div>
           <div className="gravity-label mb-2">Aspect ratio</div>
-          <div className="flex gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Shape of the picture">
             {ASPECTS.map((a) => {
               const active = visualStyle.startsWith(a.key);
+              // A small shape drawn at the real proportions: the longer side is 30 pixels.
+              const scale = 30 / Math.max(a.w, a.h);
               return (
                 <button
                   key={a.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
                   onClick={() => setAspect(a.key)}
-                  title={a.hint}
-                  className={`flex-1 rounded-lg border px-2 py-2 text-[12px] font-semibold transition-colors ${
+                  title={`${a.hint}: ${a.use}`}
+                  className={`flex flex-col items-center gap-1.5 rounded-lg border px-1.5 py-2 transition-colors ${
                     active
                       ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
                       : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'
                   }`}
                 >
-                  {a.label}
+                  <span className="flex h-[34px] items-center justify-center">
+                    <span
+                      aria-hidden="true"
+                      className={`block rounded-[3px] border-2 ${active ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-current opacity-70'}`}
+                      style={{ width: Math.round(a.w * scale), height: Math.round(a.h * scale) }}
+                    />
+                  </span>
+                  <span className="text-[12.5px] font-semibold leading-none">{a.label}</span>
+                  <span className="text-[10.5px] leading-tight opacity-80 text-center">{a.hint}</span>
                 </button>
               );
             })}
           </div>
+          <p className="mt-1.5 text-[11.5px] text-[var(--gv-text-muted)]">{ASPECTS.find((a) => visualStyle.startsWith(a.key))?.use}</p>
         </div>
 
         <div>
@@ -1452,6 +1469,8 @@ const GravityCreate: React.FC = () => {
             design={design}
             onChange={setDesign}
             mode={mode === 'campaign' ? 'campaign' : mode === 'carousel' ? 'carousel' : 'single'}
+            idea={[name, description].filter(Boolean).join('. ')}
+            language={language}
             aspect={backendAspect}
             logoUrl={selectedLogo || undefined}
             logoPosition={logoPosition}

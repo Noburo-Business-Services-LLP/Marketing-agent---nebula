@@ -4,7 +4,7 @@ import CalendarIdeaPicker from './CalendarIdeaPicker';
 import { GravityPanel, GravityLabel, GravityButton } from './gravity';
 import GenerationTimer from './GenerationTimer';
 import { heroVideoAPI, type HeroBrief } from '../services/api';
-import { CONTENT_LANGUAGES } from '../constants/languages';
+import { CONTENT_LANGUAGES, offeredLanguages } from '../constants/languages';
 
 type Concept = { title: string; emotion: string; hook: string; beats: string[]; dialogue: string[]; cta: string; look: string; brief: HeroBrief };
 
@@ -126,7 +126,7 @@ const HeroQuickStart: React.FC<{ onPick: (brief: HeroBrief, styleSlug: string, c
           <div className="grid sm:grid-cols-3 gap-3">
             <label className="block text-[13px] font-semibold text-[var(--gv-text-primary)]">Language
               <select value={language} onChange={(e) => setLanguage(e.target.value)} className={`${field} mt-1.5`}>
-                {CONTENT_LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+                {offeredLanguages(language).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
             </label>
             <label className="block text-[13px] font-semibold text-[var(--gv-text-primary)]">Shape

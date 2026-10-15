@@ -1,6 +1,6 @@
 import React from 'react';
 import AdditionalLanguagePicker from './AdditionalLanguagePicker';
-import { CONTENT_LANGUAGES } from '../constants/languages';
+import { CONTENT_LANGUAGES, offeredLanguages } from '../constants/languages';
 import {
   industryChoicesFor, industryValueFor, REACH_CHOICES, reachAreasOf, COMPANY_SIZES, SALES_CYCLES,
   VOICE_CHOICES, GOAL_CHOICES, sellsToBusinesses, showGenderChoice, toggleIn, voiceList,
@@ -162,7 +162,7 @@ const BusinessProfileFields: React.FC<Props> = ({ biz, onChange, inputCls, label
           <Field {...f} label="Main language for posts">
             <select className={inputCls} value={biz.contentLanguage || ''} onChange={(e) => onChange('contentLanguage', e.target.value)}>
               <option value="">Select...</option>
-              {CONTENT_LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+              {offeredLanguages((biz as any).contentLanguage).map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </Field>
         </div>

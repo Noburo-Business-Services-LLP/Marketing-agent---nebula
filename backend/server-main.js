@@ -99,6 +99,7 @@ const googleCalendarRoutes = require('./routes/googleCalendar');
 const productRoutes = require('./routes/products');
 const promptRoutes = require('./routes/prompts');
 const carouselRoutes = require('./routes/carousels');
+const createAssistRoutes = require('./routes/createAssist');
 const videoGenerationRoutes = require('./routes/videoGeneration');
 const heroVideoRoutes = require('./routes/heroVideo');
 const blueprintRoutes = require('./routes/blueprint');
@@ -323,7 +324,7 @@ app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 // Request size limits. Most routes only ever receive small text, so they get 1 MB; only the routes that take pictures
 // (sent as text) get a bigger allowance. A huge body is refused before it is read into memory.
 const BIG_BODY_PREFIXES = [
-  '/api/campaigns', '/api/carousels', '/api/drafts', '/api/brand-assets', '/api/video-generation', '/api/hero-video',
+  '/api/campaigns', '/api/carousels', '/api/create-assist', '/api/drafts', '/api/brand-assets', '/api/video-generation', '/api/hero-video',
   '/api/products', '/api/ideas', '/api/content', '/api/social', '/api/ads', '/api/ad-campaigns', '/api/chat',
   '/api/blueprint', '/api/brand', '/api/auth/update-profile', '/api/auth/complete-onboarding'
 ];
@@ -458,6 +459,7 @@ app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/prompts', promptRoutes);
 app.use('/api/carousels', carouselRoutes);
+app.use('/api/create-assist', createAssistRoutes);
 // Video generation has its own per-route limiters (job polling must not trip AI limiter).
 // Scheduling a video post calls an outside service; gated here so the Kling route file stays untouched.
 app.post('/api/video-generation/schedulePost', protect, requireFeature('schedule'));
