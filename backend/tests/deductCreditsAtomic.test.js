@@ -9,12 +9,16 @@ const UserStub = {
     await new Promise((r) => setImmediate(r)); // let concurrent calls interleave
     const min = q['credits.balance'] && q['credits.balance'].$gte;
     if (account._id !== q._id || (min !== undefined && !(account.credits.balance >= min))) return null;
-    account.credits.balance += u.$inc['credits.balance'];
-    account.credits.totalUsed += u.$inc['credits.totalUsed'];
+    // A pipeline update: the amount is the second operand of the balance subtraction.
+    const cost = u[0].$set['credits.balance'].$subtract[1];
+    account.credits.balance -= cost;
+    account.credits.totalUsed += cost;
     return account;
   },
-  findById: () => ({ select: async () => account }),
+  findById: () => ({ select: async () => account, lean: async () => account }),
 };
+const ledgerPath = require.resolve('../models/QuarkLedger');
+require.cache[ledgerPath] = { id: ledgerPath, filename: ledgerPath, loaded: true, exports: { create: async () => ({}) } };
 const userPath = require.resolve('../models/User');
 require.cache[userPath] = { id: userPath, filename: userPath, loaded: true, exports: UserStub };
 const { deductCredits, CREDIT_COSTS } = require('../middleware/trialGuard');

@@ -25,7 +25,7 @@ export const BLUEPRINT_COPY = {
       { label: '[Unverified]', meaning: 'Could not be confirmed, so it is marked as such.' },
     ],
     button: 'Get my free Blueprint',
-    note: 'It uses a small number of your 100 free Quarks.',
+    note: 'It uses 7 of your Quarks.',
   },
   form: {
     title: 'Your Brand Growth Blueprint',

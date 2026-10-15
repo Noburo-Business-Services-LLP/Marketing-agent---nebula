@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const quarkBuckets = require('../services/quarkBuckets');
 
 /**
  * Credit costs per action (demo version)
@@ -21,11 +22,13 @@ const checkTrial = async (req, res, next) => {
     const userId = req.user?.userId || req.user?.id || req.user?._id;
     if (!userId) return next(); // Let auth middleware handle missing user
 
+    // Quarks that have run out of time are taken off first, so the balance checked below is the real one.
+    await quarkBuckets.settle(userId).catch(() => null);
     const user = await User.findById(userId);
     if (!user) return next();
 
-    // Check if credits are exhausted (no time-based expiry)
-    if ((user.credits?.balance ?? 100) <= 0) {
+    // Check if credits are exhausted
+    if ((user.credits?.balance ?? 0) <= 0) {
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
@@ -37,7 +40,7 @@ const checkTrial = async (req, res, next) => {
     }
 
     req.trialInfo = {
-      creditsRemaining: user.credits?.balance ?? 100
+      creditsRemaining: user.credits?.balance ?? 0
     };
 
     next();
@@ -70,36 +73,18 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
 
     const totalCost = cost * count;
 
-    // One atomic step: the balance is checked and subtracted together, so many requests sent at the same
-    // moment cannot all pass the check and overdraw the account.
-    const result = await User.findOneAndUpdate(
-      { _id: userId, 'credits.balance': { $gte: totalCost } },
-      {
-        $inc: {
-          'credits.balance': -totalCost,
-          'credits.totalUsed': totalCost
-        },
-        $push: {
-          'credits.history': {
-            $each: [{
-              action,
-              amount: -totalCost,
-              description: description || `${action} x${count}`,
-              createdAt: new Date()
-            }],
-            $slice: -100 // Keep only last 100 entries
-          }
-        }
-      },
-      { new: true }
-    );
+    // Anything past its date is taken off first, then one atomic step checks the balance and subtracts from the
+    // buckets together, so many requests at the same moment cannot all pass the check and overdraw the account.
+    await quarkBuckets.settle(userId).catch(() => null);
+    const spent = await quarkBuckets.spend(userId, totalCost, { action, description: description || `${action} x${count}` });
+    const result = spent.success ? spent.user : null;
 
     if (!result) {
       const user = await User.findById(userId).select('credits.balance');
       if (!user) {
         return { success: false, creditsRemaining: 0, creditsDeducted: 0, error: 'User not found' };
       }
-      const currentBalance = user.credits?.balance ?? 100;
+      const currentBalance = user.credits?.balance ?? 0;
       return {
         success: false,
         creditsRemaining: currentBalance,
@@ -137,8 +122,9 @@ const requireCredits = (action, countOrFn = 1) => {
       const count = typeof countOrFn === 'function' ? countOrFn(req) : countOrFn;
       const totalCost = cost * count;
 
+      await quarkBuckets.settle(userId).catch(() => null);
       const user = await User.findById(userId);
-      const currentBalance = user?.credits?.balance ?? 100;
+      const currentBalance = user?.credits?.balance ?? 0;
 
       if (currentBalance < totalCost) {
         return res.status(403).json({
@@ -184,13 +170,15 @@ const refundCredits = async (userId, action, count = 1, description = '') => {
       return { success: false, creditsRemaining: 0, creditsRefunded: 0, error: 'User not found' };
     }
 
-    // Refund credits and log history
+    // A refund goes back where Quarks that expire come from: the monthly bucket while that month is still running.
+    const planLive = user.credits?.planExpiresAt && new Date(user.credits.planExpiresAt) > new Date();
     const result = await User.findByIdAndUpdate(
       userId,
       {
         $inc: {
           'credits.balance': totalRefund,
-          'credits.totalUsed': -totalRefund
+          'credits.totalUsed': -totalRefund,
+          ...(planLive ? { 'credits.planBalance': totalRefund } : {})
         },
         $push: {
           'credits.history': {

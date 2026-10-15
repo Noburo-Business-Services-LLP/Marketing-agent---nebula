@@ -11,9 +11,11 @@
  *   Competitor scrape → 0 (free)
  */
 
+const quarkBuckets = require('../services/quarkBuckets');
 const User = require('../models/User');
 
-const TRIAL_CREDITS = 100;
+// There is no free grant: a new account starts at zero and gets Quarks with a plan or a top-up.
+const TRIAL_CREDITS = 0;
 const TRIAL_DAYS = 7;
 
 /**
@@ -117,29 +119,27 @@ async function deductCredits(userId, amountOrAction, actionOrAmount, description
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
 
-  // Ensure cycle is current
+  // Ensure cycle is current, and take off anything that has run out of time
   await ensureCreditCycle(user);
+  await quarkBuckets.settle(userId).catch(() => null);
 
-  user.credits.balance = Math.max(0, Number(user.credits.balance) - amount);
-  user.credits.totalUsed = Number(user.credits.totalUsed || 0) + amount;
-  
-  // Trim history to last 50 entries before pushing
-  user.credits.history = (user.credits.history || []).slice(-50);
-  user.credits.history.push({
-    action,
-    cost: amount,
-    balanceAfter: user.credits.balance,
-    timestamp: new Date()
-  });
-
-  await user.save();
-
+  // Callers have already checked the balance, so this takes what is there up to the amount (never below zero),
+  // in one atomic step per try. Two jobs finishing together cannot lose each other's deduction.
+  let spent = null;
+  for (let attempt = 0; attempt < 3 && !spent; attempt += 1) {
+    const fresh = await User.findById(userId).select('credits.balance').lean();
+    const take = Math.min(amount, Math.max(0, Number(fresh?.credits?.balance) || 0));
+    if (take <= 0) break;
+    const r = await quarkBuckets.spend(userId, take, { action });
+    if (r.success) spent = r;
+  }
+  const after = spent ? spent.user : await User.findById(userId);
   return {
     success: true,
-    balance: user.credits.balance,
-    creditsRemaining: user.credits.balance,
-    creditsDeducted: amount,
-    totalUsed: user.credits.totalUsed
+    balance: after.credits.balance,
+    creditsRemaining: after.credits.balance,
+    creditsDeducted: spent ? spent.spent : 0,
+    totalUsed: after.credits.totalUsed
   };
 }
 

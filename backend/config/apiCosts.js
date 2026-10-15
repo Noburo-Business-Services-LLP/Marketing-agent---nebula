@@ -585,7 +585,7 @@ for (const [name, plan] of Object.entries(PLANS)) {
 // 4b. Top-ups, GST and add-ons (all editable here)
 // ---------------------------------------------------------------------------
 // Top-up Quarks are sold at INR 2.00 each, GST-exclusive.
-const TOPUP_PACKS = [999, 1999, 4999].map((inr) => ({ inr, quarks: inr / 2 }))
+const TOPUP_PACKS = [500, 1000, 2500, 5000, 10000].map((inr) => ({ inr, quarks: inr / 2 }))
   .map((p) => ({ inr: p.inr, quarks: Math.round(p.quarks) }));
 
 const GST_RATE = 0.18;

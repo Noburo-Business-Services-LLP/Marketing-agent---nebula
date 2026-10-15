@@ -4,6 +4,7 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const { CREDIT_COSTS, ACTION_UNITS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
+const quarkBuckets = require('../services/quarkBuckets');
 
 /**
  * GET /api/credits
@@ -20,13 +21,23 @@ router.get('/', protect, async (req, res) => {
 
     // Initialize credits + trial if not set yet
     await ensureCreditCycle(user);
+    // Take off anything that has run out of time, then read the account again.
+    const settled = await quarkBuckets.settle(userId).catch(() => ({ changed: false }));
+    const fresh = settled.changed ? await User.findById(userId) : user;
+    const parts = quarkBuckets.summarise(fresh);
 
     res.json({
       success: true,
       credits: {
-        balance: user.credits?.balance ?? 100,
-        totalUsed: user.credits?.totalUsed ?? 0,
-        history: (user.credits?.history || []).slice(-20) // Last 20 entries
+        balance: fresh.credits?.balance ?? 0,
+        totalUsed: fresh.credits?.totalUsed ?? 0,
+        history: (fresh.credits?.history || []).slice(-20), // Last 20 entries
+        // What the balance is made of, and when each part ends. Kept Quarks never expire.
+        parts: {
+          plan: parts.plan, planExpiresAt: parts.planExpiresAt,
+          topup: parts.topup, topupExpiresAt: parts.topupExpiresAt,
+          held: parts.held, kept: parts.kept
+        }
       },
       trial: {
         startDate: user.trial?.startDate || user.createdAt,
@@ -62,7 +73,7 @@ router.get('/history', protect, async (req, res) => {
     res.json({
       success: true,
       history: user.credits?.history || [],
-      balance: user.credits?.balance ?? 100,
+      balance: user.credits?.balance ?? 0,
       totalUsed: user.credits?.totalUsed ?? 0
     });
   } catch (error) {

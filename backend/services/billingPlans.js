@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { PLANS, TOPUP_PACKS, ADDONS, GST_RATE, gstPaise, chargePaise } = require('../config/apiCosts');
 const { PLAN_PRESENTATION, ADDON_ENV_VARS, INVOICE_ITEMS } = require('../config/plans');
 const { resolveTier, addonsOf } = require('../config/entitlements');
+const buckets = require('./quarkBuckets');
 
 const GST_PERCENT = Math.round(GST_RATE * 100);
 const PLAN_IDS = Object.keys(PLAN_PRESENTATION);
@@ -126,8 +127,8 @@ function verifyCheckoutSignature(payload, signature, secret) {
  *   record: our own stored subscription record { subscriptionId, kind, key }
  *   kind 'topup': record = { kind:'topup', key: packInr, orderId }
  */
-function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date() }) {
-  let quarks = 0; const $set = {}; const update = {};
+function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date(), heldToRelease = 0 }) {
+  let quarks = 0; const $set = {}; const update = {}; let inc = null;
   const spec = invoiceSpec(record.kind, record.key);
   if (!spec) return null;
   if (record.kind === 'plan') {
@@ -139,13 +140,23 @@ function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = n
     if (record.razorpayPlanId) $set['subscription.razorpayPlanId'] = record.razorpayPlanId;
     if (subscription && subscription.current_end) $set['subscription.currentPeriodEnd'] = new Date(subscription.current_end * 1000);
     if (subscription && subscription.charge_at) $set['subscription.nextBillingAt'] = new Date(subscription.charge_at * 1000);
+    // The monthly allowance replaces what was left of the last one and ends with the paid month.
+    // The caller has already expired the previous allowance, so adding the new one gives exactly the allowance.
+    const grant = buckets.planGrantUpdate(quarks, {
+      now, heldToRelease,
+      periodEnd: subscription && subscription.current_end ? new Date(subscription.current_end * 1000) : undefined
+    });
+    Object.assign($set, grant.set); inc = grant.inc;
   } else if (record.kind === 'addon') {
     update.$addToSet = { 'plan.addons': { $each: expandAddon(record.key) } };
   } else if (record.kind === 'topup') {
     quarks = findTopupPack(Number(record.key)).quarks;
+    const grant = buckets.topupGrantUpdate(quarks, { now });
+    Object.assign($set, grant.set); inc = grant.inc;
   }
   if (record.kind !== 'topup') $set['plan.subscriptions.$[sub].active'] = true;
-  if (quarks) update.$inc = { 'credits.balance': quarks };
+  if (inc) update.$inc = inc;
+  else if (quarks) update.$inc = { 'credits.balance': quarks };
   update.$push = {
     payments: {
       razorpayOrderId: record.subscriptionId || record.orderId, razorpayPaymentId: paymentId,

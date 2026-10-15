@@ -21,7 +21,7 @@ import { BLUEPRINT_SIGNUP_PATH } from '../utils/blueprint';
 
 /**
  * The public page for the Nebulaa app. Everything here leads to one action:
- * sign up and start with 100 free Quarks. It always shows the light, warm look,
+ * sign up and pick a plan. It always shows the light, warm look,
  * whatever theme the signed-in app uses.
  */
 
@@ -130,7 +130,7 @@ const FAQS = [
   { q: 'Do I need a website?', a: 'No. If you have one, add it and Nebulaa fills in most of your details. If you do not, answer a few simple questions.' },
   { q: 'Where do my posts go?', a: 'You connect your Instagram, Facebook and other pages with the Publish and schedule add-on. A post goes out only after you approve it.' },
   { q: 'What are Quarks?', a: 'Quarks are what the app uses each time it makes something for you. An image post uses 20, a caption uses 1 and a Hero video uses 729. Running low? Add more any time from inside the app.' },
-  { q: 'What happens when my 100 free Quarks are used?', a: 'Your 100 Quarks stay with you until you use them. The plans are optional, and nothing is charged unless you choose one.' },
+  { q: 'Do Quarks expire?', a: 'Your monthly Quarks are for that month and are renewed when your plan renews. Quarks you buy as a top-up stay valid for 60 days from the purchase. Both can be used while your plan is active. Prices are shown without GST, and 18% GST is added at checkout.' },
 ];
 
 const CtaButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string }> = ({ onClick, children, className = '' }) => (
@@ -202,7 +202,7 @@ const LandingPage: React.FC = () => {
                 className="px-5 py-2.5 text-[14px] font-bold rounded-full transition-transform hover:scale-[1.03]"
                 style={{ background: GOLD, color: INK, boxShadow: '0 6px 18px rgba(245,166,35,0.35)' }}
               >
-                Start free
+                Start for ₹999
               </button>
             </div>
 
@@ -218,7 +218,7 @@ const LandingPage: React.FC = () => {
               ))}
               <div className="flex gap-3 pt-2">
                 <button onClick={signIn} className="flex-1 py-3 rounded-full border-[1.5px] font-semibold" style={{ borderColor: INK }}>Sign in</button>
-                <button onClick={signUp} className="flex-1 py-3 rounded-full font-bold" style={{ background: GOLD, color: INK }}>Start free</button>
+                <button onClick={signUp} className="flex-1 py-3 rounded-full font-bold" style={{ background: GOLD, color: INK }}>Start for ₹999</button>
               </div>
             </div>
           )}
@@ -248,7 +248,7 @@ const LandingPage: React.FC = () => {
               Tell Nebulaa about your business once. It writes the captions, makes the images and videos, and plans every post. You check them and post.
             </p>
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Start with 100 free Quarks</CtaButton>
+              <CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Start for ₹999</CtaButton>
               <a
                 href="#how-it-works"
                 className="inline-flex items-center px-7 py-[14px] rounded-full text-[15px] font-bold transition-transform hover:scale-[1.03]"
@@ -415,7 +415,7 @@ const LandingPage: React.FC = () => {
               </div>
             ))}
           </div>
-          <div className="mt-10"><CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Start with 100 free Quarks</CtaButton></div>
+          <div className="mt-10"><CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Start for ₹999</CtaButton></div>
         </div>
       </section>
 
@@ -504,9 +504,9 @@ const LandingPage: React.FC = () => {
             <span style={script} className="text-[1.15em] leading-none">3 minutes away.</span>
           </h2>
           <p className="text-[17px] md:text-[18px] leading-[1.6] max-w-[500px] mb-8" style={{ color: INK2 }}>
-            Sign up, answer a few questions and see your posts. Start with 100 free Quarks to explore.
+            Sign up, answer a few questions and see your posts. Pick a plan and your first posts are ready within minutes.
           </p>
-          <CtaButton onClick={signUp} className="px-6 sm:px-9 py-4 text-[15.5px] sm:text-[16px]">Start with 100 free Quarks</CtaButton>
+          <CtaButton onClick={signUp} className="px-6 sm:px-9 py-4 text-[15.5px] sm:text-[16px]">Start for ₹999</CtaButton>
           <p className="mt-5 text-[14px]" style={{ color: INK2 }}>
             Already have an account?{' '}
             <button onClick={signIn} className="font-bold underline underline-offset-2">Sign in</button>
@@ -537,7 +537,7 @@ const LandingPage: React.FC = () => {
           className="w-full flex items-center justify-center gap-2 rounded-full py-3.5 text-[15.5px] font-bold"
           style={{ background: GOLD, color: INK, boxShadow: '0 8px 22px rgba(245,166,35,0.45)' }}
         >
-          Start with 100 free Quarks <ArrowRight className="w-4 h-4" />
+          Start for ₹999 <ArrowRight className="w-4 h-4" />
         </button>
       </div>
 

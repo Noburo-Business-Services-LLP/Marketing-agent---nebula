@@ -170,7 +170,7 @@ test('plans catalogue: only starter and professional, numbers from config', () =
   for (const x of c.plans) { assert.ok(x.name); assert.ok(Array.isArray(x.features) && x.features.length >= 3); }
   assert.ok(s.features.some((f) => /2,100 Quarks/.test(f)));
   assert.ok(p.features.some((f) => /3,500 Quarks/.test(f)));
-  assert.deepStrictEqual(c.topups.map((t) => [t.inr, t.quarks, t.chargePaise]), [[999, 500, 117882], [1999, 1000, 235882], [4999, 2500, 589882]]);
+  assert.deepStrictEqual(c.topups.map((t) => [t.inr, t.quarks, t.chargePaise]), [[500, 250, 59000], [1000, 500, 118000], [2500, 1250, 295000], [5000, 2500, 590000], [10000, 5000, 1180000]]);
   assert.deepStrictEqual(c.addons.map((a) => a.id), ['publish', 'competitors', 'inbox', 'bundle']);
   assert.strictEqual(c.addons.find((a) => a.id === 'publish').chargePaise, chargePaise(1000));
   assert.deepStrictEqual(c.addons.find((a) => a.id === 'inbox').requires, ['publish']);
@@ -178,8 +178,8 @@ test('plans catalogue: only starter and professional, numbers from config', () =
 });
 
 test('findTopupPack accepts only a pack price as a number', () => {
-  for (const ok of [999, 1999, 4999]) assert.ok(bp.findTopupPack(ok));
-  for (const bad of [1000, 0, -5, '500', '999', NaN, null, undefined, 999.5, Infinity, {}, [999]]) assert.strictEqual(bp.findTopupPack(bad), null, String(bad));
+  for (const ok of [500, 1000, 2500, 5000, 10000]) assert.ok(bp.findTopupPack(ok));
+  for (const bad of [999, 1999, 4999, 0, -5, '500', '1000', NaN, null, undefined, 999.5, Infinity, {}, [500]]) assert.strictEqual(bp.findTopupPack(bad), null, String(bad));
 });
 
 test('invoice item names and the GST line', () => {
@@ -188,8 +188,8 @@ test('invoice item names and the GST line', () => {
   assert.strictEqual(plan.amountInr, 999); assert.strictEqual(plan.gstPercent, 18);
   assert.strictEqual(plan.gstPaise, 17982); assert.strictEqual(plan.totalPaise, 117882);
   assert.strictEqual(bp.invoiceSpec('addon', 'inbox').itemName, 'Nebulaa add-on');
-  const top = bp.invoiceSpec('topup', 4999);
-  assert.strictEqual(top.itemName, 'Nebulaa Quarks'); assert.strictEqual(top.totalPaise, 589882);
+  const top = bp.invoiceSpec('topup', 5000);
+  assert.strictEqual(top.itemName, 'Nebulaa Quarks'); assert.strictEqual(top.totalPaise, 590000);
   assert.strictEqual(bp.invoiceSpec('plan', 'pro'), null);
 });
 
@@ -221,7 +221,7 @@ test('GET /plans returns only the new catalogue', async () => {
   const res = await call(r, 'get', '/plans', {});
   assert.strictEqual(res.code, 200);
   assert.deepStrictEqual(res.body.plans.map((p) => p.id), ['starter', 'professional']);
-  assert.strictEqual(res.body.topups.length, 3);
+  assert.strictEqual(res.body.topups.length, 5);
   assert.strictEqual(res.body.addons.length, 4);
   assert.ok(!/plan_Sra|growth|"scale"|7500/i.test(JSON.stringify(res.body)));
 });
@@ -276,7 +276,7 @@ test('create-subscription refuses old plan ids and active subscriptions', async 
 });
 
 test('create-order accepts only the three pack prices and records Quarks server-side', async () => {
-  for (const [pack, paise, quarks] of [[999, 117882, 500], [1999, 235882, 1000], [4999, 589882, 2500]]) {
+  for (const [pack, paise, quarks] of [[1000, 118000, 500], [2500, 295000, 1250], [5000, 590000, 2500]]) {
     const ctx = setup();
     const res = await call(ctx.r, 'post', '/create-order', { body: { packInr: pack, amount: 1, quarks: 999999, credits: 999999 } });
     assert.strictEqual(res.code, 200, JSON.stringify(res.body));
@@ -285,7 +285,7 @@ test('create-order accepts only the three pack prices and records Quarks server-
     assert.strictEqual(o.amount, paise);
     assert.strictEqual(o.notes.quarks, String(quarks)); assert.strictEqual(o.notes.kind, 'topup'); assert.strictEqual(o.notes.userId, 'user1');
   }
-  for (const bad of [1000, 0, -5, '500', NaN, null, undefined, 999.5, 7500]) {
+  for (const bad of [999, 0, -5, '500', NaN, null, undefined, 999.5, 7500]) {
     const ctx = setup();
     const res = await call(ctx.r, 'post', '/create-order', { body: { packInr: bad } });
     assert.strictEqual(res.code, 400, String(bad));
@@ -295,7 +295,7 @@ test('create-order accepts only the three pack prices and records Quarks server-
   assert.strictEqual((await call(ctx.r, 'post', '/create-order', { body: { amount: 7500 } })).code, 400);
 });
 
-async function paidTopup(ctx, { pack = 999, payId = 'pay_top1', forgeNotes } = {}) {
+async function paidTopup(ctx, { pack = 1000, payId = 'pay_top1', forgeNotes } = {}) {
   const create = await call(ctx.r, 'post', '/create-order', { body: { packInr: pack } });
   const orderId = create.body.order.id;
   if (forgeNotes) Object.assign(ctx.razorpay._orders[orderId].notes, forgeNotes);
@@ -304,22 +304,22 @@ async function paidTopup(ctx, { pack = 999, payId = 'pay_top1', forgeNotes } = {
 
 test('top-up verify grants the pack Quarks from config, once', async () => {
   const ctx = setup();
-  const t = await paidTopup(ctx, { pack: 1999, forgeNotes: { quarks: '99999' } });
+  const t = await paidTopup(ctx, { pack: 2500, forgeNotes: { quarks: '99999' } });
   const res = await t.verify();
   assert.strictEqual(res.code, 200, JSON.stringify(res.body));
-  assert.strictEqual(ctx.user.credits.balance, 1100);
+  assert.strictEqual(ctx.user.credits.balance, 1350);
   assert.strictEqual(ctx.user.payments.length, 1);
   assert.strictEqual(ctx.user.payments[0].razorpayPaymentId, 'pay_top1');
-  assert.strictEqual(ctx.user.payments[0].credits, 1000);
+  assert.strictEqual(ctx.user.payments[0].credits, 1250);
   assert.strictEqual(ctx.invoices.length, 1);
   assert.strictEqual(ctx.invoices[0].itemName, 'Nebulaa Quarks');
-  assert.strictEqual(ctx.invoices[0].amount, 1999);
+  assert.strictEqual(ctx.invoices[0].amount, 2500);
   assert.strictEqual(ctx.invoices[0].gstPercent, 18);
   assert.strictEqual(ctx.user.payments[0].invoiceUrl, 'https://invoice.example/1');
   const again = await t.verify();
   assert.strictEqual(again.code, 200);
   assert.strictEqual(again.body.alreadyProcessed, true);
-  assert.strictEqual(ctx.user.credits.balance, 1100);
+  assert.strictEqual(ctx.user.credits.balance, 1350);
   assert.strictEqual(ctx.user.payments.length, 1);
   assert.strictEqual(ctx.invoices.length, 1);
 });
@@ -546,7 +546,7 @@ test('I1: a managed account (no plan.tier) cannot buy a plan; free accounts stil
   assert.strictEqual((await call(free.r, 'post', '/create-subscription', { body: { planId: 'starter' } })).code, 200);
   // top-ups stay available to managed accounts
   const top = setup({ user: mkUser({ plan: undefined }) });
-  assert.strictEqual((await call(top.r, 'post', '/create-order', { body: { packInr: 999 } })).code, 200);
+  assert.strictEqual((await call(top.r, 'post', '/create-order', { body: { packInr: 1000 } })).code, 200);
 });
 
 test('I2: ending a plan cancels the add-on subscriptions at Razorpay and clears add-ons', async () => {
@@ -620,7 +620,7 @@ test('no welcome email for add-ons or top-ups', async () => {
   const created = ctx.razorpay.calls.subs[ctx.razorpay.calls.subs.length - 1];
   await sendHook(ctx.r, hook('subscription.charged', res.body.subscription_id, created.plan_id, 'pay_a1', { amount: chargePaise(1000) }));
   assert.deepStrictEqual(ctx.user.plan.addons, ['publish']);
-  const top = await paidTopup(ctx, { pack: 999, payId: 'pay_t1' });
+  const top = await paidTopup(ctx, { pack: 1000, payId: 'pay_t1' });
   assert.strictEqual(ctx.welcomes.length, 0);
 });
 

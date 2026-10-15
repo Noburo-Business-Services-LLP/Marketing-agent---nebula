@@ -46,7 +46,7 @@ test('GST maths is exact integer paise', () => {
 });
 
 test('top-up packs', () => {
-  assert.deepEqual(TOPUP_PACKS.map(p => [p.inr, p.quarks]), [[999, 500], [1999, 1000], [4999, 2500]]);
+  assert.deepEqual(TOPUP_PACKS.map(p => [p.inr, p.quarks]), [[500, 250], [1000, 500], [2500, 1250], [5000, 2500], [10000, 5000]]);
 });
 
 test('add-ons shape', () => {

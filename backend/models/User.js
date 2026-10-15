@@ -239,8 +239,15 @@ const userSchema = new mongoose.Schema({
   },
   // Credits system (demo trial)
   credits: {
-    balance: { type: Number, default: 100 },
+    // New accounts start at 0: there is no free grant. Quarks arrive with a plan or a top-up.
+    balance: { type: Number, default: 0 },
     totalUsed: { type: Number, default: 0 },
+    // Buckets inside the balance (see services/quarkBuckets.js). `balance` stays the one total the app reads.
+    planBalance: { type: Number, default: 0 },
+    planExpiresAt: { type: Date },
+    topupBalance: { type: Number, default: 0 },
+    topupExpiresAt: { type: Date },
+    topupHeld: { type: Number, default: 0 },
     history: [{
       action: { type: String },
       amount: { type: Number },

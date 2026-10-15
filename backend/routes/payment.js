@@ -19,6 +19,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const bp = require('../services/billingPlans');
+const quarkBuckets = require('../services/quarkBuckets');
 const { resolveTier, addonsOf } = require('../config/entitlements');
 const { chargePaise } = require('../config/apiCosts');
 
@@ -89,7 +90,13 @@ function createPaymentRouter(deps = {}) {
 
   // One payment, applied once. Returns { applied:false } on a replay.
   async function applyCharge(user, record, { paymentId, paidPaise, subscription }) {
-    const built = bp.buildChargeUpdate(record, { paymentId, paidPaise, subscription });
+    const alreadyApplied = (user.payments || []).some((p) => p && p.razorpayPaymentId === paymentId);
+    if (!alreadyApplied && record.kind === 'plan') {
+      // A new month starts: last month's allowance ends now, so the new one replaces it instead of piling on.
+      try { await quarkBuckets.settle(user._id, new Date(), { forcePlan: true }); } catch (e) { console.warn('Quark expiry before renewal failed:', e.message); }
+    }
+    const held = !alreadyApplied && record.kind === 'plan' ? Math.max(0, Number(user.credits?.topupHeld) || 0) : 0;
+    const built = bp.buildChargeUpdate(record, { paymentId, paidPaise, subscription, heldToRelease: record.kind === 'plan' ? held : 0 });
     if (!built) return { applied: false, reason: 'unknown_item' };
     const opts = { new: true, ...(built.arrayFilters ? { arrayFilters: built.arrayFilters } : {}) };
     const doc = await User.findOneAndUpdate(
@@ -393,6 +400,10 @@ function createPaymentRouter(deps = {}) {
       const userId = userIdOf(req);
       const user = await User.findById(userId);
       if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      // Top-ups sit on top of a plan: bought without one they would only be held.
+      if (resolveTier(user) === 'free') {
+        return res.status(403).json({ success: false, upgradeRequired: true, reason: 'upgrade', message: 'Please choose a plan first. Quarks can be topped up once a plan is active.' });
+      }
 
       const quote = bp.invoiceSpec('topup', pack.inr);
       const order = await rz().orders.create({

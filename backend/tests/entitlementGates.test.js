@@ -159,13 +159,13 @@ test('zero Quarks gets the friendly message and keeps the keys the frontend read
   assert.doesNotMatch(res.body.message, /credit/i);
 });
 
-test('the 100 Quark grant is made once, not again on the next call', async () => {
+test('a new account starts with no free Quarks, and the record is made once', async () => {
   const { ensureCreditCycle, TRIAL_CREDITS } = require('../middleware/creditGuard');
-  assert.equal(TRIAL_CREDITS, 100);
+  assert.equal(TRIAL_CREDITS, 0);
   let saves = 0;
   const user = { save: async () => { saves += 1; } };
   await ensureCreditCycle(user);
-  assert.equal(user.credits.balance, 100);
+  assert.equal(user.credits.balance, 0);
   assert.equal(saves, 1);
   user.credits.balance = 37;
   await ensureCreditCycle(user);

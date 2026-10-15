@@ -88,7 +88,7 @@ const App: React.FC = () => {
           setUser(res.user || null);
           
           // Credits check only (no time-based expiry)
-          if (res.user && (res.user.credits?.balance ?? 100) <= 0) {
+          if (res.user && (res.user.credits?.balance ?? 0) <= 0) {
             setTrialExpired({ expired: true, reason: 'credits' });
           }
         } catch (error) {
@@ -155,7 +155,7 @@ const App: React.FC = () => {
   const handleLoginSuccess = (userData: User) => {
     setUser(userData);
     // Credits check only (no time-based expiry)
-    if ((userData.credits?.balance ?? 100) <= 0) {
+    if ((userData.credits?.balance ?? 0) <= 0) {
       setTrialExpired({ expired: true, reason: 'credits' });
     } else {
       setTrialExpired({ expired: false, reason: 'time' });
