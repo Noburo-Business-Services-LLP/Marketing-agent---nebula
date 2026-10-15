@@ -169,7 +169,7 @@ test('the picture is briefed as a scroll-stopping social post, not as an editori
 
 test('look: clean, balanced and rich give different directions; unknown falls back to balanced', () => {
   const base = { brief: 'x', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5' };
-  assert.match(buildDirectPrompt({ ...base, density: 'clean' }), /calm and uncluttered/);
+  assert.match(buildDirectPrompt({ ...base, density: 'clean' }), /calm, simple and uncluttered/);
   assert.match(buildDirectPrompt({ ...base, density: 'rich' }), /rich, festive and full/);
   assert.match(buildDirectPrompt({ ...base, density: 'balanced' }), /never leave large empty blocks/);
   assert.match(buildDirectPrompt({ ...base, density: 'weird' }), /never leave large empty blocks/);

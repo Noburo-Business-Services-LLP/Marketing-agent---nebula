@@ -23,7 +23,7 @@ Report a problem only when a customer would notice it:
 - "spelling": a printed word that is misspelt or is not a real word in ${languageName} (ignore brand names, the logo, and tiny background text that is not legible).
 - "cut_off": a sentence that stops half way.
 - "language": words in a language other than ${languageName} that should not be there (brand names and one unavoidable English term are fine).
-- "invented": a number or claim that was not given.
+- "invented": a price, percentage, year, count, phone number or claim that was not given. Do NOT flag list numbering (1, 2, 3), slide counters such as 2/3, or counts that the post's own idea states (for example "7 days" in a seven-day plan).
 
 Return JSON only:
 {"ok": true|false, "issues": [{"kind": "headline|spelling|cut_off|language|invented", "text": "what is printed", "should_be": "what it should read, if you know"}]}
