@@ -14,6 +14,7 @@ const omni = require('../services/omniVideo');
 const sv = require('../services/studioVideo');
 const quarkBuckets = require('../services/quarkBuckets');
 const { QUARK_COSTS, STUDIO_CLIP_SECONDS } = require('../config/apiCosts');
+const { generateOpenAIImage } = require('../services/openaiImage');
 
 const COST = () => QUARK_COSTS.studio_video;
 const MAX_REFS = 3;
@@ -75,7 +76,7 @@ async function resolveReferences(userId, { characterIds = [], placeIds = [], pro
 
 router.get('/options', protect, async (req, res) => {
   const styles = Object.entries(sv.STYLES).map(([key, s]) => ({ key, label: s.label, hint: s.hint }));
-  res.json({ success: true, styles, languages: [{ key: 'english', label: 'English' }, { key: 'tamil', label: 'Tamil' }, { key: 'none', label: 'No speech, music only' }], quarks: COST(), seconds: STUDIO_CLIP_SECONDS });
+  res.json({ success: true, styles, languages: [{ key: 'english', label: 'English' }, { key: 'tamil', label: 'Tamil' }, { key: 'none', label: 'No speech, music only' }], quarks: COST(), referenceQuarks: QUARK_COSTS.studio_reference, seconds: STUDIO_CLIP_SECONDS });
 });
 
 // Step 2 -> 3: turn the idea and choices into a concept the owner can read and edit. Free.
@@ -182,6 +183,52 @@ router.post('/create', protect, async (req, res) => {
   } catch (e) {
     console.error('[videos] create failed:', e.message);
     res.status(500).json({ success: false, message: 'We could not start the video. Please try again.' });
+  }
+});
+
+// Make a person (a reference sheet) or a place with AI, before the video. The customer approves it or asks for another.
+router.post('/reference', protect, async (req, res) => {
+  const userId = userIdOf(req);
+  const kind = req.body && req.body.kind === 'place' ? 'place' : 'person';
+  try {
+    if (!allowed('reference', userId, 20)) return res.status(429).json({ success: false, message: 'Please wait a little before making more pictures.' });
+    const cost = QUARK_COSTS.studio_reference;
+    await quarkBuckets.settle(userId).catch(() => null);
+    const paid = await quarkBuckets.spend(userId, cost, { action: 'studio_reference', description: kind === 'person' ? 'Person for a video' : 'Place for a video' });
+    if (!paid.success) return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `This needs ${cost} Quarks. Please top up or choose a plan.` });
+    const brand = await brandOf(userId);
+    let out = null;
+    try {
+      out = await generateOpenAIImage(sv.buildReferencePrompt({ kind, description: req.body && req.body.description, city: brand.location }), { aspectRatio: kind === 'person' ? '16:9' : '9:16', quality: 'medium' });
+    } catch (e) { console.error('[videos] reference failed:', e.message); }
+    if (!out || !out.success || !/^https:\/\//.test(String(out.imageUrl || ''))) {
+      await User.updateOne({ _id: userId }, { $inc: { 'credits.balance': cost, 'credits.totalUsed': -cost } });
+      quarkBuckets.record({ user: userId, type: 'refund', quarks: cost, action: 'studio_reference_refund' });
+      return res.status(502).json({ success: false, message: 'We could not make that picture. Your Quarks were returned. Please try again.' });
+    }
+    res.json({ success: true, url: out.imageUrl, kind, quarks: cost });
+  } catch (e) {
+    console.error('[videos] reference error:', e.message);
+    res.status(500).json({ success: false, message: 'We could not make that picture. Please try again.' });
+  }
+});
+
+// Keep an approved picture in the brand assets so it can be used again. Only pictures made here are accepted.
+router.post('/reference/approve', protect, async (req, res) => {
+  try {
+    const userId = userIdOf(req);
+    const kind = req.body && req.body.kind === 'place' ? 'place' : 'person';
+    const url = String(req.body && req.body.url || '');
+    let host = ''; try { host = new URL(url).hostname; } catch (_) { host = ''; }
+    if (host !== 'res.cloudinary.com' || !/\/nebula-campaign-posts\//.test(url)) return res.status(400).json({ success: false, message: 'That picture cannot be saved.' });
+    const name = sv.clip(req.body && req.body.name, 60) || (kind === 'person' ? 'Person' : 'Place');
+    const publicId = (/\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i.exec(url) || [])[1];
+    if (!publicId) return res.status(400).json({ success: false, message: 'That picture cannot be saved.' });
+    const asset = await BrandAsset.create({ user: userId, type: kind === 'person' ? 'character' : 'environment', name, url, cloudinaryPublicId: publicId, format: 'png' });
+    res.status(201).json({ success: true, asset: { id: String(asset._id), name: asset.name, url: asset.url, type: asset.type } });
+  } catch (e) {
+    console.error('[videos] approve failed:', e.message);
+    res.status(500).json({ success: false, message: 'We could not save that picture. Please try again.' });
   }
 });
 

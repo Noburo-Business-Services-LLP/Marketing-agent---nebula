@@ -48,3 +48,19 @@ test('the Omni client turns a quota error into a friendly retryable message and 
   assert.strictEqual(good.ok, true);
   assert.strictEqual(good.buffer.toString(), 'abc');
 });
+
+test('the reference prompts ask for a sheet of one person, or an empty real place, with no text', () => {
+  const person = sv.buildReferencePrompt({ kind: 'person', description: 'A shopkeeper in her 40s', city: 'Chennai' });
+  assert.match(person, /Character reference sheet/);
+  assert.match(person, /front, three-quarter and side profile/);
+  assert.match(person, /No text/);
+  const place = sv.buildReferencePrompt({ kind: 'place', description: 'A busy sweet shop' });
+  assert.match(place, /No people, no text/);
+  assert.match(sv.buildReferencePrompt({ kind: 'person', description: '' }), /friendly local shop owner/);
+});
+
+test('a reference picture is priced as one medium picture', () => {
+  const { QUARK_COSTS: Q, ACTION_USD: A } = require('../config/apiCosts');
+  assert.strictEqual(Q.studio_reference, Math.round((A.studio_reference * 2.5) / 0.02));
+  assert.ok(Q.studio_reference >= 4 && Q.studio_reference <= 10);
+});

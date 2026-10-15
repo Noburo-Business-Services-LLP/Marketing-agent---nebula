@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Download, Loader2, Package, Image as ImageIcon, User as UserIcon, Wand2, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, Download, Loader2, Package, Image as ImageIcon, User as UserIcon, Wand2, Trash2, Sparkles } from 'lucide-react';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 import IdeaBoxTools from '../components/IdeaBoxTools';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
+import ReferenceMaker from '../components/ReferenceMaker';
+import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import { apiService, brandAssetsAPI, studioVideosAPI, StudioVideo, StudioConcept } from '../services/api';
 import { appendText } from '../utils/ideaFiles';
 import { canPlan, waitMessage, videosLeft, CHANGE_IDEAS, StepKey } from '../utils/studioVideo';
@@ -32,7 +34,8 @@ const field = 'w-full rounded-xl border border-[var(--gv-border-default)] bg-[va
 const PickRow: React.FC<{
   Icon: React.ComponentType<{ className?: string }>; title: string; hint: string; picked: PickedAsset[];
   onPick: () => void; onClear: () => void; placeholder: string; text: string; onText: (t: string) => void; pickLabel: string;
-}> = ({ Icon, title, hint, picked, onPick, onClear, placeholder, text, onText, pickLabel }) => (
+  onCreate?: () => void; createLabel?: string;
+}> = ({ Icon, title, hint, picked, onPick, onClear, placeholder, text, onText, pickLabel, onCreate, createLabel }) => (
   <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4">
     <div className="flex items-start gap-3">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--gv-accent-fill)] text-[var(--gv-accent)]"><Icon className="h-[18px] w-[18px]" /></span>
@@ -49,6 +52,7 @@ const PickRow: React.FC<{
         </span>
       ))}
       <GravityButton variant="ghost" onClick={onPick} className="!py-2">{picked.length ? 'Change' : pickLabel}</GravityButton>
+      {onCreate && <GravityButton variant="ghost" onClick={onCreate} className="!py-2"><Sparkles className="h-4 w-4 text-[var(--gv-accent)]" /> {createLabel || 'Create with AI'}</GravityButton>}
       {picked.length > 0 && <button type="button" onClick={onClear} className="text-[12.5px] text-[var(--gv-text-tertiary)] underline underline-offset-2">Remove</button>}
     </div>
     <input value={text} onChange={(e) => onText(e.target.value)} className={`${field} mt-3`} placeholder={placeholder} maxLength={200} />
@@ -71,6 +75,10 @@ const CreateVideo: React.FC = () => {
   const [places, setPlaces] = useState<PickedAsset[]>([]);
   const [products, setProducts] = useState<PickedAsset[]>([]);
   const [picker, setPicker] = useState<null | 'character' | 'environment' | 'products'>(null);
+  const [maker, setMaker] = useState<null | 'person' | 'place'>(null);
+  const [ideaPickerOpen, setIdeaPickerOpen] = useState(false);
+  const [pickedIdea, setPickedIdea] = useState('');
+  const [refCost, setRefCost] = useState(0);
 
   const [concept, setConcept] = useState<StudioConcept | null>(null);
   const [title, setTitle] = useState('');
@@ -105,6 +113,7 @@ const CreateVideo: React.FC = () => {
       if (r.styles?.length) setStyles(r.styles);
       if (r.languages?.length) setLangs(r.languages);
       setCost(r.quarks || 0);
+      setRefCost(r.referenceQuarks || 0);
     }).catch(() => undefined);
     refreshBalance();
     loadHistory();
@@ -225,6 +234,10 @@ const CreateVideo: React.FC = () => {
       {step === 'idea' && (
         <div className="space-y-6">
           <GravityPanel halo beam>
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <GravityButton variant="ghost" onClick={() => setIdeaPickerOpen(true)} className="!py-2"><CalendarIcon className="h-4 w-4 text-[var(--gv-accent)]" /> Choose an idea from your calendar</GravityButton>
+              {pickedIdea && <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Loaded: <span className="text-[var(--gv-accent-text)]">{pickedIdea}</span></span>}
+            </div>
             <GravityLabel gold className="mb-2">What is the video about?</GravityLabel>
             <textarea
               value={idea}
@@ -272,9 +285,9 @@ const CreateVideo: React.FC = () => {
         <div className="space-y-4">
           <p className="text-center text-[13.5px] text-[var(--gv-text-secondary)]">Add your own people, place and products so the video looks like your business. Skip any of these and we will choose something believable.</p>
           <PickRow Icon={UserIcon} title="Who appears" hint="A photo of the person: you, your team or a customer who agreed." picked={people}
-            onPick={() => setPicker('character')} onClear={() => setPeople([])} pickLabel="Choose a photo" text={who} onText={setWho} placeholder="Or describe them: a smiling shopkeeper in her 40s, in a cotton saree" />
+            onPick={() => setPicker('character')} onClear={() => setPeople([])} pickLabel="Choose a photo" onCreate={() => setMaker('person')} createLabel="Create with AI" text={who} onText={setWho} placeholder="Or describe them: a smiling shopkeeper in her 40s, in a cotton saree" />
           <PickRow Icon={ImageIcon} title="Where it happens" hint="A photo of your shop, kitchen, studio or anywhere you work." picked={places}
-            onPick={() => setPicker('environment')} onClear={() => setPlaces([])} pickLabel="Choose a photo" text={where} onText={setWhere} placeholder="Or describe it: a busy sweet shop with brass lamps" />
+            onPick={() => setPicker('environment')} onClear={() => setPlaces([])} pickLabel="Choose a photo" onCreate={() => setMaker('place')} createLabel="Create with AI" text={where} onText={setWhere} placeholder="Or describe it: a busy sweet shop with brass lamps" />
           <PickRow Icon={Package} title="Your product" hint="The exact product to show. It will match your photo." picked={products}
             onPick={() => setPicker('products')} onClear={() => setProducts([])} pickLabel="Choose products" text="" onText={() => undefined} placeholder="" />
           <div className="flex items-center justify-between pt-2">
@@ -394,6 +407,24 @@ const CreateVideo: React.FC = () => {
         Looking for the old step-by-step maker? <Link to="/reels/studio" className="underline underline-offset-2">Open it here</Link>.
       </p>
 
+      <CalendarIdeaPicker
+        open={ideaPickerOpen}
+        onClose={() => setIdeaPickerOpen(false)}
+        type="reel"
+        onPick={(i: any) => {
+          setIdea([i.creativeConcept || i.headline || '', i.shootType ? `Style: ${i.shootType}.` : ''].filter(Boolean).join(' '));
+          setPickedIdea(i.headline || '');
+        }}
+      />
+      {maker && (
+        <ReferenceMaker
+          kind={maker}
+          initialDescription={maker === 'person' ? who : where}
+          quarks={refCost}
+          onClose={() => setMaker(null)}
+          onUse={(a) => { if (maker === 'person') setPeople([a]); else setPlaces([a]); setMaker(null); }}
+        />
+      )}
       <AssetPicker
         open={picker === 'character'} onClose={() => setPicker(null)} source="character" max={1}
         selected={people} onChange={(a) => { setPeople(a); setPicker(null); }}

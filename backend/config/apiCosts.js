@@ -296,7 +296,11 @@ const ACTION_USD = {
   // evening") re-renders a clip, so it costs the same.
   studio_video:
     (PROVIDER_RATES.omni_video_per_sec * STUDIO_CLIP_SECONDS) +
-    assetCost(INFRA.mb_per_scene_clip)
+    assetCost(INFRA.mb_per_scene_clip),
+
+  // A person or a place made for a video before it is filmed: one medium quality picture, no proofreading (it
+  // carries no text). The customer approves it, or asks for another.
+  studio_reference: PROVIDER_RATES.gpt_image_2_per_picture.medium + assetCost(INFRA.mb_per_image)
 };
 
 // ---------------------------------------------------------------------------
@@ -385,6 +389,7 @@ const ACTION_UNITS = {
   event_post: 'per post',
   hero_video_clip: 'per clip',
   studio_video: 'per video',
+  studio_reference: 'per person or place',
   competitor_scrape: 'free',
   blueprint: 'per blueprint',
   blueprint_pdf: 'per designed Blueprint PDF'

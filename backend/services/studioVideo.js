@@ -88,6 +88,7 @@ function assemblePrompt({ concept, beats = [], spokenLine, style, language, aspe
   if (beats.length) parts.push(`Shots: ${beats.map((b, i) => `(${i + 1}) ${b}`).join(' ')}`);
   if (who) parts.push(`The person: ${clip(who, 300)}.${hasPersonPhoto ? ' Use the person in the reference photo; keep the same face and clothes.' : ''}`);
   else if (hasPersonPhoto) parts.push('Use the person in the reference photo; keep the same face and clothes.');
+  if (hasPersonPhoto) parts.push('If the person photo shows several views of one person it is a reference sheet: film that person, and never show the sheet itself.');
   if (where) parts.push(`The place: ${clip(where, 300)}.${hasPlacePhoto ? ' Match the place in the reference photo.' : ''}`);
   else if (hasPlacePhoto) parts.push('Match the place in the reference photo.');
   if (hasProductPhoto) parts.push('Show the product exactly as in the reference photo: same shape, colours and label.');
@@ -98,4 +99,13 @@ function assemblePrompt({ concept, beats = [], spokenLine, style, language, aspe
   return parts.join(' ');
 }
 
-module.exports = { STYLES, LANGUAGES, styleOf, languageOf, buildConceptPrompt, parseConcept, assemblePrompt, clip };
+/** The picture made for a person or a place before it is filmed. No text, so nothing to proofread. */
+function buildReferencePrompt({ kind, description, city }) {
+  const d = clip(description, 300) || (kind === 'person' ? 'a friendly local shop owner' : 'a clean, welcoming local shop');
+  if (kind === 'person') {
+    return `Character reference sheet on a plain light grey studio background. The same person shown in three views side by side from the waist up: front, three-quarter and side profile, with one larger close-up of the face. Realistic photography, natural skin texture and believable clothes, soft even light. The person: ${d}. Indian setting${city ? `, ${clip(city, 40)}` : ''}. No text, no labels, no logos, no watermark.`;
+  }
+  return `Realistic wide photograph of a real place: ${d}. Natural light, lived-in and believable, an everyday Indian business${city ? ` in ${clip(city, 40)}` : ''}. No people, no text, no signs with words, no logos, no watermark.`;
+}
+
+module.exports = { buildReferencePrompt, STYLES, LANGUAGES, styleOf, languageOf, buildConceptPrompt, parseConcept, assemblePrompt, clip };

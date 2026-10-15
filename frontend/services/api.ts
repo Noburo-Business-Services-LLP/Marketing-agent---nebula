@@ -4832,7 +4832,7 @@ export interface StudioVideo {
 export interface StudioConcept { title: string; concept: string; beats: string[]; spokenLine: string; quarks: number; references: Array<{ kind: string; name: string; url: string }>; }
 export interface StudioChoices { idea: string; style: string; language: string; who?: string; where?: string; characterIds?: string[]; placeIds?: string[]; productIds?: string[]; }
 export const studioVideosAPI = {
-  options: async (): Promise<{ success: boolean; styles: Array<{ key: string; label: string; hint: string }>; languages: Array<{ key: string; label: string }>; quarks: number; seconds: number }> =>
+  options: async (): Promise<{ success: boolean; styles: Array<{ key: string; label: string; hint: string }>; languages: Array<{ key: string; label: string }>; quarks: number; referenceQuarks?: number; seconds: number }> =>
     apiCall('/videos/options', {}, true),
   concept: async (c: StudioChoices): Promise<{ success: boolean; message?: string } & Partial<StudioConcept>> =>
     apiCall('/videos/concept', { method: 'POST', body: JSON.stringify(c) }, true),
@@ -4843,5 +4843,9 @@ export const studioVideosAPI = {
   get: async (id: string): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
     apiCall(`/videos/${encodeURIComponent(id)}`, {}, true),
   list: async (): Promise<{ success: boolean; videos: StudioVideo[] }> => apiCall('/videos', {}, true),
+  makeReference: async (kind: 'person' | 'place', description: string): Promise<{ success: boolean; url?: string; quarks?: number; message?: string }> =>
+    apiCall('/videos/reference', { method: 'POST', body: JSON.stringify({ kind, description }) }, true),
+  approveReference: async (kind: 'person' | 'place', url: string, name: string): Promise<{ success: boolean; asset?: { id: string; name: string; url: string }; message?: string }> =>
+    apiCall('/videos/reference/approve', { method: 'POST', body: JSON.stringify({ kind, url, name }) }, true),
   remove: async (id: string): Promise<{ success: boolean }> => apiCall(`/videos/${encodeURIComponent(id)}`, { method: 'DELETE' }, true),
 };
