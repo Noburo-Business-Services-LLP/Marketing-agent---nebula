@@ -40,7 +40,7 @@ const TermsAndConditions: React.FC = () => {
           <div className={`space-y-8 leading-relaxed ${textSec}`}>
             {/* Preamble */}
             <div className={`border-l-4 border-[#ffcc29] pl-4 italic ${textSec}`}>
-              Please read these Terms & Conditions carefully before accessing or using the Nebulaa platform. By registering, accessing, or using Nebulaa in any capacity — including during a free trial — you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree, do not use the platform.
+              Please read these Terms & Conditions carefully before accessing or using the Nebulaa platform. By registering, accessing, or using Nebulaa in any capacity you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree, do not use the platform.
             </div>
 
             {/* 1 */}
@@ -86,7 +86,7 @@ const TermsAndConditions: React.FC = () => {
             {/* 4 */}
             <section>
               <h2 className={`text-xl font-bold mb-4 ${text}`}>4. Quarks, Plans and Expiry</h2>
-              <p className="mb-3">4.1 There is no free trial and no free tier. Payment is required before any content is generated. Your Subscription includes a monthly allowance of Quarks. Those Quarks are for the billing month in which they are granted and end when the paid month ends; a new allowance is granted when the Subscription renews.</p>
+              <p className="mb-3">4.1 Payment is required before any posts, campaigns or videos are generated. The only thing you can make without a plan is the Brand Growth Blueprint. Your Subscription includes a monthly allowance of Quarks. Those Quarks are for the billing month in which they are granted and end when the paid month ends; a new allowance is granted when the Subscription renews.</p>
               <p className="mb-3">4.2 Quarks are the unit used to pay for generated content. When an action needs more Quarks than your balance holds, or a feature that your plan does not include, you can upgrade to a Subscription, buy an add-on, or buy a Quark top-up pack. Top-up Quarks are valid for 60 days from the date of the most recent top-up and can be used while a Subscription is active. Used Quarks are not refundable. If a generation fails, the Quarks for it are returned to your account automatically. Quarks that expire are not refundable or redeemable for cash.</p>
               <p className="mb-3">4.3 The service is provided on an "as-is" basis with no warranties of any kind. We may suspend an account that breaches these Terms, in accordance with Section 17.</p>
               <p>4.4 Prices on the plans page exclude GST. GST at the prevailing rate, currently 18 percent, is added at checkout and shown as a separate line on your invoice.</p>

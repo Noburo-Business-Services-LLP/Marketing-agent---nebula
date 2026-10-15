@@ -131,8 +131,12 @@ function normalisePlan(parsed, sheet) {
   channels.splice(5);
 
   const roadmap = [];
-  for (const ph of PHASES) {
-    const r = arr(parsed.roadmap, 10).find((x) => isObj(x) && x.phase === ph.id);
+  // The three phases come back in order. A newer model sometimes names a phase in its own words ("content system"
+  // for "storytelling"), so when exactly three phases arrive and an id does not match, they are taken by position.
+  const given = arr(parsed.roadmap, 10).filter(isObj);
+  for (let i = 0; i < PHASES.length; i += 1) {
+    const ph = PHASES[i];
+    const r = given.find((x) => x.phase === ph.id) || (given.length === PHASES.length && !PHASES.some((p) => p.id === given[i].phase && p.id !== ph.id) ? given[i] : null);
     if (!r) continue;
     roadmap.push({ phase: ph.id, focus: toClaim(r.focus, ctx, true), actions: claims(r.actions, 4, ctx, true), measure: claims(r.measure, 3, ctx, true) });
   }

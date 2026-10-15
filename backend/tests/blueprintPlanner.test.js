@@ -190,3 +190,14 @@ test('tag laundering: an inference whose figures or names are not in the cited f
   assert.ok(!texts.some((t) => t.includes('Twenty five') || t.includes('Meera')));
   assert.ok(texts.includes('Custom cakes baked to order suit families in Chennai.'));
 });
+
+test('the roadmap survives a model that names a phase in its own words', () => {
+  const { normalisePlan } = require('../services/blueprint/planner');
+  const sheet = require('./fixtures/blueprintSheet.json');
+  const good = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'fixtures/blueprintPlanGood.json'), 'utf8'));
+  const renamed = JSON.parse(JSON.stringify(good));
+  renamed.roadmap = (renamed.roadmap || []).map((r, i) => ({ ...r, phase: ['foundation', 'content system', 'scale up'][i] }));
+  const out = normalisePlan(renamed, sheet);
+  assert.ok(out, 'a plan whose phases are named differently is still accepted');
+  assert.deepStrictEqual(out.plan.roadmap.map((r) => r.phase), ['foundation', 'storytelling', 'growth']);
+});
