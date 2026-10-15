@@ -54,6 +54,8 @@ import { contentCalendarAPI, inventoryAPI, videoGenerationAPI, draftsAPI } from 
 import { Product, Draft } from '../types';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { updateBackgroundReel } from '../utils/backgroundReel';
+import IdeaBoxTools from '../components/IdeaBoxTools';
+import { appendText } from '../utils/ideaFiles';
 
 type AudioMode = 'off' | 'auto' | 'upload';
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
@@ -2775,6 +2777,12 @@ setCharacterAge(nextDraft?.characterAge || '');
                     placeholder={pickedIdea
                       ? 'Loaded from your calendar. Edit it before you continue.'
                       : 'For example: A 30-second walkthrough of our new filter coffee, with close-ups of the pour and the steam, ending on the storefront at golden hour.'}
+                  />
+                  <IdeaBoxTools
+                    languageLabel={({ en: 'English', hi: 'Hindi', ta: 'Tamil', te: 'Telugu', kn: 'Kannada', ml: 'Malayalam' } as Record<string, string>)[languageCode] || 'English'}
+                    onText={(t) => setDescription((d) => appendText(d, t))}
+                    onRead={(ups) => ups.forEach((u) => u.brief && setDescription((d) => appendText(d, u.brief)))}
+                    onReuse={(u) => u.brief && setDescription((d) => appendText(d, u.brief))}
                   />
                 </GravityPanel>
                 {/* Settings. Previously six raw <select>s at xl:grid-cols-6;

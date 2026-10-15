@@ -183,14 +183,14 @@ const LogoPositionPicker: React.FC<{ value: LogoGridPosition; onChange: (p: Logo
   const [open, setOpen] = useState(false);
   const index = LOGO_GRID.indexOf(value);
   return (
-    <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+    <div className="relative h-full" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         onBlur={(e) => { if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) setOpen(false); }}
         aria-haspopup="true"
         aria-expanded={open}
-        className="h-11 inline-flex items-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-2.5 text-[12px] font-semibold text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
+        className="h-full inline-flex items-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-2.5 text-[12px] font-semibold text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
       >
         <span className="grid grid-cols-3 grid-rows-2 gap-px w-[21px] h-[14px] rounded-[3px] border border-[var(--gv-border-default)] p-px" aria-hidden="true">
           {LOGO_GRID.map((pos, i) => <span key={pos} className={i === index ? 'rounded-[1px] bg-[var(--gv-accent)]' : ''} />)}
@@ -1091,7 +1091,7 @@ const GravityCreate: React.FC = () => {
   return (
     <div className="max-w-[900px] mx-auto pb-24">
       {/* Mode toggle */}
-      <div className="flex items-center justify-center mb-14 mt-4">
+      <div className="flex items-center justify-center mb-5 mt-1">
         <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--gv-surface-1)] border border-[var(--gv-border-subtle)]">
           <button
             onClick={() => setMode('campaign')}
@@ -1152,13 +1152,7 @@ const GravityCreate: React.FC = () => {
             <>Describe your <GravityEmphasis>post</GravityEmphasis></>
           )
         }
-        subcopy={
-          mode === 'campaign'
-            ? 'Describe the campaign once. Nebulaa creates the full set of posts for the platforms you choose, spaced out over the duration you set, in your brand voice.'
-            : mode === 'carousel'
-              ? 'Describe one idea. Nebulaa plans how it unfolds across the slides, then generates every slide with the same look.'
-              : 'One sentence is enough. Nebulaa turns it into a finished post.'
-        }
+        className="!mb-6"
       />
 
       {/* Ideas already planned in the calendar. A button rather than a wall
@@ -1385,7 +1379,7 @@ const GravityCreate: React.FC = () => {
                   aria-checked={active}
                   onClick={() => setAspect(a.key)}
                   title={`${a.hint}: ${a.use}`}
-                  className={`flex flex-col items-center gap-1.5 rounded-lg border px-1.5 py-2 transition-colors ${
+                  className={`flex h-[88px] flex-col items-center justify-center gap-1.5 rounded-lg border px-1.5 transition-colors ${
                     active
                       ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
                       : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'
@@ -1411,10 +1405,10 @@ const GravityCreate: React.FC = () => {
           <div className="gravity-label mb-2">
             Logo {logos.length === 0 && <span className="text-[var(--gv-text-muted)] normal-case">· none in Brand assets</span>}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex h-[88px] items-stretch gap-1.5">
             <button
               onClick={() => setSelectedLogo('')}
-              className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-colors ${
+              className={`rounded-lg border px-4 text-[12.5px] font-semibold transition-colors ${
                 !selectedLogo
                   ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
                   : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'
@@ -1427,7 +1421,7 @@ const GravityCreate: React.FC = () => {
                 key={l.id}
                 onClick={() => { setSelectedLogo(l.url); setLogoPosition(l.defaultPosition); }}
                 title={l.name}
-                className={`w-11 h-11 rounded-lg border overflow-hidden bg-[var(--gv-surface-2)] transition-colors ${
+                className={`aspect-square h-full rounded-lg border overflow-hidden bg-[var(--gv-surface-2)] transition-colors ${
                   selectedLogo === l.url ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'
                 }`}
               >
