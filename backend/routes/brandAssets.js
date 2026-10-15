@@ -161,7 +161,7 @@ router.get('/', protect, async (req, res) => {
     const userId = getUserId(req);
     const query = { user: userId };
     
-    if (type && ['logo', 'template', 'environment'].includes(type)) {
+    if (type && ['logo', 'template', 'environment', 'character'].includes(type)) {
       query.type = type;
     }
     
@@ -237,8 +237,8 @@ router.post('/upload', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Image data is required' });
     }
     
-    if (!type || !['logo', 'template', 'environment'].includes(type)) {
-      return res.status(400).json({ success: false, message: 'Type must be "logo", "template" or "environment"' });
+    if (!type || !['logo', 'template', 'environment', 'character'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'Type must be "logo", "template", "environment" or "character"' });
     }
     
     if (!name || name.trim().length === 0) {
@@ -250,7 +250,9 @@ router.post('/upload', protect, async (req, res) => {
       ? 'nebula-brand-logos'
       : type === 'environment'
         ? 'nebula-brand-environment'
-        : 'nebula-brand-templates';
+        : type === 'character'
+          ? 'nebula-brand-characters'
+          : 'nebula-brand-templates';
     const uploadResult = await deps.uploadBase64Image(imageData, folder);
     
     if (!uploadResult.success) {

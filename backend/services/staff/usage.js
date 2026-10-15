@@ -54,7 +54,7 @@ const ACTION_CATEGORY = {
   campaign_full: 'images', rival_post: 'images', strategic_post: 'images', event_post: 'images',
   campaign_text: 'captions',
   video_base: 'video', video_generated: 'video', video_scene_image: 'video', video_scene_clip: 'video', video_character_portrait: 'video',
-  hero_video_clip: 'hero',
+  hero_video_clip: 'hero', studio_video: 'video',
   blueprint: 'blueprint',
   blueprint_pdf: 'blueprint',
   chat_message: 'other', competitor_scrape: 'other'

@@ -470,6 +470,9 @@ app.use('/api/video-generation', protect, requireFeature('video', { when: (req) 
 app.use('/api/video-generation', videoGenerationRoutes);
 app.use('/api/hero-video', protect, requireFeature('video', { when: (req) => req.method === 'POST' && /^\/(concepts|plan|generate)\/?$/.test(req.path) }));
 app.use('/api/hero-video', heroVideoRoutes);
+// The single Videos flow (Gemini Omni): idea, concept, one clip, changes.
+app.use('/api/videos', protect, requireFeature('video', { when: (req) => req.method === 'POST' && /^\/(create|[a-f0-9]{24}\/change)\/?$/.test(req.path) }));
+app.use('/api/videos', require('./routes/studioVideos'));
 app.use('/api/blueprint', blueprintRoutes);
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);

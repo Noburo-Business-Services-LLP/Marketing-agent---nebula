@@ -68,6 +68,11 @@ const PROVIDER_RATES = {
   // 1080p and audio-on are billed differently and we only generate 720p.
   seedance_720p_per_sec: 0.3034,
 
+  // Google Gemini Omni 1.1 Flash (gemini-omni-1.1-flash): video output is $17.50 per 1M tokens and a second of
+  // 720p is 5,792 tokens, so about $0.10 per second. Read from Google's pricing page on 2026-10-15; a real
+  // 10 second clip with audio was generated and measured the same day. Clips come back at 10 seconds.
+  omni_video_per_sec: 0.10,
+
   // OpenAI image models, per generated image at HIGH quality and 1024x1536 (portrait).
   // Verified on 2026-10-08 from OpenAI's own image generation guide ("Calculating costs"):
   //   GPT Image 1 $0.25, GPT Image 1.5 $0.20, GPT Image 2 $0.165, GPT Image 1 Mini $0.052.
@@ -90,6 +95,9 @@ const BLUEPRINT_PDF_PAGES = 11;
 // the per-second rate into a per-clip price; heroVideoService also uses it as
 // the cap on a requested duration, so price and output cannot drift apart.
 const HERO_CLIP_SECONDS = 15;
+
+// A Videos clip made with Gemini Omni: the model returns 10 seconds, with speech, sound and music.
+const STUDIO_CLIP_SECONDS = 10;
 
 // ---------------------------------------------------------------------------
 // 1b. Infrastructure we pay for whether or not a model is involved
@@ -258,6 +266,12 @@ const ACTION_USD = {
   // a finished clip.
   hero_video_clip:
     (PROVIDER_RATES.seedance_720p_per_sec * HERO_CLIP_SECONDS) +
+    assetCost(INFRA.mb_per_scene_clip),
+
+  // The Videos flow: one prompt, one 10 second clip from Gemini Omni with speech and music. A change ("make it
+  // evening") re-renders a clip, so it costs the same.
+  studio_video:
+    (PROVIDER_RATES.omni_video_per_sec * STUDIO_CLIP_SECONDS) +
     assetCost(INFRA.mb_per_scene_clip)
 };
 
@@ -280,7 +294,7 @@ const ACTION_USD = {
 // (see the original ai_feature_costs sheet) used a flat 2.2x across the board,
 // but that sheet had no video in it at all — every line was an image or a
 // text call.
-const MARGIN = { default: 2.5, video_base: 3.2, video_generated: 3.2, hero_video_clip: 3.2 };
+const MARGIN = { default: 2.5, video_base: 3.2, video_generated: 3.2, hero_video_clip: 3.2, studio_video: 3.2 };
 const marginFor = (action) => MARGIN[action] || MARGIN.default;
 
 // What one Quark is worth.
@@ -346,6 +360,7 @@ const ACTION_UNITS = {
   strategic_post: 'per post',
   event_post: 'per post',
   hero_video_clip: 'per clip',
+  studio_video: 'per video',
   competitor_scrape: 'free',
   blueprint: 'per blueprint',
   blueprint_pdf: 'per designed Blueprint PDF'
@@ -610,7 +625,7 @@ const ADDONS = {
 };
 
 module.exports = {
-  PROVIDER_RATES, HERO_CLIP_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
+  PROVIDER_RATES, HERO_CLIP_SECONDS, STUDIO_CLIP_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
   assertPlanAllowance, TOPUP_PACKS, GST_RATE, gstPaise, chargePaise, ADDONS,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,
