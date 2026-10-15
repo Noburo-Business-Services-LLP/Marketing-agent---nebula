@@ -275,7 +275,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
             });
             if (direct && direct.success && direct.imageUrl) {
               result = { imageUrl: direct.imageUrl, model: direct.model, promptUsed: direct.promptUsed };
-              console.log(`[Carousel] slide ${slide.order} made by ${direct.model}${direct.checked ? (direct.missing.length || direct.extra.length ? ' (number check flagged something)' : ' (numbers verified)') : ''}`);
+              console.log(`[Carousel] slide ${slide.order} made by ${direct.model}${direct.checked ? (direct.missing.length || direct.extra.length || (direct.issues || []).length ? ` (checks flagged: ${direct.missing.length} missing numbers, ${direct.extra.length} extra numbers, ${(direct.issues || []).map((i) => i.kind).join('/') || 'no wording issues'})` : ' (numbers and wording verified)') : ''}`);
             } else {
               console.warn(`[Carousel] direct route failed for slide ${slide.order} (${direct && direct.error}); using the older chain`);
             }

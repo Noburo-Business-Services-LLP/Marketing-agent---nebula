@@ -2285,7 +2285,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
             });
             if (direct && direct.success && direct.imageUrl) {
               imageResult = { success: true, imageUrl: direct.imageUrl, model: direct.model, promptUsed: direct.promptUsed };
-              console.log(`[CAMPAIGN_IMAGE] slot ${slotIndex + 1}/${numSlots} made by ${direct.model}${direct.checked ? (direct.missing.length || direct.extra.length ? ' (number check flagged something)' : ' (numbers verified)') : ''}`);
+              console.log(`[CAMPAIGN_IMAGE] slot ${slotIndex + 1}/${numSlots} made by ${direct.model}${direct.checked ? (direct.missing.length || direct.extra.length || (direct.issues || []).length ? ` (checks flagged: ${direct.missing.length} missing numbers, ${direct.extra.length} extra numbers, ${(direct.issues || []).map((i) => i.kind).join('/') || 'no wording issues'})` : ' (numbers and wording verified)') : ''}`);
             } else {
               console.warn(`[CAMPAIGN_IMAGE] direct route failed for slot ${slotIndex + 1} (${direct && direct.error}); using the older chain`);
             }

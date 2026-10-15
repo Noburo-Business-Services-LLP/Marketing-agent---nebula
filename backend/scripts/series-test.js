@@ -46,6 +46,7 @@ async function stream(path, token, body) {
     const ev = await stream('/campaigns/generate-campaign-stream', token, {
       campaignName: process.env.CAMPAIGN_NAME || 'Diwali biryani feast', campaignDescription: process.env.CAMPAIGN_DESC || 'Diwali family feast combo: mutton biryani, chicken 65 and dessert for 4 at Rs 1499, free home delivery.', objective: 'leads',
       platforms: ['instagram'], tone: 'professional', language: process.env.CAMPAIGN_LANGUAGE || 'tamil', aspectRatio: '4:5', duration: process.env.CAMPAIGN_DURATION || '1 week', postsPerWeek: Number(process.env.CAMPAIGN_POSTS_PER_WEEK || 2),
+      density: process.env.CAMPAIGN_DENSITY || 'balanced',
       startDate: new Date().toISOString().slice(0, 10), preferredDays: [], targetAge: '25-55', targetGender: 'all', targetLocation: 'Dindigul', targetInterests: ''
     });
     result.campaign = ev.filter((e) => ['post', 'error', 'complete'].includes(e.event)).map((e) => ({ event: e.event, imageUrl: e.data.imageUrl, caption: e.data.caption, message: e.data.message, model: e.data.model }));
