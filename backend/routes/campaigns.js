@@ -2250,9 +2250,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         if (process.env.IMAGE_MODE !== 'pipeline') {
           try {
             const { generateDirectSeriesImage } = require('../services/directImage');
-            // The first post sets the look; every other post is matched to it.
-            const firstCached = slotIndex === 0 ? null : slotImageCache.get(0);
-            const continuityUrl = firstCached && firstCached.success && firstCached.imageUrl ? firstCached.imageUrl : undefined;
+            // Campaign posts go out on different days, so they share a palette and type style (told in words) but
+            // not a picture: handing post 1 to the others made them near copies of it.
             const direct = await generateDirectSeriesImage({
               brief: [campaignName, campaignDescription, (visualPlan && visualPlan.slots && visualPlan.slots[slotIndex] && visualPlan.slots[slotIndex].imagePrompt) || post.imageDescription].filter(Boolean).join('. '),
               imageText: resolvedImageText,
@@ -2266,8 +2265,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
               noLogo: !slotLogoUrl,
               productUrls: chosenProductImages,
               environmentUrl: slotAssets.environmentImage || undefined,
-              continuityUrl,
-              details: designStyle ? designDetails : {},
+              variety: true,
+              details: designDetails || {},
               designText: designStyle ? require('../config/postStyles').buildStyleDirective(designStyle, designDetails, { language: selectedLanguage }) : '',
               headerUrl: designHeader,
               footerUrl: designFooter

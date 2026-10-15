@@ -266,7 +266,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
               productUrls: chosenProductImages,
               environmentUrl: environmentImage || undefined,
               continuityUrl: previousSlideImageUrl || undefined,
-              details: designStyle ? slideDetails(i, plan.slides.length) : {},
+              details: slideDetails(i, plan.slides.length),
               designText: designStyle ? require('../config/postStyles').buildStyleDirective(designStyle, slideDetails(i, plan.slides.length), { language: normalizedLanguage }) : '',
               headerUrl: designHeader,
               footerUrl: designFooter

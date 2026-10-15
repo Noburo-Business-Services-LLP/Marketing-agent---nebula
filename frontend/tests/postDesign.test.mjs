@@ -33,3 +33,12 @@ test('frame share of a post follows the shape, capped at 30 percent', async () =
   assert.ok(frameSharePercent('footer', '16:9') <= 30);
   assert.equal(frameSharePercent('footer', 'weird'), 18.5);
 });
+
+test('typed details travel with the request even though no style is chosen any more', () => {
+  const d = { ...DEFAULT_DESIGN, details: { ...DEFAULT_DESIGN.details, headline: 'Diwali sale', phone: '98765 43210' } };
+  const f = designRequestFields(d);
+  assert.equal(f.postStyle, undefined);
+  assert.equal(f.postDetails.headline, 'Diwali sale');
+  assert.equal(f.postDetails.phone, '98765 43210');
+  assert.deepEqual(designRequestFields(DEFAULT_DESIGN), {});
+});

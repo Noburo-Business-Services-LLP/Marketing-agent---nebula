@@ -35,11 +35,10 @@ export function referenceFileProblem(file: { type?: string; size?: number } | un
 /** The fields to send with a request. Details and the reference only travel when they will be used. */
 export function designRequestFields(d: PostDesign, opts: { reference: boolean } = { reference: true }): Record<string, any> {
   const out: Record<string, any> = {};
-  if (d.style && d.style !== 'plain') {
-    out.postStyle = d.style;
-    const filled = Object.values(d.details).some((v) => String(v || '').trim());
-    if (filled) out.postDetails = d.details;
-  }
+  // Styles are no longer chosen in the app (the model designs the post itself); an older saved style still works.
+  if (d.style && d.style !== 'plain') out.postStyle = d.style;
+  // The exact text goes with the request whenever something was typed.
+  if (Object.values(d.details).some((v) => String(v || '').trim())) out.postDetails = d.details;
   if (opts.reference && d.referenceImage) out.referenceImage = d.referenceImage;
   if (d.headerUrl) out.headerUrl = d.headerUrl;
   if (d.footerUrl) out.footerUrl = d.footerUrl;

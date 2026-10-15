@@ -132,3 +132,9 @@ test('colour codes never reach the model as text: they become colour names', () 
   assert.doesNotMatch(p, /FFE0B2/i);
   assert.match(p, /never print colour codes/);
 });
+
+test('campaign posts are told to differ from each other, carousel slides are not', () => {
+  const base = { brief: 'x', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5', series: { label: 'post 2 of 6 in a campaign' } };
+  assert.match(buildDirectPrompt({ ...base, variety: true }), /own scene, subject and composition/);
+  assert.doesNotMatch(buildDirectPrompt(base), /own scene, subject and composition/);
+});

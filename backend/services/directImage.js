@@ -58,7 +58,7 @@ const tidy = (v) => humanizeColours(String(v == null ? '' : v)).replace(/&amp;/g
 const ASPECT_WORDS = { '1:1': 'square', '4:5': '4:5 portrait', '9:16': '9:16 vertical story', '16:9': '16:9 landscape', '3:4': '3:4 portrait' };
 
 /** The one request sent to the image model. Plain language, no rule lists. */
-function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, noLogo, logoCorner = '', details = {}, designText = '', reserve = '', productCount = 0, series = null, imageText = '', hasEnvironment = false, hasContinuity = false }) {
+function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, noLogo, logoCorner = '', details = {}, designText = '', reserve = '', productCount = 0, series = null, variety = false, imageText = '', hasEnvironment = false, hasContinuity = false }) {
   const lines = [];
   const kind = tidy(brand.industry) || 'local business';
   lines.push(`Create a finished, professional social media post (${ASPECT_WORDS[aspectRatio] || '4:5 portrait'}) for ${tidy(brand.name) || 'the business'}, a ${kind} business${tidy(brand.location) ? ' in ' + tidy(brand.location) : ''}.`);
@@ -66,6 +66,7 @@ function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, 
   if (series) {
     lines.push(`This picture is ${tidy(series.label) || 'one'} of a connected series that is posted together${series.role ? ` (its job in the story: ${tidy(series.role)})` : ''}. The whole series shares one look${tidy(series.concept) ? `: ${tidy(series.concept)}` : ''}${tidy(series.visualSystem) ? ` Visual system: ${tidy(series.visualSystem)}` : ''}${tidy(series.mechanism) ? ` Recurring device: ${tidy(series.mechanism)}` : ''} Keep the same palette, type style and design language so the pictures clearly belong together, while each one has its own composition.`);
   }
+  if (series && variety) lines.push('Each post in this series goes out on a different day, so this one must have its own scene, subject and composition: do not reuse the same person, room, landmark or layout as the others. Share only the palette, type style and brand feel.');
   if (tidy(imageText)) lines.push(`Show this text on the picture exactly, spelled character for character: "${tidy(imageText)}". Do not add other headline wording. Every slide or post in the series uses the same language as this one.`);
   if (tidy(brand.about)) lines.push(`About the business: ${tidy(brand.about).slice(0, 300)}`);
   if (brand.colours && brand.colours.length) lines.push(`Brand colours to lean on: ${brand.colours.map((c) => hexToName(c)).join(', ')}.`);

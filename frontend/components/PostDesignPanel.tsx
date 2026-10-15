@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ImagePlus, X } from 'lucide-react';
+import { ImagePlus, X } from 'lucide-react';
 import PostPreview from './PostPreview';
 import { brandAssetsAPI } from '../services/api';
-import { POST_STYLE_OPTIONS, PostDesign, PostDetails, referenceFileProblem } from '../utils/postDesign';
+import { PostDesign, PostDetails, referenceFileProblem } from '../utils/postDesign';
 
 const input = 'w-full rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 py-2.5 text-[14px] text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-tertiary)] focus:outline-none focus:border-[var(--gv-accent)]';
 const label = 'block text-[12.5px] font-semibold text-[var(--gv-text-primary)] mb-1.5';
@@ -65,7 +65,7 @@ const PostDesignPanel: React.FC<{
     r.readAsDataURL(file as File);
   };
 
-  const designed = design.style !== 'plain';
+  const designed = true;
 
   const FrameChoice: React.FC<{ title: string; items: any[]; value: string; k: 'headerUrl' | 'footerUrl' }> = ({ title, items, value, k }) => (
     <div>
@@ -100,33 +100,13 @@ const PostDesignPanel: React.FC<{
   return (
     <section className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-5 sm:p-6 space-y-8" aria-label="Post design">
       <div>
-        <h2 className="text-[18px] font-semibold text-[var(--gv-text-primary)]">Post design</h2>
-        <p className="mt-1 text-[13.5px] text-[var(--gv-text-secondary)]">Choose how the post should look. The pictures below are examples of each look, not your own products.</p>
-      </div>
-
-      <div>
-        <p className={sectionTitle}>1 · Style</p>
-        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" role="radiogroup" aria-label="Post style">
-          {POST_STYLE_OPTIONS.map((s) => {
-            const on = design.style === s.id;
-            return (
-              <button key={s.id} type="button" role="radio" aria-checked={on} onClick={() => set({ style: s.id })}
-                className={`group relative text-left rounded-xl overflow-hidden border-2 bg-[var(--gv-panel)] transition-colors ${on ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'}`}>
-                <img src={s.sample} alt="" loading="lazy" className="w-full aspect-[4/5] object-cover bg-[var(--gv-surface-2)]" />
-                {on && <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[var(--gv-accent)] text-[#1A1208] flex items-center justify-center shadow"><Check className="w-3.5 h-3.5" /></span>}
-                <span className="block px-3 py-2.5">
-                  <span className="block text-[13px] font-semibold text-[var(--gv-text-primary)]">{s.label}</span>
-                  <span className="block mt-0.5 text-[11.5px] leading-snug text-[var(--gv-text-tertiary)]">{s.blurb}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <h2 className="text-[18px] font-semibold text-[var(--gv-text-primary)]">Details <span className="text-[13px] font-normal text-[var(--gv-text-tertiary)]">· optional</span></h2>
+        <p className="mt-1 text-[13.5px] text-[var(--gv-text-secondary)]">Nebulaa designs the post from your idea. Add exact words, a picture you like, or a header and footer only if you want them. Anything you leave empty is left out, and nothing is invented.</p>
       </div>
 
       {designed && (
-        <div className="border-t border-[var(--gv-border-subtle)] pt-6">
-          <p className={sectionTitle}>2 · Text on the design</p>
+        <div>
+          <p className={sectionTitle}>1 · Exact text on the design</p>
           <p className="mt-1 text-[12.5px] text-[var(--gv-text-tertiary)]">{DETAIL_NOTE[mode]}</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Field id="pd-headline" text="Headline"><input id="pd-headline" className={input} value={design.details.headline} maxLength={90} onChange={(e) => setDetail('headline', e.target.value)} placeholder="For example: Festive Home Sale" /></Field>
@@ -147,7 +127,7 @@ const PostDesignPanel: React.FC<{
       )}
 
       <div className="border-t border-[var(--gv-border-subtle)] pt-6">
-        <p className={sectionTitle}>{designed ? '3' : '2'} · Reference picture <span className="normal-case tracking-normal font-normal text-[var(--gv-text-tertiary)]">(optional)</span></p>
+        <p className={sectionTitle}>2 · Reference picture <span className="normal-case tracking-normal font-normal text-[var(--gv-text-tertiary)]">(optional)</span></p>
         <div className="mt-3 flex flex-col sm:flex-row gap-4 sm:items-center">
           {design.referenceImage ? (
             <div className="flex items-center gap-4">
@@ -168,7 +148,7 @@ const PostDesignPanel: React.FC<{
       </div>
 
       <div className="border-t border-[var(--gv-border-subtle)] pt-6">
-        <p className={sectionTitle}>{designed ? '4' : '3'} · Header and footer <span className="normal-case tracking-normal font-normal text-[var(--gv-text-tertiary)]">(optional)</span></p>
+        <p className={sectionTitle}>3 · Header and footer <span className="normal-case tracking-normal font-normal text-[var(--gv-text-tertiary)]">(optional)</span></p>
         <p className="mt-1 text-[12.5px] text-[var(--gv-text-tertiary)]">Strips laid over the top and bottom of the finished post, such as your address, GST number or branches. Your logo goes on top of them.</p>
         <div className="mt-4 grid gap-6 md:grid-cols-[1fr_1fr_190px]">
           <FrameChoice title="Header" items={headers} value={design.headerUrl} k="headerUrl" />
