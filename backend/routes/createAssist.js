@@ -195,7 +195,9 @@ router.post('/transcribe', protect, async (req, res) => {
     form.append('model', process.env.TRANSCRIBE_MODEL || 'gpt-4o-transcribe');
     form.append('language', language);
     form.append('prompt', language === 'ta' ? 'A shop owner in Tamil Nadu describes a social media post: an offer, a festival, a product.' : 'A shop owner describes a social media post: an offer, a festival, a product.');
-    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: form });
+    const send = () => fetch('https://api.openai.com/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: form });
+    let r = await send();
+    if (r.status >= 500) r = await send(); // a one-off gateway error (seen as 520) clears on the second try
     if (!r.ok) {
       console.error('[create-assist] transcribe HTTP', r.status);
       return res.status(502).json({ success: false, message: 'Could not turn the recording into text. Please try again, or type it.' });
