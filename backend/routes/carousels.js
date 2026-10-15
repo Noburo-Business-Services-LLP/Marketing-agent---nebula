@@ -78,7 +78,8 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       headerUrl: headerUrlIn,
       footerUrl: footerUrlIn,
       referenceImage: referenceImageIn,
-      theme: themeIn
+      theme: themeIn,
+      density: densityIn
     } = req.body || {};
     const styleReference = typeof referenceImageIn === 'string' && /^data:image\/(png|jpe?g|webp);base64,/i.test(referenceImageIn) && referenceImageIn.length < 7000000 ? referenceImageIn : undefined;
     const { isPostStyle, normalisePostDetails } = require('../config/postStyles');
@@ -258,6 +259,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
               brand: { name: bpDirect.name || (brandUser && brandUser.companyName), industry: bpDirect.industry, location: bpDirect.businessLocation, about: bpDirect.description, website: bpDirect.website },
               language: normalizedLanguage,
               aspectRatio,
+              density: ['clean', 'balanced', 'rich'].includes(String(densityIn)) ? String(densityIn) : 'balanced',
               series: { label: `slide ${slide.order} of ${plan.slides.length} in a swipe carousel`, role: slide.role, concept: plan.creativeConcept, visualSystem: plan.visualSystem, mechanism: plan.swipeMechanism },
               logoUrl: logoUrl || undefined,
               overlayLogo: true,

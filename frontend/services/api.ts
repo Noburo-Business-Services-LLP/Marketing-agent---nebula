@@ -4705,6 +4705,8 @@ export const draftsAPI = {
     logoPosition?: string;
     /** an optional label that ties posts together by subject */
     theme?: string;
+    /** how full the design should be */
+    density?: 'clean' | 'balanced' | 'rich';
   }): Promise<{ success: boolean; draftId?: string; draft?: Draft; message?: string }> => {
     return apiCall('/drafts/generate-image-bg', {
       method: 'POST',

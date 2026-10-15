@@ -84,8 +84,15 @@ function humanizeColours(text) {
 const tidy = (v) => humanizeColours(String(v == null ? '' : v)).replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 const ASPECT_WORDS = { '1:1': 'square', '4:5': '4:5 portrait', '9:16': '9:16 vertical story', '16:9': '16:9 landscape', '3:4': '3:4 portrait' };
 
+const DENSITY_TEXT = {
+  clean: 'It must work as an Instagram post seen on a phone while scrolling, and it must feel calm and uncluttered: one clear focal subject (a real person, the product, or the shop itself), a short bold headline with generous breathing room around it, at most two supporting elements, and a restrained palette with strong contrast. Simple does not mean empty: the focal subject must be vivid and well lit. Friendly and commercial, not abstract or editorial. No watermarks.',
+  balanced: 'It must work as an Instagram post seen on a phone while scrolling: one clear focal subject (a real person, the product, or the shop itself), vivid warm colour with strong contrast, one bold headline, the offer or message stated plainly, and supporting details such as icons, badges or a short list where they help. Fill the frame with content and never leave large empty blocks or an empty card. Polished and professional, but friendly and commercial, not minimalist, abstract or editorial. No watermarks.',
+  rich: 'It must work as an Instagram post seen on a phone while scrolling, and it should feel rich, festive and full: layered props and patterns, badges, icons, tags and several supporting elements around a strong focal subject, like a lively shop-front poster. Keep the headline dominant and fully readable, and keep every word spelled correctly. Friendly and commercial. No watermarks.',
+};
+const densityText = (d) => DENSITY_TEXT[String(d || '').toLowerCase()] || DENSITY_TEXT.balanced;
+
 /** The one request sent to the image model. Plain language, no rule lists. */
-function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, noLogo, logoCorner = '', details = {}, designText = '', reserve = '', productCount = 0, series = null, variety = false, imageText = '', hasEnvironment = false, hasContinuity = false }) {
+function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, noLogo, logoCorner = '', details = {}, designText = '', reserve = '', productCount = 0, series = null, variety = false, imageText = '', hasEnvironment = false, hasContinuity = false, density = 'balanced' }) {
   const lines = [];
   const kind = tidy(brand.industry) || 'local business';
   lines.push(`Create a finished, professional social media post (${ASPECT_WORDS[aspectRatio] || '4:5 portrait'}) for ${tidy(brand.name) || 'the business'}, a ${kind} business${tidy(brand.location) ? ' in ' + tidy(brand.location) : ''}.`);
@@ -124,7 +131,7 @@ function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, 
   if (hasEnvironment) lines.push('One attached picture shows the real place: keep it recognisable.');
   if (hasContinuity) lines.push('The last attached picture is the previous one in this series: match its colours, type style and visual language, but do not copy its composition.');
   if (designText) lines.push(designText);
-  lines.push('It must work as an Instagram post seen on a phone while scrolling: one clear focal subject (a real person, the product, or the shop itself), vivid warm colour with strong contrast, one bold headline, the offer or message stated plainly, and supporting details such as icons, badges or a short list where they help. Fill the frame with content and never leave large empty blocks or an empty card. Polished and professional, but friendly and commercial, not minimalist, abstract or editorial. No watermarks.');
+  lines.push(densityText(density));
   if (reserve) lines.push(reserve);
   return lines.join('\n');
 }
@@ -183,39 +190,49 @@ async function generateDirectPost(input, io = {}) {
     let result = await gen(prompt, { aspectRatio: input.aspectRatio, references: refs });
     if (!result || !result.success || !result.imageUrl) return { success: false, error: (result && result.error) || 'no picture' };
 
-    // Read the picture back: the numbers from the brief must be there, and no number nobody supplied may be.
-    // One retry, then keep the better of the two.
+    // Read the picture back. Two checks run together: the numbers (the ones from the brief must be there, none
+    // nobody supplied may be) and a proofread of the words (headline as written, spelling, cut-off sentences,
+    // wrong-language words). One remake at most, then the better of the two is kept.
     const required = requiredNumbers({ brief: [input.brief, input.imageText].filter(Boolean).join(' '), details: input.details });
     const allowedText = [input.brief, input.imageText, input.series && input.series.concept, input.series && input.series.visualSystem, input.series && input.series.mechanism, input.brand && input.brand.name, input.brand && input.brand.location, input.brand && input.brand.website, ...Object.values(input.details || {}).map((v) => (Array.isArray(v) ? v.join(' ') : v))].filter(Boolean).join(' ');
-    let checked = false;
-    let missing = [];
-    let extra = [];
-    if (result.imageUrl.startsWith('http')) {
-      const text = await read(result.imageUrl).catch(() => '');
-      if (text) {
-        checked = true;
-        missing = missingNumbers(required, text);
-        extra = extraNumbers(allowedText, text);
-        // A single post is remade for either problem. Pictures in a series are remade only for a missing number:
-        // an extra number is logged, but a second picture would double the wait for every slide.
-        const retryExtra = input.retryOnExtra !== false;
-        if (missing.length || (retryExtra && extra.length)) {
-          const fixes = [];
-          if (missing.length) fixes.push(`the picture must clearly show these numbers exactly: ${missing.join(', ')}`);
-          if (retryExtra && extra.length) fixes.push(`do not show any number that was not given, such as: ${extra.join(', ')}; remove those claims entirely`);
-          const again = await gen(`${prompt}\nImportant: ${fixes.join('; ')}.`, { aspectRatio: input.aspectRatio, references: refs });
-          if (again && again.success && again.imageUrl) {
-            const text2 = again.imageUrl.startsWith('http') ? await read(again.imageUrl).catch(() => '') : '';
-            if (text2) {
-              const m2 = missingNumbers(required, text2);
-              const e2 = extraNumbers(allowedText, text2);
-              if (m2.length + e2.length <= missing.length + extra.length) { result = again; missing = m2; extra = e2; }
-            }
-          }
-        }
+    const allowedNumbers = Array.from(new Set([...(allowedText.match(/\d[\d,.]*\d|\d/g) || []).map((n) => n.replace(/[,.]/g, ''))])).slice(0, 20);
+    const proofread = io.proofread || require('./proofread').proofreadImage;
+    const { fixInstructions } = require('./proofread');
+    const expected = [];
+    if (input.imageText && !textMismatchesLanguage(input.imageText, input.language)) expected.push({ label: 'headline', text: tidy(input.imageText) });
+    for (const k of ['headline', 'offer', 'phone', 'tagline']) if (input.details && input.details[k]) expected.push({ label: k, text: tidy(input.details[k]) });
+    const retryExtra = input.retryOnExtra !== false;
+    // A single post is remade for any problem. A picture in a series only for a missing number or a headline that
+    // does not read as written: a second picture would double the wait for every slide.
+    const blocking = (i) => (retryExtra ? true : (i.kind === 'headline' || i.kind === 'cut_off'));
+    const assess = async (url) => {
+      if (!String(url).startsWith('http')) return { checked: false, missing: [], extra: [], issues: [] };
+      const [text, pr] = await Promise.all([
+        read(url).catch(() => ''),
+        proofread({ imageUrl: url, languageName: languageWords(input.language), expected, allowedNumbers }).catch(() => ({ checked: false, issues: [] })),
+      ]);
+      return {
+        checked: Boolean(text) || Boolean(pr && pr.checked),
+        missing: text ? missingNumbers(required, text) : [],
+        extra: text ? extraNumbers(allowedText, text) : [],
+        issues: (pr && pr.issues) || [],
+      };
+    };
+    const score = (a) => a.missing.length + (retryExtra ? a.extra.length : 0) + a.issues.filter(blocking).length;
+    let current = await assess(result.imageUrl);
+    if (current.checked && score(current) > 0) {
+      const fixes = [];
+      if (current.missing.length) fixes.push(`the picture must clearly show these numbers exactly: ${current.missing.join(', ')}`);
+      if (retryExtra && current.extra.length) fixes.push(`do not show any number that was not given, such as: ${current.extra.join(', ')}; remove those claims entirely`);
+      fixes.push(...fixInstructions(current.issues.filter(blocking)));
+      const again = await gen(`${prompt}\nImportant corrections: ${fixes.join('; ')}.`, { aspectRatio: input.aspectRatio, references: refs });
+      if (again && again.success && again.imageUrl) {
+        const next = await assess(again.imageUrl);
+        if (!next.checked || score(next) <= score(current)) { result = again; current = next.checked ? next : current; }
       }
     }
-    return { success: true, imageUrl: result.imageUrl, model: result.model, promptUsed: prompt, checked, missing, extra, logoPlacedByModel: hasLogo };
+    const checked = current.checked; const missing = current.missing; const extra = current.extra; const issues = current.issues;
+    return { success: true, imageUrl: result.imageUrl, model: result.model, promptUsed: prompt, checked, missing, extra, issues, logoPlacedByModel: hasLogo };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -243,7 +260,7 @@ async function generateDirectSeriesImage(input, io = {}) {
     const framed = await (io.addFrames || addFramesToImage)(url, { headerUrl: input.headerUrl, footerUrl: input.footerUrl });
     if (framed && framed.applied) url = framed.imageUrl;
   }
-  return { success: true, imageUrl: url, model: out.model, promptUsed: out.promptUsed, checked: out.checked, missing: out.missing, extra: out.extra };
+  return { success: true, imageUrl: url, model: out.model, promptUsed: out.promptUsed, checked: out.checked, missing: out.missing, extra: out.extra, issues: out.issues || [] };
 }
 
 module.exports = { languageKind, textMismatchesLanguage, hexToName, humanizeColours, generateDirectSeriesImage, extraNumbers, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, languageWords };

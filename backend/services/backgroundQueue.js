@@ -438,6 +438,7 @@ async function processDraftImageGenerationJob(job) {
               brand: { name: bp.name || user?.companyName, industry: bp.industry, location: bp.businessLocation, about: bp.description, website: bp.website, colours },
               language: effectiveLanguage,
               aspectRatio: job.aspectRatio || '1:1',
+              density: job.density || 'balanced',
               logoUrl: effectiveLogo?.url || (job.logoUrl === '' ? '' : undefined),
               // The real logo file goes on afterwards by default (exact, never redrawn); IMAGE_LOGO_MODE=model lets the model place it.
               overlayLogo: process.env.IMAGE_LOGO_MODE !== 'model',

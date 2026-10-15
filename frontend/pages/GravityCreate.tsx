@@ -226,6 +226,8 @@ const GravityCreate: React.FC = () => {
   const [name, setName] = useState('');
   // An optional label that ties posts together by subject (a festival, an offer): they are then listed together.
   const [theme, setTheme] = useState('');
+  // How full the design should be: calm, balanced or rich. Sent with every request.
+  const [density, setDensity] = useState<'clean' | 'balanced' | 'rich'>('balanced');
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('2 weeks');
   const [cadence, setCadence] = useState('3 posts / week');
@@ -638,6 +640,7 @@ const GravityCreate: React.FC = () => {
       type: 'post',
       title: name.trim() || 'Untitled post',
       theme: theme.trim() || undefined,
+      density,
       caption: description.trim() || name.trim() || '',
       hashtags: [],
       platforms: selectedPlatforms,
@@ -724,6 +727,7 @@ const GravityCreate: React.FC = () => {
       body: JSON.stringify({
         title: name.trim(),
         theme: theme.trim() || undefined,
+        density,
         brief: description.trim() || name.trim(),
         slideCount,
         platforms: selectedPlatforms,
@@ -832,6 +836,7 @@ const GravityCreate: React.FC = () => {
     const body = {
       campaignName: name.trim(),
       theme: theme.trim() || undefined,
+      density,
       campaignDescription: description.trim() || name.trim(),
       objective: ideaContext.objective || 'awareness',
       platforms: selectedPlatforms,
@@ -1409,6 +1414,33 @@ const GravityCreate: React.FC = () => {
 
         </div>
 
+        <div className="sm:col-span-2">
+          <div className="gravity-label mb-2">Look</div>
+          <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="How full the design is">
+            {([
+              ['clean', 'Clean', 'Calm and simple'],
+              ['balanced', 'Balanced', 'A clear message with support'],
+              ['rich', 'Rich', 'Festive and full'],
+            ] as const).map(([key, label, hint]) => {
+              const on = density === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => setDensity(key)}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${on
+                    ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
+                    : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'}`}
+                >
+                  <span className="block text-[12.5px] font-semibold">{label}</span>
+                  <span className="block text-[11px] opacity-80">{hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
       )}
 

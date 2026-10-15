@@ -166,3 +166,55 @@ test('the picture is briefed as a scroll-stopping social post, not as an editori
   assert.match(p, /never leave large empty blocks/);
   assert.doesNotMatch(p, /Not a template/);
 });
+
+test('look: clean, balanced and rich give different directions; unknown falls back to balanced', () => {
+  const base = { brief: 'x', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5' };
+  assert.match(buildDirectPrompt({ ...base, density: 'clean' }), /calm and uncluttered/);
+  assert.match(buildDirectPrompt({ ...base, density: 'rich' }), /rich, festive and full/);
+  assert.match(buildDirectPrompt({ ...base, density: 'balanced' }), /never leave large empty blocks/);
+  assert.match(buildDirectPrompt({ ...base, density: 'weird' }), /never leave large empty blocks/);
+  assert.match(buildDirectPrompt(base), /never leave large empty blocks/);
+});
+
+test('proofreading: a wrong headline makes a single post be remade with the correction, and the better picture is kept', async () => {
+  const prompts = [];
+  const io = {
+    fetchReference: async () => null,
+    generate: async (prompt) => { prompts.push(prompt); return { success: true, imageUrl: `https://img/${prompts.length}.jpg`, model: 'gpt-image-2' }; },
+    readText: async () => 'Diwali sale 30% off',
+    proofread: async ({ imageUrl }) => (imageUrl.endsWith('/1.jpg')
+      ? { checked: true, ok: false, issues: [{ kind: 'headline', text: 'Diwali sael', should_be: 'Diwali sale' }, { kind: 'spelling', text: 'desinging', should_be: 'designing' }] }
+      : { checked: true, ok: true, issues: [] }),
+  };
+  const out = await generateDirectPost({ brief: 'Diwali sale 30% off', imageText: 'Diwali sale', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5', details: {} }, io);
+  assert.strictEqual(prompts.length, 2);
+  assert.match(prompts[1], /the headline must read exactly "Diwali sale"/);
+  assert.match(prompts[1], /correct "desinging" to "designing"/);
+  assert.strictEqual(out.imageUrl, 'https://img/2.jpg');
+  assert.deepStrictEqual(out.issues, []);
+});
+
+test('proofreading: in a series only a headline or cut-off problem causes a remake, a spelling slip is only reported', async () => {
+  const { generateDirectSeriesImage } = require('../services/directImage');
+  let calls = 0;
+  const base = {
+    fetchReference: async () => null,
+    generate: async () => { calls += 1; return { success: true, imageUrl: `https://img/${calls}.jpg`, model: 'gpt-image-2' }; },
+    readText: async () => '',
+  };
+  const input = { brief: 'Sale', imageText: 'Big sale', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5', series: { label: 'post 1 of 3' } };
+  const spelling = await generateDirectSeriesImage(input, { ...base, proofread: async () => ({ checked: true, ok: false, issues: [{ kind: 'spelling', text: 'sael', should_be: 'sale' }] }) });
+  assert.strictEqual(calls, 1);
+  assert.strictEqual(spelling.issues.length, 1);
+  calls = 0;
+  await generateDirectSeriesImage(input, { ...base, proofread: async ({ imageUrl }) => (imageUrl.endsWith('/1.jpg') ? { checked: true, ok: false, issues: [{ kind: 'cut_off', text: 'in Dindigul that want to', should_be: '' }] } : { checked: true, ok: true, issues: [] }) });
+  assert.strictEqual(calls, 2);
+});
+
+test('proofreading: when the check cannot run, the picture is kept and nothing is remade', async () => {
+  let calls = 0;
+  const io = { fetchReference: async () => null, generate: async () => { calls += 1; return { success: true, imageUrl: 'https://img/1.jpg', model: 'gpt-image-2' }; }, readText: async () => '', proofread: async () => ({ checked: false, ok: true, issues: [] }) };
+  const out = await generateDirectPost({ brief: 'x', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5', details: {} }, io);
+  assert.strictEqual(calls, 1);
+  assert.strictEqual(out.success, true);
+});

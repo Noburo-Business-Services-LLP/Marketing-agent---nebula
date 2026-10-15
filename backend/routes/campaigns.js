@@ -1527,6 +1527,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     const {
       campaignName, campaignDescription, objective,
       theme: themeInput,
+      density: densityInput,
       platforms: platformsInput, tone, aspectRatio,
       keyMessages, duration, startDate: startDateParam,
       preferredDays: daysInput, targetAge, targetGender,
@@ -2268,6 +2269,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
               brand: { name: brandDisplayName, industry: bp.industry, location: bp.businessLocation, about: bp.description, website: bp.website },
               language: selectedLanguage,
               aspectRatio: aspectRatio || '1:1',
+              density: ['clean', 'balanced', 'rich'].includes(String(densityInput)) ? String(densityInput) : 'balanced',
               series: { label: `post ${slotIndex + 1} of ${numSlots} in a campaign`, role: post.campaignRole || post.contentTheme, concept: visualPlan && visualPlan.campaignVisualConcept, visualSystem: visualPlan && visualPlan.visualSystem },
               logoUrl: slotLogoUrl || undefined,
               overlayLogo: true,

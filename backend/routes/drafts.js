@@ -607,7 +607,7 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       // backgroundQueue.js's `effectiveLogo` for how that distinction is used.
       logoUrl, logoPosition,
       // Design style, its text, and the saved header/footer chosen in Create
-      postStyle, postDetails, headerUrl, footerUrl, theme
+      postStyle, postDetails, headerUrl, footerUrl, theme, density
     } = req.body;
     const { isPostStyle, normalisePostDetails } = require('../config/postStyles');
     const httpsOnly = (u) => (typeof u === 'string' && /^https:\/\//i.test(u.trim()) ? u.trim() : undefined);
@@ -682,7 +682,8 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       postStyle: isPostStyle(postStyle) && postStyle !== 'plain' ? postStyle : undefined,
       postDetails: postDetails ? normalisePostDetails(postDetails) : undefined,
       headerUrl: httpsOnly(headerUrl),
-      footerUrl: httpsOnly(footerUrl)
+      footerUrl: httpsOnly(footerUrl),
+      density: ['clean', 'balanced', 'rich'].includes(String(density)) ? String(density) : 'balanced'
     });
 
     res.status(201).json({ success: true, draftId: draft._id, draft });
