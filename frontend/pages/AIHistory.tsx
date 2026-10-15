@@ -50,7 +50,7 @@ const AIHistory: React.FC = () => {
       {type === 'campaign' && (
         <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-white border-slate-200'}`}>
           <Search className="w-4 h-4 text-slate-400" />
-          <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={`w-full bg-transparent outline-none ${tc.text}`}>
+          <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={`gravity-bare w-full bg-transparent outline-none ${tc.text}`}>
             <option value="">All platforms</option>
             <option value="instagram">Instagram</option>
             <option value="facebook">Facebook</option>

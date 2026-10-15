@@ -327,7 +327,7 @@ const UnifiedInbox: React.FC = () => {
                 value={search}
                 onChange={event => setSearch(event.target.value)}
                 placeholder="Search conversations"
-                className="w-full bg-transparent outline-none text-sm"
+                className="gravity-bare w-full bg-transparent outline-none text-sm"
               />
             </div>
 
@@ -524,7 +524,7 @@ const UnifiedInbox: React.FC = () => {
                         onChange={event => setReply(event.target.value)}
                         rows={3}
                         placeholder={replyingToCommentId ? "Replying to a specific comment..." : "Reply across the original social platform"}
-                        className="w-full bg-transparent outline-none resize-none text-sm"
+                        className="gravity-bare w-full bg-transparent outline-none resize-none text-sm"
                       />
                       <div className="flex items-center justify-between pt-2">
                         <div className={`flex items-center gap-2 text-xs ${muted}`}>

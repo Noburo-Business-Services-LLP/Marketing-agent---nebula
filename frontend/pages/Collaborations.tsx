@@ -171,7 +171,7 @@ const Collaborations: React.FC = () => {
               <label className={`flex items-center gap-2 rounded-lg px-3 py-2.5 border ${isDarkMode ? 'border-slate-700 bg-[#070A12]' : 'border-slate-300 bg-white'}`}>
                 <Calendar className={`w-4 h-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
                 <input
-                  className={`w-full bg-transparent outline-none ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}
+                  className={`gravity-bare w-full bg-transparent outline-none ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}
                   type="date"
                   value={form.dueDate}
                   onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
