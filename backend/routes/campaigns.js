@@ -1320,7 +1320,7 @@ RULES:
 1) Provide meaningful, campaign-ready content for EVERY section.
 2) No placeholders like [Fun Fact 1], [Point], [Outcome] in output values.
 3) Keep language strictly ${selectedLanguage}.
-4) ${selectedLanguage === 'English' ? 'English allowed.' : 'No English words except brand/product names and hashtags.'}
+4) ${selectedLanguage === 'English' ? 'Plain English only: no Tamil, Hindi or transliterated words.' : 'No English words except brand/product names and hashtags.'}
 5) Provide richer details, not generic filler.
 6) Provide CTA text but DO NOT include a URL; URL placeholders remain in template.
 7) For bullet-worthy sections (highlights, benefits, pillars, deliverables, takeaways), provide 3-4 bullet items.
@@ -4904,7 +4904,7 @@ Requirements:
 6. Match the tone appropriate for ${platform || 'Instagram'}.
 7. ${strictBrandMode ? `STRICT BRAND LOCK: The caption MUST follow "${enforcedTone}" tone exactly and must not drift.` : 'Keep tone aligned to the brand context above.'}
 8. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
-9. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
+9. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'Plain English only: no Tamil, Hindi or transliterated words (no Tanglish or Hinglish).' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
 
 CRITICAL: NEVER include @mentions (e.g. @somebrand) of ANY account, including the user's own brand. Instagram limits mentions of the same handle to once per day per posting account and rejects subsequent posts with a "spam risk" error. If you must reference a brand, use plain text or #hashtag form — NEVER @handle. Failure to follow this rule breaks the entire publish flow.
 
@@ -5062,7 +5062,7 @@ Requirements:
 7. ${strictBrandMode ? `STRICT BRAND LOCK: The caption MUST follow "${enforcedTone}" tone exactly and must not drift.` : 'Keep tone aligned to the brand context above.'}
 8. ${strictBrandMode ? 'If there is conflict between platform defaults and brand profile, prioritize brand profile.' : 'Balance platform-native style with brand voice.'}
 9. LANGUAGE ENFORCEMENT: Write caption and CTA strictly in ${selectedLanguage}.
-10. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'English is allowed.' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
+10. ${selectedLanguage.includes('Mix') ? 'You may mix English and the native language fluidly.' : selectedLanguage === 'English' ? 'Plain English only: no Tamil, Hindi or transliterated words (no Tanglish or Hinglish).' : 'Do NOT use English words except for strict brand names. Hashtags MUST be entirely in ' + selectedLanguage + ' (or transliterated if native characters aren\'t supported).'}
 11. ${selectedProductText ? 'Naturally feature the selected product name, description, price, category, and features when relevant. Do not invent product facts.' : 'Do not invent product details.'}
 
 CRITICAL: NEVER include @mentions (e.g. @somebrand) of ANY account, including the user's own brand. Instagram limits mentions of the same handle to once per day per posting account and rejects subsequent posts with a "spam risk" error. If you must reference a brand, use plain text or #hashtag form — NEVER @handle. Failure to follow this rule breaks the entire publish flow.

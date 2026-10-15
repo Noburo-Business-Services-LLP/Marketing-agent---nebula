@@ -286,7 +286,7 @@ Platform:
 
 Language:
 {{language}}
-LANGUAGE ENFORCEMENT: Write the caption, hashtags, and any body copy strictly in {{language}}. Do not default to English unless {{language}} is English.
+LANGUAGE ENFORCEMENT: Write the caption, hashtags, and any body copy strictly in {{language}}. Do not default to English unless {{language}} is English. Use only {{language}}: do not mix in words from any other language, and do not write one language in another language's letters (no Tanglish or Hinglish) unless {{language}} itself says it is a mix. If {{language}} is English, write plain, natural English (Indian English is fine) with no Tamil, Hindi or other-language words.
 
 ==================================================
 FIRST: UNDERSTAND THE IDEA
@@ -591,7 +591,7 @@ Tone:
 
 Language:
 {{language}}
-LANGUAGE ENFORCEMENT: Write the entire post, hashtags included, strictly in {{language}}. Do not default to English unless {{language}} is English.
+LANGUAGE ENFORCEMENT: Write the entire post, hashtags included, strictly in {{language}}. Do not default to English unless {{language}} is English. Use only {{language}}: do not mix in words from any other language, and do not write one language in another language's letters (no Tanglish or Hinglish) unless {{language}} itself says it is a mix. If {{language}} is English, write plain, natural English (Indian English is fine) with no Tamil, Hindi or other-language words.
 
 ==================================================
 WRITING PROCESS — DO NOT SKIP THIS ORDER
@@ -1184,7 +1184,7 @@ Tone:
 
 Language:
 {{language}}
-LANGUAGE ENFORCEMENT: Write every post caption, hashtag, and CTA strictly in {{language}}. Do not default to English unless {{language}} is English.
+LANGUAGE ENFORCEMENT: Write every post caption, hashtag, and CTA strictly in {{language}}. Do not default to English unless {{language}} is English. Use only {{language}}: do not mix in words from any other language, and do not write one language in another language's letters (no Tanglish or Hinglish) unless {{language}} itself says it is a mix. If {{language}} is English, write plain, natural English (Indian English is fine) with no Tamil, Hindi or other-language words.
 
 Number of Posts:
 {{totalPosts}}
@@ -2058,7 +2058,7 @@ Platform:
 
 Language:
 {{language}}
-LANGUAGE ENFORCEMENT: Write every slide headline, story copy, caption, and hashtag strictly in {{language}}. Do not default to English unless {{language}} is English.
+LANGUAGE ENFORCEMENT: Write every slide headline, story copy, caption, and hashtag strictly in {{language}}. Do not default to English unless {{language}} is English. Use only {{language}}: do not mix in words from any other language, and do not write one language in another language's letters (no Tanglish or Hinglish) unless {{language}} itself says it is a mix. If {{language}} is English, write plain, natural English (Indian English is fine) with no Tamil, Hindi or other-language words.
 
 ==================================================
 FIRST: DETERMINE THE CAROUSEL'S JOB
