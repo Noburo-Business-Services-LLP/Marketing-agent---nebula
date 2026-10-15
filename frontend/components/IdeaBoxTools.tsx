@@ -159,7 +159,7 @@ const IdeaBoxTools: React.FC<{
         {recording && <span className="inline-flex items-center gap-2 text-[12.5px] text-red-600" role="status"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />Listening… tap Stop when you finish</span>}
         {transcribing && <span className="inline-flex items-center gap-2 text-[12.5px] text-[var(--gv-text-secondary)]" role="status"><Loader2 className="w-4 h-4 animate-spin" />Writing it down…</span>}
         {reading && <span className="inline-flex items-center gap-2 text-[12.5px] text-[var(--gv-text-secondary)]" role="status"><Loader2 className="w-4 h-4 animate-spin" />Reading your file…</span>}
-        {!recording && !busy && <span className="text-[12px] text-[var(--gv-text-tertiary)]">Or drop a pamphlet, poster or price list here. Free to use.</span>}
+        {!recording && !busy && <span className="text-[12px] text-[var(--gv-text-tertiary)]">Or drop a pamphlet, poster or price list here.</span>}
       </div>
 
       {note && <p role="alert" className="mt-2 text-[12.5px] text-[var(--gv-text-primary)]">{note}</p>}
