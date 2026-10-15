@@ -10,6 +10,8 @@ import { CONTENT_LANGUAGES, OFFERED_LANGUAGE_VALUES } from '../constants/languag
 import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 import PostDesignPanel from '../components/PostDesignPanel';
 import ModeExplainer from '../components/ModeExplainer';
+import IdeaBoxTools, { ReadUpload } from '../components/IdeaBoxTools';
+import { appendText, mergeDetails } from '../utils/ideaFiles';
 import { DEFAULT_DESIGN, PostDesign, designRequestFields } from '../utils/postDesign';
 import { Draft } from '../types';
 import GeneratingFill from '../components/GeneratingFill';
@@ -305,6 +307,16 @@ const GravityCreate: React.FC = () => {
   const [ideaContext, setIdeaContext] = useState<{ contentPillar: string; objective: string; format: string }>({
     contentPillar: '', objective: '', format: ''
   });
+
+  // What was read from a dropped file goes into the idea and the optional fields. Only empty boxes are filled, so
+  // nothing the person typed is replaced, and they can change everything.
+  const applyReadFiles = (uploads: ReadUpload[]) => {
+    for (const u of uploads) {
+      if (u.brief) setDescription((d) => appendText(d, u.brief));
+      if (!name.trim() && (u.details?.headline || u.name)) setName((n) => n.trim() || String(u.details?.headline || '').slice(0, 80));
+      setDesign((d) => ({ ...d, details: mergeDetails(d.details as any, u.details as any) as any }));
+    }
+  };
 
   const applyCalendarItem = (item: any) => {
     setName(item.headline || '');
@@ -1261,6 +1273,12 @@ const GravityCreate: React.FC = () => {
                 : 'For example: A quiet Sunday morning with filter coffee. Invite people to spend the morning with us.'}
             rows={mode === 'linkedin' ? 8 : 4}
             className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-[var(--gv-text-tertiary)] leading-relaxed resize-none placeholder:text-[var(--gv-text-muted)]"
+          />
+          <IdeaBoxTools
+            languageLabel={language}
+            onText={(t) => setDescription((d) => appendText(d, t))}
+            onRead={(ups) => applyReadFiles(ups)}
+            onReuse={(u) => applyReadFiles([u])}
           />
         </div>
       </div>
