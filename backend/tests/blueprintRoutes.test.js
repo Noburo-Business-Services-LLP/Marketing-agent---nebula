@@ -26,7 +26,7 @@ test('POST / chain: protect, feature gate, checkTrial, credits guard, limiter, h
   const post = routesOf(router).find((r) => r.method === 'post' && r.path === '/');
   assert.strictEqual(post.handlers.length, 6);
   assert.strictEqual(post.handlers[0], protect);
-  assert.strictEqual(post.handlers[2], checkTrial);
+  assert.strictEqual(typeof post.handlers[2], 'function'); // checkTrial and the credits guard apply to paid tiers only
   assert.strictEqual(typeof post.handlers[1], 'function');
   assert.strictEqual(typeof post.handlers[3], 'function');
   assert.ok(post.handlers[1] !== post.handlers[3]);

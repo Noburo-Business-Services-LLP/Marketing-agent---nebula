@@ -171,6 +171,8 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
   const ownsAddon = (id: string) => held.includes(id) || held.includes('bundle');
   const onPaidPlan = tier === 'starter' || tier === 'professional';
   const isManaged = tier === 'managed';
+  // A new account that has not paid yet: no Quarks, and the free Blueprint is the one thing it can use.
+  const isNewAccount = tier === 'free' && reason === 'credits';
 
   // One checkout runner for the three purchases. `afterPay` verifies the payment on the server.
   const checkout = async (key: string, create: () => Promise<any>, build: (d: any) => any, verify: (r: any) => Promise<any>) => {
@@ -243,10 +245,12 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
         <div className="text-center mb-10 rounded-3xl bg-[#070a12] px-6 py-6">
           <img src="/assets/nebulaa-gold.png" alt="Nebulaa" className="w-16 h-16 mx-auto mb-4" onError={(e) => (e.currentTarget.style.display = 'none')} />
           <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3 tracking-tight">
-            {reason === 'credits' ? 'You have used all of your Quarks' : 'Plans and Quarks'}
+            {isNewAccount ? 'Choose a plan to start creating' : reason === 'credits' ? 'You have used all of your Quarks' : 'Plans and Quarks'}
           </h1>
           <p className={`${muted} text-base max-w-2xl mx-auto`}>
-            {reason === 'credits'
+            {isNewAccount
+              ? 'Posts, campaigns and videos start with a plan. Your Growth Blueprint is free: make it now, then pick a plan when you are ready to create.'
+              : reason === 'credits'
               ? 'Please upgrade your plan, or buy an add-on pack or Quarks, to continue.'
               : 'Choose a monthly plan, add the features you need, or buy extra Quarks at any time. Prices are shown before GST; 18 percent GST is added at checkout.'}
           </p>
@@ -255,6 +259,15 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
             {balance !== null && <> · <span className="text-white font-semibold">{balance.toLocaleString('en-IN')}</span> Quarks remaining</>}
           </p>
         </div>
+
+        {isNewAccount && (
+          <div className="mb-10 max-w-2xl mx-auto rounded-3xl border border-[#ffcc29]/40 bg-[#0f1520] px-6 py-6 text-center">
+            <p className="text-xs font-semibold tracking-[0.14em] text-[#ffcc29] mb-2">FREE FOR YOU</p>
+            <h2 className="text-xl font-bold text-white mb-2">Your Brand Growth Blueprint</h2>
+            <p className={`${muted} text-sm mb-4`}>A plan for your business: who to reach, what to post and where to start. It takes a few minutes and costs nothing.</p>
+            <button className={PRIMARY_BTN + ' max-w-xs mx-auto'} onClick={() => navigate('/blueprint')}>Make my free Blueprint</button>
+          </div>
+        )}
 
         {notice && <div className="mb-6 max-w-xl mx-auto rounded-2xl bg-green-500/10 border border-green-500/30 px-5 py-3 text-green-300 text-sm text-center flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" />{notice}</div>}
         {error && <div className="mb-6 max-w-xl mx-auto rounded-2xl bg-red-500/10 border border-red-500/30 px-5 py-3 text-red-300 text-sm text-center">{error}</div>}

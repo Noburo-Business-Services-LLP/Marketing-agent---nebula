@@ -36,6 +36,7 @@ function defaultDeps() {
   const { isPublicHttpsUrl } = require('../heroVideoService');
   return {
     Blueprint: require('../../models/Blueprint'),
+    freeBlueprintIsFree: true,
     deduct: (...a) => require('../../middleware/trialGuard').deductCredits(...a),
     refund: (...a) => require('../../middleware/trialGuard').refundCredits(...a),
     uploadLogo: async (dataUrl) => {
@@ -177,15 +178,23 @@ function createBlueprintService(depsIn) {
 
     const blueprintId = deps.uuid();
     const now = at();
+    // The free Blueprint (one per business) is made without Quarks, so a new account can use it before paying.
+    const noCharge = tier === 'free' && deps.freeBlueprintIsFree === true;
     try {
       await Blueprint.create({
         blueprintId, userId, emailKey: key, tierAtStart: tier, mode: n.mode, status: 'queued', step: 'queued', progress: 0,
         checkpoint: null, heartbeatAt: now, input, businessKeys: keys, freeSlot: tier === 'free', ipHash, approvals: [], qaFlags: [],
-        charge: { state: 'pending', quarks: QUARK_COSTS.blueprint }, createdAt: now
+        charge: noCharge ? { state: 'none', quarks: 0 } : { state: 'pending', quarks: QUARK_COSTS.blueprint }, createdAt: now
       });
     } catch (err) {
       if (err && err.code === 11000) return alreadyUsed(await findExisting(key, keys), userId);
       throw err;
+    }
+
+    // The free Blueprint (one per business) costs nothing: no charge is taken, so there is nothing to refund either.
+    if (noCharge) {
+      deps.enqueue(() => run(blueprintId));
+      return reply(202, { success: true, id: blueprintId, status: 'queued' });
     }
 
     let paid = null;

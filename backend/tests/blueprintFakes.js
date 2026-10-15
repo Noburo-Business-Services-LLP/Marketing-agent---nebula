@@ -78,6 +78,7 @@ function makeDeps(over = {}) {
   let n = 0;
   const deps = {
     Blueprint, calls, queued, clock,
+    freeBlueprintIsFree: false, // tests of the charge flow use the old charged behaviour; the free path has its own tests
     deduct: async (...a) => { calls.deduct.push(a); return { success: true, creditsDeducted: 7 }; },
     refund: async (...a) => { calls.refund.push(a); return { success: true, creditsRefunded: 7 }; },
     uploadLogo: async (d) => { calls.upload.push(d); return 'https://res.cloudinary.com/demo/image/upload/logo.png'; },

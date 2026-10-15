@@ -532,3 +532,22 @@ test('already used by another account: 409 with no id; the owner still gets the 
   assert.strictEqual(other.json.message, 'This business has already used its free Blueprint.');
   assert.strictEqual((await begin(user('u1', 'a@x.com'), form())).json.id, 'bp-1');
 });
+
+test('the free Blueprint takes no Quarks: 202, no charge, no refund path, slot held', async () => {
+  const { deps, begin, doc } = setup({ freeBlueprintIsFree: true });
+  const r = await begin(user(), form());
+  assert.strictEqual(r.status, 202);
+  assert.strictEqual(deps.calls.deduct.length, 0);
+  const d = doc(r.json.id);
+  assert.strictEqual(d.freeSlot, true);
+  assert.strictEqual(d.charge.state, 'none');
+  assert.strictEqual(d.charge.quarks, 0);
+  assert.strictEqual(deps.queued.length, 1);
+});
+
+test('a paid tier is still charged for a Blueprint', async () => {
+  const { deps, begin } = setup({ freeBlueprintIsFree: true });
+  const r = await begin(user(), form(), 'starter');
+  assert.strictEqual(r.status, 202);
+  assert.strictEqual(deps.calls.deduct.length, 1);
+});
