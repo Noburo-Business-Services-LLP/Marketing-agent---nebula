@@ -533,8 +533,13 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) {
     return next();
   }
-  // Otherwise serve React app
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  // The web app is served by its own container. A frontend build left in `public` (this server used to carry one)
+  // must never be shown as if it were the product, so this only serves a build that is really there.
+  const indexFile = path.join(__dirname, 'public', 'index.html');
+  if (!require('fs').existsSync(indexFile)) {
+    return res.status(404).json({ success: false, message: 'This address serves the Nebulaa API only.' });
+  }
+  res.sendFile(indexFile);
 });
 
 // API 404 handler
