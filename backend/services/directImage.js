@@ -25,7 +25,36 @@ function languageWords(code) {
   return LANGUAGE_WORDS[c] || String(code || 'English');
 }
 
-const tidy = (v) => String(v == null ? '' : v).replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+/** A plain colour name for a hex code, so the picture is told "deep navy blue" and never has a code to print. */
+function hexToName(hex) {
+  let h = String(hex || '').replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return 'a brand colour';
+  const r = parseInt(h.slice(0, 2), 16) / 255; const g = parseInt(h.slice(2, 4), 16) / 255; const b = parseInt(h.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b); const min = Math.min(r, g, b); const l = (max + min) / 2; const d = max - min;
+  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let hue = 0;
+  if (d) {
+    if (max === r) hue = ((g - b) / d) % 6; else if (max === g) hue = (b - r) / d + 2; else hue = (r - g) / d + 4;
+    hue = (hue * 60 + 360) % 360;
+  }
+  if (l < 0.1) return 'near-black';
+  if (l > 0.93) return 'off-white';
+  const tone = l < 0.3 ? 'deep ' : (l > 0.75 ? 'soft ' : '');
+  if (sat < 0.12) return l < 0.35 ? 'charcoal grey' : (l > 0.7 ? 'light grey' : 'grey');
+  let name;
+  if (hue < 15 || hue >= 345) name = 'red'; else if (hue < 40) name = l > 0.7 ? 'peach' : 'orange'; else if (hue < 65) name = l > 0.7 ? 'cream' : 'golden yellow';
+  else if (hue < 165) name = 'green'; else if (hue < 195) name = 'teal'; else if (hue < 255) name = l < 0.3 ? 'navy blue' : 'blue';
+  else if (hue < 290) name = 'purple'; else name = 'magenta pink';
+  return `${tone}${name}`.replace('deep navy blue', 'deep navy blue');
+}
+
+/** Colour codes in free text become colour names, so no code can end up printed on a picture. */
+function humanizeColours(text) {
+  return String(text == null ? '' : text).replace(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g, (_, hex) => hexToName(hex));
+}
+
+const tidy = (v) => humanizeColours(String(v == null ? '' : v)).replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 const ASPECT_WORDS = { '1:1': 'square', '4:5': '4:5 portrait', '9:16': '9:16 vertical story', '16:9': '16:9 landscape', '3:4': '3:4 portrait' };
 
 /** The one request sent to the image model. Plain language, no rule lists. */
@@ -39,7 +68,7 @@ function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, 
   }
   if (tidy(imageText)) lines.push(`Show this text on the picture exactly, spelled character for character: "${tidy(imageText)}". Do not add other headline wording. Every slide or post in the series uses the same language as this one.`);
   if (tidy(brand.about)) lines.push(`About the business: ${tidy(brand.about).slice(0, 300)}`);
-  if (brand.colours && brand.colours.length) lines.push(`Brand colours to lean on: ${brand.colours.join(', ')}.`);
+  if (brand.colours && brand.colours.length) lines.push(`Brand colours to lean on: ${brand.colours.map((c) => hexToName(c)).join(', ')}.`);
   lines.push(`All words on the image must be in ${languageWords(language)}, spelled correctly, in large readable type.`);
   const facts = [];
   if (details.headline) facts.push(`headline "${details.headline}"`);
@@ -49,7 +78,7 @@ function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, 
   if (details.hours) facts.push(`opening hours "${details.hours}"`);
   if (brand.website) facts.push(`website "${brand.website}"`);
   if (facts.length) lines.push(`Show these exact details, spelled character for character: ${facts.join('; ')}.`);
-  lines.push('Use only the details given here. Do not invent phone numbers, addresses, websites, prices, discounts, years, customer counts or claims. If a detail is not given, leave that space out.');
+  lines.push('Use only the details given here. Do not invent phone numbers, addresses, websites, prices, discounts, years, customer counts or claims. If a detail is not given, leave that space out. Colours, styles and instructions are not words: never print colour codes, hex values, reference numbers, ids, dates or times on the picture unless they are in the exact details above.');
   if (logoCorner) lines.push(`Keep the ${String(logoCorner).replace('-', ' ')} corner of the picture calm and free of text or important detail: the real business logo is placed there afterwards. Do not draw any logo, brand mark or emblem yourself.`);
   else if (hasLogo) lines.push('The first attached picture is the business logo. Place it cleanly in one corner exactly as it is, with its colours and lettering unchanged, and do not draw any other logo or brand mark.');
   else if (noLogo) lines.push('Do not draw any logo, emblem or brand mark. The business name may appear only as plain text.');
@@ -179,4 +208,4 @@ async function generateDirectSeriesImage(input, io = {}) {
   return { success: true, imageUrl: url, model: out.model, promptUsed: out.promptUsed, checked: out.checked, missing: out.missing, extra: out.extra };
 }
 
-module.exports = { generateDirectSeriesImage, extraNumbers, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, languageWords };
+module.exports = { hexToName, humanizeColours, generateDirectSeriesImage, extraNumbers, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, languageWords };

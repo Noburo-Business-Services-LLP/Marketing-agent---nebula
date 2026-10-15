@@ -56,6 +56,16 @@ interface LayoutProps {
 const STARTING_CREDITS = 100;
 
 const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
+  // The app shell scrolls inside its own main area. Stop the page behind it from scrolling as well, which is
+  // what made the left menu travel up with the content on some screens.
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const before = { h: html.style.overflow, b: body.style.overflow };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => { html.style.overflow = before.h; body.style.overflow = before.b; };
+  }, []);
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [trialInfo, setTrialInfo] = useState<TrialData | null>(null);
   const [showCreditPanel, setShowCreditPanel] = useState(false);
@@ -228,7 +238,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         .hide-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
 
-      <div className="relative z-[1] flex h-screen font-sans text-[var(--gv-text-primary)]">
+      <div className="relative z-[1] flex h-[100dvh] overflow-hidden font-sans text-[var(--gv-text-primary)]">
         {/* Mobile overlay */}
         {isSidebarOpen && (
           <div
@@ -442,7 +452,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          <main className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-8">
             {children}
           </main>
         </div>

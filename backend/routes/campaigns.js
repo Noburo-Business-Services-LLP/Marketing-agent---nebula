@@ -1972,10 +1972,23 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       return Array.from(new Set(tags)).slice(0, 8);
     };
 
+    // The words that go on the picture. A long line is shortened at a natural break, never in the middle of a
+    // phrase ("Simplifying Your"): first at a colon, dash or full stop, then at the last whole word with no
+    // dangling connector.
     const clampImageText = (raw) => {
       const cleaned = String(raw || '').replace(/\s+/g, ' ').trim();
       if (!cleaned) return '';
-      return cleaned.split(' ').filter(Boolean).slice(0, 5).join(' ');
+      const MAX_WORDS = 14;
+      const words = cleaned.split(' ').filter(Boolean);
+      if (words.length <= MAX_WORDS && cleaned.length <= 90) return cleaned;
+      const head = words.slice(0, MAX_WORDS).join(' ').slice(0, 90);
+      const cut = Math.max(head.lastIndexOf(': '), head.lastIndexOf(' - '), head.lastIndexOf(' — '), head.lastIndexOf('. '), head.lastIndexOf(', '), head.lastIndexOf('! '), head.lastIndexOf('? '));
+      let out = cut >= head.length * 0.5 ? head.slice(0, cut) : head;
+      const dangling = new Set(['your', 'the', 'a', 'an', 'and', 'or', 'for', 'to', 'of', 'in', 'on', 'with', 'at', 'by', 'from', 'into', 'our', 'its', 'is', 'are']);
+      let parts = out.split(' ');
+      while (parts.length > 2 && dangling.has(parts[parts.length - 1].toLowerCase().replace(/[^a-z]/g, ''))) parts.pop();
+      out = parts.join(' ').replace(/[,:;\-–—]+$/, '').trim();
+      return out;
     };
 
     const cleanupCaption = (caption, markers = [], templateText = '') => {

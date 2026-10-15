@@ -44,7 +44,7 @@ async function stream(path, token, body) {
   if (which === 'both' || which === 'campaign') {
     const token = generateToken(process.env.CAMPAIGN_USER || '69b91d809c76dde92fa2708d');
     const ev = await stream('/campaigns/generate-campaign-stream', token, {
-      campaignName: 'Diwali biryani feast', campaignDescription: 'Diwali family feast combo: mutton biryani, chicken 65 and dessert for 4 at Rs 1499, free home delivery.', objective: 'leads',
+      campaignName: process.env.CAMPAIGN_NAME || 'Diwali biryani feast', campaignDescription: process.env.CAMPAIGN_DESC || 'Diwali family feast combo: mutton biryani, chicken 65 and dessert for 4 at Rs 1499, free home delivery.', objective: 'leads',
       platforms: ['instagram'], tone: 'professional', language: 'tamil', aspectRatio: '4:5', duration: process.env.CAMPAIGN_DURATION || '1 week', postsPerWeek: Number(process.env.CAMPAIGN_POSTS_PER_WEEK || 2),
       startDate: new Date().toISOString().slice(0, 10), preferredDays: [], targetAge: '25-55', targetGender: 'all', targetLocation: 'Dindigul', targetInterests: ''
     });

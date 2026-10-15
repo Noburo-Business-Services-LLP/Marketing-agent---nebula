@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, extraNumbers } = require('../services/directImage');
+const { hexToName, humanizeColours, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, extraNumbers } = require('../services/directImage');
 
 test('the request carries the brief and real facts, forbids invented details, and names the logo', () => {
   const p = buildDirectPrompt({
@@ -121,4 +121,14 @@ test('in a series an extra number alone does not cause a second picture', async 
   const out = await generateDirectSeriesImage({ brief: 'Sale up to 30% off', brand: { name: 'TRM' }, language: 'english', aspectRatio: '4:5', details: {} }, io);
   assert.strictEqual(calls, 1);
   assert.deepStrictEqual(out.extra, ['18']);
+});
+
+test('colour codes never reach the model as text: they become colour names', () => {
+  assert.strictEqual(hexToName('#011636'), 'deep navy blue');
+  assert.strictEqual(hexToName('#FFE0B2'), 'soft peach');
+  assert.strictEqual(humanizeColours('Palette: #011636 and #FFE0B2, accent #F5A623.'), 'Palette: deep navy blue and soft peach, accent orange.');
+  const p = buildDirectPrompt({ brief: 'Use navy #011636 background', brand: { name: 'Nebulaa', colours: ['#011636', '#FFE0B2'] }, language: 'english', aspectRatio: '4:5', series: { label: 'post 1 of 3', concept: 'Dark #011636 world with #FFE0B2 cards', visualSystem: '' } });
+  assert.doesNotMatch(p, /#?011636/);
+  assert.doesNotMatch(p, /FFE0B2/i);
+  assert.match(p, /never print colour codes/);
 });
