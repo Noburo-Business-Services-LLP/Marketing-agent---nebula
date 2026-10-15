@@ -75,6 +75,7 @@ export interface User {
     balance: number;
     totalUsed: number;
   };
+  plan?: { tier: 'free' | 'starter' | 'professional' | 'managed' | null };
   brandScore?: {
     score: number;
     metrics: {

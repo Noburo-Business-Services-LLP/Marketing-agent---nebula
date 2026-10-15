@@ -10,6 +10,7 @@ import Auth from './pages/Auth';
 import Onboarding from './pages/Onboarding';
 import TrialExpired from './pages/TrialExpired';
 import CreateVideo from './pages/CreateVideo';
+import NeedPlanModal from './components/NeedPlanModal';
 import Dashboard from './pages/Dashboard';
 import GravityHome from './pages/GravityHome';
 import GravityCreate from './pages/GravityCreate';
@@ -93,11 +94,7 @@ const App: React.FC = () => {
         try {
           const res = await apiService.getCurrentUser();
           setUser(res.user || null);
-          
-          // Credits check only (no time-based expiry)
-          if (res.user && (res.user.credits?.balance ?? 0) <= 0) {
-            setTrialExpired({ expired: true, reason: 'credits' });
-          }
+          // An account with no Quarks can still look around. The prompt to choose a plan appears when it tries to make something.
         } catch (error) {
           console.error("Auth check failed", error);
           localStorage.removeItem('authToken');
@@ -123,6 +120,9 @@ const App: React.FC = () => {
   const clearCreditsPaywall = useCallback(() => {
     setTrialExpired((t) => (t.expired && t.reason === 'credits' ? { expired: false, reason: 'time' } : t));
   }, []);
+
+  // A new account with no plan and no Quarks: it can look around and make its free Blueprint, nothing else.
+  const needsPlan = !!user && user.plan?.tier === 'free' && (user.credits?.balance ?? 0) <= 0;
 
   const trialExpiredRef = useRef(trialExpired);
   trialExpiredRef.current = trialExpired;
@@ -161,12 +161,7 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (userData: User) => {
     setUser(userData);
-    // Credits check only (no time-based expiry)
-    if ((userData.credits?.balance ?? 0) <= 0) {
-      setTrialExpired({ expired: true, reason: 'credits' });
-    } else {
-      setTrialExpired({ expired: false, reason: 'time' });
-    }
+    setTrialExpired({ expired: false, reason: 'time' });
   };
 
   const handleLogout = useCallback(() => {
@@ -260,15 +255,8 @@ const App: React.FC = () => {
           path="/*"
           element={
             user ? (
-              trialExpired.expired ? (
-                <TrialExpired 
-                  reason={trialExpired.reason} 
-                  daysUsed={7 - (user.trial?.expiresAt ? Math.max(0, Math.ceil((new Date(user.trial.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0)}
-                  creditsUsed={user.credits?.totalUsed ?? 0}
-                  onLogout={handleLogout} 
-                />
-              ) : user.onboardingCompleted ? (
-                <Layout user={user} onLogout={handleLogout}>
+              user.onboardingCompleted ? (
+                <Layout user={user} onLogout={handleLogout} needsPlan={needsPlan}>
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
@@ -322,6 +310,13 @@ const App: React.FC = () => {
                     </Routes>
                     {/* Persists across navigation while a Smart Calendar reel renders. */}
                     <BackgroundReelIndicator />
+                    {trialExpired.expired && (
+                      <NeedPlanModal
+                        hasPlan={!needsPlan}
+                        onSeePlans={() => { clearCreditsPaywall(); window.location.hash = '#/trial-expired'; }}
+                        onDismiss={clearCreditsPaywall}
+                      />
+                    )}
                 </Layout>
               ) : (
                   <Navigate to="/onboarding" replace />

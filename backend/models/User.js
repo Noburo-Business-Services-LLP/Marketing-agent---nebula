@@ -401,6 +401,8 @@ userSchema.methods.toPublicJSON = function () {
       connectedAt: s.connectedAt
     })),
     subscription: this.subscription,
+    // The plan tier (starter, professional, free) or null for a managed account. Used to show the plan prompt.
+    plan: { tier: (this.plan && this.plan.tier) || null },
     credits: this.credits ? {
       balance: this.credits.balance,
       totalUsed: this.credits.totalUsed

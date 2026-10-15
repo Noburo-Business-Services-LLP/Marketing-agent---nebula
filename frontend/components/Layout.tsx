@@ -51,11 +51,13 @@ interface LayoutProps {
   children: React.ReactNode;
   user: User | null;
   onLogout: () => void;
+  /** A new account with no plan and no Quarks: show a slim prompt above the page. */
+  needsPlan?: boolean;
 }
 
 const STARTING_CREDITS = 100;
 
-const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
+const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = false }) => {
   // The app shell scrolls inside its own main area. Stop the page behind it from scrolling as well, which is
   // what made the left menu travel up with the content on some screens.
   useEffect(() => {
@@ -85,7 +87,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
       const data = await apiService.getCredits();
       if (data.success) {
         setTrialInfo({
-          creditsBalance: data.credits?.balance ?? STARTING_CREDITS,
+          creditsBalance: data.credits?.balance ?? 0,
           totalUsed: data.credits?.totalUsed ?? 0,
           startingCredits: STARTING_CREDITS,
           history: data.credits?.history ?? [],
@@ -304,6 +306,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
         {/* ================= MAIN COLUMN ================= */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {needsPlan && !location.pathname.startsWith('/blueprint') && (
+            <div className="shrink-0 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-accent-fill)] px-4 md:px-8 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <p className="text-[13px] text-[var(--gv-text-primary)]">You are looking around. Choose a plan to start making posts and videos. Your Growth Blueprint is free.</p>
+              <div className="flex gap-2">
+                <button onClick={() => navigate('/blueprint')} className="rounded-lg border border-[var(--gv-border-default)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--gv-text-primary)]">Make my free Blueprint</button>
+                <button onClick={() => navigate('/trial-expired')} className="rounded-lg bg-[var(--gv-accent)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--gv-accent-ink)]">See plans</button>
+              </div>
+            </div>
+          )}
           {localStorage.getItem('csmReturnToken') && (
             // A CSM working inside a client's account: always visible above the header, never scrolls away, one click back.
             <div className="shrink-0 border-b border-[#F5A623]/50 bg-[#FDF1DC] px-4 md:px-8 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
