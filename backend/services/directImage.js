@@ -187,7 +187,13 @@ async function generateDirectPost(input, io = {}) {
     const hasLogo = !overlay && Boolean(input.logoUrl) && refs.length > 0;
     const productCount = Math.max(0, refs.length - (hasLogo ? 1 : 0) - (hasEnvironment ? 1 : 0) - (hasContinuity ? 1 : 0));
     const prompt = buildDirectPrompt({ ...input, hasLogo, noLogo: input.logoUrl === '' || input.noLogo, logoCorner: overlay ? (input.logoPosition || 'bottom-right') : '', productCount, hasEnvironment, hasContinuity });
-    let result = await gen(prompt, { aspectRatio: input.aspectRatio, references: refs });
+    // Quality is chosen per picture: plain English starts at low (proofread, and remade at medium if anything is wrong);
+    // other languages start at medium because their small text fails at low about two times in five.
+    const lang = languageKind(input.language);
+    const startQuality = input.quality || process.env.IMAGE_QUALITY_START || ((lang.base === 'english' && !lang.mix) ? 'low' : 'medium');
+    const remakeQuality = startQuality === 'low' ? 'medium' : 'high';
+    let result = await gen(prompt, { aspectRatio: input.aspectRatio, references: refs, quality: startQuality });
+    let usedQuality = startQuality;
     if (!result || !result.success || !result.imageUrl) return { success: false, error: (result && result.error) || 'no picture' };
 
     // Read the picture back. Two checks run together: the numbers (the ones from the brief must be there, none
@@ -225,14 +231,14 @@ async function generateDirectPost(input, io = {}) {
       if (current.missing.length) fixes.push(`the picture must clearly show these numbers exactly: ${current.missing.join(', ')}`);
       if (retryExtra && current.extra.length) fixes.push(`do not show any number that was not given, such as: ${current.extra.join(', ')}; remove those claims entirely`);
       fixes.push(...fixInstructions(current.issues.filter(blocking)));
-      const again = await gen(`${prompt}\nImportant corrections: ${fixes.join('; ')}.`, { aspectRatio: input.aspectRatio, references: refs });
+      const again = await gen(`${prompt}\nImportant corrections: ${fixes.join('; ')}.`, { aspectRatio: input.aspectRatio, references: refs, quality: remakeQuality });
       if (again && again.success && again.imageUrl) {
         const next = await assess(again.imageUrl);
-        if (!next.checked || score(next) <= score(current)) { result = again; current = next.checked ? next : current; }
+        if (!next.checked || score(next) <= score(current)) { result = again; current = next.checked ? next : current; usedQuality = remakeQuality; }
       }
     }
     const checked = current.checked; const missing = current.missing; const extra = current.extra; const issues = current.issues;
-    return { success: true, imageUrl: result.imageUrl, model: result.model, promptUsed: prompt, checked, missing, extra, issues, logoPlacedByModel: hasLogo };
+    return { success: true, imageUrl: result.imageUrl, model: result.model, promptUsed: prompt, checked, missing, extra, issues, logoPlacedByModel: hasLogo, quality: usedQuality };
   } catch (error) {
     return { success: false, error: error.message };
   }

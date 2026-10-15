@@ -62,13 +62,17 @@ function referencesFromParts(parts) {
   return out;
 }
 
-function buildEditForm(prompt, size, references, model = OPENAI_IMAGE_MODEL) {
+/** Picture quality: low is a few paise, medium about a quarter of high. Callers choose; the default stays high. */
+const QUALITIES = ['low', 'medium', 'high'];
+const qualityOf = (q) => (QUALITIES.includes(q) ? q : (QUALITIES.includes(process.env.IMAGE_QUALITY_DEFAULT) ? process.env.IMAGE_QUALITY_DEFAULT : 'high'));
+
+function buildEditForm(prompt, size, references, model = OPENAI_IMAGE_MODEL, quality = 'high') {
   const form = new FormData();
   form.append('model', model);
   form.append('prompt', String(prompt || '').slice(0, 4000));
   form.append('size', size);
   form.append('n', '1');
-  form.append('quality', 'high');
+  form.append('quality', qualityOf(quality));
   references.forEach((ref, i) => {
     const bytes = Buffer.from(ref.data, 'base64');
     form.append('image[]', new Blob([bytes], { type: ref.mimeType }), `reference-${i + 1}.${extFor(ref.mimeType)}`);
@@ -91,7 +95,7 @@ function buildEditForm(prompt, size, references, model = OPENAI_IMAGE_MODEL) {
  * is not feature parity, and a creative that leaned on a specific real
  * asset may look less anchored to it if this path is the one that succeeds.
  */
-async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}) {
+async function generateOpenAIImage(prompt, { aspectRatio, references = [], quality } = {}) {
   if (!OPENAI_API_KEY) {
     return { success: false, error: 'OPENAI_API_KEY is not configured' };
   }
@@ -105,7 +109,7 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
       ? fetchWithTimeout(OPENAI_IMAGE_EDIT_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-        body: buildEditForm(prompt, size, refs, model)
+        body: buildEditForm(prompt, size, refs, model, quality)
       }, 240000)
       : fetchWithTimeout(OPENAI_IMAGE_URL, {
         method: 'POST',
@@ -118,7 +122,7 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [] } = {}
           prompt: String(prompt || '').slice(0, 4000),
           size,
           n: 1,
-          quality: 'high'
+          quality: qualityOf(quality)
         })
       }, 240000));
 

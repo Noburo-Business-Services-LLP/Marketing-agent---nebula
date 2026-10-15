@@ -7,7 +7,7 @@ const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const legacyModel = (m) => /^(gpt-3|gpt-4|chatgpt-4o)/.test(String(m || ''));
 
 function proofreadModel() {
-  return process.env.PROOFREAD_MODEL || 'gpt-5.5';
+  return process.env.PROOFREAD_MODEL || 'gpt-6.1-sol';
 }
 
 function buildProofreadPrompt({ languageName, expected = [], allowedNumbers = [] }) {
