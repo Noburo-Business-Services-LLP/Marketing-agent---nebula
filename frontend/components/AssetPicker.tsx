@@ -12,7 +12,7 @@ export interface PickedAsset {
   dataUrl?: string;
 }
 
-type Source = 'products' | 'environment';
+type Source = 'products' | 'environment' | 'character';
 
 /**
  * Pick products, services or environments from what the brand already has.
@@ -64,12 +64,12 @@ const AssetPicker: React.FC<{
             description: p.description || ''
           })));
         } else {
-          const res: any = await brandAssetsAPI.getAll('environment');
+          const res: any = await brandAssetsAPI.getAll(source === 'character' ? 'character' : 'environment');
           const list = res?.assets || res?.data || [];
           if (cancelled) return;
           setItems(list.map((a: any) => ({
             id: a._id,
-            name: a.name || a.label || 'Environment',
+            name: a.name || a.label || (source === 'character' ? 'Person' : 'Environment'),
             imageUrl: a.url || a.imageUrl || '',
             description: a.description || ''
           })));
@@ -126,7 +126,7 @@ const AssetPicker: React.FC<{
 
   if (!open) return null;
 
-  const label = source === 'products' ? 'products and services' : 'environments';
+  const label = source === 'products' ? 'products and services' : source === 'character' ? 'people' : 'environments';
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
@@ -139,7 +139,7 @@ const AssetPicker: React.FC<{
                 {source === 'products'
                   ? <Package className="w-5 h-5 text-[#F5A623]" />
                   : <ImageIcon className="w-5 h-5 text-[#F5A623]" />}
-                {source === 'products' ? 'Products and services' : 'Environments'}
+                {source === 'products' ? 'Products and services' : source === 'character' ? 'People' : 'Environments'}
               </h3>
               <p className="text-[12.5px] text-white/45 mt-1">
                 {max === 1

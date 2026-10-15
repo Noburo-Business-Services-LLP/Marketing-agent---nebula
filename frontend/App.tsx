@@ -9,6 +9,7 @@ import LandingPage from './pages/LandingPage';
 import Auth from './pages/Auth';
 import Onboarding from './pages/Onboarding';
 import TrialExpired from './pages/TrialExpired';
+import CreateVideo from './pages/CreateVideo';
 import Dashboard from './pages/Dashboard';
 import GravityHome from './pages/GravityHome';
 import GravityCreate from './pages/GravityCreate';
@@ -71,6 +72,12 @@ const RouteChangeWatcher: React.FC<{ onChange: () => void }> = ({ onChange }) =>
 const LoginRedirect: React.FC = () => {
   const [params] = useSearchParams();
   return <Navigate to={postAuthTarget(params.toString())} replace />;
+};
+
+// /reels opens the single Videos flow. A link that carries a job (an older reel being resumed) still opens the step-by-step maker.
+const VideosEntry: React.FC = () => {
+  const [params] = useSearchParams();
+  return params.get('jobId') ? <ReelGenerator /> : <CreateVideo />;
 };
 
 const App: React.FC = () => {
@@ -277,7 +284,8 @@ const App: React.FC = () => {
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove user={user} />} />
                     <Route path="/library" element={<Library />} />
-                    <Route path="/reels" element={<ReelGenerator />} />
+                    <Route path="/reels" element={<VideosEntry />} />
+                    <Route path="/reels/studio" element={<ReelGenerator />} />
                     <Route path="/reels/hero" element={<HeroVideo />} />
                     <Route path="/upload" element={<Navigate to="/campaigns?tab=upload" replace />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />

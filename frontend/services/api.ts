@@ -3164,7 +3164,7 @@ export const apiService = {
 // ================================
 export const brandAssetsAPI = {
   // Get all brand assets
-  getAll: async (type?: 'logo' | 'template' | 'environment'): Promise<any> => {
+  getAll: async (type?: 'logo' | 'template' | 'environment' | 'character'): Promise<any> => {
     const query = type ? `?type=${type}` : '';
     return await apiCall<any>(`/brand-assets${query}`, {}, true);
   },
@@ -3187,7 +3187,7 @@ export const brandAssetsAPI = {
   // Upload a new asset (logo or template)
   upload: async (data: {
     imageData: string;
-    type: 'logo' | 'template' | 'environment';
+    type: 'logo' | 'template' | 'environment' | 'character';
     name: string;
     isPrimary?: boolean;
     defaultPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'center';
@@ -4821,4 +4821,27 @@ export const promptsAPI = {
   ): Promise<{ success: boolean; template: string; isEdited: boolean }> => {
     return apiCall(`/prompts/${id}`, { method: 'DELETE' }, true);
   }
+};
+
+// The Videos flow: one idea, one clip with speech and music, then changes ("make it evening").
+export interface StudioVideo {
+  id: string; status: 'processing' | 'completed' | 'failed'; title: string; concept: string; spokenLine: string;
+  style: string; language: string; aspectRatio: string; videoUrl: string; seconds: number; parent: string | null;
+  change: string; quarks: number; error: string; createdAt: string; completedAt: string | null;
+}
+export interface StudioConcept { title: string; concept: string; beats: string[]; spokenLine: string; quarks: number; references: Array<{ kind: string; name: string; url: string }>; }
+export interface StudioChoices { idea: string; style: string; language: string; who?: string; where?: string; characterIds?: string[]; placeIds?: string[]; productIds?: string[]; }
+export const studioVideosAPI = {
+  options: async (): Promise<{ success: boolean; styles: Array<{ key: string; label: string; hint: string }>; languages: Array<{ key: string; label: string }>; quarks: number; seconds: number }> =>
+    apiCall('/videos/options', {}, true),
+  concept: async (c: StudioChoices): Promise<{ success: boolean; message?: string } & Partial<StudioConcept>> =>
+    apiCall('/videos/concept', { method: 'POST', body: JSON.stringify(c) }, true),
+  create: async (c: StudioChoices & { title: string; concept: string; beats: string[]; spokenLine: string; aspectRatio: string }): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
+    apiCall('/videos/create', { method: 'POST', body: JSON.stringify(c) }, true),
+  change: async (id: string, instruction: string): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
+    apiCall(`/videos/${encodeURIComponent(id)}/change`, { method: 'POST', body: JSON.stringify({ instruction }) }, true),
+  get: async (id: string): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
+    apiCall(`/videos/${encodeURIComponent(id)}`, {}, true),
+  list: async (): Promise<{ success: boolean; videos: StudioVideo[] }> => apiCall('/videos', {}, true),
+  remove: async (id: string): Promise<{ success: boolean }> => apiCall(`/videos/${encodeURIComponent(id)}`, { method: 'DELETE' }, true),
 };

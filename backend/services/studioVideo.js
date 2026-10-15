@@ -36,28 +36,35 @@ function buildConceptPrompt({ idea, style, language, brand, who, where, products
   const lang = LANGUAGES[languageOf(language)];
   return `You help the owner of a small Indian business plan a 10 second vertical marketing video.
 
-THE OWNER'S IDEA:
-${clip(idea, 1200) || '(none written: invent a simple, honest video for this business)'}
+THE VIDEO MUST BE ABOUT THIS IDEA. It is the subject of the video. Use every product, offer, place and name it mentions exactly as written:
+"""
+${clip(idea, 1200) || '(none written: invent a simple, honest video for the business below)'}
+"""
 
-THE BUSINESS (the only facts you may use):
-- Name: ${clip(brand && brand.name, 80) || 'unknown'}
+RULES
+- Never replace the idea's business, product or offer with the account's own business. If the idea names a business or product, that is the one in the video.
+- Use the account details below ONLY to fill what the idea leaves out (for example the city or the business name when the idea names none).
+- Never invent prices, discounts, phone numbers or claims that are not in the idea.
+- Describe only what the camera sees and what is said. Do not describe on-screen text, captions or titles: they are not added.
+
+ACCOUNT DETAILS (background only):
+- Business: ${clip(brand && brand.name, 80) || 'unknown'}
 - What they do: ${clip(brand && brand.industry, 80) || 'unknown'}
-- Place: ${clip(brand && brand.location, 80) || 'unknown'}
-- Offer or facts the owner gave: ${clip(brand && brand.facts, 300) || 'none'}
+- City: ${clip(brand && brand.location, 80) || 'unknown'}
 
 CHOICES:
 - Look: ${STYLES[styleOf(style)].label} (${STYLES[styleOf(style)].hint})
-- Who appears: ${clip(who, 200) || 'the model decides, a believable local person'}
-- Where: ${clip(where, 200) || 'the model decides, a believable local setting'}
-- Products shown: ${clip(products, 200) || 'none given'}
+- Who appears: ${clip(who, 200) || 'a believable local person, chosen by you'}
+- Where: ${clip(where, 200) || 'a believable local setting, chosen by you'}
+- Products shown: ${clip(products, 200) || 'the products in the idea'}
 - Spoken language: ${lang || 'no speech, music only'}
 
 Return JSON only:
 {
-  "title": "3 to 6 words",
+  "title": "3 to 6 words about the idea",
   "concept": "2 or 3 plain sentences telling the owner what the video will show, in simple English",
   "beats": ["3 short shot descriptions, one line each"],
-  "spokenLine": ${lang ? `"one natural sentence of at most 22 words spoken in ${lang}${lang === 'Tamil' ? ', in Tamil script' : ''}, using only the facts above; never invent prices, discounts or numbers"` : '""'}
+  "spokenLine": ${lang ? `"one natural sentence of at most 18 words spoken in ${lang}${lang === 'Tamil' ? ', in Tamil script' : ''}, using only facts from the idea"` : '""'}
 }`;
 }
 
