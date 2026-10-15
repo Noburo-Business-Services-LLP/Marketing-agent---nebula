@@ -190,16 +190,16 @@ const LogoPositionPicker: React.FC<{ value: LogoGridPosition; onChange: (p: Logo
         onBlur={(e) => { if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) setOpen(false); }}
         aria-haspopup="true"
         aria-expanded={open}
-        className="h-full inline-flex items-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-2.5 text-[12px] font-semibold text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
+        className="h-full flex-col justify-center inline-flex items-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-2.5 text-[12px] font-semibold text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
       >
-        <span className="grid grid-cols-3 grid-rows-2 gap-px w-[21px] h-[14px] rounded-[3px] border border-[var(--gv-border-default)] p-px" aria-hidden="true">
+        <span className="grid grid-cols-3 grid-rows-2 gap-px w-[30px] h-[20px] rounded-[3px] border border-[var(--gv-border-default)] p-px" aria-hidden="true">
           {LOGO_GRID.map((pos, i) => <span key={pos} className={i === index ? 'rounded-[1px] bg-[var(--gv-accent)]' : ''} />)}
         </span>
         {LOGO_GRID_LABELS[value]}
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-20 pt-1.5">
-          <div className="grid grid-cols-3 gap-1 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] p-2 shadow-lg" role="radiogroup" aria-label="Logo position">
+        <div className="absolute right-0 top-full z-30 w-max pt-1.5">
+          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel,var(--gv-surface-1))] p-2.5 shadow-xl" role="radiogroup" aria-label="Logo position">
             {LOGO_GRID.map((pos) => (
               <button
                 key={pos}
@@ -209,7 +209,7 @@ const LogoPositionPicker: React.FC<{ value: LogoGridPosition; onChange: (p: Logo
                 aria-label={LOGO_GRID_LABELS[pos]}
                 title={LOGO_GRID_LABELS[pos]}
                 onClick={() => { onChange(pos); setOpen(false); }}
-                className={`w-9 h-7 rounded-md border flex items-center justify-center transition-colors ${
+                className={`w-11 h-11 min-w-0 rounded-lg border flex items-center justify-center transition-colors ${
                   value === pos ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'
                 }`}
               >
