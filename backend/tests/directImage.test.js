@@ -159,3 +159,10 @@ test('a campaign post carries no recurring device and is told not to add light s
   assert.doesNotMatch(p, /Recurring device/);
   assert.match(p, /No decorative light streaks/);
 });
+
+test('the picture is briefed as a scroll-stopping social post, not as an editorial design', () => {
+  const p = buildDirectPrompt({ brief: 'Diwali sale', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5' });
+  assert.match(p, /Instagram post seen on a phone/);
+  assert.match(p, /never leave large empty blocks/);
+  assert.doesNotMatch(p, /Not a template/);
+});

@@ -2254,7 +2254,16 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
             // Campaign posts go out on different days, so they share a palette and type style (told in words) but
             // not a picture: handing post 1 to the others made them near copies of it.
             const direct = await generateDirectSeriesImage({
-              brief: [campaignName, campaignDescription, (visualPlan && visualPlan.slots && visualPlan.slots[slotIndex] && visualPlan.slots[slotIndex].imagePrompt) || post.imageDescription].filter(Boolean).join('. '),
+              // What this post is about, in plain words: the campaign, this post's role and theme, and the point it
+              // makes. The planner's own image idea is left out on purpose: it tends towards abstract, editorial
+              // scenes that do not work as a small business's social post.
+              brief: [
+                campaignName,
+                campaignDescription,
+                post.campaignRole ? `This post's job in the campaign: ${post.campaignRole}.` : '',
+                post.contentTheme ? `Theme: ${post.contentTheme}.` : '',
+                String(post.caption || '').replace(/\s+/g, ' ').slice(0, 220) ? `The post says: ${String(post.caption || '').replace(/\s+/g, ' ').slice(0, 220)}` : ''
+              ].filter(Boolean).join(' '),
               imageText: resolvedImageText,
               brand: { name: brandDisplayName, industry: bp.industry, location: bp.businessLocation, about: bp.description, website: bp.website },
               language: selectedLanguage,

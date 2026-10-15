@@ -124,7 +124,7 @@ function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, 
   if (hasEnvironment) lines.push('One attached picture shows the real place: keep it recognisable.');
   if (hasContinuity) lines.push('The last attached picture is the previous one in this series: match its colours, type style and visual language, but do not copy its composition.');
   if (designText) lines.push(designText);
-  lines.push('It must look like one cohesive, polished design made by a professional agency, with real-looking people or products where it helps. Not a template, not stock clip art, no watermarks.');
+  lines.push('It must work as an Instagram post seen on a phone while scrolling: one clear focal subject (a real person, the product, or the shop itself), vivid warm colour with strong contrast, one bold headline, the offer or message stated plainly, and supporting details such as icons, badges or a short list where they help. Fill the frame with content and never leave large empty blocks or an empty card. Polished and professional, but friendly and commercial, not minimalist, abstract or editorial. No watermarks.');
   if (reserve) lines.push(reserve);
   return lines.join('\n');
 }

@@ -129,7 +129,7 @@ function toText(value) {
  * which they need rather than this guessing from the prompt text.
  */
 async function getJSONWithRetry(prompt, isUsable, label = 'CreativeDirector', language = '') {
-  const attempt1 = await callTextLLM(prompt, { jsonMode: true, language });
+  const attempt1 = await callTextLLM(prompt, { jsonMode: true, language, purpose: 'plan' });
   let result = parseGeminiJSON(attempt1) || {};
   if (isUsable(result)) return result;
 
@@ -145,7 +145,7 @@ async function getJSONWithRetry(prompt, isUsable, label = 'CreativeDirector', la
   console.warn(`[${label}] First attempt returned no usable JSON, retrying once.`);
   const attempt2 = await callTextLLM(
     `${prompt}\n\nReturn ONLY the JSON object. No explanation, no reasoning, no markdown — the response must start with { and end with }.`,
-    { jsonMode: true, skipCache: true, language }
+    { jsonMode: true, skipCache: true, language, purpose: 'plan' }
   );
   result = parseGeminiJSON(attempt2) || {};
   if (!isUsable(result)) {

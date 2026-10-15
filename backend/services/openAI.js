@@ -3,7 +3,10 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 
 // The writing models. English copy and plans use one, Indian-language copy uses a stronger one; both are settings,
 // so a model can be changed without a release. OPENAI_MODEL is left alone for code that names it directly.
-const TEXT_MODEL_ENGLISH = () => process.env.TEXT_MODEL_ENGLISH || 'gpt-6.1-sol';
+const TEXT_MODEL_ENGLISH = () => process.env.TEXT_MODEL_ENGLISH || 'gpt-5.5';
+// The creative planning steps (concepts, slide plans, visual systems) have their own setting, because the model that
+// plans decides how the pictures look. Copy in a regional language is written by TEXT_MODEL_REGIONAL.
+const TEXT_MODEL_PLANNING = () => process.env.TEXT_MODEL_PLANNING || 'gpt-5.5';
 const TEXT_MODEL_REGIONAL = () => process.env.TEXT_MODEL_REGIONAL || 'gpt-6.1-sol';
 // If the writing model fails, these Gemini models take over (in this order).
 const TEXT_BACKUP_MODELS = () => String(process.env.TEXT_BACKUP_MODELS || 'gemini-3.8-flash,gemini-3.7-flash').split(',').map((m) => m.trim()).filter(Boolean);
@@ -16,7 +19,8 @@ function isRegionalLanguage(language) {
   return true;
 }
 
-function textModelFor(language) {
+function textModelFor(language, purpose = '') {
+  if (purpose === 'plan') return TEXT_MODEL_PLANNING();
   return isRegionalLanguage(language) ? TEXT_MODEL_REGIONAL() : TEXT_MODEL_ENGLISH();
 }
 
@@ -129,8 +133,8 @@ async function callOpenAI(prompt, options = {}) {
  * JSON-mode request whose prompt doesn't itself ask for JSON, so this
  * can't safely guess it from the prompt text.
  */
-async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false, language = '', model = '' } = {}) {
-  const chosen = model || textModelFor(language);
+async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false, language = '', model = '', purpose = '' } = {}) {
+  const chosen = model || textModelFor(language, purpose);
   try {
     return await callOpenAI(prompt, { model: chosen, temperature, maxTokens, timeout, jsonMode });
   } catch (openAiErr) {
