@@ -16,6 +16,33 @@ const LANGUAGE_WORDS = {
   malayalam: 'Malayalam (Malayalam script)',
 };
 
+const SCRIPTS = {
+  tamil: /[\u0B80-\u0BFF]/, hindi: /[\u0900-\u097F]/, telugu: /[\u0C00-\u0C7F]/, kannada: /[\u0C80-\u0CFF]/, malayalam: /[\u0D00-\u0D7F]/,
+};
+const ANY_INDIC = /[\u0900-\u0D7F]/;
+
+/** { base, mix } from a language value such as "tamil", "Tamil", "tamil_english_mix" or "Tamil + English". */
+function languageKind(code) {
+  const c = String(code || 'english').toLowerCase();
+  const mix = /mix|\+|&/.test(c) && /english/.test(c) || c.endsWith('_english_mix');
+  const base = Object.keys(SCRIPTS).find((k) => c.includes(k)) || 'english';
+  return { base, mix };
+}
+
+/**
+ * Does a headline written by an earlier step contradict the language chosen? Plain Tamil with an all-English
+ * headline, or plain English with a Tamil one. A mix accepts either. A mismatch means the words are treated as
+ * the idea to express in the right language, not as exact text to copy.
+ */
+function textMismatchesLanguage(text, code) {
+  const t = String(text || '');
+  if (!t.trim()) return false;
+  const { base, mix } = languageKind(code);
+  if (mix) return false;
+  if (base === 'english') return ANY_INDIC.test(t);
+  return !SCRIPTS[base].test(t);
+}
+
 function languageWords(code) {
   const c = String(code || 'english').toLowerCase();
   if (c.endsWith('_english_mix')) {
@@ -66,8 +93,18 @@ function buildDirectPrompt({ brief, brand = {}, language, aspectRatio, hasLogo, 
   if (series) {
     lines.push(`This picture is ${tidy(series.label) || 'one'} of a connected series that is posted together${series.role ? ` (its job in the story: ${tidy(series.role)})` : ''}. The whole series shares one look${tidy(series.concept) ? `: ${tidy(series.concept)}` : ''}${tidy(series.visualSystem) ? ` Visual system: ${tidy(series.visualSystem)}` : ''}${tidy(series.mechanism) ? ` Recurring device: ${tidy(series.mechanism)}` : ''} Keep the same palette, type style and design language so the pictures clearly belong together, while each one has its own composition.`);
   }
-  if (series && variety) lines.push('Each post in this series goes out on a different day, so this one must have its own scene, subject and composition: do not reuse the same person, room, landmark or layout as the others. Share only the palette, type style and brand feel.');
-  if (tidy(imageText)) lines.push(`Show this text on the picture exactly, spelled character for character: "${tidy(imageText)}". Do not add other headline wording. Every slide or post in the series uses the same language as this one.`);
+  if (series && variety) lines.push('No decorative light streaks, glowing lines, beams, lens flares or diagonal stripes across the picture unless the brief asks for them. Each post in this series goes out on a different day, so this one must have its own scene, subject and composition: do not reuse the same person, room, landmark or layout as the others. Share only the palette, type style and brand feel.');
+  if (tidy(imageText)) {
+    if (textMismatchesLanguage(imageText, language)) {
+      // An earlier step wrote the headline in the wrong language. Keep its meaning, say it in the chosen language.
+      lines.push(`The headline should express this idea: "${tidy(imageText)}". Write it naturally in ${languageWords(language)}, in that language only, and do not leave it in another language.`);
+    } else {
+      lines.push(`Show this text on the picture exactly, spelled character for character: "${tidy(imageText)}". Do not add other headline wording.`);
+    }
+  }
+  const lang = languageKind(language);
+  if (!lang.mix && lang.base !== 'english') lines.push('Use no English words except brand names, product names and unavoidable terms.');
+  if (!lang.mix && lang.base === 'english') lines.push('Use no words from other languages.');
   if (tidy(brand.about)) lines.push(`About the business: ${tidy(brand.about).slice(0, 300)}`);
   if (brand.colours && brand.colours.length) lines.push(`Brand colours to lean on: ${brand.colours.map((c) => hexToName(c)).join(', ')}.`);
   lines.push(`All words on the image must be in ${languageWords(language)}, spelled correctly, in large readable type.`);
@@ -209,4 +246,4 @@ async function generateDirectSeriesImage(input, io = {}) {
   return { success: true, imageUrl: url, model: out.model, promptUsed: out.promptUsed, checked: out.checked, missing: out.missing, extra: out.extra };
 }
 
-module.exports = { hexToName, humanizeColours, generateDirectSeriesImage, extraNumbers, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, languageWords };
+module.exports = { languageKind, textMismatchesLanguage, hexToName, humanizeColours, generateDirectSeriesImage, extraNumbers, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, languageWords };

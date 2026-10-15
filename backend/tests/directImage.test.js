@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { hexToName, humanizeColours, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, extraNumbers } = require('../services/directImage');
+const { languageKind, textMismatchesLanguage, hexToName, humanizeColours, buildDirectPrompt, generateDirectPost, requiredNumbers, missingNumbers, extraNumbers } = require('../services/directImage');
 
 test('the request carries the brief and real facts, forbids invented details, and names the logo', () => {
   const p = buildDirectPrompt({
@@ -137,4 +137,25 @@ test('campaign posts are told to differ from each other, carousel slides are not
   const base = { brief: 'x', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5', series: { label: 'post 2 of 6 in a campaign' } };
   assert.match(buildDirectPrompt({ ...base, variety: true }), /own scene, subject and composition/);
   assert.doesNotMatch(buildDirectPrompt(base), /own scene, subject and composition/);
+});
+
+test('a headline in the wrong language is treated as an idea to express, not as exact text', () => {
+  assert.deepStrictEqual(languageKind('tamil_english_mix'), { base: 'tamil', mix: true });
+  assert.deepStrictEqual(languageKind('Tamil'), { base: 'tamil', mix: false });
+  assert.strictEqual(textMismatchesLanguage('Another day, another blank caption box.', 'tamil'), true);
+  assert.strictEqual(textMismatchesLanguage('இந்த தீபாவளி உங்கள் வியாபாரம்', 'tamil'), false);
+  assert.strictEqual(textMismatchesLanguage('இந்த தீபாவளி', 'english'), true);
+  assert.strictEqual(textMismatchesLanguage('Another day', 'tamil_english_mix'), false);
+  const p = buildDirectPrompt({ brief: 'x', imageText: 'Another day, another blank caption box.', brand: { name: 'A' }, language: 'tamil', aspectRatio: '4:5' });
+  assert.match(p, /should express this idea/);
+  assert.doesNotMatch(p, /Show this text on the picture exactly/);
+  assert.match(p, /Use no English words except brand names/);
+  const ok = buildDirectPrompt({ brief: 'x', imageText: 'இந்த தீபாவளி', brand: { name: 'A' }, language: 'tamil', aspectRatio: '4:5' });
+  assert.match(ok, /Show this text on the picture exactly/);
+});
+
+test('a campaign post carries no recurring device and is told not to add light streaks', () => {
+  const p = buildDirectPrompt({ brief: 'x', brand: { name: 'A' }, language: 'english', aspectRatio: '4:5', series: { label: 'post 1 of 3 in a campaign', concept: 'Warm', visualSystem: 'Cream' }, variety: true });
+  assert.doesNotMatch(p, /Recurring device/);
+  assert.match(p, /No decorative light streaks/);
 });

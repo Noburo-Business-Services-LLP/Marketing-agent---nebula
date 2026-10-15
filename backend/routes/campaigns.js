@@ -2258,7 +2258,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
               brand: { name: brandDisplayName, industry: bp.industry, location: bp.businessLocation, about: bp.description, website: bp.website },
               language: selectedLanguage,
               aspectRatio: aspectRatio || '1:1',
-              series: { label: `post ${slotIndex + 1} of ${numSlots} in a campaign`, role: post.campaignRole || post.contentTheme, concept: visualPlan && visualPlan.campaignVisualConcept, visualSystem: visualPlan && visualPlan.visualSystem, mechanism: visualPlan && visualPlan.recurringDevice },
+              series: { label: `post ${slotIndex + 1} of ${numSlots} in a campaign`, role: post.campaignRole || post.contentTheme, concept: visualPlan && visualPlan.campaignVisualConcept, visualSystem: visualPlan && visualPlan.visualSystem },
               logoUrl: slotLogoUrl || undefined,
               overlayLogo: true,
               logoPosition: slotLogoPosition,
