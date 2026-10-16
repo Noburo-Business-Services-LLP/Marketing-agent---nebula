@@ -9,7 +9,8 @@ import {
   lastActiveText, limitLabel, mergeUsage, removalExplainer, slotOffer, usageText,
 } from '../utils/agency';
 import type { UsageRow } from '../utils/agency';
-import { openSubscriptionCheckout } from '../utils/razorpayCheckout';
+import Dialog from '../components/AgencyDialog';
+import ExtraClientDialog from '../components/ExtraClientDialog';
 
 const FIELD = 'w-full rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-3 py-2.5 text-[14px] text-[var(--gv-text-primary)] outline-none focus:border-[var(--gv-accent)]';
 const CARD = 'rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-4 sm:p-5';
@@ -18,30 +19,8 @@ const BTN_MAIN = 'inline-flex items-center justify-center gap-2 rounded-lg bg-[v
 const BTN_DANGER = 'inline-flex items-center justify-center gap-2 rounded-lg bg-red-700 px-4 min-h-[40px] text-[13px] font-semibold text-white hover:bg-red-800 disabled:opacity-50';
 const LOAD_ERROR = 'We could not load your clients. Please try again.';
 
-/** A plain dialog: Escape closes it, focus starts inside it, and the page behind stays put. */
-const Dialog: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('input, button')?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-[var(--gv-panel)] p-5 shadow-xl sm:max-w-md sm:rounded-2xl">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-[var(--gv-text-primary)]">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-[var(--gv-text-secondary)]"><X className="h-5 w-5" /></button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-};
-
 type Loaded = { clients: AgencyClient[]; limit: number; used: number; slotInr: number };
-type Info = { includedClients: number; maxClients: number; slotInr: number };
+type Info = { includedClients: number; maxClients: number; slotInr: number; slot?: { inr?: number; gstPaise?: number; chargePaise?: number } };
 
 const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
   const [data, setData] = useState<Loaded | null>(null);
@@ -56,7 +35,7 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState('');
-  const [buying, setBuying] = useState(false);
+  const [slotOpen, setSlotOpen] = useState(false);
   const [csvBusy, setCsvBusy] = useState(false);
 
   const agency = isAgencyUser(user);
@@ -79,7 +58,7 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
     if (!agency) return;
     load();
     apiService.getPlans()
-      .then((p) => { if (p?.agency) setInfo({ includedClients: p.agency.includedClients, maxClients: p.agency.maxClients, slotInr: p.slot ? Math.round(p.slot.inr ?? p.agency.slotInr) : p.agency.slotInr }); })
+      .then((p) => { if (p?.agency) setInfo({ includedClients: p.agency.includedClients, maxClients: p.agency.maxClients, slotInr: p.slot ? Math.round(p.slot.inr ?? p.agency.slotInr) : p.agency.slotInr, slot: p.slot }); })
       .catch(() => undefined);
   }, [agency, load]);
 
@@ -118,25 +97,6 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
     setRenameBusy(false);
     if (r.success) { setRenaming(null); setNotice('The client was renamed.'); await load(); }
     else setRenameError(agencyErrorMessage(r, 'We could not rename this client. Please try again.'));
-  };
-
-  const buySlot = async () => {
-    setBuying(true); setPageError(''); setNotice('');
-    try {
-      const d = await apiService.createSlotSubscription();
-      if (!d?.success) throw new Error(d?.message || 'The payment could not be started. Please try again.');
-      openSubscriptionCheckout({
-        data: d,
-        description: `Extra client, monthly${slotInr ? `, ₹${slotInr.toLocaleString('en-IN')} plus GST` : ''}`,
-        verify: (r) => apiService.verifySubscription(r),
-        onConfirmed: async (m) => { setBuying(false); setNotice(m); setDialog(null); await load(); },
-        onProblem: (m) => { setBuying(false); setPageError(m); },
-        onClosed: () => setBuying(false),
-      });
-    } catch (e) {
-      setBuying(false);
-      setPageError(agencyErrorMessage(e, 'The payment could not be started. Please try again.'));
-    }
   };
 
   const downloadCsv = async () => {
@@ -180,7 +140,7 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
         <div className={`${CARD} flex flex-col gap-3 bg-[var(--gv-accent-fill)] sm:flex-row sm:items-center sm:justify-between`}>
           <p className="min-w-0 text-[14px] text-[var(--gv-text-primary)] sm:flex-1">{offer.text}</p>
           {offer.kind === 'buy' && (
-            <button type="button" className={BTN_MAIN} onClick={buySlot} disabled={buying}>{buying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add an extra client</button>
+            <button type="button" className={BTN_MAIN} onClick={() => { setNotice(''); setSlotOpen(true); }}><Plus className="h-4 w-4" /> Add an extra client</button>
           )}
         </div>
       )}
@@ -247,10 +207,18 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
           room={room}
           offer={offer}
           included={info ? includedText(info.includedClients, slotInr) : ''}
-          buying={buying}
-          onBuy={buySlot}
+          onBuy={() => { setDialog(null); setNotice(''); setSlotOpen(true); }}
           onClose={() => setDialog(null)}
           onAdded={async (name) => { setDialog(null); setNotice(`${name} was added. Open it to set up its brand details.`); await load(); }}
+        />
+      )}
+      {slotOpen && (
+        <ExtraClientDialog
+          slot={info?.slot}
+          agency={info ? { includedClients: info.includedClients, maxClients: info.maxClients, slotInr: slotInr } : undefined}
+          limit={data?.limit ?? 0}
+          onClose={() => setSlotOpen(false)}
+          onAdded={() => { setNotice(''); load(); }}
         />
       )}
       {dialog?.kind === 'remove' && (
@@ -268,11 +236,10 @@ const AddDialog: React.FC<{
   room: { used: number; limit: number; maxClients: number };
   offer: ReturnType<typeof slotOffer>;
   included: string;
-  buying: boolean;
   onBuy: () => void;
   onClose: () => void;
   onAdded: (name: string) => Promise<void>;
-}> = ({ room, offer, included, buying, onBuy, onClose, onAdded }) => {
+}> = ({ room, offer, included, onBuy, onClose, onAdded }) => {
   const [name, setName] = useState('');
   const [industry, setIndustry] = useState('');
   const [error, setError] = useState('');
@@ -293,10 +260,10 @@ const AddDialog: React.FC<{
     return (
       <Dialog title="Add a client" onClose={onClose}>
         <p className="text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">{offer.text}</p>
-        {offer.kind === 'buy' && <p className="mt-2 text-[13px] text-[var(--gv-text-secondary)]">The extra client is added as soon as the payment is confirmed.</p>}
+        {offer.kind === 'buy' && <p className="mt-2 text-[13px] text-[var(--gv-text-secondary)]">You will see the full price, with GST, before you pay.</p>}
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button type="button" className={BTN} onClick={onClose}>Close</button>
-          {offer.kind === 'buy' && <button type="button" className={BTN_MAIN} onClick={onBuy} disabled={buying}>{buying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add an extra client</button>}
+          {offer.kind === 'buy' && <button type="button" className={BTN_MAIN} onClick={onBuy}><Plus className="h-4 w-4" /> Add an extra client</button>}
         </div>
       </Dialog>
     );

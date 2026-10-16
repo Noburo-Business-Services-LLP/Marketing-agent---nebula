@@ -63,6 +63,7 @@ export function tierLabel(tier?: string): string {
   switch (tier) {
     case 'starter': return 'Starter';
     case 'professional': return 'Growth';
+    case 'agency': return 'Agency';
     case 'managed': return 'Managed';
     default: return 'Free';
   }

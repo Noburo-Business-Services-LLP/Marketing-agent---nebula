@@ -52,3 +52,8 @@ test('apiErrorFrom keeps the server answer so the inbox pages can show the upgra
   assert.equal(apiErrorFrom(null, 500, 'Inbox request failed').message, 'Inbox request failed');
   assert.equal(upgradeInfoOf(apiErrorFrom({ message: 'x' }, 500, 'f')), null);
 });
+
+test('the Agency plan has a plain label and its wording never says credits or trial', () => {
+  assert.equal(tierLabel('agency'), 'Agency');
+  assert.doesNotMatch(upgradeMessage('quarks'), /credit|trial/i);
+});

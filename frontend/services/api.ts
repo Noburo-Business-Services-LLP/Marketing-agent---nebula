@@ -304,7 +304,7 @@ const generateContextAwareCaption = (topic: string, business?: BusinessProfile) 
 export interface PlanPrice { inr: number; gstPaise: number; chargePaise: number }
 export interface PlansResponse {
   success: boolean;
-  plans: Array<PlanPrice & { id: 'starter' | 'professional'; name: string; description: string; quarks: number; outputs?: { posts: number; videos: number }; features: string[] }>;
+  plans: Array<PlanPrice & { id: 'starter' | 'professional' | 'agency'; name: string; description: string; quarks: number; outputs?: { posts: number; videos: number }; features: string[] }>;
   topups: Array<PlanPrice & { quarks: number; outputs?: { posts: number; videos: number } }>;
   addons: Array<PlanPrice & { id: 'publish' | 'competitors' | 'inbox' | 'bundle'; label: string; requires: string[]; includes: string[] }>;
   /** Agency plan figures; every rupee amount comes from the server. */
@@ -315,7 +315,10 @@ export interface PlansResponse {
 export interface AgencyClient { id: string; name: string; createdAt: string; frozen: boolean }
 export interface AgencyClientsResponse { success: boolean; clients: AgencyClient[]; limit: number; used: number; slotInr: number }
 export interface AgencyUsageResponse {
-  success: boolean; month: string; monthLabel?: string; poolPosts: number; poolVideos?: number; total?: number; hasMore?: boolean;
+  success: boolean; month: string; monthLabel?: string;
+  /** The shared pool as posts and videos. The Quark figures in the answer are never shown. */
+  poolPosts: number; poolVideos?: number;
+  page?: number; limit?: number; total?: number; hasMore?: boolean;
   clients: Array<{ id: string; name: string; removed?: boolean; frozen?: boolean; posts: number; videos: number; lastActive?: string | null }>;
 }
 
@@ -493,7 +496,7 @@ export const apiService = {
     return apiCall('/payment/verify', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
-  createSubscription: async (planId: 'starter' | 'professional', couponCode?: string): Promise<any> => {
+  createSubscription: async (planId: 'starter' | 'professional' | 'agency', couponCode?: string): Promise<any> => {
     return apiCall('/payment/create-subscription', { method: 'POST', body: JSON.stringify({ planId, couponCode: couponCode || '' }) }, true);
   },
 
@@ -1495,8 +1498,14 @@ export const apiService = {
       return { success: true };
     } catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not open this client. Please try again.') }; }
   },
-  getAgencyUsage: async (month?: string): Promise<AgencyUsageResponse> =>
-    apiCall(`/agency/usage${month ? `?month=${encodeURIComponent(month)}` : ''}`, { method: 'GET' }, true),
+  getAgencyUsage: async (month?: string, page?: number, limit?: number): Promise<AgencyUsageResponse> => {
+    const q = new URLSearchParams();
+    if (month) q.set('month', month);
+    if (page && page > 1) q.set('page', String(page));
+    if (limit) q.set('limit', String(limit));
+    const qs = q.toString();
+    return apiCall(`/agency/usage${qs ? `?${qs}` : ''}`, { method: 'GET' }, true);
+  },
   downloadAgencyUsage: async (month: string): Promise<{ success: boolean; message?: string }> => {
     try {
       const res = await fetch(`${API_BASE_URL}/agency/usage.csv?month=${encodeURIComponent(month)}`, { headers: { Authorization: `Bearer ${getToken()}` } });

@@ -75,6 +75,21 @@
       if (!INSIDE) { localStorage.removeItem('csmReturnToken'); localStorage.removeItem('csmActingClient'); localStorage.removeItem('csmReturnTo'); }
     } catch (e) { /* ignore */ }
   }
+  var MANAGED = MODE === 'managed'; // an account on the managed plan (plans page shows "managed by Nebulaa")
+  // The payment window is replaced by a stand-in that can never reach a payment service: the real checkout
+  // script (a <script> tag in index.html) cannot overwrite it. ?agencystate= slotdismiss | slotfail | slot409 picks the outcome.
+  function FakeRazorpay(opts) { this.opts = opts || {}; this.h = {}; }
+  FakeRazorpay.prototype.on = function (n, f) { this.h[n] = f; };
+  FakeRazorpay.prototype.open = function () {
+    var o = this.opts, self = this;
+    AUDIT.log.push({ method: 'OPEN', url: 'fake-payment-window', route: 'FakeRazorpay', status: 200 });
+    setTimeout(function () {
+      if (ASTATE === 'slotdismiss') { if (o.modal && o.modal.ondismiss) o.modal.ondismiss(); return; }
+      if (ASTATE === 'slotfail') { if (self.h['payment.failed']) self.h['payment.failed']({ error: { description: 'Your card was declined.' } }); return; }
+      if (o.handler) o.handler({ razorpay_payment_id: 'pay_audit', razorpay_subscription_id: o.subscription_id, razorpay_signature: 'sig_audit' });
+    }, 600);
+  };
+  try { Object.defineProperty(window, 'Razorpay', { configurable: false, get: function () { return FakeRazorpay; }, set: function () { /* the real script is ignored */ } }); } catch (e) { /* ignore */ }
   AUDIT.mode = MODE;
   if (LOGGED_OUT) { localStorage.removeItem('authToken'); localStorage.removeItem('token'); }
 
@@ -111,6 +126,9 @@
     brandScore: { score: 72, metrics: { engagement: 68, consistency: 75, authenticity: 74 } },
     preferences: { emailNotifications: true }, createdAt: iso(-30),
   };
+  if (MANAGED) user.plan = { tier: 'managed' };
+  // The Terms prompt would cover the plans page; the Task 11 plans-page routes are audited with the terms already accepted.
+  if (MANAGED || MODE === 'normal') user.consent = { acceptedAt: iso(-30), termsVersion: 'audit' };
   if (AGENCY) { var clientName = (function () { try { return localStorage.getItem('csmActingClient') || 'Sweet Co'; } catch (e) { return 'Sweet Co'; } })(); user.plan = { tier: 'agency' }; if (!INSIDE) user.consent = { acceptedAt: iso(-30), termsVersion: 'audit' }; user.actingAgency = INSIDE ? { name: clientName } : null; if (INSIDE) { user.businessProfile = Object.assign({}, businessProfile, { name: clientName }); user.firstName = clientName; } else { user.firstName = 'Studio North'; user.businessProfile = Object.assign({}, businessProfile, { name: 'Studio North' }); } }
 
   var draft = function (i, status, sourceType, img) {
@@ -215,6 +233,9 @@
     { platform: 'Google Business', connected: false },
   ];
 
+  var BOUGHT = 0; // extra clients the stand-in payment window has "bought" in this tab
+  try { if (params.get('agencystate')) sessionStorage.removeItem('audit-extra-bought'); BOUGHT = Number(sessionStorage.getItem('audit-extra-bought')) || 0; } catch (e) { /* ignore */ }
+  var CLIENT_LIMIT = (ASTATE === 'cap' ? 25 : ASTATE === 'slots2' || ASTATE === 'usage-paging' ? 7 : 5) + BOUGHT;
   var ok = function (extra) { var o = { success: true }; for (var k in extra) o[k] = extra[k]; return o; };
 
   // [method or '*', RegExp on pathname after /api, response object or function(ctx) -> object|{__status,body}]
@@ -222,10 +243,13 @@
     // ---- Agency (Task 10): the Clients page, the switcher, add / rename / remove / open, usage ----
     ['GET', /^\/agency\/clients$/, function () {
       if (ASTATE === 'error') return { __status: 500, body: { success: false, message: 'Something went wrong.' } };
-      var list = ASTATE === 'empty' ? [] : ASTATE === 'full'
+      var big = ASTATE === 'cap' || ASTATE === 'usage-paging';
+      var list = ASTATE === 'empty' ? [] : big
+        ? Array.from({ length: ASTATE === 'cap' ? 25 : 31 }, function (_, i) { return ['a' + (i + 1), ['Sweet Co', 'Green Leaf Cafe', 'Harbour Dental Care', 'Meera Jewellers', 'Studio Nine Salon'][i % 5] + (i >= 5 ? ' ' + (Math.floor(i / 5) + 1) : ''), false]; })
+        : ASTATE === 'full'
         ? [['a1', 'Sweet Co', false], ['a2', 'Green Leaf Cafe', false], ['a3', 'Meera Jewellers', true], ['a4', 'Harbour Dental Care', false], ['a5', 'A very long client business name that has to wrap on a small screen without breaking the card', false]]
         : [['a1', 'Sweet Co', false], ['a2', 'Green Leaf Cafe', false], ['a3', 'Meera Jewellers', true]];
-      var out = { success: true, clients: list.map(function (c, i) { return { id: c[0], name: c[1], createdAt: iso(-40 + i * 5), frozen: c[2] }; }), limit: 5, used: list.length, slotInr: 1499 };
+      var out = { success: true, clients: list.map(function (c, i) { return { id: c[0], name: c[1], createdAt: iso(-40 + i), frozen: c[2] }; }), limit: CLIENT_LIMIT, used: list.length, slotInr: 1499 };
       if (ASTATE === 'slow') out.__delay = 4000;
       return out.__delay ? { __status: 200, __delay: out.__delay, body: out } : out;
     }],
@@ -242,27 +266,59 @@
       return ok({ token: CLIENT_TOKEN, expiresInHours: 8, client: { id: id, name: names[id] || 'Sweet Co' } });
     }],
     ['GET', /^\/agency\/usage\.csv$/, 'Client,Posts,Videos\nSweet Co,12,2\nGreen Leaf Cafe,7,0\n'],
-    ['GET', /^\/agency\/usage$/, function () {
-      return ok({
-        month: '2026-10', monthLabel: 'October 2026', poolPosts: 381, poolVideos: 26, total: 3, page: 1, limit: 25, hasMore: false,
-        clients: [
-          { id: 'a1', name: 'Sweet Co', frozen: false, posts: 12, videos: 2, lastActive: iso(0), quarksSpent: 540, total: { posts: 30, videos: 5, quarksSpent: 1200 } },
-          { id: 'a2', name: 'Green Leaf Cafe', frozen: false, posts: 7, videos: 0, lastActive: iso(-6), quarksSpent: 140, total: { posts: 9, videos: 0, quarksSpent: 180 } },
-          { id: 'a3', name: 'Meera Jewellers', frozen: true, posts: 0, videos: 0, lastActive: null, quarksSpent: 0, total: { posts: 0, videos: 0, quarksSpent: 0 } },
-          { id: 'removed', name: 'Removed client', removed: true, posts: 1, videos: 0, quarksSpent: 11 },
-        ],
+    ['GET', /^\/agency\/usage$/, function (c) {
+      if (ASTATE === 'usage-error') return { __status: 500, body: { success: false, message: 'Cannot read properties of undefined (reading usage)' } };
+      var cur = now.toISOString().slice(0, 7);
+      var month = /^\d{4}-\d{2}$/.test(c.url.searchParams.get('month') || '') ? c.url.searchParams.get('month') : cur;
+      var monthsBack = (Number(cur.slice(0, 4)) - Number(month.slice(0, 4))) * 12 + Number(cur.slice(5)) - Number(month.slice(5));
+      var label = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][Number(month.slice(5)) - 1] + ' ' + month.slice(0, 4);
+      var scale = monthsBack <= 0 ? 1 : monthsBack === 1 ? 0.6 : 0;
+      var base = [['a1', 'Sweet Co', false, 12, 2, 0], ['a2', 'Green Leaf Cafe', false, 7, 0, -6], ['a3', 'Meera Jewellers', true, 0, 0, null]];
+      if (ASTATE === 'cap' || ASTATE === 'usage-paging') base = Array.from({ length: ASTATE === 'cap' ? 25 : 31 }, function (_, i) { return ['a' + (i + 1), ['Sweet Co', 'Green Leaf Cafe', 'Harbour Dental Care', 'Meera Jewellers', 'Studio Nine Salon'][i % 5] + (i >= 5 ? ' ' + (Math.floor(i / 5) + 1) : ''), false, (i * 3) % 17, i % 4 === 0 ? 1 : 0, -i]; });
+      var all = ASTATE === 'usage-empty' ? [] : base.map(function (b) {
+        return { id: b[0], name: b[1], frozen: b[2], posts: Math.round(b[3] * scale), videos: Math.round(b[4] * scale), lastActive: b[5] === null ? null : iso(b[5]), quarksSpent: Math.round(b[3] * scale) * 11, total: { posts: b[3] * 2, videos: b[4], quarksSpent: 999 } };
       });
+      if (!ASTATE.indexOf('usage-empty') && all.length === 0) { /* no clients at all */ } else if (scale > 0 || monthsBack > 1) all.push({ id: 'removed', name: 'Removed client', removed: true, frozen: false, posts: Math.round(1 * scale), videos: 0, lastActive: iso(-20), quarksSpent: 11, total: { posts: 1, videos: 0, quarksSpent: 11 } });
+      if (ASTATE === 'usage-empty') all = [];
+      var limit = ASTATE === 'usage-paging' ? 10 : 25;
+      var page = Math.max(1, Number(c.url.searchParams.get('page')) || 1);
+      var slice = all.slice((page - 1) * limit, page * limit);
+      return ok({ month: month, monthLabel: label, poolLeft: 4200, poolPosts: ASTATE === 'pool-empty' ? 0 : 381, poolVideos: ASTATE === 'pool-empty' ? 0 : 26, page: page, limit: limit, total: all.length, hasMore: page * limit < all.length, clients: slice });
     }],
-    ['POST', /^\/payment\/create-slot-subscription$/, { __status: 200, body: { success: false, message: 'Audit stub: no payment is started in this preview.' } }],
+    ['POST', /^\/payment\/create-slot-subscription$/, function () {
+      if (ASTATE === 'slotrefused' || ASTATE === 'cap') return { __status: 400, body: { success: false, message: 'You are at the most clients one agency account can have (25). Contact us for a larger set-up.' } };
+      return ok({ subscription_id: 'sub_audit', key: 'rzp_audit_key', amount: 176882, gstPaise: 26982, slot: { id: 'client', quarks: 500 }, prefill: { name: 'Studio North' } });
+    }],
+    ['POST', /^\/payment\/verify-subscription$/, function () {
+      if (ASTATE === 'slot409') return { __status: 409, body: { success: false, message: 'Your payment was received, but the extra client could not be added yet. Our team has been told.' } };
+      BOUGHT += 1; CLIENT_LIMIT += 1;
+      try { sessionStorage.setItem('audit-extra-bought', String(BOUGHT)); } catch (e) { /* ignore */ }
+      return ok({ alreadyProcessed: false, message: 'Your extra client is added.', kind: 'slot', key: 'client', clientLimit: CLIENT_LIMIT });
+    }],
     ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
     ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {
-      var cyc = function (amt) { return { monthly: { planId: 'audit-m', amount: amt, label: 'Monthly', per: 'per month' }, quarterly: { planId: 'audit-q', amount: amt * 3, label: 'Quarterly', per: 'per quarter' }, annual: { planId: 'audit-a', amount: amt * 10, label: 'Annual', per: 'per year' } }; };
-      var plan = function (name, amt) { return { name: name, description: 'Audit placeholder plan.', features: ['Feature one', 'Feature two', 'Feature three'], cycles: cyc(amt) }; };
-      return ok({ plans: { pro: plan('Pro', 1000), growth: plan('Growth', 2000), scale: plan('Scale', 3000) }, agency: { includedClients: 5, maxClients: 25, slotInr: 1499, slotQuarks: 500 }, slot: { id: 'client', inr: 1499, gstPaise: 26982, chargePaise: 176882, quarks: 500 } });
+      var price = function (inr) { var gst = Math.round(inr * 18); return { inr: inr, gstPaise: gst, chargePaise: inr * 100 + gst }; };
+      var feat = function (posts, videos) { return ['Up to ' + posts + ' posts a month, or', 'up to ' + videos + ' short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time']; };
+      return ok({
+        plans: [
+          Object.assign({ id: 'starter', name: 'Starter', description: 'For a single business getting started.', quarks: 600, outputs: { posts: 54, videos: 3 }, features: feat(54, 3).concat(['Brand Blueprint']) }, price(999)),
+          Object.assign({ id: 'professional', name: 'Growth', description: 'For a business that posts every day.', quarks: 2000, outputs: { posts: 181, videos: 12 }, features: feat(181, 12).concat(['Priority support']) }, price(2999)),
+          Object.assign({ id: 'agency', name: 'Agency', description: 'Run several client brands from one account, with one shared pool of posts and videos.', quarks: 6000, outputs: { posts: 545, videos: 37 }, features: feat(545, 37).concat(['5 client brands included', 'Publishing, inbox and competitor insights included', 'Usage report for each client']) }, price(6999)),
+        ],
+        topups: [Object.assign({ quarks: 500, outputs: { posts: 45, videos: 3 } }, price(1000)), Object.assign({ quarks: 1000, outputs: { posts: 90, videos: 6 } }, price(2000))],
+        addons: [Object.assign({ id: 'publish', label: 'Publish and schedule', requires: [], includes: [] }, price(1000)), Object.assign({ id: 'competitors', label: 'Competitor insights', requires: ['publish'], includes: [] }, price(1000)), Object.assign({ id: 'inbox', label: 'Inbox and automatic replies', requires: ['publish'], includes: [] }, price(1000)), Object.assign({ id: 'bundle', label: 'Publish, competitors and inbox bundle', requires: [], includes: ['publish', 'competitors', 'inbox'] }, price(2500))],
+        agency: { includedClients: 5, maxClients: 25, slotInr: 1499, slotQuarks: 500 },
+        slot: Object.assign({ id: 'client', quarks: 500 }, price(1499)),
+      });
     }],
-    ['GET', /^\/payment\/(status|billing)/, ok({ subscription: user.subscription, credits: credits, payments: [] })],
+    ['GET', /^\/payment\/billing-details$/, ok({ details: { gstin: '', legalName: '', address: '', pin: '', stateCode: '' }, states: [{ abbr: 'TN', name: 'Tamil Nadu' }, { abbr: 'KA', name: 'Karnataka' }] })],
+    ['GET', /^\/payment\/billing$/, function () {
+      var tier = AGENCY ? 'agency' : MANAGED ? 'managed' : ASTATE === 'starter' ? 'starter' : 'free';
+      return ok({ plan: { tier: tier, addons: tier === 'agency' ? ['bundle'] : [] }, subscription: user.subscription, credits: { balance: ASTATE === 'pool-empty' ? 0 : credits.balance }, payments: [] });
+    }],
+    ['GET', /^\/payment\/status/, ok({ subscription: user.subscription, credits: credits, payments: [] })],
     ['GET', /^\/drafts\/?$/, ok({ drafts: drafts, total: drafts.length })],
     ['POST', /^\/drafts\/[^/]+\/localize$/, ok({ results: [{ language: 'kannada', ok: true, draftId: 'audit-draft-v1' }, { language: 'telugu', ok: false, message: 'We could not write the Telugu version this time. Please try again.' }] })],
     ['GET', /^\/drafts\/[^/]+$/, function (c) { return ok({ draft: drafts[0] }); }],

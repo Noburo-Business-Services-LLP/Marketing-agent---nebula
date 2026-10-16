@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CreditCard, CheckCircle, Loader2, Shield, Check } from 'lucide-react';
+import { CreditCard, CheckCircle, Loader2, Shield, Check, Plus } from 'lucide-react';
 import { apiService, PlansResponse } from '../services/api';
 import { formatInr, formatPaise, tierLabel } from '../utils/plans';
+import {
+  agencyCardNote, agencyCardState, agencyExtraClientLine, agencyFeatureLines, agencyHeadline, insideClientBillingNotice, poolText, slotAvailability,
+} from '../utils/agencyPlan';
 import BillingDetailsForm from '../components/BillingDetailsForm';
+import ExtraClientDialog from '../components/ExtraClientDialog';
 import LegalLinks from '../components/LegalLinks';
 
 declare global {
@@ -18,6 +22,8 @@ interface TrialExpiredProps {
   reason?: 'time' | 'credits' | 'migrated';
   daysUsed?: number;
   creditsUsed?: number;
+  /** Working inside one of an agency's clients: plans and payments belong to the agency account. */
+  insideClient?: boolean;
   onLogout: () => void;
 }
 
@@ -141,7 +147,9 @@ const SpaceBg: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </div>
 );
 
-const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
+const muted = 'text-[#ededed]/75';
+
+const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLogout }) => {
   const navigate = useNavigate();
   const [catalogue, setCatalogue] = useState<PlansResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,6 +160,17 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [accountLoaded, setAccountLoaded] = useState(false);
+  // An Agency account: its client count and shared pool, shown in posts and videos.
+  const [agencyNow, setAgencyNow] = useState<{ limit: number; used: number; poolPosts?: number; poolVideos?: number } | null>(null);
+  const [slotOpen, setSlotOpen] = useState(false);
+
+  const loadAgency = async () => {
+    try {
+      const [c, u] = await Promise.all([apiService.getAgencyClients(), apiService.getAgencyUsage().catch(() => null)]);
+      setAgencyNow({ limit: c.limit || 0, used: c.used ?? (c.clients || []).length, poolPosts: u?.poolPosts, poolVideos: u?.poolVideos });
+    } catch { setAgencyNow(null); }
+  };
 
   const loadAccount = async () => {
     try {
@@ -159,10 +178,13 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
       if (b?.plan?.tier) setTier(b.plan.tier);
       setHeld(Array.isArray(b?.plan?.addons) ? b.plan.addons : []);
       if (typeof b?.credits?.balance === 'number') setBalance(b.credits.balance);
+      if (b?.plan?.tier === 'agency' && !insideClient) await loadAgency();
     } catch { /* the catalogue is still useful without the account details */ }
+    setAccountLoaded(true);
   };
 
   useEffect(() => {
+    if (insideClient) { setLoading(false); return; }
     apiService.getPlans()
       .then((res) => setCatalogue(res))
       .catch((e: any) => setLoadError(e?.message || 'The plans could not be loaded. Please try again.'))
@@ -172,6 +194,8 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
 
   const ownsAddon = (id: string) => held.includes(id) || held.includes('bundle');
   const onPaidPlan = tier === 'starter' || tier === 'professional';
+  const isAgencyPlan = tier === 'agency';
+  const agencyState = agencyCardState(tier);
   const isManaged = tier === 'managed';
   const [showGst, setShowGst] = useState(false);
   // A new account that has not paid yet: no Quarks, and the free Blueprint is the one thing it can use.
@@ -211,7 +235,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
     }
   };
 
-  const buyPlan = (id: 'starter' | 'professional', name: string, charge: number) =>
+  const buyPlan = (id: 'starter' | 'professional' | 'agency', name: string, charge: number) =>
     checkout(`plan:${id}`, () => apiService.createSubscription(id),
       (d) => ({ key: d.key, subscription_id: d.subscription_id, description: `${name}, monthly, ${formatPaise(charge)} including GST` }),
       (r) => apiService.verifySubscription({ razorpay_payment_id: r.razorpay_payment_id, razorpay_subscription_id: r.razorpay_subscription_id, razorpay_signature: r.razorpay_signature }));
@@ -226,6 +250,22 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
       (d) => ({ key: d.key, order_id: d.order.id, amount: d.order.amount, currency: d.order.currency, description: d.description }),
       (r) => apiService.verifyPayment({ razorpay_order_id: r.razorpay_order_id, razorpay_payment_id: r.razorpay_payment_id, razorpay_signature: r.razorpay_signature }));
 
+  if (insideClient) {
+    const n = insideClientBillingNotice();
+    return (
+      <SpaceBg>
+        <div className="max-w-md w-full">
+          <GlassCard>
+            <div className="p-8 text-center">
+              <h1 className="text-xl font-bold text-white mb-2">{n.title}</h1>
+              <p className={`${muted} text-sm mb-5`}>{n.body}</p>
+              <button className={PRIMARY_BTN} onClick={() => { if (apiService.returnToCsmAccount()) { window.location.hash = '#/agency/clients'; window.location.reload(); } }}>{n.action}</button>
+            </div>
+          </GlassCard>
+        </div>
+      </SpaceBg>
+    );
+  }
   if (loading) {
     return <SpaceBg><Loader2 className="w-10 h-10 animate-spin text-[#ffcc29]" /></SpaceBg>;
   }
@@ -240,7 +280,10 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
   }
 
   const h2 = 'text-xl md:text-2xl font-bold text-white mb-4';
-  const muted = 'text-[#ededed]/75';
+  const agencyPoolEmpty = isAgencyPlan && reason === 'credits';
+  const headline = agencyHeadline(agencyPoolEmpty);
+  const openClients = () => { window.location.hash = '#/agency/clients'; window.location.reload(); };
+  const slotRoom = slotAvailability({ limit: agencyNow?.limit, used: agencyNow?.used, maxClients: catalogue.agency?.maxClients });
 
   return (
     <SpaceBg>
@@ -248,10 +291,12 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
         <div className="text-center mb-10 rounded-3xl bg-[#070a12] px-6 py-6">
           <img src="/assets/nebulaa-gold.png" alt="Nebulaa" className="w-16 h-16 mx-auto mb-4" onError={(e) => (e.currentTarget.style.display = 'none')} />
           <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3 tracking-tight">
-            {isNewAccount ? 'Choose a plan to start creating' : reason === 'credits' ? 'You have used all of your Quarks' : 'Plans and Quarks'}
+            {isAgencyPlan ? headline.title : isNewAccount ? 'Choose a plan to start creating' : reason === 'credits' ? 'You have used all of your Quarks' : 'Plans and Quarks'}
           </h1>
           <p className={`${muted} text-base max-w-2xl mx-auto`}>
-            {isNewAccount
+            {isAgencyPlan
+              ? headline.body
+              : isNewAccount
               ? 'Posts, campaigns and videos start with a plan. Your Growth Blueprint is free: make it now, then pick a plan when you are ready to create.'
               : reason === 'credits'
               ? 'Please upgrade your plan, or buy an add-on pack or Quarks, to continue.'
@@ -259,7 +304,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
           </p>
           <p className={`${muted} text-sm mt-3`}>
             Current plan: <span className="text-white font-semibold">{tierLabel(tier)}</span>
-            {balance !== null && <> · <span className="text-white font-semibold">{balance.toLocaleString('en-IN')}</span> Quarks remaining</>}
+            {!isAgencyPlan && balance !== null && <> · <span className="text-white font-semibold">{balance.toLocaleString('en-IN')}</span> Quarks remaining</>}
           </p>
         </div>
 
@@ -274,6 +319,32 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
 
         {notice && <div className="mb-6 max-w-xl mx-auto rounded-2xl bg-green-500/10 border border-green-500/30 px-5 py-3 text-green-300 text-sm text-center flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" />{notice}</div>}
         {error && <div className="mb-6 max-w-xl mx-auto rounded-2xl bg-red-500/10 border border-red-500/30 px-5 py-3 text-red-300 text-sm text-center">{error}</div>}
+
+        {isAgencyPlan && (
+          <div className="mb-10 rounded-3xl bg-[#070a12] px-6 py-6" aria-labelledby="your-agency-plan">
+            <h2 id="your-agency-plan" className="text-xl font-bold text-white mb-3">Your clients and shared pool</h2>
+            {agencyNow ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-3xl font-extrabold text-white">{agencyNow.used} of {agencyNow.limit}<span className={`${muted} text-base font-normal`}> clients</span></p>
+                  {poolText(agencyNow.poolPosts, agencyNow.poolVideos) && <p className={`${muted} text-sm mt-2`}>{poolText(agencyNow.poolPosts, agencyNow.poolVideos)}</p>}
+                  <button type="button" onClick={openClients} className="mt-4 text-sm text-[#ffcc29] underline underline-offset-2 hover:text-white">Go to my clients</button>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white mb-1">Extra clients</h3>
+                  <p className={`${muted} text-sm mb-1`}>{agencyExtraClientLine(catalogue.agency, catalogue.slot)}</p>
+                  {slotRoom.hint && <p className={`${muted} text-sm mb-1`}>{slotRoom.hint}</p>}
+                  {!slotRoom.canBuy && <p className={`${muted} text-sm mb-3`} role="status">{slotRoom.message}</p>}
+                  <button type="button" className={PRIMARY_BTN + ' md:max-w-xs mt-2'} disabled={!slotRoom.canBuy || !!busy} onClick={() => { setNotice(''); setError(''); setSlotOpen(true); }}>
+                    <Plus className="w-4 h-4" /> Add an extra client
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className={`${muted} text-sm`} role="status">{accountLoaded ? 'Your client count could not be loaded just now. Please reload the page.' : 'Loading your clients'}</p>
+            )}
+          </div>
+        )}
 
         {isManaged && (
           <div className="mb-12 rounded-3xl bg-[#070a12] px-6 py-6 text-center">
@@ -295,10 +366,15 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
           </div>
         )}
 
-        {!isManaged && <h2 className={h2}>Monthly plans</h2>}
-        {!isManaged && <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-          {catalogue.plans.map((plan) => {
+        {!isManaged && <h2 className={h2}>{isAgencyPlan ? 'Your plan' : 'Monthly plans'}</h2>}
+        {!isManaged && <div className={isAgencyPlan ? 'grid grid-cols-1 gap-6 mb-12 max-w-md' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12'}>
+          {catalogue.plans.filter((plan) => !isAgencyPlan || plan.id === 'agency').map((plan) => {
             const current = tier === plan.id;
+            const isAgencyCard = plan.id === 'agency';
+            const features = isAgencyCard ? agencyFeatureLines(plan, catalogue.agency) : plan.features;
+            const note = isAgencyCard ? agencyCardNote(agencyState) : (onPaidPlan && !current ? 'You already have an active plan.' : '');
+            const locked = isAgencyCard ? agencyState !== 'available' : (onPaidPlan && !current);
+            const extraLine = isAgencyCard ? agencyExtraClientLine(catalogue.agency, catalogue.slot) : '';
             return (
               <GlassCard key={plan.id} highlighted={plan.id === 'professional'}>
                 <div className="p-7 flex flex-col h-full">
@@ -307,23 +383,28 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
                   <p className="text-4xl font-extrabold text-white">{formatInr(plan.inr)}<span className={`${muted} text-base font-normal`}> a month plus GST</span></p>
                   <p className={`${muted} text-xs mt-1 mb-5`}>{formatPaise(plan.chargePaise)} including 18 percent GST. Renews monthly and can be cancelled at any time.</p>
                   <ul className="space-y-2.5 mb-7 flex-1">
-                    {plan.features.map((f, i) => (
+                    {features.map((f, i) => (
                       <li key={i} className="flex items-start gap-2.5 text-[13px]">
                         <Check className="w-4 h-4 text-[#ffcc29]/80 flex-shrink-0 mt-0.5" /><span className="text-[#ededed]/85">{f}</span>
                       </li>
                     ))}
                   </ul>
-                  <button className={PRIMARY_BTN} disabled={!!busy || current || (onPaidPlan && !current)} onClick={() => buyPlan(plan.id, plan.name, plan.chargePaise)}>
-                    {busy === `plan:${plan.id}` ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing</> : current ? 'Your current plan' : <><CreditCard className="w-4 h-4" /> Choose {plan.name}</>}
+                  {extraLine && <p className={`${muted} text-xs mb-5 -mt-3`}>{extraLine}</p>}
+                  <button className={PRIMARY_BTN} disabled={!!busy || !accountLoaded || current || locked} onClick={() => buyPlan(plan.id, plan.name, plan.chargePaise)}>
+                    {busy === `plan:${plan.id}` ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing</> : current ? (isAgencyCard ? 'Your plan' : 'Your current plan') : <><CreditCard className="w-4 h-4" /> Choose {plan.name}</>}
                   </button>
-                  {onPaidPlan && !current && <p className={`${muted} text-xs mt-2 text-center`}>You already have an active plan.</p>}
+                  {note && <p className={`${muted} text-xs mt-2 text-center`}>{note}</p>}
                 </div>
               </GlassCard>
             );
           })}
         </div>}
 
-        {!isManaged && <>
+        {isAgencyPlan && (
+          <p className={`${muted} text-sm mb-12`}>Publishing, inbox and competitor insights are included in your Agency plan, so there are no add-ons to buy.</p>
+        )}
+
+        {!isManaged && !isAgencyPlan && <>
         <h2 className={h2}>Add-ons</h2>
         <p className={`${muted} text-sm -mt-2 mb-4`}>Add-ons are available with the Starter and Growth plans and renew monthly. Prices are before GST.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
@@ -379,6 +460,15 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
           <LegalLinks className="pt-1 text-xs text-[#ededed]/60" linkClassName="hover:text-[#ededed] underline underline-offset-2" />
         </div>
       </div>
+      {slotOpen && (
+        <ExtraClientDialog
+          slot={catalogue.slot}
+          agency={catalogue.agency}
+          limit={agencyNow?.limit ?? 0}
+          onClose={() => setSlotOpen(false)}
+          onAdded={() => { loadAgency(); }}
+        />
+      )}
     </SpaceBg>
   );
 };

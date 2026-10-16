@@ -42,5 +42,10 @@
   "pages/AgencyClients.tsx",
   "components/ClientSwitcher.tsx",
   "utils/agency.ts",
-  "utils/razorpayCheckout.ts"
+  "utils/razorpayCheckout.ts",
+  "utils/agencyPlan.ts",
+  "utils/slotPurchase.ts",
+  "components/AgencyUsage.tsx",
+  "components/ExtraClientDialog.tsx",
+  "components/AgencyDialog.tsx"
 ]

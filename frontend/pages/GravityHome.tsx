@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, ArrowRight, Sparkles } from 'lucide-react';
 import { apiService, draftsAPI } from '../services/api';
-import { Draft, Campaign } from '../types';
+import { Draft, Campaign, User } from '../types';
+import AgencyUsage from '../components/AgencyUsage';
+import { isAgencyUser } from '../utils/agency';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 
 // Gravity Home — matches the prototype's Home screen exactly, wired to
@@ -38,7 +40,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   return <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--gv-text-muted)]">{status}</span>;
 };
 
-const GravityHome: React.FC = () => {
+const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,6 +194,8 @@ const GravityHome: React.FC = () => {
 
   return (
     <div className="max-w-[1240px] mx-auto pb-16">
+      {isAgencyUser(user) && <AgencyUsage />}
+
       {/* Setup notice — only shows when there's actual setup to do */}
       {drafts.length === 0 && campaigns.length === 0 && !loading && (
         <div className="mb-8 flex items-center gap-3 px-5 py-4 rounded-xl bg-[var(--gv-surface-1)] border border-[rgb(var(--gv-accent-rgb)/0.25)] relative overflow-hidden">

@@ -264,6 +264,7 @@ const App: React.FC = () => {
                 reason={'time'}
                 daysUsed={7 - (user.trial?.expiresAt ? Math.max(0, Math.ceil((new Date(user.trial.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0)}
                 creditsUsed={user.credits?.totalUsed ?? 0}
+                insideClient={isInsideClient(user)}
                 onLogout={handleLogout}
               />
             ) : (
@@ -280,7 +281,7 @@ const App: React.FC = () => {
               user.onboardingCompleted ? (
                 <Layout user={user} onLogout={handleLogout} needsPlan={needsPlan}>
                     <Routes>
-                    <Route path="/dashboard" element={<GravityHome />} />
+                    <Route path="/dashboard" element={<GravityHome user={user} />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
                     {/* Two tabs on one page: Plan (AI month strategy, the PDF-able
                         view) and Schedule (real month grid, thumbnails on the day
