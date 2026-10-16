@@ -188,6 +188,13 @@ const userSchema = new mongoose.Schema({
     },
     connectedAt: { type: Date, default: Date.now }
   }],
+  // Agreement to the Terms and the Privacy Policy given at sign-up: when, and to which version of each.
+  consent: {
+    termsVersion: { type: String, default: '' },
+    privacyVersion: { type: String, default: '' },
+    acceptedAt: { type: Date },
+    source: { type: String, default: '' }
+  },
   // Optional invoice details the customer adds: a GSTIN for a tax invoice in the business name, and the state
   // the supply is made to (Zoho's two letter code). Read when an invoice is made; never required to pay.
   billingDetails: {

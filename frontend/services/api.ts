@@ -322,7 +322,7 @@ export const apiService = {
     }
   },
 
-  register: async (data: { email: string; password: string; firstName: string; companyName?: string; website?: string; inviteCode?: string; botCheckToken?: string }): Promise<AuthResponse & { requiresVerification?: boolean }> => {
+  register: async (data: { email: string; password: string; firstName: string; companyName?: string; website?: string; inviteCode?: string; botCheckToken?: string; acceptedTerms: boolean }): Promise<AuthResponse & { requiresVerification?: boolean }> => {
     const response = await apiCall<{ success: boolean; message: string; token: string; user: User; requiresVerification?: boolean }>(
       '/auth/signup',
       { method: 'POST', body: JSON.stringify(data) }

@@ -18,6 +18,8 @@ const AUTH_BG: React.CSSProperties = {
 const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(searchParams.get('mode') !== 'signup');
+  // Agreement to the Terms and the Privacy Policy, ticked at sign-up.
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -143,6 +145,11 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    if (!isLogin && !agreed) {
+      setError('Please agree to the Terms and the Privacy Policy to continue.');
+      return;
+    }
+
     if (!isLogin && signupConfig.botCheckSiteKey && !botCheckToken) {
       setError('Please complete the check below to show that you are a person.');
       return;
@@ -162,7 +169,8 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
           companyName,
           website,
           inviteCode: signupConfig.inviteRequired ? inviteCode.trim() : undefined,
-          botCheckToken: botCheckToken || undefined
+          botCheckToken: botCheckToken || undefined,
+          acceptedTerms: agreed
         });
       }
 
@@ -887,6 +895,26 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   <CriteriaItem met={pwdCriteria.special} label="Contains a symbol (!@#$)" theme={theme} />
                 </ul>
               </div>
+            )}
+
+            {!isLogin && (
+              <label className="mt-4 flex items-start gap-3 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => { setAgreed(e.target.checked); if (e.target.checked) setError(null); }}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[#F5A623]"
+                  aria-required="true"
+                />
+                <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>
+                  I agree to the{' '}
+                  <a href="/#/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#F5A623] hover:underline">Terms and Conditions</a>
+                  {', the '}
+                  <a href="/#/privacy-policy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#F5A623] hover:underline">Privacy Policy</a>
+                  {' and the '}
+                  <a href="/#/refund-policy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#F5A623] hover:underline">Refund Policy</a>.
+                </span>
+              </label>
             )}
 
             {!isLogin && signupConfig.botCheckSiteKey && <div ref={botCheckBox} className="mt-4" />}

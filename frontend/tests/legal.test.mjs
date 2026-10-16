@@ -34,3 +34,12 @@ test('customer facing legal pages do not use the banned words', () => {
     assert.ok(!/\btrial\b|unlimited/i.test(t), f);
   }
 });
+
+test('the sign-up form asks for agreement, links the three pages, and sends it with the sign-up', () => {
+  const auth = read('pages/Auth.tsx');
+  assert.match(auth, /type="checkbox"/);
+  assert.match(auth, /Please agree to the Terms and the Privacy Policy to continue\./);
+  for (const href of ['/#/terms', '/#/privacy-policy', '/#/refund-policy']) assert.ok(auth.includes(`href="${href}"`), href);
+  assert.match(auth, /acceptedTerms: agreed/);
+  assert.match(read('services/api.ts'), /acceptedTerms: boolean/);
+});

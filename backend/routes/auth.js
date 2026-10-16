@@ -566,6 +566,7 @@ router.post('/signup', signupLimiter, signupGuard(), [
     .trim()
     .isLength({ max: 300 })
     .withMessage('Website URL cannot exceed 300 characters'),
+  body('acceptedTerms').custom(require('../services/consent').acceptedTermsCheck),
   handleValidationErrors
 ], async (req, res) => {
   try {
@@ -616,7 +617,8 @@ router.post('/signup', signupLimiter, signupGuard(), [
         }
       },
       isVerified: false,
-      plan: newAccountPlan()
+      plan: newAccountPlan(),
+      consent: require('../services/consent').consentRecord()
     });
 
     // Generate and send OTP
