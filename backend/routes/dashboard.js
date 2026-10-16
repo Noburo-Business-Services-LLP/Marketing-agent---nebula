@@ -9,6 +9,7 @@ const { protect } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
 const { canUse } = require('../config/entitlements');
 const { deductCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
+const { walletBalance } = require('../services/agency');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
 const Campaign = require('../models/Campaign');
@@ -800,11 +801,12 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
       // Per post, at the live campaign_full rate — a hardcoded 7 here would
       // let the pre-flight check disagree with what deductCredits actually takes.
       const creditCost = campaignCount * CREDIT_COSTS.campaign_full;
-      if (user.credits.balance < creditCost) {
+      const poolBalance = await walletBalance(user._id); // the agency's shared pool for a client workspace
+      if (poolBalance < creditCost) {
         return res.status(403).json({
           success: false,
           message: 'Insufficient Quarks',
-          creditsRemaining: user.credits.balance,
+          creditsRemaining: poolBalance,
           required: creditCost
         });
       }
@@ -816,7 +818,7 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
     
     // Deduct credits after successful generation (skip for first-time onboarding)
     const generatedCount = suggestions.campaigns?.length || 0;
-    let creditsRemaining = user.credits.balance;
+    let creditsRemaining = await walletBalance(user._id);
     if (generatedCount > 0) {
       if (!isFirstGeneration) {
         const result = await deductCredits(user._id, 'campaign_full', generatedCount, `AI campaign suggestions x${generatedCount}`);
@@ -955,8 +957,9 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     if (!isFirstStreamGen) {
       await ensureCreditCycle(user);
       const creditCostStream = count * CREDIT_COSTS.campaign_full;
-      if (user.credits.balance < creditCostStream) {
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: creditCostStream })}\n\n`);
+      const poolBalance = await walletBalance(user._id); // the agency's shared pool for a client workspace
+      if (poolBalance < creditCostStream) {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Insufficient Quarks', creditsRemaining: poolBalance, required: creditCostStream })}\n\n`);
         res.end();
         return;
       }
@@ -1082,7 +1085,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
         } else {
           console.log(`🎁 Skipping credit deduction for ${generatedCampaigns.length} initial streamed campaigns`);
           await User.findByIdAndUpdate(user._id, { $set: { initialCampaignsGenerated: true } });
-          res.write(`data: ${JSON.stringify({ type: 'credits_update', creditsRemaining: user.credits.balance })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: 'credits_update', creditsRemaining: await walletBalance(user._id) })}\n\n`);
         }
       } catch (creditErr) {
         console.error('Credit deduction failed after streaming:', creditErr);
@@ -1235,8 +1238,9 @@ router.post('/generate-rival-post', protect, async (req, res) => {
 
     // Credit check
     await ensureCreditCycle(user);
-    if (user.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 7 });
+    const poolBalance = await walletBalance(user._id); // the agency's shared pool for a client workspace
+    if (poolBalance < 7) {
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: poolBalance, required: 7 });
     }
 
     const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo, aspectRatio } = req.body;
@@ -1597,8 +1601,9 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(user);
-    if (user.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 7 });
+    const poolBalance = await walletBalance(user._id); // the agency's shared pool for a client workspace
+    if (poolBalance < 7) {
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: poolBalance, required: 7 });
     }
     
     // Get user's business context
@@ -1645,8 +1650,9 @@ router.post('/strategic-advisor/refine-image', protect, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(user);
-    if (user.credits.balance < 3) {
-      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 3 });
+    const poolBalance = await walletBalance(user._id); // the agency's shared pool for a client workspace
+    if (poolBalance < 3) {
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: poolBalance, required: 3 });
     }
     
     const result = await refineImageWithPrompt(originalPrompt, refinementPrompt, style, currentImageUrl);
@@ -1683,8 +1689,9 @@ router.post('/generate-event-post', protect, async (req, res) => {
     const creditUser = await User.findById(userId);
     if (!creditUser) return res.status(404).json({ success: false, message: 'User not found' });
     await ensureCreditCycle(creditUser);
-    if (creditUser.credits.balance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: creditUser.credits.balance, required: 7 });
+    const poolBalance = await walletBalance(creditUser._id); // the agency's shared pool for a client workspace
+    if (poolBalance < 7) {
+      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: poolBalance, required: 7 });
     }
     
     // Get user's business context

@@ -5,6 +5,15 @@ const User = require('../models/User');
 const { CREDIT_COSTS, ACTION_UNITS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const quarkBuckets = require('../services/quarkBuckets');
+const agencyRules = require('../services/agency');
+
+// Whose Quarks this person sees: their own, or the agency's shared pool for a client workspace
+// (an empty pool when the agency cannot pay, so a client never sees its own record's numbers).
+async function holderOf(user) {
+  if (!agencyRules.isWorkspace(user)) return user;
+  const owner = await User.findById(agencyRules.idOf(user.agency.ownerId));
+  return owner && agencyRules.canPayForClients(owner) ? owner : null;
+}
 
 /**
  * GET /api/credits
@@ -22,8 +31,9 @@ router.get('/', protect, async (req, res) => {
     // Initialize credits + trial if not set yet
     await ensureCreditCycle(user);
     // Take off anything that has run out of time, then read the account again.
-    const settled = await quarkBuckets.settle(userId).catch(() => ({ changed: false }));
-    const fresh = settled.changed ? await User.findById(userId) : user;
+    const settled = await quarkBuckets.settleWallet(userId).catch(() => ({ changed: false }));
+    const holder = await holderOf(user);
+    const fresh = (settled.changed && holder) ? await User.findById(holder._id) : (holder || {});
     const parts = quarkBuckets.summarise(fresh);
 
     res.json({
@@ -70,11 +80,13 @@ router.get('/history', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // A client sees the agency's shared pool and its history.
+    const holder = (await holderOf(user)) || {};
     res.json({
       success: true,
-      history: user.credits?.history || [],
-      balance: user.credits?.balance ?? 0,
-      totalUsed: user.credits?.totalUsed ?? 0
+      history: holder.credits?.history || [],
+      balance: holder.credits?.balance ?? 0,
+      totalUsed: holder.credits?.totalUsed ?? 0
     });
   } catch (error) {
     console.error('Get credit history error:', error);

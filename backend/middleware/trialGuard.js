@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const quarkBuckets = require('../services/quarkBuckets');
+const agencyRules = require('../services/agency');
 
 /**
  * Credit costs per action (demo version)
@@ -23,12 +24,15 @@ const checkTrial = async (req, res, next) => {
     if (!userId) return next(); // Let auth middleware handle missing user
 
     // Quarks that have run out of time are taken off first, so the balance checked below is the real one.
-    await quarkBuckets.settle(userId).catch(() => null);
+    await quarkBuckets.settleWallet(userId).catch(() => null);
     const user = await User.findById(userId);
     if (!user) return next();
 
+    // A client workspace spends from its agency's shared pool, so that is the balance to check.
+    const balance = agencyRules.isWorkspace(user) ? await agencyRules.walletBalance(userId) : (user.credits?.balance ?? 0);
+
     // Check if credits are exhausted
-    if ((user.credits?.balance ?? 0) <= 0) {
+    if (balance <= 0) {
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
@@ -40,7 +44,7 @@ const checkTrial = async (req, res, next) => {
     }
 
     req.trialInfo = {
-      creditsRemaining: user.credits?.balance ?? 0
+      creditsRemaining: balance
     };
 
     next();
@@ -75,16 +79,17 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
 
     // Anything past its date is taken off first, then one atomic step checks the balance and subtracts from the
     // buckets together, so many requests at the same moment cannot all pass the check and overdraw the account.
-    await quarkBuckets.settle(userId).catch(() => null);
+    await quarkBuckets.settleWallet(userId).catch(() => null);
     const spent = await quarkBuckets.spend(userId, totalCost, { action, description: description || `${action} x${count}`, units: count });
     const result = spent.success ? spent.user : null;
 
     if (!result) {
-      const user = await User.findById(userId).select('credits.balance');
+      const user = await User.findById(userId).select('credits.balance agency.ownerId');
       if (!user) {
         return { success: false, creditsRemaining: 0, creditsDeducted: 0, error: 'User not found' };
       }
-      const currentBalance = user.credits?.balance ?? 0;
+      // For a client this is the agency's pool (0 when the agency cannot pay), never the client's own record.
+      const currentBalance = agencyRules.isWorkspace(user) ? await agencyRules.walletBalance(userId) : (user.credits?.balance ?? 0);
       return {
         success: false,
         creditsRemaining: currentBalance,
@@ -96,7 +101,10 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
     return {
       success: true,
       creditsRemaining: result.credits.balance,
-      creditsDeducted: totalCost
+      creditsDeducted: totalCost,
+      // Who paid, so a job can refund the same wallet later even if the client or plan has changed.
+      payerId: spent.payerId,
+      workspaceId: spent.workspaceId
     };
   } catch (error) {
     console.error('Credit deduction error:', error);
@@ -126,9 +134,9 @@ const requireCredits = (action, countOrFn = 1) => {
       const gate = await require('../services/spendGuard').check(action);
       if (!gate.ok) return res.status(503).json({ success: false, serviceBusy: true, message: gate.message });
 
-      await quarkBuckets.settle(userId).catch(() => null);
+      await quarkBuckets.settleWallet(userId).catch(() => null);
       const user = await User.findById(userId);
-      const currentBalance = user?.credits?.balance ?? 0;
+      const currentBalance = agencyRules.isWorkspace(user) ? await agencyRules.walletBalance(userId) : (user?.credits?.balance ?? 0);
 
       if (currentBalance < totalCost) {
         return res.status(403).json({
@@ -160,7 +168,7 @@ const requireCredits = (action, countOrFn = 1) => {
  * @param {string} description - Human-readable description
  * @returns {{ success: boolean, creditsRemaining: number, creditsRefunded: number, error?: string }}
  */
-const refundCredits = async (userId, action, count = 1, description = '') => {
+const refundCredits = async (userId, action, count = 1, description = '', opts = {}) => {
   try {
     const cost = CREDIT_COSTS[action];
     if (cost === undefined || cost === 0) {
@@ -169,7 +177,22 @@ const refundCredits = async (userId, action, count = 1, description = '') => {
 
     const totalRefund = cost * count;
 
-    const user = await User.findById(userId);
+    // The refund goes to the wallet that was charged: `opts.payerId` when the charge recorded it, else whoever pays
+    // for this user now (the agency for a client workspace). It never lands on a client record.
+    let payerId = null;
+    let workspaceId = null;
+    if (opts && opts.payerId) {
+      payerId = String(opts.payerId);
+      workspaceId = payerId !== String(userId) ? String(userId) : null;
+    } else {
+      ({ payerId, workspaceId } = await agencyRules.resolvePayer(userId));
+    }
+    if (!payerId) {
+      return { success: false, creditsRemaining: 0, creditsRefunded: 0, error: 'User not found' };
+    }
+    const target = workspaceId ? payerId : userId;
+
+    const user = await User.findById(target);
     if (!user) {
       return { success: false, creditsRemaining: 0, creditsRefunded: 0, error: 'User not found' };
     }
@@ -177,7 +200,7 @@ const refundCredits = async (userId, action, count = 1, description = '') => {
     // A refund goes back where Quarks that expire come from: the monthly bucket while that month is still running.
     const planLive = user.credits?.planExpiresAt && new Date(user.credits.planExpiresAt) > new Date();
     const result = await User.findByIdAndUpdate(
-      userId,
+      target,
       {
         $inc: {
           'credits.balance': totalRefund,
@@ -198,6 +221,15 @@ const refundCredits = async (userId, action, count = 1, description = '') => {
       },
       { new: true }
     );
+    if (!result) {
+      return { success: false, creditsRemaining: 0, creditsRefunded: 0, error: 'User not found' };
+    }
+
+    // Other accounts have no ledger row for a refund today and keep it that way; a client refund leaves one so
+    // the agency's per-client report nets out correctly.
+    if (workspaceId) {
+      quarkBuckets.record({ user: target, workspace: workspaceId, type: 'refund', quarks: totalRefund, balanceAfter: result.credits.balance, action: `${action}_refund` });
+    }
 
     return {
       success: true,

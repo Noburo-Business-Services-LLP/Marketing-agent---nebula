@@ -8,6 +8,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { requireFeature, requireFeatureWhen, wantsScheduling } = require('../middleware/requireFeature');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
+const { walletBalance } = require('../services/agency');
 const { getTextModelChain, isModelRetiredError, markModelRetired } = require('../services/geminiTextModels');
 const Campaign = require('../models/Campaign');
 const Influencer = require('../models/Influencer');
@@ -2440,7 +2441,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     if (!postsEmitted) throw new Error('No posts could be created. Please try again.');
 
     // Done
-    const updatedUser = await User.findById(userId).select('credits.balance');
+    const poolBalance = await walletBalance(userId); // the agency's shared pool for a client workspace
     await learnCampaignGeneration({
       userId,
       user,
@@ -2466,7 +2467,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     });
     sendEvent('complete', {
       totalPosts: postsToProcess.length,
-      creditsRemaining: updatedUser?.credits?.balance ?? 0
+      creditsRemaining: poolBalance
     });
 
     res.end();
@@ -4669,8 +4670,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
     }));
 
     // Fetch latest credit balance for frontend update
-    const updatedUser = await User.findById(userId).select('credits.balance');
-    const creditsRemaining = updatedUser?.credits?.balance ?? 0;
+    const creditsRemaining = await walletBalance(userId); // the agency's shared pool for a client workspace
 
     await learnCampaignGeneration({
       userId,
@@ -5897,12 +5897,12 @@ router.post('/template-poster/batch', protect, checkTrial, requireCredits('image
     console.log(`- Batch complete: ${successCount}/${posters.length} posters generated`);
 
     // Fetch latest credit balance for frontend
-    const latestUser = await User.findById(req.user.userId || req.user.id || req.user._id).select('credits.balance');
+    const latestBalance = await walletBalance(req.user.userId || req.user.id || req.user._id); // the agency's shared pool for a client workspace
     
     res.json({
       success: true,
       results,
-      creditsRemaining: latestUser?.credits?.balance ?? 0,
+      creditsRemaining: latestBalance,
       summary: {
         total: posters.length,
         successful: successCount,

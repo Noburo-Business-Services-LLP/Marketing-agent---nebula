@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
  */
 const QuarkLedgerSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  // The agency client a spend or refund was for, when the Quarks belong to the agency pool. Unset for every other account.
+  workspace: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   type: { type: String, enum: ['grant', 'purchase', 'spend', 'refund', 'expiry', 'hold', 'release', 'adjust'], required: true },
   bucket: { type: String, enum: ['plan', 'topup', 'kept'], default: 'kept' },
   quarks: { type: Number, required: true }, // signed: spends and expiries are negative
@@ -18,5 +20,6 @@ const QuarkLedgerSchema = new mongoose.Schema({
 }, { versionKey: false });
 
 QuarkLedgerSchema.index({ user: 1, createdAt: -1 });
+QuarkLedgerSchema.index({ user: 1, workspace: 1, createdAt: -1 });
 
 module.exports = mongoose.models.QuarkLedger || mongoose.model('QuarkLedger', QuarkLedgerSchema);

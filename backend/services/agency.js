@@ -30,13 +30,41 @@ function workspacePlanFields(owner) {
 
 const placeholderEmail = (id) => `ws-${id}@workspace.invalid`;
 
-/** Quarks available to this user: the payer's balance. 0 if the payer cannot be found. */
+/** Resolve who to charge for `userId`: { payerId, workspaceId|null }. Reads the user once. */
+async function resolvePayer(userId, { User = require('../models/User') } = {}) {
+  const q = User.findById(userId).select('agency.ownerId');
+  const me = await (q && typeof q.lean === 'function' ? q.lean() : q);
+  if (!me) return { payerId: null, workspaceId: null };
+  return isWorkspace(me)
+    ? { payerId: idOf(me.agency.ownerId), workspaceId: idOf(userId) }
+    : { payerId: idOf(userId), workspaceId: null };
+}
+
+/**
+ * An agency that may pay for its clients: on the agency plan (not itself a client), an active account, not being
+ * deleted and not halted. The same test as the pass check in middleware/auth.js, so a client cannot spend while its pass would be refused.
+ */
+const canPayForClients = (owner) =>
+  !!owner && isAgency(owner) && owner.isActive !== false &&
+  !(owner.deletion && owner.deletion.status === 'pending') &&
+  !(owner.subscription && owner.subscription.status === 'halted');
+
+/** The same test as a MongoDB filter, so a spend checks it in the one atomic update. */
+const CLIENT_PAYER_FILTER = Object.freeze({
+  'plan.tier': 'agency',
+  'agency.ownerId': null,
+  isActive: { $ne: false },
+  'deletion.status': { $ne: 'pending' },
+  'subscription.status': { $ne: 'halted' }
+});
+
+/** Quarks available to this user: the payer's balance. 0 if the payer cannot be found or a client's agency cannot pay. */
 async function walletBalance(userId, { User = require('../models/User') } = {}) {
   const me = await User.findById(userId).select('credits.balance agency.ownerId').lean();
   if (!me) return 0;
   if (!isWorkspace(me)) return Math.max(0, num(me.credits && me.credits.balance));
-  const payer = await User.findById(idOf(me.agency.ownerId)).select('credits.balance').lean();
-  return payer ? Math.max(0, num(payer.credits && payer.credits.balance)) : 0;
+  const payer = await User.findById(idOf(me.agency.ownerId)).select('credits.balance plan agency.ownerId isActive deletion.status subscription.status').lean();
+  return payer && canPayForClients(payer) ? Math.max(0, num(payer.credits && payer.credits.balance)) : 0;
 }
 
-module.exports = { isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, idOf };
+module.exports = { isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };

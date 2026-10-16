@@ -9,6 +9,7 @@ const path = require('path');
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
 const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
+const { walletBalance } = require('../services/agency');
 const { getPublicBaseUrl } = require('../utils/toneAudio');
 const { videoGenerationQueue } = require('../services/videoGenerationQueue');
 const {
@@ -3969,8 +3970,7 @@ router.post('/renderMissing', protect, checkTrial, videoAiWriteLimiter, async (r
 
     // Read-only check so the job does not start when the balance cannot cover what is missing.
     const unit = Number(CREDIT_COSTS[kind === 'images' ? 'video_scene_image' : 'video_scene_clip']) || 0;
-    const owner = await User.findById(userId).select('credits.balance').lean();
-    const balance = Number(owner?.credits?.balance ?? 0);
+    const balance = await walletBalance(userId); // the agency's shared pool for a client workspace
     if (unit > 0 && balance < unit) {
       return res.status(403).json({ success: false, creditsExhausted: true, message: `You need at least ${unit} Quarks to make the next ${kind === 'images' ? 'image' : 'clip'}. Add Quarks and try again.` });
     }

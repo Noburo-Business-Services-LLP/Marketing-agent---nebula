@@ -144,14 +144,16 @@ async function fail(doc, message) {
     { new: true }
   );
   if (claimed && claimed.quarks > 0) {
-    await User.updateOne({ _id: doc.user }, { $inc: { 'credits.balance': claimed.quarks, 'credits.totalUsed': -claimed.quarks } });
-    quarkBuckets.record({ user: doc.user, type: 'refund', quarks: claimed.quarks, action: 'studio_video_refund', ref: String(doc._id) });
+    // Back to the wallet that paid (recorded at charge time), never to a client record.
+    const back = await quarkBuckets.refundTo(doc.user, claimed.quarks, { action: 'studio_video_refund', ref: String(doc._id), payerId: claimed.payer });
+    if (!back.ok) console.error('[videos] could not return Quarks for', String(doc._id), '- no wallet to return them to');
   }
 }
 
 async function charge(userId, id) {
-  await quarkBuckets.settle(userId).catch(() => null);
+  await quarkBuckets.settleWallet(userId).catch(() => null);
   const r = await quarkBuckets.spend(userId, COST(), { action: 'studio_video', description: 'Video', ref: id });
+  if (r.success) await StudioVideo.updateOne({ _id: id }, { $set: { payer: r.payerId } }).catch(() => null);
   return r.success;
 }
 
@@ -226,7 +228,7 @@ router.post('/reference', protect, async (req, res) => {
     if (!allowed('reference', userId, 20)) return res.status(429).json({ success: false, message: 'Please wait a little before making more pictures.' });
     if (await busy(res, 'studio_reference')) return;
     const cost = QUARK_COSTS.studio_reference;
-    await quarkBuckets.settle(userId).catch(() => null);
+    await quarkBuckets.settleWallet(userId).catch(() => null);
     const paid = await quarkBuckets.spend(userId, cost, { action: 'studio_reference', description: kind === 'person' ? 'Person for a video' : 'Place for a video' });
     if (!paid.success) return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `This needs ${cost} Quarks. Please top up or choose a plan.` });
     const brand = await brandOf(userId);
@@ -235,8 +237,8 @@ router.post('/reference', protect, async (req, res) => {
       out = await generateOpenAIImage(sv.buildReferencePrompt({ kind, description: req.body && req.body.description, city: brand.location }), { aspectRatio: kind === 'person' ? '16:9' : '9:16', quality: 'medium' });
     } catch (e) { console.error('[videos] reference failed:', e.message); }
     if (!out || !out.success || !/^https:\/\//.test(String(out.imageUrl || ''))) {
-      await User.updateOne({ _id: userId }, { $inc: { 'credits.balance': cost, 'credits.totalUsed': -cost } });
-      quarkBuckets.record({ user: userId, type: 'refund', quarks: cost, action: 'studio_reference_refund' });
+      // Back to the wallet that was just charged (the agency pool for a client workspace).
+      await quarkBuckets.refundTo(userId, cost, { action: 'studio_reference_refund', payerId: paid.payerId });
       return res.status(502).json({ success: false, message: 'We could not make that picture. Your Quarks were returned. Please try again.' });
     }
     res.json({ success: true, url: out.imageUrl, kind, quarks: cost });

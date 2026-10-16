@@ -5,6 +5,7 @@ const { generateImageFromCustomPrompt, refineImageWithPrompt, localizeCampaignCo
 const { uploadBase64Image } = require('../services/imageUploader');
 const { deductCredits } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
+const { walletBalance } = require('../services/agency');
 const { composeImageToVideoWithAudio } = require('../services/mediaComposer');
 const {
   downloadAndInspectVideoFromUrl,
@@ -29,8 +30,9 @@ router.post('/regenerate-image', protect, async (req, res) => {
     const user = await User.findById(req.user.userId || req.user.id);
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
     await ensureCreditCycle(user);
-    if (user.credits.balance < 3) {
-      return res.status(403).json({ success: false, error: 'Insufficient Quarks', creditsRemaining: user.credits.balance, required: 3 });
+    const poolBalance = await walletBalance(user._id); // the agency's shared pool for a client workspace
+    if (poolBalance < 3) {
+      return res.status(403).json({ success: false, error: 'Insufficient Quarks', creditsRemaining: poolBalance, required: 3 });
     }
 
     const { originalImagePrompt, caption } = req.body;
@@ -264,11 +266,12 @@ router.post('/image-audio-to-video', protect, async (req, res) => {
     await ensureCreditCycle(user);
 
     // Check if user has sufficient credits (2 credits for video composition)
-    if (user.credits.balance < 2) {
+    const poolBalance = await walletBalance(user._id); // the agency's shared pool for a client workspace
+    if (poolBalance < 2) {
       return res.status(403).json({
         success: false,
         error: 'Insufficient Quarks for video composition',
-        creditsRemaining: user.credits.balance,
+        creditsRemaining: poolBalance,
         required: 2
       });
     }

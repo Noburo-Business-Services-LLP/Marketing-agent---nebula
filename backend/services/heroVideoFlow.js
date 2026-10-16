@@ -224,7 +224,9 @@ async function refundOnce(deps, jobId, userId, desc) {
   );
   if (!claimed) return false;
   try {
-    const res = await deps.refund(userId, ACTION, 1, desc);
+    // A client workspace's job recorded who paid at charge time; the refund goes to that same wallet.
+    const payerId = claimed.metadata && claimed.metadata.payerId;
+    const res = payerId ? await deps.refund(userId, ACTION, 1, desc, { payerId }) : await deps.refund(userId, ACTION, 1, desc);
     if (res && res.success === false) throw new Error(res.error || 'refund returned success:false');
     return true;
   } catch (err) {
@@ -304,12 +306,13 @@ async function startHeroGeneration(deps, { userId, body }) {
       createdAt: now,
       startedAt: now,
       payload,
-      metadata: { kind: 'hero', refunded: false }
+      // payerId is set only for an agency client (the agency paid), so a refund goes back to the agency pool.
+      metadata: { kind: 'hero', refunded: false, ...(dres.workspaceId ? { payerId: dres.payerId } : {}) }
     });
   } catch (err) {
     console.error('Hero job create failed:', err && err.message);
     // No job exists to hold the guard; this is the only refund on this path.
-    try { await deps.refund(userId, ACTION, 1, 'Refund: hero job not created'); } catch (e) { console.error('Hero refund failed:', e && e.message); }
+    try { await (dres.workspaceId ? deps.refund(userId, ACTION, 1, 'Refund: hero job not created', { payerId: dres.payerId }) : deps.refund(userId, ACTION, 1, 'Refund: hero job not created')); } catch (e) { console.error('Hero refund failed:', e && e.message); }
     return { status: 500, json: { success: false, message: 'Could not start video generation' } };
   }
 

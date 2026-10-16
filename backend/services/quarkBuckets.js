@@ -18,7 +18,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const TOPUP_VALID_DAYS = 60;
 // A renewal can land a little late (a retry after a failed charge), so the plan bucket outlives the paid month by this much.
 const PLAN_GRACE_DAYS = 3;
-const PAID_TIERS = ['starter', 'professional'];
+const PAID_TIERS = ['starter', 'professional', 'agency'];
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -76,20 +76,55 @@ function spendPipeline(cost, entry) {
   }];
 }
 
+/**
+ * Spend from the wallet that pays for `userId`: the user's own, or the agency's shared pool when the user is a
+ * client workspace. The agency must be able to pay (see CLIENT_PAYER_FILTER), checked in the same atomic update.
+ * The ledger row sits on the payer and names the client in `workspace`. Nothing is ever charged to the client record.
+ * The result also names who paid (`payerId`, `workspaceId`) so a later refund can go to the same wallet.
+ */
 async function spend(userId, cost, { action = 'spend', description = '', ref = '', units = 1 } = {}) {
   const amount = num(cost);
   if (amount <= 0) return { success: true, balance: null, spent: 0 };
+  const agencyRules = require('./agency');
+  const { payerId, workspaceId } = await agencyRules.resolvePayer(userId);
+  if (!payerId) return { success: false, balance: null, spent: 0 }; // never charge a record we cannot place
   const entry = { action, amount: -amount, description: description || action, createdAt: new Date() };
-  const doc = await User.findOneAndUpdate(
-    { _id: userId, 'credits.balance': { $gte: amount } },
-    spendPipeline(amount, entry),
-    { new: true }
-  );
+  const filter = { _id: workspaceId ? payerId : userId, 'credits.balance': { $gte: amount } };
+  if (workspaceId) Object.assign(filter, agencyRules.CLIENT_PAYER_FILTER);
+  const doc = await User.findOneAndUpdate(filter, spendPipeline(amount, entry), { new: true });
   if (!doc) return { success: false, balance: null, spent: 0 };
-  record({ user: userId, type: 'spend', quarks: -amount, balanceAfter: doc.credits.balance, action, ref });
+  record({ user: workspaceId ? payerId : userId, workspace: workspaceId || undefined, type: 'spend', quarks: -amount, balanceAfter: doc.credits.balance, action, ref });
   // What this cost us, for the daily ceiling and the staff screen. Never blocks the spend.
   try { require('./spendGuard').record(action, units); } catch (_) { /* cost tracking is best effort */ }
-  return { success: true, balance: doc.credits.balance, spent: amount, user: doc };
+  return { success: true, balance: doc.credits.balance, spent: amount, user: doc, payerId: workspaceId ? payerId : String(userId), workspaceId };
+}
+
+/**
+ * Give Quarks back to the wallet that was charged: `payerId` when the charge recorded one (so a refund still lands
+ * even if the client was removed or the plan changed since), otherwise whoever pays for `userId` now. Returns
+ * { ok, payerId } and never touches a client record. A client refund also leaves a ledger row naming the client.
+ */
+async function refundTo(userId, quarks, { action = 'refund', ref = '', payerId = '' } = {}) {
+  const amount = num(quarks);
+  if (amount <= 0) return { ok: false, payerId: null };
+  let target = userId;
+  let workspaceId = null;
+  if (payerId && String(payerId) !== String(userId)) { target = payerId; workspaceId = String(userId); }
+  else if (!payerId) {
+    const r = await require('./agency').resolvePayer(userId);
+    if (!r.payerId) return { ok: false, payerId: null };
+    if (r.workspaceId) { target = r.payerId; workspaceId = r.workspaceId; }
+  }
+  const out = await User.updateOne({ _id: target }, { $inc: { 'credits.balance': amount, 'credits.totalUsed': -amount } });
+  if (out && out.modifiedCount === 0) return { ok: false, payerId: null };
+  record({ user: target, workspace: workspaceId || undefined, type: 'refund', quarks: amount, action, ref: ref || undefined });
+  return { ok: true, payerId: String(target) };
+}
+
+/** `settle` for whoever pays for `userId`: a client's activity expires the agency's Quarks, not its own empty record. */
+async function settleWallet(userId, ...rest) {
+  const { payerId, workspaceId } = await require('./agency').resolvePayer(userId);
+  return settle(workspaceId && payerId ? payerId : userId, ...rest);
 }
 
 /** Expire what is due, and hold top-ups while no plan is active. Safe to call often. */
@@ -155,6 +190,6 @@ function topupGrantUpdate(quarks, { now = new Date() } = {}) {
 }
 
 module.exports = {
-  DAY, TOPUP_VALID_DAYS, PLAN_GRACE_DAYS, hasActivePlan, summarise, spend, spendPipeline, settle,
+  DAY, TOPUP_VALID_DAYS, PLAN_GRACE_DAYS, hasActivePlan, summarise, spend, spendPipeline, refundTo, settle, settleWallet,
   planGrantUpdate, topupGrantUpdate, record
 };

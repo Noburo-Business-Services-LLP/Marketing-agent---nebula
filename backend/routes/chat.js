@@ -9,6 +9,7 @@ const Influencer = require('../models/Influencer');
 const BrandAsset = require('../models/BrandAsset');
 const { generateChatResponse, generateChatSuggestions } = require('../services/geminiAI');
 const { checkTrial, deductCredits } = require('../middleware/trialGuard');
+const { walletBalance } = require('../services/agency');
 
 // Chat completion endpoint - uses Gemini AI with user context
 router.post('/message', protect, async (req, res) => {
@@ -32,7 +33,8 @@ router.post('/message', protect, async (req, res) => {
       }
 
       // Credits check only (no time-based expiry)
-      if (user && (user.credits?.balance ?? 0) < 0.5) {
+      // A client workspace is checked against its agency's shared pool.
+      if (user && (await walletBalance(userId)) < 0.5) {
         return res.status(403).json({ success: false, creditsExhausted: true, message: 'Insufficient Quarks for chat' });
       }
     }

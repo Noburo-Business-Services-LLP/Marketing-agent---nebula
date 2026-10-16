@@ -126,7 +126,8 @@ function createBlueprintService(depsIn) {
     );
     if (!claimed) return false;
     try {
-      const res = await deps.refund(String(doc.userId), ACTION, 1, 'Refund: Brand Growth Blueprint');
+      const payerId = claimed.charge && claimed.charge.payerId;
+      const res = payerId ? await deps.refund(String(doc.userId), ACTION, 1, 'Refund: Brand Growth Blueprint', { payerId }) : await deps.refund(String(doc.userId), ACTION, 1, 'Refund: Brand Growth Blueprint');
       if (res && res.success === false) throw new Error(res.error || 'refund returned success:false');
       return true;
     } catch (err) {
@@ -212,14 +213,14 @@ function createBlueprintService(depsIn) {
     }
     // The customer has paid. If recording that fails twice, refund directly: the document is still 'pending', which
     // refundOnce and the stale poll never touch, so no other path can refund it.
-    const markCharged = () => Blueprint.findOneAndUpdate({ blueprintId }, { $set: { 'charge.state': 'charged', heartbeatAt: at() } });
+    const markCharged = () => Blueprint.findOneAndUpdate({ blueprintId }, { $set: { 'charge.state': 'charged', heartbeatAt: at(), ...(paid.workspaceId ? { 'charge.payerId': paid.payerId } : {}) } });
     try { await markCharged(); } catch (first) {
       console.error('[blueprint] charge write failed, retrying:', first && first.message);
       try { await markCharged(); } catch (second) {
         console.error('[blueprint] charge write failed again, refunding:', second && second.message);
         let refunded = false;
         try {
-          const res = await deps.refund(String(userId), ACTION, 1, 'Refund: Brand Growth Blueprint');
+          const res = paid.workspaceId ? await deps.refund(String(userId), ACTION, 1, 'Refund: Brand Growth Blueprint', { payerId: paid.payerId }) : await deps.refund(String(userId), ACTION, 1, 'Refund: Brand Growth Blueprint');
           refunded = !(res && res.success === false);
         } catch (err) { console.error('[blueprint] direct refund failed:', err && err.message); }
         try {

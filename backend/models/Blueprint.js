@@ -32,7 +32,9 @@ const blueprintSchema = new mongoose.Schema(
     error: { message: { type: String } },
     charge: {
       state: { type: String, enum: ['none', 'pending', 'charged', 'refunded'], default: 'none' },
-      quarks: { type: Number }
+      quarks: { type: Number },
+      // Set only when an agency client's Blueprint was paid from the agency pool, so a refund goes to the same wallet.
+      payerId: { type: String }
     }
   },
   { timestamps: true }

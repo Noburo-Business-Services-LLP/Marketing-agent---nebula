@@ -51,6 +51,8 @@ const SOCIAL_CONNECT_REWARD = 5; // credits awarded for first-time social connec
  * Checks if platform was already connected before rewarding
  */
 async function rewardSocialConnect(user, platform) {
+  // A client workspace has no Quarks of its own (it spends from its agency's pool), so connecting earns nothing there.
+  if (user.agency && user.agency.ownerId) return false;
   const normalizedPlatform = platform.toLowerCase();
   const alreadyConnected = user.connectedSocials?.some(
     s => s.platform.toLowerCase() === normalizedPlatform ||

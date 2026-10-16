@@ -22,6 +22,8 @@ const studioVideoSchema = new mongoose.Schema({
   seconds: { type: Number, default: 10 },
   quarks: { type: Number, default: 0 },
   refunded: { type: Boolean, default: false },
+  // Whose Quarks paid for this video (the agency for a client workspace), so a refund goes back to the same wallet.
+  payer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   error: { type: String, default: '' },
   startedAt: { type: Date, default: Date.now },
   completedAt: { type: Date, default: null }

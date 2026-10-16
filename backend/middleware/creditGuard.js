@@ -12,6 +12,7 @@
  */
 
 const quarkBuckets = require('../services/quarkBuckets');
+const agencyRules = require('../services/agency');
 const User = require('../models/User');
 
 // There is no free grant: a new account starts at zero and gets Quarks with a plan or a top-up.
@@ -77,11 +78,14 @@ function checkCredits(requiredCredits) {
       // Ensure cycle is current and apply login bonus
       await ensureCreditCycle(user);
 
-      if (user.credits.balance < requiredCredits) {
+      // A client workspace spends from its agency's shared pool.
+      const balance = agencyRules.isWorkspace(user) ? await agencyRules.walletBalance(userId) : user.credits.balance;
+
+      if (balance < requiredCredits) {
         return res.status(403).json({
           success: false,
           message: 'Insufficient Quarks',
-          creditsRemaining: user.credits.balance,
+          creditsRemaining: balance,
           required: requiredCredits,
           cycleEnd: user.credits.cycleEnd
         });
@@ -89,7 +93,7 @@ function checkCredits(requiredCredits) {
 
       // Attach user and credits info to request
       req.creditUser = user;
-      req.creditsAvailable = user.credits.balance;
+      req.creditsAvailable = balance;
       next();
     } catch (error) {
       console.error('Credit check error:', error);
@@ -121,25 +125,28 @@ async function deductCredits(userId, amountOrAction, actionOrAmount, description
 
   // Ensure cycle is current, and take off anything that has run out of time
   await ensureCreditCycle(user);
-  await quarkBuckets.settle(userId).catch(() => null);
+  await quarkBuckets.settleWallet(userId).catch(() => null);
 
   // Callers have already checked the balance, so this takes what is there up to the amount (never below zero),
   // in one atomic step per try. Two jobs finishing together cannot lose each other's deduction.
   let spent = null;
   for (let attempt = 0; attempt < 3 && !spent; attempt += 1) {
-    const fresh = await User.findById(userId).select('credits.balance').lean();
-    const take = Math.min(amount, Math.max(0, Number(fresh?.credits?.balance) || 0));
+    // For a client this is the agency's pool, and 0 when the agency cannot pay.
+    const available = agencyRules.isWorkspace(user)
+      ? await agencyRules.walletBalance(userId)
+      : Math.max(0, Number((await User.findById(userId).select('credits.balance').lean())?.credits?.balance) || 0);
+    const take = Math.min(amount, available);
     if (take <= 0) break;
     const r = await quarkBuckets.spend(userId, take, { action });
     if (r.success) spent = r;
   }
-  const after = spent ? spent.user : await User.findById(userId);
+  const after = spent ? spent.user : await User.findById(agencyRules.isWorkspace(user) ? agencyRules.idOf(user.agency.ownerId) : userId);
   return {
     success: true,
-    balance: after.credits.balance,
-    creditsRemaining: after.credits.balance,
+    balance: after?.credits?.balance ?? 0,
+    creditsRemaining: after?.credits?.balance ?? 0, // a client whose agency is gone has no pool: 0
     creditsDeducted: spent ? spent.spent : 0,
-    totalUsed: after.credits.totalUsed
+    totalUsed: after?.credits?.totalUsed ?? 0
   };
 }
 
@@ -151,14 +158,16 @@ async function requireCredits(userId, amount) {
   const user = await User.findById(userId);
   if (!user) throw new Error('User not found');
   await ensureCreditCycle(user);
-  
-  if (user.credits.balance < amount) {
+
+  // A client workspace spends from its agency's shared pool.
+  const balance = agencyRules.isWorkspace(user) ? await agencyRules.walletBalance(userId) : user.credits.balance;
+  if (balance < amount) {
     const err = new Error('Insufficient Quarks');
-    err.creditsRemaining = user.credits.balance;
+    err.creditsRemaining = balance;
     err.required = amount;
     throw err;
   }
-  return user.credits.balance;
+  return balance;
 }
 
 module.exports = {

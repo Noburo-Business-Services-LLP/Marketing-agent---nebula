@@ -33,7 +33,7 @@ test('placeholder email is valid-looking and cannot receive mail', () => {
 });
 
 test('wallet: the balance of the payer, 0 when the payer is missing', async () => {
-  const User = { findById: (id) => ({ select: () => ({ lean: async () => ({ o1: { credits: { balance: 42 } }, w1: { agency: { ownerId: 'o1' } }, gone: { agency: { ownerId: 'none' } } })[id] || null }) }) };
+  const User = { findById: (id) => ({ select: () => ({ lean: async () => ({ o1: { plan: { tier: 'agency' }, credits: { balance: 42 } }, w1: { agency: { ownerId: 'o1' } }, gone: { agency: { ownerId: 'none' } } })[id] || null }) }) };
   assert.strictEqual(await a.walletBalance('w1', { User }), 42);
   assert.strictEqual(await a.walletBalance('o1', { User }), 42);
   assert.strictEqual(await a.walletBalance('gone', { User }), 0);
