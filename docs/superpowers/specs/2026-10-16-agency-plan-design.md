@@ -11,8 +11,8 @@ Success looks like this:
 - Every Quark spent is paid from the agency's one pool, and the agency can see how many posts and videos each client used.
 - Nothing about a client's brand, files or social accounts leaks into another client's.
 
-Said by the owner: shared pool; 5 clients included and extra clients at Rs 799 up to 25; agencies keep topping up; managed-service customers stay as they are; opened for self-service now.
-Assumed by me (to be confirmed): the numbers in "Plan and price", and that agencies invoice their own clients themselves.
+Said by the owner: shared pool; 5 clients included and extra clients up to 25; agencies keep topping up; managed-service customers stay as they are; opened for self-service now.
+Assumed by me (to be confirmed): the prices in "Plan and price", and that agencies invoice their own clients themselves.
 
 ## Out of scope for the first version
 
@@ -58,10 +58,26 @@ Plan and add-on checks (`resolveTier`, `canUse`, add-ons) read the agency accoun
 | | Price (ex-GST) | Includes |
 |---|---|---|
 | Agency | Rs 6,999 a month | 5 clients, 6,000 shared Quarks, all three feature add-ons |
-| Extra client | Rs 799 a month each, up to 25 clients in total | 500 more Quarks each, one more client slot |
+| Extra client | Rs 1,499 a month each, up to 25 clients in total | 500 more Quarks each, one more client slot |
 | Top-up | Same packs as everyone | Added to the agency's pool |
 
-Roughly 545 posts or 37 videos a month in the pool at 5 clients. The price per Quark is about Rs 1.17 against Growth at Rs 1.00 and top-ups at Rs 2.10. Margin is about 40% if cost is about Rs 0.70 a Quark, which comes from the 30% Growth margin already accepted. This must be re-checked against real costs before launch, see "Open items".
+Roughly 545 posts or 37 videos a month in the pool at 5 clients. The price per Quark is about Rs 1.17 against Growth at Rs 1.00 and top-ups at Rs 2.10.
+
+**What it costs us, using the Ayrshare Business plan** (USD 599 a month flat for the first 30 social profiles, then USD 8.99 for each profile from 31 to 100; a profile is billed only while it exists; Rs 88 to the dollar; owner's figures on 2026-10-16: 7 profiles in use):
+- Profiles 8 to 30 add nothing to the Ayrshare bill, because the flat fee is already paid. Five clients cost nothing extra in Ayrshare until the platform passes 30 profiles.
+- From the 31st profile each costs about Rs 790 a month.
+- Quarks cost about Rs 0.70 each (derived from the accepted Growth margin, to be re-measured). Five clients using 60% of the pool cost about Rs 2,520; using all of it, Rs 4,200.
+
+| Agency of 5 clients | Margin on Rs 6,999 |
+|---|---|
+| Profiles inside the 30 already paid for, pool 60% used | about 64% |
+| Profiles inside the 30, pool fully used | about 40% |
+| Profiles past 30, pool 60% used | about 7% |
+| Profiles past 30, pool fully used | a loss |
+
+An extra client at Rs 1,499 earns about 76% inside the 30 profiles and about 24% past them (Ayrshare Rs 790 plus 500 Quarks Rs 350). This is why it is priced above Rs 799.
+
+**Watch and reprice rule.** The cost jumps at 30 profiles. The system counts connected profiles and raises an owner alert at 25. When the platform nears 30, the agency base price for new sign-ups moves to Rs 9,999 (about 25% margin at full use even with profiles past 30). The price lives in config only, so this is one edit. Existing agencies keep the price they signed up at until the owner decides otherwise. The same count applies to the existing Rs 1,000 Publish add-on, whose margin shrinks the same way past 30.
 
 Billing reuses what exists. `agency` becomes a plan id with its Razorpay plan; "extra client" is an add-on with a quantity, built on the existing add-on subscriptions. The numbers are config in `apiCosts.js` only, never written anywhere else. Customers see posts and videos, never Quarks, in line with the other plans.
 
@@ -80,6 +96,7 @@ Cancelling the agency plan: clients keep their data, nothing can be made, and th
 
 ### Limits and abuse
 
+- A staff-only count of connected Ayrshare profiles (the Money page already holds the Ayrshare tools) with the alert at 25.
 - The client limit is enforced when a client is created, in one atomic update, so two requests at once cannot go over it.
 - Quarks are shared, so one client cannot starve the platform; the existing per-day spend cap and kill switches apply to the agency account's total.
 - A workspace cannot be created without an active agency plan.
@@ -100,7 +117,7 @@ Cancelling the agency plan: clients keep their data, nothing can be made, and th
 
 ## Open items
 
-1. **Connected social accounts cost per client.** Each client's connected social accounts are a separate Ayrshare profile, and Ayrshare charges by profile. At 5 to 25 profiles per agency that may change the margin. Check the Ayrshare price per profile before fixing Rs 6,999 and Rs 799.
+1. **Profile count and the 30-profile line.** Built into this design (the alert at 25 and the repricing rule). The owner confirms the Rs 9,999 figure when the time comes. Ask Ayrshare whether a profile that is created and removed within the month is billed in full.
 2. **Real cost per Quark.** Measure instead of using the Growth-derived figure.
 3. **GST on agency invoices.** Same as other plans, to be confirmed with Subashni together with the SAC code.
 4. **Terms and Privacy.** An agency holds its clients' data, so the Terms need a short clause that the agency has its clients' permission, and the Privacy Policy should say the agency is the one who decides about that data. Lawyer review.
