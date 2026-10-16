@@ -5,7 +5,7 @@
  * Each month's reminder goes once: the billing date it was sent for is saved on the account before the email is sent.
  */
 const bp = require('./billingPlans');
-const { PLANS, ADDONS, chargePaise, outputsFor } = require('../config/apiCosts');
+const { PLANS, ADDONS, AGENCY, chargePaise, outputsFor } = require('../config/apiCosts');
 const { PLAN_PRESENTATION } = require('../config/plans');
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -21,13 +21,14 @@ function planKeyOf(user) {
   return PLAN_PRESENTATION[key] && PLANS[key] ? key : null;
 }
 
-/** What the next charge will be, in paise including GST: the plan and every add-on that is active. */
+/** What the next charge will be, in paise including GST: the plan, every add-on and every extra client slot that is active. */
 function nextChargePaise(user) {
   const key = planKeyOf(user);
   if (!key) return 0;
   let total = chargePaise(PLANS[key].inr);
   for (const s of ((user.plan && user.plan.subscriptions) || [])) {
     if (s && s.kind === 'addon' && s.active && ADDONS[s.key]) total += chargePaise(ADDONS[s.key].inr);
+    if (s && s.kind === 'slot' && s.active && bp.isSlotKey(s.key)) total += chargePaise(AGENCY.slot.inr);
   }
   return total;
 }
@@ -96,7 +97,7 @@ async function runRenewalRemindersOnce({ now = Date.now(), deps = {} } = {}) {
     'subscription.status': 'active',
     'subscription.cancelAtPeriodEnd': { $ne: true },
     'subscription.nextBillingAt': { $gte: new Date(now + FROM_DAYS * DAY), $lte: new Date(now + TO_DAYS * DAY) },
-    'plan.tier': { $in: ['starter', 'professional'] }
+    'plan.tier': { $in: ['starter', 'professional', 'agency'] }
   }).select('email firstName isActive subscription plan').limit(500).lean();
   let sent = 0; let skipped = 0;
   for (const user of candidates) {

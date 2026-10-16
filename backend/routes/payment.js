@@ -1,6 +1,6 @@
 /**
- * Payment Routes: Razorpay billing for Starter and Professional plans, add-on
- * subscriptions and Quark top-up packs.
+ * Payment Routes: Razorpay billing for the Starter, Professional and Agency plans, add-on
+ * subscriptions, Agency extra client slots and Quark top-up packs.
  *
  * Every price is GST-exclusive in config/apiCosts.js; 18 percent GST is added at
  * checkout (integer paise). Quarks are granted from that config only: never from
@@ -8,9 +8,10 @@
  * atomic update that skips a Razorpay payment id already stored on the user.
  *
  *   GET  /plans                      plans, top-up packs and add-ons with GST
- *   POST /create-subscription        { planId: 'starter' | 'professional' }
+ *   POST /create-subscription        { planId: 'starter' | 'professional' | 'agency' }
  *   POST /create-addon-subscription  { addon: 'publish' | 'competitors' | 'inbox' | 'bundle' }
- *   POST /verify-subscription        checkout signature, then grant (plan or add-on)
+ *   POST /create-slot-subscription   (no body) one extra client slot, Agency accounts only
+ *   POST /verify-subscription        checkout signature, then grant (plan, add-on or client slot)
  *   POST /create-order               { packInr } one of the top-up pack prices
  *   POST /verify                     checkout signature, then grant the pack's Quarks
  *   POST /webhook                    subscription.charged / halted / cancelled / completed
@@ -30,7 +31,8 @@ function invoiceBillingOf(user) {
   return { gstin: b.gstin || '', legalName: b.legalName || '', address: b.address || '', pin: b.pin || '', stateCode: b.stateCode || '', stateName: st ? st.name : '' };
 }
 const { resolveTier, addonsOf } = require('../config/entitlements');
-const { chargePaise } = require('../config/apiCosts');
+const { chargePaise, AGENCY } = require('../config/apiCosts');
+const agencyRules = require('../services/agency');
 
 const PLAN_CURRENCY = 'INR';
 const ENDING_EVENTS = ['subscription.cancelled', 'subscription.halted', 'subscription.completed'];
@@ -52,6 +54,9 @@ function createPaymentRouter(deps = {}) {
   const Coupon = deps.Coupon || require('../models/Coupon');
   const createInvoice = deps.createInvoice || require('../services/zohoBooks').createInvoice;
   const env = () => deps.env || process.env;
+  // Tells the owner about a payment that needs a person (best effort, never throws).
+  const alert = deps.alert || ((category, detail) => { try { require('../services/opsAlerts').recordFailure(category, detail); } catch (_) { /* alerting never stops billing */ } });
+  const syncWorkspacePlans = deps.syncWorkspacePlans || ((args) => require('../services/agencyWorkspaces').syncWorkspacePlans(args));
   const sendWelcome = deps.sendWelcome || require('../services/welcomeEmail').sendSubscriberWelcome;
   let defaultRazorpay = null;
   const rz = () => {
@@ -61,6 +66,12 @@ function createPaymentRouter(deps = {}) {
       defaultRazorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
     }
     return defaultRazorpay;
+  };
+  // A client workspace never starts billing: money and plans stay with the agency account.
+  const refuseWorkspace = (user, res) => {
+    if (!agencyRules.isWorkspace(user)) return false;
+    res.status(403).json({ success: false, message: 'Plans and payments are managed from the agency account.' });
+    return true;
   };
   const userIdOf = (req) => req.user?.userId || req.user?.id || req.user?._id;
   const prefillOf = (user) => ({
@@ -91,13 +102,13 @@ function createPaymentRouter(deps = {}) {
   // entity must agree with it (same Razorpay plan, same owner) or nothing is granted.
   function recordMatches(user, record, entity) {
     if (!record || !entity) return false;
-    if (record.kind === 'plan' ? !bp.isPlanId(record.key) : record.kind === 'addon' ? !bp.isAddonId(record.key) : true) return false;
+    if (record.kind === 'plan' ? !bp.isPlanId(record.key) : record.kind === 'addon' ? !bp.isAddonId(record.key) : record.kind === 'slot' ? !bp.isSlotKey(record.key) : true) return false;
     if (!record.razorpayPlanId || entity.plan_id !== record.razorpayPlanId) return false;
     if (String(entity.notes?.userId || '') !== String(user._id)) return false;
     return true;
   }
 
-  // When a plan ends, its add-ons must stop billing too (best effort per subscription).
+  // When a plan ends, its add-ons and extra client slots must stop billing too (best effort per subscription).
   async function cancelAddonSubscriptions(user) {
     const addons = storedSubscriptions(user).filter((s) => s.kind === 'addon' && s.active);
     for (const a of addons) {
@@ -105,24 +116,101 @@ function createPaymentRouter(deps = {}) {
       catch (e) { console.warn(`Could not cancel add-on subscription ${a.subscriptionId}:`, e.message); }
     }
     await User.updateOne({ _id: user._id }, { $set: { 'plan.subscriptions.$[addon].active': false } }, { arrayFilters: [{ 'addon.kind': 'addon' }] });
+    for (const slot of storedSubscriptions(user).filter((s) => s.kind === 'slot' && s.active)) {
+      try { await rz().subscriptions.cancel(slot.subscriptionId, 0); }
+      catch (e) {
+        console.warn(`Could not cancel slot subscription ${slot.subscriptionId}:`, e.message);
+        alert('payment', `could not stop extra client subscription ${slot.subscriptionId} after the Agency plan ended: cancel it in Razorpay`);
+      }
+      await endSlot(user._id, slot);
+    }
   }
 
+  // Ends one slot subscription: lowers the limit by one, once, and only if it was active.
+  async function endSlot(userId, record) {
+    const built = bp.buildEndUpdate(null, record, 'subscription.cancelled');
+    const doc = await User.findOneAndUpdate({ _id: userId, ...built.filter }, built.update, { new: true, arrayFilters: built.arrayFilters });
+    // The limit can never go below zero extra slots, whatever the stored data says.
+    await User.updateOne({ _id: userId, 'agency.extraSlots': { $lt: 0 } }, { $set: { 'agency.extraSlots': 0 } });
+    return doc;
+  }
+
+  // After the agency plan or a client slot changes: copy the plan to every client and freeze (never delete) the ones above the limit.
+  async function syncAgency(userId) {
+    try {
+      const owner = await User.findById(userId);
+      if (owner) await syncWorkspacePlans({ owner, models: { User } });
+    } catch (e) {
+      console.warn('Client workspace sync failed (non-blocking):', e.message);
+      alert('payment', `client sync after a billing change failed: ${e.message}`);
+    }
+  }
+  const touchesAgency = (record) => record.kind === 'slot' || (record.kind === 'plan' && record.key === 'agency');
+
+  // A slot payment is applied only to an agency account (never a client workspace), and a first payment only below the
+  // most clients. The same conditions go into the one atomic update, so two payments at once cannot get past them.
+  const MAX_EXTRA = bp.MAX_EXTRA_SLOTS;
+  function slotRefusal(user, firstCycle) {
+    if (!agencyRules.isAgency(user)) return 'no_agency_plan';
+    if (firstCycle && !bp.canBuySlot(user).ok) return 'at_limit';
+    return null;
+  }
+  function slotGate(record, firstCycle) {
+    return {
+      'plan.tier': 'agency', 'agency.ownerId': null,
+      'plan.subscriptions': { $elemMatch: { subscriptionId: record.subscriptionId, active: firstCycle ? { $ne: true } : true } },
+      ...(firstCycle ? { $or: [{ 'agency.extraSlots': null }, { 'agency.extraSlots': { $lt: MAX_EXTRA } }] } : {})
+    };
+  }
+  // Money was taken that we cannot honour: grant nothing, tell the owner, and stop the subscription charging again.
+  async function refuseSlot(user, record, paymentId, reason) {
+    alert('payment', `extra client payment ${paymentId} for account ${user._id} was not applied (${reason}): refund it in Razorpay`);
+    try { await rz().subscriptions.cancel(record.subscriptionId, 0); }
+    catch (e) { console.warn(`Could not cancel slot subscription ${record.subscriptionId}:`, e.message); }
+    return { applied: false, reason };
+  }
+  const SLOT_REFUSALS = {
+    no_agency_plan: 'We received your payment, but your Agency plan is not active, so the extra client could not be added. Our team has been told and will contact you about a refund.',
+    at_limit: `We received your payment, but your account already has the most clients (${AGENCY.maxClients}), so the extra client could not be added. Our team has been told and will contact you about a refund.`,
+    slot_conflict: 'We received your payment, but could not add the extra client just now. Our team has been told and will contact you.'
+  };
+  const isStrictAmount = (record) => record.kind === 'slot' || (record.kind === 'plan' && record.key === 'agency');
+
   // One payment, applied once. Returns { applied:false } on a replay.
-  async function applyCharge(user, record, { paymentId, paidPaise, subscription }) {
+  async function applyCharge(user, record, { paymentId, paidPaise, subscription }, attempt = 0) {
     const alreadyApplied = (user.payments || []).some((p) => p && p.razorpayPaymentId === paymentId);
+    let firstCycle = true; let gate = {};
+    if (record.kind === 'slot' && !alreadyApplied) {
+      firstCycle = record.active !== true;
+      const refusal = slotRefusal(user, firstCycle);
+      if (refusal) return refuseSlot(user, record, paymentId, refusal);
+      gate = slotGate(record, firstCycle);
+    }
     if (!alreadyApplied && record.kind === 'plan') {
       // A new month starts: last month's allowance ends now, so the new one replaces it instead of piling on.
       try { await quarkBuckets.settle(user._id, new Date(), { forcePlan: true }); } catch (e) { console.warn('Quark expiry before renewal failed:', e.message); }
     }
     const held = !alreadyApplied && record.kind === 'plan' ? Math.max(0, Number(user.credits?.topupHeld) || 0) : 0;
-    const built = bp.buildChargeUpdate(record, { paymentId, paidPaise, subscription, heldToRelease: record.kind === 'plan' ? held : 0 });
+    const built = bp.buildChargeUpdate(record, { paymentId, paidPaise, subscription, heldToRelease: record.kind === 'plan' ? held : 0, firstCycle });
     if (!built) return { applied: false, reason: 'unknown_item' };
     const opts = { new: true, ...(built.arrayFilters ? { arrayFilters: built.arrayFilters } : {}) };
     const doc = await User.findOneAndUpdate(
-      { _id: user._id, 'payments.razorpayPaymentId': { $ne: paymentId } },
+      { _id: user._id, 'payments.razorpayPaymentId': { $ne: paymentId }, ...gate },
       built.update, opts
     );
-    if (!doc) return { applied: false, reason: 'already_processed' };
+    if (!doc) {
+      if (record.kind === 'slot' && !alreadyApplied) {
+        // Either a replay, or the account changed between our read and the update (for example another payment
+        // activated this slot first). Read again once and decide with the current record.
+        const fresh = await User.findById(user._id);
+        const freshRecord = fresh && findRecord(fresh, record.subscriptionId);
+        const replay = !fresh || (fresh.payments || []).some((p) => p && p.razorpayPaymentId === paymentId);
+        if (replay || !freshRecord) return { applied: false, reason: 'already_processed' };
+        if (attempt < 1) return applyCharge(fresh, freshRecord, { paymentId, paidPaise, subscription }, attempt + 1);
+        return refuseSlot(user, record, paymentId, 'slot_conflict');
+      }
+      return { applied: false, reason: 'already_processed' };
+    }
     try {
       const out = await createInvoice({
         email: user.email, firstName: user.firstName, lastName: user.lastName || '',
@@ -139,6 +227,7 @@ function createPaymentRouter(deps = {}) {
       console.warn('Invoice creation failed (non-blocking):', e.message);
     }
     await maybeSendWelcome(user, record, built.quarks);
+    if (touchesAgency(record)) await syncAgency(user._id);
     return { applied: true, quarks: built.quarks, balance: doc.credits?.balance, doc };
   }
 
@@ -146,7 +235,7 @@ function createPaymentRouter(deps = {}) {
   // Claimed atomically, so a replay or a renewal never sends it again. Never throws.
   async function maybeSendWelcome(user, record, quarks) {
     try {
-      if (record.kind !== 'plan' || !['starter', 'professional'].includes(record.key)) return;
+      if (record.kind !== 'plan' || !['starter', 'professional', 'agency'].includes(record.key)) return;
       const claimed = await User.findOneAndUpdate(
         { _id: user._id, 'plan.welcomeEmailSentAt': null },
         { $set: { 'plan.welcomeEmailSentAt': new Date() } },
@@ -214,6 +303,7 @@ function createPaymentRouter(deps = {}) {
       const userId = userIdOf(req);
       const user = await User.findById(userId);
       if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      if (refuseWorkspace(user, res)) return;
 
       if (hasActivePlanSubscription(user)) {
         return res.status(400).json({ success: false, message: 'You already have an active subscription' });
@@ -226,7 +316,7 @@ function createPaymentRouter(deps = {}) {
       const { planId, couponCode } = req.body || {};
       const quote = bp.planQuote(planId);
       if (!quote) {
-        return res.status(400).json({ success: false, message: 'Please choose the Starter or Growth plan.' });
+        return res.status(400).json({ success: false, message: 'Please choose the Starter, Growth or Agency plan.' });
       }
 
       // Coupons only record discount metadata; the plan price is unchanged.
@@ -277,6 +367,7 @@ function createPaymentRouter(deps = {}) {
       const userId = userIdOf(req);
       const user = await User.findById(userId);
       if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      if (refuseWorkspace(user, res)) return;
 
       const { addon } = req.body || {};
       const check = bp.canBuyAddon(user, addon);
@@ -310,8 +401,50 @@ function createPaymentRouter(deps = {}) {
   });
 
   /**
+   * POST /api/payment/create-slot-subscription   (no body)
+   * One extra client slot for an Agency account: its own monthly subscription at the configured price plus GST.
+   * Only an agency account on the Agency plan, and only while below the most clients.
+   */
+  router.post('/create-slot-subscription', protect, payLimiter, async (req, res) => {
+    try {
+      const userId = userIdOf(req);
+      const user = await User.findById(userId);
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      if (refuseWorkspace(user, res)) return;
+
+      const check = bp.canBuySlot(user);
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+      const quote = bp.slotQuote();
+
+      const razorpayPlanId = await getOrCreateRazorpayPlan('slot', bp.SLOT_KEY);
+      const subscription = await rz().subscriptions.create({
+        plan_id: razorpayPlanId,
+        customer_notify: 1,
+        total_count: 120,
+        notes: { userId: userId.toString(), email: user.email, slot: bp.SLOT_KEY }
+      });
+      await User.updateOne({ _id: user._id }, {
+        $push: { 'plan.subscriptions': { subscriptionId: subscription.id, kind: 'slot', key: bp.SLOT_KEY, razorpayPlanId, active: false, createdAt: new Date() } }
+      });
+
+      res.json({
+        success: true,
+        subscription_id: subscription.id,
+        key: env().RAZORPAY_KEY_ID,
+        amount: quote.chargePaise,
+        gstPaise: quote.gstPaise,
+        slot: { id: bp.SLOT_KEY, quarks: quote.quarks },
+        prefill: prefillOf(user)
+      });
+    } catch (error) {
+      console.error('Create slot subscription error:', error);
+      res.status(500).json({ success: false, message: 'Failed to create the extra client subscription' });
+    }
+  });
+
+  /**
    * POST /api/payment/verify-subscription
-   * Verifies the first payment of a plan or add-on subscription, then grants it.
+   * Verifies the first payment of a plan, add-on or client slot subscription, then grants it.
    */
   router.post('/verify-subscription', protect, payLimiter, async (req, res) => {
     try {
@@ -335,6 +468,9 @@ function createPaymentRouter(deps = {}) {
 
       const spec = bp.invoiceSpec(record.kind, record.key);
       const result = await applyCharge(user, record, { paymentId: razorpay_payment_id, paidPaise: spec.totalPaise, subscription: rzpSub });
+      if (!result.applied && SLOT_REFUSALS[result.reason]) {
+        return res.status(409).json({ success: false, message: SLOT_REFUSALS[result.reason] });
+      }
       if (result.applied && record.kind === 'plan' && rzpSub.notes?.couponCode) {
         await Coupon.findOneAndUpdate(
           { code: rzpSub.notes.couponCode },
@@ -344,10 +480,11 @@ function createPaymentRouter(deps = {}) {
       res.json({
         success: true,
         alreadyProcessed: !result.applied,
-        message: record.kind === 'plan' ? 'Your plan is active.' : 'Your add-on is active.',
+        message: record.kind === 'plan' ? 'Your plan is active.' : record.kind === 'slot' ? 'Your extra client is added.' : 'Your add-on is active.',
         kind: record.kind, key: record.key,
         quarksGranted: result.applied ? result.quarks : 0,
-        balance: result.applied ? result.balance : user.credits?.balance
+        balance: result.applied ? result.balance : user.credits?.balance,
+        ...(touchesAgency(record) ? { clientLimit: agencyRules.clientLimitOf(result.applied ? result.doc : user) } : {})
       });
     } catch (error) {
       console.error('Verify subscription error:', error);
@@ -390,12 +527,22 @@ function createPaymentRouter(deps = {}) {
       if (eventName === 'subscription.charged') {
         if (!payment?.id) return res.json({ success: true });
         const spec = bp.invoiceSpec(record.kind, record.key);
+        // The Agency plan and client slots only accept exactly the configured price plus GST. A different amount
+        // (a wrongly configured Razorpay plan, for example) grants nothing and is reported.
+        if (isStrictAmount(record) && payment.amount !== spec.totalPaise) {
+          console.warn(`Webhook payment ${payment.id} for ${subscription.id} has an unexpected amount: ignored`);
+          alert('payment', `payment ${payment.id} for ${record.kind} ${record.key} had an unexpected amount (${payment.amount} paise, expected ${spec.totalPaise}): nothing was granted`);
+          return res.json({ success: true });
+        }
         const paidPaise = Number.isFinite(payment.amount) ? payment.amount : spec.totalPaise;
         await applyCharge(user, record, { paymentId: payment.id, paidPaise, subscription });
       } else if (ENDING_EVENTS.includes(eventName)) {
         const built = bp.buildEndUpdate(user, record, eventName);
-        await User.findOneAndUpdate({ _id: user._id }, built.update, { new: true, arrayFilters: built.arrayFilters });
+        await User.findOneAndUpdate({ _id: user._id, ...(built.filter || {}) }, built.update, { new: true, arrayFilters: built.arrayFilters });
         if (built.endsPlan) await cancelAddonSubscriptions(user);
+        if (built.endsSlot) await User.updateOne({ _id: user._id, 'agency.extraSlots': { $lt: 0 } }, { $set: { 'agency.extraSlots': 0 } });
+        // The plan or a slot ended: the client limit changed, so clients above it are frozen (never deleted).
+        if (touchesAgency(record) && (built.endsSlot || built.endsPlan)) await syncAgency(user._id);
       }
 
       res.json({ success: true });
@@ -420,6 +567,7 @@ function createPaymentRouter(deps = {}) {
       const userId = userIdOf(req);
       const user = await User.findById(userId);
       if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      if (refuseWorkspace(user, res)) return;
       // Top-ups sit on top of a plan: bought without one they would only be held.
       if (resolveTier(user) === 'free') {
         return res.status(403).json({ success: false, upgradeRequired: true, reason: 'upgrade', message: 'Please choose a plan first. Quarks can be topped up once a plan is active.' });
@@ -590,7 +738,7 @@ function createPaymentRouter(deps = {}) {
       if (user.subscription && user.subscription.cancelAtPeriodEnd) {
         return res.json({ success: true, alreadyCancelling: true, endsAt, message: 'Your plan is already set to end. You can keep using it until then.' });
       }
-      const addonIds = storedSubscriptions(user).filter((s) => s.kind === 'addon' && s.active).map((s) => s.subscriptionId);
+      const addonIds = storedSubscriptions(user).filter((s) => (s.kind === 'addon' || s.kind === 'slot') && s.active).map((s) => s.subscriptionId);
       // "Already cancelled" counts as done, so a repeated press or an earlier partial attempt does not fail.
       const alreadyDone = (e) => /already|cancelled|canceled|completed|not cancel/i.test(String((e && (e.error && e.error.description || e.message)) || ''));
       let planCancelled = 0;

@@ -30,11 +30,16 @@ const ADDON_ENV_VARS = {
   bundle: 'RAZORPAY_PLAN_ID_ADDON_BUNDLE'
 };
 
+// The extra client slot (Agency plan) is its own monthly subscription with its own Razorpay plan.
+const SLOT_ENV_VAR = 'RAZORPAY_PLAN_ID_SLOT';
+
 // Names that appear on invoices (Zoho Books). GST is its own 18 percent line.
 const INVOICE_ITEMS = {
   plan: 'Nebulaa subscription',
+  agency: 'Nebulaa Agency subscription',
   addon: 'Nebulaa add-on',
+  slot: 'Nebulaa extra client',
   topup: 'Nebulaa Quarks'
 };
 
-module.exports = { PLAN_PRESENTATION, ADDON_ENV_VARS, INVOICE_ITEMS };
+module.exports = { PLAN_PRESENTATION, ADDON_ENV_VARS, SLOT_ENV_VAR, INVOICE_ITEMS };

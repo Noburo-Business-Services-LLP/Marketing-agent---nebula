@@ -5,9 +5,10 @@
  */
 const crypto = require('crypto');
 const { PLANS, TOPUP_PACKS, ADDONS, AGENCY, GST_RATE, gstPaise, chargePaise, outputsFor } = require('../config/apiCosts');
-const { PLAN_PRESENTATION, ADDON_ENV_VARS, INVOICE_ITEMS } = require('../config/plans');
+const { PLAN_PRESENTATION, ADDON_ENV_VARS, SLOT_ENV_VAR, INVOICE_ITEMS } = require('../config/plans');
 const { resolveTier, addonsOf } = require('../config/entitlements');
 const buckets = require('./quarkBuckets');
+const agencyRules = require('./agency');
 
 const GST_PERCENT = Math.round(GST_RATE * 100);
 const PLAN_IDS = Object.keys(PLAN_PRESENTATION);
@@ -16,6 +17,11 @@ const fmt = (n) => n.toLocaleString('en-IN');
 
 function isPlanId(id) { return typeof id === 'string' && PLAN_IDS.includes(id); }
 function isAddonId(id) { return typeof id === 'string' && ADDON_IDS.includes(id); }
+// The extra client slot has one kind of item only.
+const SLOT_KEY = 'client';
+function isSlotKey(key) { return key === SLOT_KEY; }
+// The most extra slots one agency can hold: the total client limit less the clients the plan includes.
+const MAX_EXTRA_SLOTS = AGENCY.maxClients - AGENCY.includedClients;
 
 function planFeatures(id) {
   const o = outputsFor(PLANS[id].quarks);
@@ -39,6 +45,10 @@ function addonQuote(id) {
   return { id, ...priceBlock(ADDONS[id].inr) };
 }
 
+function slotQuote() {
+  return { id: SLOT_KEY, ...priceBlock(AGENCY.slot.inr), quarks: AGENCY.slot.quarks };
+}
+
 function planCatalogue() {
   return {
     plans: PLAN_IDS.map((id) => ({
@@ -50,7 +60,8 @@ function planCatalogue() {
       id, label: ADDONS[id].label, ...priceBlock(ADDONS[id].inr),
       requires: [...(ADDONS[id].requires || [])], includes: [...(ADDONS[id].includes || [])]
     })),
-    agency: { includedClients: AGENCY.includedClients, maxClients: AGENCY.maxClients, slotInr: AGENCY.slot.inr, slotQuarks: AGENCY.slot.quarks }
+    agency: { includedClients: AGENCY.includedClients, maxClients: AGENCY.maxClients, slotInr: AGENCY.slot.inr, slotQuarks: AGENCY.slot.quarks },
+    slot: slotQuote()
   };
 }
 
@@ -83,35 +94,52 @@ function canBuyAddon(user, addon) {
   return { ok: true, message: '' };
 }
 
+// Only an agency account (never a client workspace) may buy a client slot, and never beyond the most clients.
+function canBuySlot(user) {
+  if (!agencyRules.isAgency(user)) return { ok: false, message: 'Client slots are part of the Agency plan.' };
+  if (agencyRules.clientLimitOf(user) >= AGENCY.maxClients) {
+    return { ok: false, message: `You are at the most clients one agency account can have (${AGENCY.maxClients}). Contact us for a larger set-up.` };
+  }
+  return { ok: true, message: '' };
+}
+
 // Invoice line: item name, the ex-GST amount, and GST as its own 18 percent line.
 function invoiceSpec(kind, key) {
   let inr; let description;
-  if (kind === 'plan' && isPlanId(key)) { inr = PLANS[key].inr; description = `${PLAN_PRESENTATION[key].name} plan, one month, ${fmt(PLANS[key].quarks)} Quarks`; }
+  let itemName = INVOICE_ITEMS[kind];
+  if (kind === 'plan' && isPlanId(key)) {
+    inr = PLANS[key].inr; description = `${PLAN_PRESENTATION[key].name} plan, one month, ${fmt(PLANS[key].quarks)} Quarks`;
+    if (INVOICE_ITEMS[key]) itemName = INVOICE_ITEMS[key];
+  }
   else if (kind === 'addon' && isAddonId(key)) { inr = ADDONS[key].inr; description = `${ADDONS[key].label}, one month`; }
+  else if (kind === 'slot' && isSlotKey(key)) { inr = AGENCY.slot.inr; description = 'Extra client brand, one month'; }
   else if (kind === 'topup') {
     const pack = findTopupPack(key);
     if (!pack) return null;
     inr = pack.inr; description = `${fmt(pack.quarks)} Quarks`;
   } else return null;
   const gst = gstPaise(inr);
-  return { itemName: INVOICE_ITEMS[kind], description, amountInr: inr, gstPercent: GST_PERCENT, gstPaise: gst, totalPaise: chargePaise(inr) };
+  return { itemName, description, amountInr: inr, gstPercent: GST_PERCENT, gstPaise: gst, totalPaise: chargePaise(inr) };
 }
 
 function razorpayPlanBody(kind, key) {
   const isPlan = kind === 'plan';
-  const quote = isPlan ? planQuote(key) : addonQuote(key);
+  const isSlot = kind === 'slot';
+  const quote = isPlan ? planQuote(key) : isSlot ? (isSlotKey(key) ? slotQuote() : null) : addonQuote(key);
   if (!quote) return null;
+  const name = isPlan ? (INVOICE_ITEMS[key] || INVOICE_ITEMS.plan) : isSlot ? INVOICE_ITEMS.slot : INVOICE_ITEMS.addon;
+  const label = isPlan ? `${PLAN_PRESENTATION[key].name}` : isSlot ? 'Extra client brand' : ADDONS[key].label;
   return {
     period: 'monthly', interval: 1,
-    item: {
-      name: isPlan ? INVOICE_ITEMS.plan : INVOICE_ITEMS.addon,
-      amount: quote.chargePaise, currency: 'INR',
-      description: `${isPlan ? PLAN_PRESENTATION[key].name : ADDONS[key].label}, monthly, including ${GST_PERCENT}% GST`
-    },
+    item: { name, amount: quote.chargePaise, currency: 'INR', description: `${label}, monthly, including ${GST_PERCENT}% GST` },
     notes: { product: 'nebulaa', kind, key }
   };
 }
-function envVarFor(kind, key) { return kind === 'plan' ? PLAN_PRESENTATION[key]?.envVar : ADDON_ENV_VARS[key]; }
+function envVarFor(kind, key) {
+  if (kind === 'plan') return PLAN_PRESENTATION[key]?.envVar;
+  if (kind === 'slot') return isSlotKey(key) ? SLOT_ENV_VAR : undefined;
+  return ADDON_ENV_VARS[key];
+}
 
 function safeEqualHex(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || !a || a.length !== b.length) return false;
@@ -133,7 +161,7 @@ function verifyCheckoutSignature(payload, signature, secret) {
  *   record: our own stored subscription record { subscriptionId, kind, key }
  *   kind 'topup': record = { kind:'topup', key: packInr, orderId }
  */
-function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date(), heldToRelease = 0 }) {
+function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date(), heldToRelease = 0, firstCycle = true }) {
   let quarks = 0; const $set = {}; const update = {}; let inc = null;
   const spec = invoiceSpec(record.kind, record.key);
   if (!spec) return null;
@@ -156,6 +184,12 @@ function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = n
     Object.assign($set, grant.set); inc = grant.inc;
   } else if (record.kind === 'addon') {
     update.$addToSet = { 'plan.addons': { $each: expandAddon(record.key) } };
+  } else if (record.kind === 'slot') {
+    // Every paid cycle brings the slot's Quarks; only the first payment of the subscription adds the client slot.
+    quarks = AGENCY.slot.quarks;
+    const grant = buckets.topupGrantUpdate(quarks, { now });
+    Object.assign($set, grant.set); inc = { ...grant.inc };
+    if (firstCycle) inc['agency.extraSlots'] = 1;
   } else if (record.kind === 'topup') {
     quarks = findTopupPack(Number(record.key)).quarks;
     const grant = buckets.topupGrantUpdate(quarks, { now });
@@ -180,7 +214,19 @@ function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = n
  * Plan: back to free with add-ons cleared. Add-on: remove only what no other
  * active add-on subscription still provides.
  */
+function endUpdateFor(record) {
+  if (!record || record.kind !== 'slot') return null;
+  return { $inc: { 'agency.extraSlots': -1 }, $set: { 'plan.subscriptions.$[sub].active': false } };
+}
+
 function buildEndUpdate(user, record, eventName) {
+  if (record.kind === 'slot') {
+    // Lowers the limit once, and only for a slot that was active: the filter makes a repeated or early event do nothing.
+    return {
+      update: endUpdateFor(record), arrayFilters: [{ 'sub.subscriptionId': record.subscriptionId }], endsSlot: true,
+      filter: { 'plan.subscriptions': { $elemMatch: { subscriptionId: record.subscriptionId, active: true } } }
+    };
+  }
   const status = eventName === 'subscription.halted' ? 'halted' : eventName === 'subscription.cancelled' ? 'cancelled' : 'expired';
   const arrayFilters = [{ 'sub.subscriptionId': record.subscriptionId }];
   const $set = { 'plan.subscriptions.$[sub].active': false };
@@ -202,7 +248,7 @@ function buildEndUpdate(user, record, eventName) {
 }
 
 module.exports = {
-  PLAN_IDS, ADDON_IDS, isPlanId, isAddonId, planQuote, addonQuote, planCatalogue, findTopupPack,
-  expandAddon, canBuyAddon, invoiceSpec, razorpayPlanBody, envVarFor,
-  verifyWebhookSignature, verifyCheckoutSignature, buildChargeUpdate, buildEndUpdate
+  PLAN_IDS, ADDON_IDS, SLOT_KEY, MAX_EXTRA_SLOTS, isPlanId, isAddonId, isSlotKey, planQuote, addonQuote, slotQuote, planCatalogue, findTopupPack,
+  expandAddon, canBuyAddon, canBuySlot, invoiceSpec, razorpayPlanBody, envVarFor,
+  verifyWebhookSignature, verifyCheckoutSignature, buildChargeUpdate, buildEndUpdate, endUpdateFor
 };

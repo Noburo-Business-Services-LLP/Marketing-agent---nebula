@@ -4,7 +4,7 @@
  * What cannot be worked out from stored data is returned as { available: false, reason } or carries a note.
  * Days and months are counted in India time. Staff, CSM and hidden test accounts are not customers.
  */
-const { PLANS, ADDONS, TOPUP_PACKS, USD_PER_QUARK, gstPaise, chargePaise } = require('../../config/apiCosts');
+const { PLANS, ADDONS, AGENCY, TOPUP_PACKS, USD_PER_QUARK, gstPaise, chargePaise } = require('../../config/apiCosts');
 const { PLAN_PRESENTATION, INVOICE_ITEMS } = require('../../config/plans');
 const { resolveTier } = require('../../config/entitlements');
 const { AYRSHARE } = require('../../config/vendorPlans');
@@ -33,7 +33,7 @@ function monthStart(ms, back = 0) {
   return Date.UTC(s.getUTCFullYear(), s.getUTCMonth() - back, 1) - IST_OFFSET_MIN * 60000;
 }
 
-const TIER_LABELS = { free: 'Free', managed: 'Managed', starter: PLAN_PRESENTATION.starter.name, professional: PLAN_PRESENTATION.professional.name };
+const TIER_LABELS = { free: 'Free', managed: 'Managed', starter: PLAN_PRESENTATION.starter.name, professional: PLAN_PRESENTATION.professional.name, agency: PLAN_PRESENTATION.agency.name };
 
 /** Names a payment from our own plan, add-on and pack names. Provider text is never used. */
 function describePayment(user, p) {
@@ -41,12 +41,14 @@ function describePayment(user, p) {
   const rec = subs.find((s) => s && p.razorpayOrderId && s.subscriptionId === p.razorpayOrderId);
   if (rec && rec.kind === 'plan' && PLAN_PRESENTATION[rec.key]) return `${PLAN_PRESENTATION[rec.key].name} plan`;
   if (rec && rec.kind === 'addon' && ADDONS[rec.key]) return `${ADDONS[rec.key].label} add-on`;
+  if (rec && rec.kind === 'slot') return 'Extra client';
   if (p.item === 'managed_invoice') return p.label ? `Managed plan, ${p.label}` : 'Managed plan';
   if (p.item === INVOICE_ITEMS.topup) {
     const pack = TOPUP_PACKS.find((k) => k.quarks === Number(p.credits));
     return pack ? `Quark pack, ${pack.quarks.toLocaleString('en-IN')} Quarks` : 'Quark pack';
   }
-  if (p.item === INVOICE_ITEMS.plan) return 'Plan';
+  if (p.item === INVOICE_ITEMS.plan || p.item === INVOICE_ITEMS.agency) return 'Plan';
+  if (p.item === INVOICE_ITEMS.slot) return 'Extra client';
   if (p.item === INVOICE_ITEMS.addon) return 'Add-on';
   return 'Payment';
 }
@@ -113,7 +115,7 @@ function revenueOf(users, now) {
 }
 
 function planMixOf(customers) {
-  const tiers = ['free', 'starter', 'professional', 'managed'].map((id) => ({ id, label: TIER_LABELS[id], count: 0 }));
+  const tiers = ['free', 'starter', 'professional', 'agency', 'managed'].map((id) => ({ id, label: TIER_LABELS[id], count: 0 }));
   const addons = Object.keys(ADDONS).map((id) => ({ id, label: ADDONS[id].label, count: 0 }));
   let mrr = 0;
   for (const u of customers) {
@@ -122,6 +124,7 @@ function planMixOf(customers) {
       if (!s || !s.active) continue;
       if (s.kind === 'addon' && ADDONS[s.key]) { addons.find((a) => a.id === s.key).count += 1; mrr += ADDONS[s.key].inr * 100; }
       else if (s.kind === 'plan' && PLANS[s.key]) mrr += PLANS[s.key].inr * 100;
+      else if (s.kind === 'slot') mrr += AGENCY.slot.inr * 100;
     }
   }
   return {
@@ -297,4 +300,4 @@ async function loadMoneyData({ models }) {
   return { users, ayrshareProfiles, invoices };
 }
 
-module.exports = { buildMoney, buildPayments, describePayment, monthStart, quarkTotals, loadMoneyData, HISTORY_CAP_WARN };
+module.exports = { buildMoney, buildPayments, describePayment, monthStart, quarkTotals, loadMoneyData, HISTORY_CAP_WARN, _planMixOf: planMixOf };

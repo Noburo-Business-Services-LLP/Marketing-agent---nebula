@@ -1,10 +1,10 @@
 /**
- * Welcome email for a new paid subscriber (Starter or Growth).
+ * Welcome email for a new paid subscriber (Starter, Growth or Agency).
  * Pure builder plus a sender that takes an injectable transport, so tests never send mail.
  * Voice: docs/superpowers/specs/2026-10-03-nebulaa-app-voice-design.md.
  */
 
-const PLAN_NAMES = { starter: 'Starter', professional: 'Growth' };
+const PLAN_NAMES = { starter: 'Starter', professional: 'Growth', agency: 'Agency' };
 
 function formatQuarks(n) {
   return Number(n).toLocaleString('en-US');
@@ -18,12 +18,18 @@ function buildWelcomeEmail({ firstName, tier, quarks }) {
   const greeting = name ? `Hello ${name},` : 'Hello,';
   const subject = `Your Nebulaa ${planName} plan is active`;
 
+  const agency = tier === 'agency';
+  const { AGENCY } = require('../config/apiCosts');
   const paragraphs = [
     greeting,
     `Thank you for subscribing. Your ${planName} plan is now active, and ${formatQuarks(quarks)} Quarks have been added to your account. That is enough for up to ${outputs.posts} posts or ${outputs.videos} short videos this month, in any mix.`,
-    `You can now create posts and campaigns, and make short videos with voice and music. Each task uses Quarks, and the amount is shown before you confirm it. Your monthly Quarks are for this month, and you can top up with more whenever you need them.`,
-    'Publish and schedule, Inbox and replies, and Competitor insights are add-ons. You can add any of them from the plans page whenever you need them.',
-    'To begin, sign in to Nebulaa and open Create content.',
+    agency
+      ? `Your plan includes ${AGENCY.includedClients} client brands. Each client has its own brand details, calendar, library and connected social accounts, and every client uses the one shared pool of Quarks. Your monthly Quarks are for this month, and you can top up with more whenever you need them.`
+      : `You can now create posts and campaigns, and make short videos with voice and music. Each task uses Quarks, and the amount is shown before you confirm it. Your monthly Quarks are for this month, and you can top up with more whenever you need them.`,
+    agency
+      ? 'Publish and schedule, Inbox and replies, and Competitor insights are included in your plan. You can add more clients from the Clients page whenever you need them.'
+      : 'Publish and schedule, Inbox and replies, and Competitor insights are add-ons. You can add any of them from the plans page whenever you need them.',
+    agency ? 'To begin, sign in to Nebulaa, open Clients and add your first client.' : 'To begin, sign in to Nebulaa and open Create content.',
     'If you have any questions, reply to this email and our team will help.',
     'Nebulaa'
   ];
