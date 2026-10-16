@@ -65,6 +65,29 @@ router.patch('/clients/:id', protect, limiter, async (req, res) => {
   }
 });
 
+/**
+ * Remove a client and everything it holds, at once. Needs the agency's password and the word REMOVE. Refused while the
+ * client has running work. The agency's usage history for this client is kept.
+ */
+router.delete('/clients/:id', protect, limiter, async (req, res) => {
+  try {
+    if (req.actingAgency || ag.isWorkspace(req.user)) return res.status(403).json({ success: false, message: 'Clients are removed from your agency account.' });
+    const body = req.body || {};
+    if (String(body.confirm).trim() !== 'REMOVE') return res.status(400).json({ success: false, message: 'Type REMOVE to confirm.' });
+    if (!(await del.passwordOk(idOf(req), body.password, { User: models().User }))) return res.status(403).json({ success: false, message: 'That password is not right.' });
+    const m = models();
+    const owner = await m.User.findById(req.user._id);
+    if (!owner) return res.status(404).json({ success: false, message: 'That client was not found.' });
+    const deps = del.defaultDeps();
+    const r = await ws.removeWorkspace({ owner, workspaceId: String(req.params.id), models: m, purge: (id) => del.purgeWorkspace(id, { models: m, deps }) });
+    if (!r.ok) return res.status(r.busy ? 409 : /not found/.test(r.message) ? 404 : 502).json({ success: false, message: r.message });
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[agency] remove failed:', e.message);
+    res.status(500).json({ success: false, message: 'We could not remove this client. Please check your client list and try again.' });
+  }
+});
+
 router.post('/clients/:id/open', protect, limiter, async (req, res) => {
   try {
     const owner = await agencyOwner(req);

@@ -476,7 +476,7 @@ router.post('/clients/bulk', requireStaff('view_clients'), async (req, res) => {
     const repo = {
       findCustomers: (ids) => User.find({ _id: { $in: ids } }).select('staffRole isCsm subscription').lean(),
       findCsm: (id) => (/^[a-f0-9]{24}$/i.test(String(id)) ? User.findById(id).select('staffRole isCsm isActive').lean() : null),
-      applyUpdate: (ids, update) => User.updateMany({ _id: { $in: ids }, staffRole: null, isCsm: { $ne: true } }, update)
+      applyUpdate: (ids, update) => User.updateMany({ _id: { $in: ids }, staffRole: null, isCsm: { $ne: true }, 'agency.ownerId': null }, update)
     };
     const out = await bulkClients({ actor: req.staff, input: req.body || {}, repo, record: (row) => recordStaffAction(row) });
     res.status(out.status).json(out.body);
@@ -495,7 +495,7 @@ router.post('/clients/bulk-assign', requireStaff('assign_csm'), async (req, res)
     const csm = csmId ? await User.findById(csmId).select('staffRole isCsm isActive').lean() : null;
     const check = checkAssignment({ csm: csmId ? csm : null, client: { _id: 'x' } });
     if (!check.ok) return res.status(400).json({ success: false, message: check.message });
-    const result = await User.updateMany({ _id: { $in: ids }, staffRole: null, isCsm: { $ne: true } }, { $set: { assignedCsm: csmId } });
+    const result = await User.updateMany({ _id: { $in: ids }, staffRole: null, isCsm: { $ne: true }, 'agency.ownerId': null }, { $set: { assignedCsm: csmId } });
     await recordStaffAction({ actor: req.staff, action: 'bulk_assign_csm', details: { clients: ids.length, csm: csmId ? String(csmId) : null } });
     res.json({ success: true, updated: result.modifiedCount || 0 });
   } catch (error) {

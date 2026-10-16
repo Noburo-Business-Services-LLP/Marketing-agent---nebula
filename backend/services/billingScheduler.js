@@ -21,7 +21,7 @@ async function runBillingOnce({ now = Date.now(), deps = {} } = {}) {
     getRecord: (id, period) => ClientInvoice.findOne({ client: id, period }).lean(),
     upsertRecord: (id, period, set) => ClientInvoice.updateOne({ client: id, period }, { $set: set, $setOnInsert: { client: id, period } }, { upsert: true }),
   };
-  const clients = await User.find({ 'managedBilling.autoInvoice': true, 'plan.tier': 'managed', isActive: { $ne: false }, staffRole: null, isCsm: { $ne: true } })
+  const clients = await User.find({ 'managedBilling.autoInvoice': true, 'plan.tier': 'managed', isActive: { $ne: false }, staffRole: null, isCsm: { $ne: true }, 'agency.ownerId': null }) // managed clients only; a client workspace is never invoiced
     .select('email firstName lastName companyName businessProfile.name managedBilling').lean();
   const today = L.todayIst(now);
   let made = 0; const failures = [];

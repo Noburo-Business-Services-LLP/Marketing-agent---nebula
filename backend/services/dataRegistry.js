@@ -50,7 +50,7 @@ const RULES = [
   { model: 'OnboardingContext', field: 'userId', action: D },
   { model: 'Product', field: 'user', action: D },
   { model: 'PromptOverride', field: 'user', action: D },
-  { model: 'QuarkLedger', field: 'user', action: D },
+  { model: 'QuarkLedger', field: 'user', action: D, note: 'Found by account only. An agency\'s rows tagged with a client (workspace) belong to the agency pool and are kept when that client is removed; they go when the agency is deleted.' },
   { model: 'Reminder', field: 'userId', action: D },
   { model: 'ScrapeJob', field: 'userId', action: D },
   { model: 'SeoReport', field: 'userId', action: D },

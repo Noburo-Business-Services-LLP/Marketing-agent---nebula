@@ -51,3 +51,31 @@ test('the filter finds a customer by every field that points at them', () => {
   assert.ok(erasable().length > 35);
   assert.ok(!erasable().some((r) => r.model === 'ClientInvoice'), 'tax records are not erased');
 });
+
+// Other fields that point at a user, on models that already have a rule. Each is acknowledged here with the reason it is not the owner field,
+// so a new field that refers to a user cannot be added without someone deciding what deletion should do with it.
+const OTHER_USER_REFERENCES = {
+  AutoReplySettings: { updatedBy: 'who last changed it; same customer or staff' },
+  ClientInvoice: { recordedBy: 'staff member who recorded it; the invoice is kept as a tax record' },
+  Collaboration: { assignedBy: 'a collaborator inside the same customer account' },
+  QuarkLedger: { workspace: 'agency client the spend was for; the row belongs to the agency pool (field user) and is kept when the client is removed' },
+  SocialInboxConversation: { assignedUserId: 'a teammate inside the same customer account' },
+  StaffAction: { actor: 'the staff member; our own audit trail' },
+  StudioVideo: { payer: 'agency that paid for a client video; the video is erased with the client (field user)' }
+};
+
+test('every extra field that refers to a user on a listed model is acknowledged, so deletion has been thought through for it', () => {
+  const unknown = [];
+  for (const r of RULES) {
+    const m = mongoose.model(r.model);
+    const known = [r.field, ...(r.also || [])];
+    for (const p of refsToUser(m)) if (!known.includes(p) && !(OTHER_USER_REFERENCES[r.model] || {})[p]) unknown.push(`${r.model}.${p}`);
+  }
+  assert.deepStrictEqual(unknown, [], `Decide what deleting an account does with: ${unknown.join(', ')} (add it to OTHER_USER_REFERENCES with the reason)`);
+});
+
+test('deleting a client workspace and deleting an agency are covered by the same list: the client\'s own records are found by its id', () => {
+  assert.ok(erasable().some((r) => r.model === 'Campaign') && erasable().some((r) => r.model === 'Draft'));
+  assert.strictEqual(ruleFor('QuarkLedger').action, 'delete');
+  assert.deepStrictEqual(filterFor(ruleFor('QuarkLedger'), 'agency1'), { user: 'agency1' });
+});

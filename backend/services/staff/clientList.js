@@ -4,6 +4,7 @@
  */
 const { classifyClient, matchesFilter, FILTERS } = require('./clientStatus');
 const { roleOf } = require('./permissions');
+const { NOT_A_WORKSPACE } = require('../agency');
 
 const SORTS = ['name', 'quarks', 'lastActive', 'status', 'plan'];
 
@@ -106,7 +107,7 @@ function buildList({ viewer, users, extras = {}, csmNames = {}, now = Date.now()
 /** Reads what the list needs. `models` is injected for tests. */
 async function loadClientData({ viewer, models, now = Date.now(), assignedOnly = false }) {
   const { User, FeatureEvent, Draft } = models;
-  const scope = { staffRole: null, isCsm: { $ne: true } }; // null also matches accounts that never had a role
+  const scope = { staffRole: null, isCsm: { $ne: true }, ...NOT_A_WORKSPACE }; // null also matches accounts that never had a role; a client workspace is never a customer here
   if (roleOf(viewer) === 'csm') scope.assignedCsm = viewer._id;
   else if (assignedOnly) scope.assignedCsm = { $ne: null }; // the Team page only needs clients that have a CSM
   const users = await User.find(scope, {

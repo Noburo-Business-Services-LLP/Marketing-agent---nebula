@@ -8,6 +8,7 @@
 const { resolveTier } = require('../../config/entitlements');
 const { USD_PER_QUARK } = require('../../config/apiCosts');
 const { monthStart, HISTORY_CAP_WARN } = require('./money');
+const { NOT_A_WORKSPACE } = require('../agency');
 const { isPaying, connectedCount } = require('./clientStatus');
 
 const DAY = 86400000;
@@ -233,7 +234,7 @@ const PUBLISHED = { $or: [{ publishedAt: { $ne: null } }, { status: 'posted' }] 
  */
 async function loadUsageData({ models, window: windowDays = 30, now = Date.now() }) {
   const { User, Draft, Campaign, VideoJob, HeroVideoJob, Blueprint, SocialInboxMessage } = models;
-  const users = await User.find({ staffRole: null, isCsm: { $ne: true } }, {
+  const users = await User.find({ staffRole: null, isCsm: { $ne: true }, ...NOT_A_WORKSPACE }, {
     email: 1, createdAt: 1, isHidden: 1, staffRole: 1, isCsm: 1, onboardingCompleted: 1,
     connectedSocials: 1, 'ayrshare.activeSocialAccounts': 1, plan: 1, 'payments.status': 1, 'credits.history': 1
   }).lean();

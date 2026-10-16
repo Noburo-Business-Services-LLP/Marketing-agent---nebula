@@ -8,6 +8,7 @@ const { PLANS, ADDONS, AGENCY, TOPUP_PACKS, USD_PER_QUARK, gstPaise, chargePaise
 const { PLAN_PRESENTATION, INVOICE_ITEMS } = require('../../config/plans');
 const { resolveTier } = require('../../config/entitlements');
 const { AYRSHARE } = require('../../config/vendorPlans');
+const { NOT_A_WORKSPACE } = require('../agency');
 const { PROFILE_FILTER, status: profileStatus } = require('../ayrshareProfileWatch');
 const { paymentFailureMessage } = require('../providerErrors');
 const { dayKey } = require('./home');
@@ -286,7 +287,7 @@ function buildMoney({ users, ayrshareProfiles = null, now = Date.now(), page = 1
 /** Reads what Money needs. Customers only; Ayrshare profiles are counted over every account (staff included, as they use a slot too). */
 async function loadMoneyData({ models }) {
   const { User } = models;
-  const users = await User.find({ staffRole: null, isCsm: { $ne: true } }, {
+  const users = await User.find({ staffRole: null, isCsm: { $ne: true }, ...NOT_A_WORKSPACE }, {
     email: 1, firstName: 1, lastName: 1, companyName: 1, 'businessProfile.name': 1, isHidden: 1, staffRole: 1, isCsm: 1,
     plan: 1, subscription: 1, payments: 1, 'credits.history': 1, managedBilling: 1, trial: 1, isActive: 1
   }).lean();

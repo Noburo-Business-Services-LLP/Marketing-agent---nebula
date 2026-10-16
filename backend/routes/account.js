@@ -19,13 +19,8 @@ const limiter = rateLimit({
 
 const models = () => del.defaultModels();
 
-/** The password is asked again for anything that downloads or erases the account. */
-async function passwordOk(userId, password) {
-  const User = models().User;
-  const u = await User.findById(userId).select('+password');
-  if (!u || !password || typeof password !== 'string') return false;
-  try { return await u.comparePassword(password); } catch (_) { return false; }
-}
+// The password is asked again for anything that downloads or erases the account (shared with removing a client).
+const passwordOk = (userId, password) => del.passwordOk(userId, password, { User: models().User });
 
 router.get('/status', protect, async (req, res) => {
   const user = req.user;
@@ -34,6 +29,7 @@ router.get('/status', protect, async (req, res) => {
     success: true,
     deletion: user.deletion && user.deletion.status === 'pending' ? { status: 'pending', purgeAfter: user.deletion.purgeAfter, requestedAt: user.deletion.requestedAt } : null,
     canDelete: e.ok, reason: e.ok || e.already ? '' : e.message,
+    clients: e.ok && e.clients ? e.clients : 0, // an agency's clients are deleted with it
     graceDays: del.GRACE_DAYS,
     consent: user.consent && user.consent.acceptedAt ? { acceptedAt: user.consent.acceptedAt } : null
   });

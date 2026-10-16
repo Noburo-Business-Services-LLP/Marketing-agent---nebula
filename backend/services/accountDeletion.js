@@ -8,6 +8,7 @@
 const crypto = require('crypto');
 const { erasable, filterFor, RETENTION_YEARS } = require('./dataRegistry');
 const { extractAssets, deleteAssets } = require('./cloudinaryCleanup');
+const ag = require('./agency');
 
 const GRACE_DAYS = 14;
 const DAY = 24 * 60 * 60 * 1000;
@@ -21,10 +22,29 @@ const emailHash = (email) => hmac(`email:${String(email || '').trim().toLowerCas
 /** Who may ask to be deleted from the app. Staff and managed clients go through support. */
 function eligibility(user, { isStaff = () => false, resolveTier = () => 'free' } = {}) {
   if (!user) return { ok: false, message: 'Account not found.' };
+  // A client brand is looked after by the agency that owns it; it has no login and is never deleted on its own.
+  if (ag.isWorkspace(user)) return { ok: false, message: 'Remove this client from your agency account.' };
   if (isStaff(user)) return { ok: false, message: 'Staff accounts cannot be deleted from the app. Please ask the account owner.' };
   if (resolveTier(user) === 'managed') return { ok: false, message: 'Your account is looked after by our team, so please write to support@nebulaa.ai and we will delete it for you.' };
   if (user.deletion && user.deletion.status === 'pending') return { ok: false, already: true, message: 'Your account is already set to be deleted.' };
-  return { ok: true };
+  return ownsClients(user) ? { ok: true, clients: Number(user.agency && user.agency.clientCount) || 0 } : { ok: true };
+}
+
+/** An agency, or any account that still has client brands, even if its plan has since ended. */
+const ownsClients = (user) => ag.isAgency(user) || !!(user && !ag.isWorkspace(user) && user.agency && Number(user.agency.clientCount) > 0);
+
+/** The password is asked again for anything that downloads or erases an account. */
+async function passwordOk(userId, password, { User } = {}) {
+  const Model = User || defaultModels().User;
+  const u = await Model.findById(userId).select('+password');
+  if (!u || !password || typeof password !== 'string') return false;
+  try { return await u.comparePassword(password); } catch (_) { return false; }
+}
+
+/** Ids of the client workspaces an account owns. */
+async function clientIds(user, User) {
+  const rows = await User.find({ 'agency.ownerId': user._id }).select('_id').lean();
+  return rows.map((r) => r._id);
 }
 
 /** Stops billing now: the plan and any add-ons are cancelled immediately. "Already cancelled" counts as done. */
@@ -49,6 +69,11 @@ async function requestDeletion({ user, via = 'self', models, razorpay, now = new
   await User.updateOne({ _id: user._id }, { $set: { 'deletion.status': 'pending', 'deletion.requestedAt': now, 'deletion.purgeAfter': purgeAfter, 'subscription.cancelAtPeriodEnd': true } });
   // Scheduled posts stop going out. They are put back if the account is restored.
   await Campaign.updateMany({ userId: user._id, status: 'scheduled' }, { $set: { status: 'paused', pausedForDeletion: true } });
+  // An agency's clients go with it, so their scheduled posts stop too.
+  if (ownsClients(user)) {
+    const ids = await clientIds(user, User);
+    if (ids.length) await Campaign.updateMany({ userId: { $in: ids }, status: 'scheduled' }, { $set: { status: 'paused', pausedForDeletion: true } });
+  }
   if (mail && user.email) await mail.sendDeletionRequested(user, purgeAfter).catch((e) => console.error('[account delete] email failed:', e && e.message));
   return { ok: true, purgeAfter };
 }
@@ -59,6 +84,10 @@ async function restoreDeletion({ user, models, now = new Date() }) {
   await AccountDeletion.updateMany({ user: user._id, status: 'pending' }, { $set: { status: 'restored', completedAt: now } });
   await User.updateOne({ _id: user._id }, { $set: { 'deletion.status': '' }, $unset: { 'deletion.requestedAt': '', 'deletion.purgeAfter': '' } });
   await Campaign.updateMany({ userId: user._id, pausedForDeletion: true }, { $set: { status: 'scheduled' }, $unset: { pausedForDeletion: '' } });
+  if (ownsClients(user)) {
+    const ids = await clientIds(user, User);
+    if (ids.length) await Campaign.updateMany({ userId: { $in: ids }, pausedForDeletion: true }, { $set: { status: 'scheduled' }, $unset: { pausedForDeletion: '' } });
+  }
   return { ok: true, note: 'Your account is back. Your plan was cancelled, so choose a plan again if you want to carry on creating.' };
 }
 
@@ -80,6 +109,18 @@ function stepsFor({ user, models, deps, now }) {
         return { detail: `${kept} payment records kept for tax` };
       }
     },
+    ...(ownsClients(user) ? [{
+      name: 'clients',
+      run: async () => {
+        // Every client is erased the same way a single removal erases it (files, connected accounts, data, then the record).
+        const list = await require('./agencyWorkspaces').listWorkspaces({ owner: user, models });
+        for (const c of list) {
+          const out = await purgeWorkspace(c.id, { models, deps, now });
+          if (!out.ok) throw new Error(`client "${c.name}" could not be erased${out.error ? `: ${out.error}` : ''}`);
+        }
+        return { detail: `${list.length} clients erased`, skipped: list.length === 0 };
+      }
+    }] : []),
     {
       name: 'files',
       run: async () => {
@@ -124,12 +165,31 @@ function stepsFor({ user, models, deps, now }) {
     {
       name: 'account',
       run: async () => {
-        if (deps.mail && user.email) await deps.mail.sendDeleted(user).catch(() => undefined);
+        if (deps.mail && user.email && !ag.isWorkspace(user)) await deps.mail.sendDeleted(user).catch(() => undefined);
         await models.User.deleteOne({ _id: user._id });
         return { detail: 'account erased' };
       }
     }
   ];
+}
+
+// A client workspace has no payments, no email and no staff history, and nothing is sent to it.
+const WORKSPACE_STEPS = ['files', 'social_profile', 'data', 'account'];
+
+/**
+ * Erases one client workspace now, with no waiting period and no email. Never runs on an ordinary account or an agency.
+ * A step that fails leaves the workspace in place, so it can be tried again; finished steps are safe to repeat.
+ * The agency's own ledger rows for this client are kept: the data list finds ledger rows by their account, which is the agency.
+ */
+async function purgeWorkspace(workspaceId, { models, deps, now = new Date() }) {
+  const user = await models.User.findById(workspaceId).select('+emailKey').lean();
+  if (!user) return { ok: true, note: 'the client was already gone' };
+  if (!ag.isWorkspace(user)) return { ok: false, error: 'not a client account' };
+  for (const step of stepsFor({ user, models, deps, now }).filter((s) => WORKSPACE_STEPS.includes(s.name))) {
+    try { await step.run(); }
+    catch (e) { console.error(`[client removal] step "${step.name}" failed:`, e && e.message); return { ok: false, step: step.name, error: e && e.message }; }
+  }
+  return { ok: true };
 }
 
 /** Runs the erase for one pending request that is due. Safe to run again after a failure: finished steps are not repeated. */
@@ -194,4 +254,4 @@ function startAccountPurge({ intervalMs = 6 * 60 * 60 * 1000, logger = console }
   return () => clearInterval(timer);
 }
 
-module.exports = { GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };
+module.exports = { passwordOk, ownsClients, purgeWorkspace, GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };

@@ -97,7 +97,8 @@ async function runRenewalRemindersOnce({ now = Date.now(), deps = {} } = {}) {
     'subscription.status': 'active',
     'subscription.cancelAtPeriodEnd': { $ne: true },
     'subscription.nextBillingAt': { $gte: new Date(now + FROM_DAYS * DAY), $lte: new Date(now + TO_DAYS * DAY) },
-    'plan.tier': { $in: ['starter', 'professional', 'agency'] }
+    'plan.tier': { $in: ['starter', 'professional', 'agency'] },
+    'agency.ownerId': null // a client workspace never pays or gets email; the agency account is the one reminded
   }).select('email firstName isActive subscription plan').limit(500).lean();
   let sent = 0; let skipped = 0;
   for (const user of candidates) {

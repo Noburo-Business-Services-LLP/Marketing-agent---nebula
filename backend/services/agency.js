@@ -28,6 +28,9 @@ function workspacePlanFields(owner) {
   return { 'plan.tier': isAgency(owner) ? 'agency' : 'free', 'plan.addons': [] };
 }
 
+/** Added to any query over customers so a hidden client workspace is never counted or treated as an independent customer. */
+const NOT_A_WORKSPACE = Object.freeze({ 'agency.ownerId': null });
+
 const placeholderEmail = (id) => `ws-${id}@workspace.invalid`;
 
 /** Resolve who to charge for `userId`: { payerId, workspaceId|null }. Reads the user once. */
@@ -84,4 +87,4 @@ async function publicCredits(user, { User = require('../models/User') } = {}) {
 /** The free first campaign batch is for a person's own first run. A client's work is paid from the agency's shared pool. */
 const freeFirstBatch = (u) => !isWorkspace(u) && !(u && u.initialCampaignsGenerated);
 
-module.exports = { publicCredits, freeFirstBatch, isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };
+module.exports = { NOT_A_WORKSPACE, publicCredits, freeFirstBatch, isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };
