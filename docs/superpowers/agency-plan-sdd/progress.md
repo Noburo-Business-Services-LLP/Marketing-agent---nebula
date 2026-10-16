@@ -1,0 +1,27 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-10-16-agency-plan.md
+Spec: docs/superpowers/specs/2026-10-16-agency-plan-design.md
+Pre-flight scan: Task1 touches config/entitlements/billingPlans (consumed by 6); Task2 User model+agency.js (consumed 3,4,5,9); Task5 payer consumed by 7; Task6 slot extraSlots consumed 2/3. No contradictions found; Task 6 test uses chargePaise import (fixed in plan).
+BASE Task 1: df4b72b
+Task 1: fix round 1/5 (2 addressed, 0 open; commits 8577221..37e657b)
+Task 1: minor (deferred): Blueprint agency-tier test has no negative control (bogus tier should error)
+Task 1: minor (deferred): planFeatures generic lines prepend Agency card text; "Usage report for each client" feature is delivered by Task 7/11
+Task 1: complete (commits df4b72b..37e657b, review clean after 1 fix round)
+BASE Task 2: 37e657b
+Task 2: fix round 1/5 (2 Important addressed, tests added; commit affb749)
+Task 2: complete (commits 37e657b..affb749; task review found 0 Critical, 2 Important fixed; no scoped re-review, fix is covered by new RED/GREEN tests)
+Ruling (2026-10-16): owner asked for cost-conscious building: mid-tier (sonnet) implementers, per-task reviews ONLY for Tasks 5 and 6 (shared Quark pool, billing); all others rely on the implementer's TDD plus one final whole-branch review on the most capable model. Cost if wrong: a defect found later in the final review.
+Task 3: complete (commit d7aa5d9, no task review per ruling; atomic limit and create verified on fake User only, real Mongo run due in Task 4/12; deviation: createWorkspace builds plan{tier,addons} not dotted keys)
+Task 4: complete (commit 80f6116, no task review per ruling; real isolation run on nebulaa_dev passed 12 checks through an in-process server (no launch entry), full server-main run deferred to Task 12)
+Follow-up (existing CSM code, out of agency scope): isBlockedWhileActing does not lower-case or decode the path, so /API/PAYMENT may bypass the CSM pass block; agency's isBlockedInsideClient already handles it. Raise at final review / separate fix.
+Task 5: review found 0 Critical, 3 Important, 11 Minor (task-5-review.md). Rulings: I1 free first campaign batch must NOT be granted to client workspaces (abuse by add/remove loop) - fix now; I2 handled in Task 9: removing a client with running jobs is refused with a plain message; I3 add missing tests now; profile routes inside a client should show the pool balance - fix now. Cost if wrong: small rework.
+Task 5: fix round 1/5 started
+Task 5: complete (commits c3639f3, 7d9f453; reviewed by opus: 0 Critical, 3 Important fixed or routed to Task 9; 9-mutation check on new tests)
+Task 6: review (opus) 0 Critical, 5 Important, 11 Minor (task-6-review.md). Cap ruling: 20 paid slots allowed (5+20=25), 19 may buy one more, 20 refused (brief's test was wrong). Rulings: I1 refused/mismatched slot or plan payments must be recorded durably AND alert the owner immediately (not the 3-in-10 threshold); I2 strict amount check must also run on verify, not only webhook; I3 compare against the price stored on the subscription record at purchase (so later repricing of new sign-ups never breaks renewals of existing agencies); I4 frozen client workspaces must not spend the pool: enforce in quarkBuckets.spend / CLIENT_PAYER_FILTER; I5 single-slot cancel route is an OWNER DECISION, not built (note in final report); add missing tests (slot_conflict, no-agency-plan on verify, wrong amount on verify, refusal reason).
+Task 6: fix round 1/5 started
+Task 6: complete (commits 47c4659, 6c04128; opus review 0 Critical, 5 Important: 4 fixed, I5 single-slot cancel is an owner decision; residual: frozen-check is a separate read from the atomic spend (tiny race window), failed-payment rows now counted separately in tests)
+Task 7: complete (commit 711b3cb, no task review per ruling; real dev run: per-client totals + agency own use = pool drop 227)
+Carry-forward notes: Task 9 must keep ledger rows tagged workspace=<removed client> (report merges them into "Removed client"), and must refuse removing a client with running jobs (ruling from Task 5 review I2). Tasks 10 and 11 must NOT show quarksSpent / total.quarksSpent / poolLeft to customers (show poolPosts/poolVideos). Report 403s after the agency plan ends: check spec if export access should continue.
+Task 8: complete (commits 7df350c, dd9e714; hourly watch, once-per-episode owner alert at 25 via opsAlerts.notify; spec item 'move new Agency sign-ups to Rs 9,999 near 30' NOT wired: owner decision/follow-up)
+Task 9: complete (commit 8c1591d; real dev run passed; removal needs agency password + typing REMOVE; refused while any of 7 kinds of work runs; ledger kept; agency deletion purges clients)
+Flag for owner / final review: notificationScheduler emails every campaign reminder to a HARD-CODED personal address (existing code, not changed); content-calendar auto-generation and snapshot collection still run for client workspaces (decide whether they should spend the pool); account export covers only the agency's own data not its clients'; tiny race between pass check and pause; staff can open a workspace by id on the single-client staff page; first-run left throwaway rows in nebulaa_dev (cleaned, AiSpendDay restored).
+Task 10: complete (commits 0874d86, 6f57d26; frontend 271; slot checkout untested (preview refuses it); client workspaces have no consent record so Terms prompt suppressed in frontend (backend consent record for workspaces maybe wanted); return button label 'Back to my clients')
