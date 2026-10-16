@@ -788,6 +788,13 @@ const startServer = async () => {
       console.warn('Billing scheduler failed to start:', schedulerError.message);
     }
 
+    // A reminder email three days before each monthly plan charge
+    try {
+      require('./services/renewalReminders').startRenewalReminders();
+    } catch (schedulerError) {
+      console.warn('Renewal reminders failed to start:', schedulerError.message);
+    }
+
     // Drafts left "creating" by a restart or a lost connection are closed, and their Quarks returned
     try {
       require('./services/staleDrafts').startStaleDraftReaper();

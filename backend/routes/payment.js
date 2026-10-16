@@ -514,6 +514,51 @@ function createPaymentRouter(deps = {}) {
   });
 
   /**
+   * POST /api/payment/cancel-subscription
+   * One click stop. The plan (and any add-ons) is cancelled at Razorpay at the END of the month already paid for, so the
+   * customer keeps using what they paid for and is not charged again. Safe to press twice.
+   */
+  router.post('/cancel-subscription', protect, payLimiter, async (req, res) => {
+    try {
+      const user = await User.findById(userIdOf(req));
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      const tier = resolveTier(user);
+      const planRecs = storedSubscriptions(user).filter((s) => s.kind === 'plan' && s.active);
+      const planIds = planRecs.map((s) => s.subscriptionId);
+      const legacyId = user.subscription && user.subscription.razorpaySubscriptionId;
+      if (legacyId && !planIds.includes(legacyId) && user.subscription.status === 'active') planIds.push(legacyId);
+      const endsAt = (user.subscription && (user.subscription.currentPeriodEnd || user.subscription.nextBillingAt)) || null;
+      if (tier === 'managed' || tier === 'free' || planIds.length === 0) {
+        return res.status(400).json({ success: false, message: 'There is no plan to cancel on this account.' });
+      }
+      if (user.subscription && user.subscription.cancelAtPeriodEnd) {
+        return res.json({ success: true, alreadyCancelling: true, endsAt, message: 'Your plan is already set to end. You can keep using it until then.' });
+      }
+      const addonIds = storedSubscriptions(user).filter((s) => s.kind === 'addon' && s.active).map((s) => s.subscriptionId);
+      // "Already cancelled" counts as done, so a repeated press or an earlier partial attempt does not fail.
+      const alreadyDone = (e) => /already|cancelled|canceled|completed|not cancel/i.test(String((e && (e.error && e.error.description || e.message)) || ''));
+      let planCancelled = 0;
+      for (const id of planIds) {
+        try { await rz().subscriptions.cancel(id, 1); planCancelled += 1; }
+        catch (e) { if (alreadyDone(e)) planCancelled += 1; else console.error(`Could not cancel plan subscription ${id}:`, e && e.message); }
+      }
+      if (planCancelled === 0) {
+        require('../services/opsAlerts').recordFailure('payment', 'cancel subscription failed');
+        return res.status(502).json({ success: false, message: 'We could not cancel your plan just now. Please try again in a few minutes, or write to us and we will do it for you.' });
+      }
+      for (const id of addonIds) {
+        try { await rz().subscriptions.cancel(id, 1); } catch (e) { if (!alreadyDone(e)) console.warn(`Could not cancel add-on subscription ${id}:`, e && e.message); }
+      }
+      await User.updateOne({ _id: user._id }, { $set: { 'subscription.cancelAtPeriodEnd': true, 'subscription.cancelRequestedAt': new Date() } });
+      res.json({ success: true, endsAt, message: 'Your plan will not renew. You can keep using it until the end of the month you paid for.' });
+    } catch (error) {
+      console.error('Cancel subscription error:', error);
+      require('../services/opsAlerts').recordFailure('payment', `cancel-subscription: ${error.message}`);
+      res.status(500).json({ success: false, message: 'We could not cancel your plan just now. Please try again in a few minutes.' });
+    }
+  });
+
+  /**
    * GET /api/payment/billing
    * Returns payment history, subscription status, and credits for the Billing tab
    */
@@ -549,7 +594,11 @@ function createPaymentRouter(deps = {}) {
 
       res.json({
         success: true,
-        subscription: user.subscription || { plan: 'free', status: 'active' },
+        subscription: {
+          ...(user.subscription && user.subscription.toObject ? user.subscription.toObject() : (user.subscription || { plan: 'free', status: 'active' })),
+          cancelAtPeriodEnd: !!(user.subscription && user.subscription.cancelAtPeriodEnd),
+          endsAt: (user.subscription && (user.subscription.currentPeriodEnd || user.subscription.nextBillingAt)) || null
+        },
         plan: { tier: resolveTier(user), addons: addonsOf(user) },
         credits: {
           balance: user.credits?.balance ?? 0,

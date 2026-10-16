@@ -77,6 +77,9 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const { costs: quarkCosts, units: quarkUnits } = useQuarkPricing();
   const [loadingBilling, setLoadingBilling] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelNote, setCancelNote] = useState('');
 
   // Business Profile Form State (full onboarding questionnaire)
   const emptyBiz: BusinessProfile = {
@@ -682,6 +685,48 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                   <a href="#/trial-expired" className="text-sm font-semibold text-[#F5A623] hover:underline">Plans and Quarks</a>
                                   <CreditCard className={`w-8 h-8 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
                                 </div>
+
+                                {/* Stop the plan: it runs to the end of the month already paid for and is not charged again. */}
+                                {(billingData.plan?.tier === 'starter' || billingData.plan?.tier === 'professional') && (
+                                  <div className="mt-4 border-t border-[var(--gv-border-subtle)] pt-4">
+                                    {billingData.subscription.cancelAtPeriodEnd ? (
+                                      <p className={`text-sm ${theme.text}`} role="status">
+                                        Your plan will not renew.{' '}
+                                        {billingData.subscription.endsAt ? `You can keep using it until ${new Date(billingData.subscription.endsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}.` : 'You can keep using it until the end of the month you paid for.'}
+                                      </p>
+                                    ) : confirmingCancel ? (
+                                      <div role="alertdialog" aria-labelledby="cancel-plan-title">
+                                        <p id="cancel-plan-title" className={`text-sm font-semibold ${theme.text}`}>Cancel your plan?</p>
+                                        <p className={`mt-1 text-sm ${theme.textSecondary}`}>
+                                          You will not be charged again. You can keep using your plan{billingData.subscription.endsAt ? ` until ${new Date(billingData.subscription.endsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}` : ' until the end of the month you paid for'}, and the Quarks that came with it until then. Used Quarks are not refunded. You can choose a plan again whenever you like.
+                                        </p>
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                          <button type="button" disabled={cancelling} onClick={() => setConfirmingCancel(false)} className="rounded-lg border border-[var(--gv-border-default)] px-4 py-2 text-sm font-semibold">Keep my plan</button>
+                                          <button
+                                            type="button" disabled={cancelling}
+                                            onClick={async () => {
+                                              setCancelling(true); setCancelNote('');
+                                              try {
+                                                const r = await apiService.cancelSubscription();
+                                                if (r && r.success) {
+                                                  setBillingData((b) => (b ? { ...b, subscription: { ...b.subscription, cancelAtPeriodEnd: true, endsAt: r.endsAt || b.subscription.endsAt } } : b));
+                                                  setConfirmingCancel(false);
+                                                } else setCancelNote((r && r.message) || 'We could not cancel your plan just now. Please try again.');
+                                              } catch (e: any) { setCancelNote((e && (e.data?.message || e.message)) || 'We could not cancel your plan just now. Please try again.'); }
+                                              setCancelling(false);
+                                            }}
+                                            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                                          >
+                                            {cancelling && <Loader2 className="h-4 w-4 animate-spin" />} Yes, cancel my plan
+                                          </button>
+                                        </div>
+                                        {cancelNote && <p className="mt-2 text-sm text-red-600" role="alert">{cancelNote}</p>}
+                                      </div>
+                                    ) : (
+                                      <button type="button" onClick={() => setConfirmingCancel(true)} className={`text-sm font-semibold underline underline-offset-2 ${theme.textSecondary} hover:opacity-80`}>Cancel plan</button>
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
                               {/* Quarks */}

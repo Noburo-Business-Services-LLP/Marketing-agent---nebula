@@ -140,6 +140,7 @@ function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = n
     $set['plan.tier'] = record.key;
     $set['plan.subscriptionId'] = record.subscriptionId;
     $set['subscription.status'] = 'active';
+    $set['subscription.cancelAtPeriodEnd'] = false; // a new payment means the plan is running again
     $set['subscription.razorpaySubscriptionId'] = record.subscriptionId;
     if (record.razorpayPlanId) $set['subscription.razorpayPlanId'] = record.razorpayPlanId;
     if (subscription && subscription.current_end) $set['subscription.currentPeriodEnd'] = new Date(subscription.current_end * 1000);

@@ -102,7 +102,7 @@ export interface Payment {
 
 export interface BillingData {
   success: boolean;
-  subscription: { plan: string; status: string; expiresAt?: string };
+  subscription: { plan: string; status: string; expiresAt?: string; cancelAtPeriodEnd?: boolean; endsAt?: string | null; nextBillingAt?: string | null };
   plan?: { tier: string; addons: string[] };
   credits: { balance: number; totalUsed: number };
   payments: Payment[];

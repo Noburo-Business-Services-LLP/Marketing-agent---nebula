@@ -651,3 +651,63 @@ test('sendWelcomeEmail uses the injected transport, skips without a key, and nev
   const none = await we.sendSubscriberWelcome({ email: 'a@example.com' }, { tier: 'starter', quarks: 2100 }, { env: {} });
   assert.strictEqual(none.skipped, true);
 });
+
+// ---------------------------------------------------------------- cancel at the end of the paid month
+const paidUser = (over = {}) => mkUser({
+  plan: { tier: 'starter', addons: ['publish'], subscriptions: [
+    { subscriptionId: 'sub_plan', kind: 'plan', key: 'starter', active: true },
+    { subscriptionId: 'sub_addon', kind: 'addon', key: 'publish', active: true }] },
+  subscription: { status: 'active', razorpaySubscriptionId: 'sub_plan', currentPeriodEnd: new Date('2026-12-01T00:00:00Z') },
+  ...over
+});
+
+test('cancel: the plan and its add-ons are cancelled at the END of the paid month, and the account is marked', async () => {
+  const ctx = setup({ user: paidUser() });
+  const res = await call(ctx.r, 'post', '/cancel-subscription');
+  assert.strictEqual(res.code, 200, JSON.stringify(res.body));
+  assert.deepStrictEqual(ctx.razorpay.calls.cancels, [['sub_plan', 1], ['sub_addon', 1]]);
+  assert.strictEqual(ctx.user.subscription.cancelAtPeriodEnd, true);
+  assert.ok(ctx.user.subscription.cancelRequestedAt);
+  assert.ok(res.body.endsAt);
+  assert.strictEqual(ctx.user.plan.tier, 'starter', 'the plan keeps working until the month ends');
+});
+
+test('cancel: pressing it twice does not cancel twice', async () => {
+  const ctx = setup({ user: paidUser() });
+  await call(ctx.r, 'post', '/cancel-subscription');
+  const again = await call(ctx.r, 'post', '/cancel-subscription');
+  assert.strictEqual(again.code, 200);
+  assert.strictEqual(again.body.alreadyCancelling, true);
+  assert.strictEqual(ctx.razorpay.calls.cancels.length, 2);
+});
+
+test('cancel: a free or managed account has nothing to cancel', async () => {
+  for (const tier of ['free', undefined]) {
+    const ctx = setup({ user: mkUser({ plan: tier ? { tier, addons: [], subscriptions: [] } : undefined }) });
+    const res = await call(ctx.r, 'post', '/cancel-subscription');
+    assert.strictEqual(res.code, 400);
+    assert.strictEqual(ctx.razorpay.calls.cancels.length, 0);
+  }
+});
+
+test('cancel: if Razorpay refuses, nothing is marked and the customer is told plainly', async () => {
+  const ctx = setup({ user: paidUser() });
+  ctx.razorpay.subscriptions.cancel = async () => { throw new Error('gateway down'); };
+  const res = await call(ctx.r, 'post', '/cancel-subscription');
+  assert.strictEqual(res.code, 502);
+  assert.match(res.body.message, /could not cancel/);
+  assert.ok(!ctx.user.subscription.cancelAtPeriodEnd);
+});
+
+test('cancel: "already cancelled" from Razorpay counts as done', async () => {
+  const ctx = setup({ user: paidUser() });
+  ctx.razorpay.subscriptions.cancel = async () => { const e = new Error('x'); e.error = { description: 'The subscription is already cancelled' }; throw e; };
+  const res = await call(ctx.r, 'post', '/cancel-subscription');
+  assert.strictEqual(res.code, 200);
+  assert.strictEqual(ctx.user.subscription.cancelAtPeriodEnd, true);
+});
+
+test('a new plan payment clears a pending cancellation', () => {
+  const b = bp.buildChargeUpdate({ kind: 'plan', key: 'starter', subscriptionId: 'sub_new' }, { paymentId: 'p', paidPaise: 117882 });
+  assert.strictEqual(b.update.$set['subscription.cancelAtPeriodEnd'], false);
+});

@@ -506,6 +506,8 @@ export const apiService = {
     return apiCall('/payment/status', { method: 'GET' }, true);
   },
 
+  cancelSubscription: async (): Promise<{ success: boolean; endsAt?: string | null; alreadyCancelling?: boolean; message?: string }> =>
+    apiCall('/payment/cancel-subscription', { method: 'POST', body: '{}' }, true),
   getBillingData: async (): Promise<any> => {
     return apiCall('/payment/billing', { method: 'GET' }, true);
   },

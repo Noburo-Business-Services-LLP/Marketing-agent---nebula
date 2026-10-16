@@ -195,7 +195,12 @@ const userSchema = new mongoose.Schema({
     razorpaySubscriptionId: { type: String, default: '' },
     razorpayPlanId: { type: String, default: '' },
     currentPeriodEnd: { type: Date },
-    nextBillingAt: { type: Date }
+    nextBillingAt: { type: Date },
+    // The customer asked to stop: the plan runs to the end of the paid month and is not charged again.
+    cancelAtPeriodEnd: { type: Boolean, default: false },
+    cancelRequestedAt: { type: Date },
+    // The billing date the renewal reminder email was already sent for, so each month's reminder goes once.
+    reminderForBillingAt: { type: Date }
   },
   // Google Calendar integration
   googleCalendar: {
