@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
+import BillingDetailsForm from '../components/BillingDetailsForm';
 import { tierLabel } from '../utils/plans';
 import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
@@ -727,6 +728,15 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                     )}
                                   </div>
                                 )}
+                              </div>
+
+                              {/* GST details for the invoice */}
+                              <div className={`p-5 rounded-lg border ${
+                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
+                              }`}>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">GST details for your invoice</p>
+                                <p className={`text-sm mb-4 ${theme.textSecondary}`}>Add your GSTIN to get a tax invoice in your business name. You can leave this empty and still pay.</p>
+                                <BillingDetailsForm />
                               </div>
 
                               {/* Quarks */}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CreditCard, CheckCircle, Loader2, Shield, Check } from 'lucide-react';
 import { apiService, PlansResponse } from '../services/api';
 import { formatInr, formatPaise, tierLabel } from '../utils/plans';
+import BillingDetailsForm from '../components/BillingDetailsForm';
 
 declare global {
   interface Window {
@@ -171,6 +172,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
   const ownsAddon = (id: string) => held.includes(id) || held.includes('bundle');
   const onPaidPlan = tier === 'starter' || tier === 'professional';
   const isManaged = tier === 'managed';
+  const [showGst, setShowGst] = useState(false);
   // A new account that has not paid yet: no Quarks, and the free Blueprint is the one thing it can use.
   const isNewAccount = tier === 'free' && reason === 'credits';
 
@@ -276,6 +278,19 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
           <div className="mb-12 rounded-3xl bg-[#070a12] px-6 py-6 text-center">
             <h2 className="text-xl font-bold text-white mb-2">Your plan is managed by Nebulaa</h2>
             <p className={`${muted} text-sm max-w-xl mx-auto`}>Your account is set up and looked after by Nebulaa, so you do not need to choose a plan or add-ons. You can buy extra Quarks below at any time.</p>
+          </div>
+        )}
+
+        {!isManaged && (
+          <div className="mb-8 max-w-2xl mx-auto text-center">
+            <button type="button" onClick={() => setShowGst((v) => !v)} aria-expanded={showGst} className={`${muted} text-sm underline underline-offset-2 hover:text-white`}>
+              {showGst ? 'Hide GST details' : 'Need a GST invoice in your business name? Add your GSTIN'}
+            </button>
+            {showGst && (
+              <div className="mt-4 rounded-2xl p-5 text-left" style={{ background: '#fffdf8', color: '#14203A' }}>
+                <BillingDetailsForm compact />
+              </div>
+            )}
           </div>
         )}
 

@@ -20,6 +20,15 @@ const express = require('express');
 const crypto = require('crypto');
 const bp = require('../services/billingPlans');
 const quarkBuckets = require('../services/quarkBuckets');
+const gstinRules = require('../services/gstin');
+
+// What goes on an invoice from the details a customer added (a GSTIN, the name and the state the supply is made to).
+function invoiceBillingOf(user) {
+  const b = (user && user.billingDetails) || {};
+  if (!b.gstin && !b.stateCode) return undefined;
+  const st = gstinRules.stateByAbbr(b.stateCode);
+  return { gstin: b.gstin || '', legalName: b.legalName || '', address: b.address || '', pin: b.pin || '', stateCode: b.stateCode || '', stateName: st ? st.name : '' };
+}
 const { resolveTier, addonsOf } = require('../config/entitlements');
 const { chargePaise } = require('../config/apiCosts');
 
@@ -120,7 +129,8 @@ function createPaymentRouter(deps = {}) {
         companyName: user.companyName || user.businessProfile?.name || '',
         razorpayPaymentId: paymentId, credits: built.quarks,
         itemName: built.spec.itemName, description: built.spec.description,
-        amount: built.spec.amountInr, gstPercent: built.spec.gstPercent, totalAmount: built.spec.totalPaise / 100
+        amount: built.spec.amountInr, gstPercent: built.spec.gstPercent, totalAmount: built.spec.totalPaise / 100,
+        billing: invoiceBillingOf(user)
       });
       if (out && out.invoiceUrl) {
         await User.updateOne({ _id: user._id }, { $set: { 'payments.$[p].invoiceUrl': out.invoiceUrl } }, { arrayFilters: [{ 'p.razorpayPaymentId': paymentId }] });
@@ -514,6 +524,52 @@ function createPaymentRouter(deps = {}) {
   });
 
   /**
+   * GET and PUT /api/payment/billing-details
+   * The optional details for a tax invoice: a GSTIN with the business name, and the state the supply is made to.
+   * Never needed to pay. They are read when an invoice is made, so they apply to payments made after they are saved.
+   */
+  const detailsOf = (u) => {
+    const b = (u && u.billingDetails) || {};
+    return { gstin: b.gstin || '', legalName: b.legalName || '', address: b.address || '', pin: b.pin || '', stateCode: b.stateCode || '' };
+  };
+  router.get('/billing-details', protect, async (req, res) => {
+    try {
+      const user = await User.findById(userIdOf(req));
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      res.json({ success: true, details: detailsOf(user), states: gstinRules.STATES.map((s) => ({ abbr: s.abbr, name: s.name })) });
+    } catch (error) {
+      console.error('Billing details fetch error:', error);
+      res.status(500).json({ success: false, message: 'We could not load your invoice details. Please try again.' });
+    }
+  });
+  router.put('/billing-details', protect, payLimiter, async (req, res) => {
+    try {
+      const user = await User.findById(userIdOf(req));
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      const b = req.body || {};
+      const clip = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+      const next = { gstin: '', legalName: clip(b.legalName, 120), address: clip(b.address, 240), pin: clip(b.pin, 6).replace(/\D/g, ''), stateCode: '' };
+      if (b.pin && next.pin.length !== 6) return res.status(400).json({ success: false, errors: { pin: 'A PIN code has 6 digits.' }, message: 'Please check the PIN code.' });
+      if (gstinRules.normalise(b.gstin)) {
+        const v = gstinRules.validateGstin(b.gstin);
+        if (!v.ok) return res.status(400).json({ success: false, errors: { gstin: v.message }, message: v.message });
+        if (next.legalName.length < 2) return res.status(400).json({ success: false, errors: { legalName: 'Enter the business name exactly as it is registered for GST.' }, message: 'Enter the business name exactly as it is registered for GST.' });
+        next.gstin = v.gstin;
+        next.stateCode = v.stateAbbr; // a GSTIN fixes the state the supply is made to
+      } else if (b.stateCode) {
+        const st = gstinRules.stateByAbbr(b.stateCode);
+        if (!st) return res.status(400).json({ success: false, errors: { stateCode: 'Choose a state from the list.' }, message: 'Choose a state from the list.' });
+        next.stateCode = st.abbr;
+      }
+      await User.updateOne({ _id: user._id }, { $set: { billingDetails: { ...next, updatedAt: new Date() } } });
+      res.json({ success: true, details: next, message: next.gstin ? 'Saved. Your next invoice will carry this GSTIN.' : 'Saved.' });
+    } catch (error) {
+      console.error('Billing details save error:', error);
+      res.status(500).json({ success: false, message: 'We could not save your invoice details. Please try again.' });
+    }
+  });
+
+  /**
    * POST /api/payment/cancel-subscription
    * One click stop. The plan (and any add-ons) is cancelled at Razorpay at the END of the month already paid for, so the
    * customer keeps using what they paid for and is not charged again. Safe to press twice.
@@ -600,6 +656,7 @@ function createPaymentRouter(deps = {}) {
           endsAt: (user.subscription && (user.subscription.currentPeriodEnd || user.subscription.nextBillingAt)) || null
         },
         plan: { tier: resolveTier(user), addons: addonsOf(user) },
+        billingDetails: detailsOf(user),
         credits: {
           balance: user.credits?.balance ?? 0,
           totalUsed: user.credits?.totalUsed ?? 0

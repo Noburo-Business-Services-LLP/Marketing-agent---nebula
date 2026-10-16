@@ -508,6 +508,10 @@ export const apiService = {
 
   cancelSubscription: async (): Promise<{ success: boolean; endsAt?: string | null; alreadyCancelling?: boolean; message?: string }> =>
     apiCall('/payment/cancel-subscription', { method: 'POST', body: '{}' }, true),
+  getBillingDetails: async (): Promise<{ success: boolean; details: { gstin: string; legalName: string; address: string; pin: string; stateCode: string }; states: Array<{ abbr: string; name: string }> }> =>
+    apiCall('/payment/billing-details', { method: 'GET' }, true),
+  saveBillingDetails: async (d: { gstin: string; legalName: string; address: string; pin: string; stateCode: string }): Promise<{ success: boolean; message?: string; errors?: Record<string, string> }> =>
+    apiCall('/payment/billing-details', { method: 'PUT', body: JSON.stringify(d) }, true),
   getBillingData: async (): Promise<any> => {
     return apiCall('/payment/billing', { method: 'GET' }, true);
   },

@@ -711,3 +711,92 @@ test('a new plan payment clears a pending cancellation', () => {
   const b = bp.buildChargeUpdate({ kind: 'plan', key: 'starter', subscriptionId: 'sub_new' }, { paymentId: 'p', paidPaise: 117882 });
   assert.strictEqual(b.update.$set['subscription.cancelAtPeriodEnd'], false);
 });
+
+// ---------------------------------------------------------------- invoice details: GSTIN and state
+const gstinRulesT = require('../services/gstin');
+const validGstin = (() => { const f = '33ABCDE1234F1Z'; return f + gstinRulesT.checkChar(f); })();
+
+test('details: a valid GSTIN with a business name is saved, and fixes the state', async () => {
+  const ctx = setup({ user: mkUser() });
+  const res = await call(ctx.r, 'put', '/billing-details', { body: { gstin: validGstin.toLowerCase(), legalName: 'Asha Traders', address: '4 Main Road', pin: '600001', stateCode: 'KA' } });
+  assert.strictEqual(res.code, 200, JSON.stringify(res.body));
+  assert.strictEqual(ctx.user.billingDetails.gstin, validGstin);
+  assert.strictEqual(ctx.user.billingDetails.stateCode, 'TN', 'the GSTIN decides the state, not the dropdown');
+  const got = await call(ctx.r, 'get', '/billing-details');
+  assert.strictEqual(got.body.details.legalName, 'Asha Traders');
+});
+
+test('details: a bad GSTIN, a missing business name or a bad PIN is refused and nothing is saved', async () => {
+  const ctx = setup({ user: mkUser() });
+  let res = await call(ctx.r, 'put', '/billing-details', { body: { gstin: '33ABCDE1234F1Z0', legalName: 'X Co' } });
+  assert.strictEqual(res.code, 400); assert.ok(res.body.errors.gstin);
+  res = await call(ctx.r, 'put', '/billing-details', { body: { gstin: validGstin } });
+  assert.strictEqual(res.code, 400); assert.ok(res.body.errors.legalName);
+  res = await call(ctx.r, 'put', '/billing-details', { body: { pin: '12' } });
+  assert.strictEqual(res.code, 400); assert.ok(res.body.errors.pin);
+  assert.ok(!ctx.user.billingDetails);
+});
+
+test('details: without a GSTIN only a state can be saved, and an unknown state is refused', async () => {
+  const ctx = setup({ user: mkUser() });
+  assert.strictEqual((await call(ctx.r, 'put', '/billing-details', { body: { stateCode: 'KA' } })).code, 200);
+  assert.strictEqual(ctx.user.billingDetails.stateCode, 'KA');
+  assert.strictEqual(ctx.user.billingDetails.gstin, '');
+  assert.strictEqual((await call(ctx.r, 'put', '/billing-details', { body: { stateCode: 'ZZ' } })).code, 400);
+});
+
+test('details: clearing the GSTIN keeps the account working and the invoice goes back to a plain one', async () => {
+  const ctx = setup({ user: mkUser({ billingDetails: { gstin: validGstin, legalName: 'Asha Traders', stateCode: 'TN' } }) });
+  assert.strictEqual((await call(ctx.r, 'put', '/billing-details', { body: { gstin: '' } })).code, 200);
+  assert.strictEqual(ctx.user.billingDetails.gstin, '');
+});
+
+test('the invoice for a payment carries the customer details when they added them, and none when they did not', async () => {
+  const withDetails = setup({ user: mkUser({ billingDetails: { gstin: validGstin, legalName: 'Asha Traders', address: '4 Main Road', pin: '600001', stateCode: 'TN' } }) });
+  const t1 = await paidTopup(withDetails, { pack: 1000, payId: 'pay_gst1' });
+  assert.strictEqual((await t1.verify()).code, 200);
+  assert.strictEqual(withDetails.invoices[0].billing.gstin, validGstin);
+  assert.strictEqual(withDetails.invoices[0].billing.legalName, 'Asha Traders');
+  assert.strictEqual(withDetails.invoices[0].billing.stateName, 'Tamil Nadu');
+  const plain = setup({ user: mkUser() });
+  const t2 = await paidTopup(plain, { pack: 1000, payId: 'pay_gst2' });
+  assert.strictEqual((await t2.verify()).code, 200);
+  assert.strictEqual(plain.invoices[0].billing, undefined);
+});
+
+test('Zoho: a GSTIN makes a business invoice (contact updated, gst number, state, and the service code on the line)', async () => {
+  const realFetch = global.fetch; const seen = [];
+  const env = { ...process.env };
+  Object.assign(process.env, { ZOHO_BOOKS_REFRESH_TOKEN: 't', ZOHO_BOOKS_CLIENT_ID: 'c', ZOHO_BOOKS_CLIENT_SECRET: 's', ZOHO_BOOKS_ORG_ID: 'org' });
+  global.fetch = async (url, opts = {}) => {
+    const u = String(url); seen.push({ u, body: typeof opts.body === 'string' ? JSON.parse(opts.body) : null, method: opts.method });
+    const json = (o) => ({ json: async () => o });
+    if (u.includes('oauth/v2/token')) return json({ access_token: 'a', expires_in: 3600 });
+    if (u.includes('/settings/taxes')) return json({ code: 0, taxes: [{ tax_id: 'tax18', tax_percentage: 18, tax_name: 'GST' }] });
+    if (u.includes('/contacts?')) return json({ code: 0, contacts: [{ contact_id: 'c1' }] });
+    if (u.includes('/invoices?')) return json({ code: 0, invoice: { invoice_id: 'i1', invoice_number: 'INV-9', invoice_url: 'https://z/i1' } });
+    return json({ code: 0 });
+  };
+  try {
+    const { createInvoice } = require('../services/zohoBooks');
+    const base = { email: 'a@b.c', firstName: 'A', lastName: '', companyName: '', razorpayPaymentId: 'pay_1', itemName: 'Nebulaa subscription', description: 'Starter, monthly', amount: 999, gstPercent: 18, totalAmount: 1178.82 };
+    await createInvoice({ ...base, billing: { gstin: validGstin, legalName: 'Asha Traders', address: '4 Main Road', pin: '600001', stateCode: 'KA', stateName: 'Karnataka' } });
+    const inv = seen.find((x) => x.u.includes('/invoices?') && x.method === 'POST').body;
+    assert.strictEqual(inv.gst_treatment, 'business_gst');
+    assert.strictEqual(inv.gst_no, validGstin);
+    assert.strictEqual(inv.place_of_supply, 'KA');
+    assert.strictEqual(inv.line_items[0].hsn_or_sac, '997331');
+    const put = seen.find((x) => x.method === 'PUT');
+    assert.strictEqual(put.body.gst_no, validGstin);
+    assert.strictEqual(put.body.gst_treatment, 'business_gst');
+    // and a plain customer still gets a consumer invoice, with the service code and no GST number
+    seen.length = 0;
+    await createInvoice(base);
+    const plain = seen.find((x) => x.u.includes('/invoices?') && x.method === 'POST').body;
+    assert.strictEqual(plain.gst_treatment, 'consumer');
+    assert.ok(!('gst_no' in plain));
+    assert.strictEqual(plain.place_of_supply, 'TN');
+    assert.strictEqual(plain.line_items[0].hsn_or_sac, '997331');
+    assert.ok(!seen.some((x) => x.method === 'PUT'));
+  } finally { global.fetch = realFetch; for (const k of Object.keys(process.env)) if (!(k in env)) delete process.env[k]; }
+});

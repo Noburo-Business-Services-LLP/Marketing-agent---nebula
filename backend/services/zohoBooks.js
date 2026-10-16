@@ -180,9 +180,27 @@ async function createInvoice(params) {
   // contact is not tax-exempt. Without them the original behaviour is unchanged.
   const gstPercent = params.gstPercent || 0;
   const paidAmount = params.totalAmount || amount;
+  // The customer's own invoice details, when they added any: a GSTIN makes it a tax invoice in the business name.
+  const billing = (params.billing && typeof params.billing === 'object') ? params.billing : {};
+  const hasGstin = Boolean(gstPercent && billing.gstin);
+  const placeOfSupply = (gstPercent && (billing.stateCode)) || 'TN';
 
   // Step 1: Get or create contact
-  const contactId = await getOrCreateContact({ email, firstName, lastName, companyName });
+  const contactId = await getOrCreateContact({ email, firstName, lastName, companyName: hasGstin && billing.legalName ? billing.legalName : companyName });
+
+  // Step 1a: a GSTIN goes on the contact too, so Zoho treats the sale as business to business
+  if (hasGstin) try {
+    await zohoRequest('PUT', `/contacts/${contactId}`, {
+      contact_name: billing.legalName || undefined,
+      company_name: billing.legalName || undefined,
+      gst_treatment: 'business_gst',
+      gst_no: billing.gstin,
+      place_of_supply: placeOfSupply,
+      ...(billing.address || billing.pin ? { billing_address: { address: billing.address || '', zip: billing.pin || '', state: billing.stateName || '', country: 'India' } } : {})
+    });
+  } catch (e) {
+    console.warn('📄 [ZOHO] Could not add the GSTIN to the contact:', e.message);
+  }
 
   // Step 1b: Update contact with tax exemption (original invoices only)
   if (!gstPercent) try {
@@ -222,7 +240,12 @@ async function createInvoice(params) {
     lineItem.name = params.itemName;
     lineItem.description = params.description || params.itemName;
     lineItem.tax_id = taxId;
+    // The service accounting code for the supply. To be confirmed with the accountant; the default is the
+    // one agreed for launch and can be changed with INVOICE_SAC without a release.
+    lineItem.hsn_or_sac = String(process.env.INVOICE_SAC || '997331');
     delete invoiceData.tax_exemption_id;
+    invoiceData.place_of_supply = placeOfSupply;
+    if (hasGstin) { invoiceData.gst_treatment = 'business_gst'; invoiceData.gst_no = billing.gstin; }
   }
 
   const invoiceResult = await zohoRequest('POST', '/invoices', invoiceData);

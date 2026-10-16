@@ -188,6 +188,16 @@ const userSchema = new mongoose.Schema({
     },
     connectedAt: { type: Date, default: Date.now }
   }],
+  // Optional invoice details the customer adds: a GSTIN for a tax invoice in the business name, and the state
+  // the supply is made to (Zoho's two letter code). Read when an invoice is made; never required to pay.
+  billingDetails: {
+    gstin: { type: String, default: '' },
+    legalName: { type: String, default: '' },
+    address: { type: String, default: '' },
+    pin: { type: String, default: '' },
+    stateCode: { type: String, default: '' },
+    updatedAt: { type: Date }
+  },
   subscription: {
     plan: { type: String, enum: ['free', 'pro', 'enterprise'], default: 'free' },
     status: { type: String, enum: ['active', 'cancelled', 'expired', 'halted'], default: 'active' },
