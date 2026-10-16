@@ -38,3 +38,43 @@ test('wallet: the balance of the payer, 0 when the payer is missing', async () =
   assert.strictEqual(await a.walletBalance('o1', { User }), 42);
   assert.strictEqual(await a.walletBalance('gone', { User }), 0);
 });
+
+test('limit boundaries: 0, 5, 6, 25 and 26 clients worth of slots', () => {
+  const I = AGENCY.includedClients, M = AGENCY.maxClients;
+  assert.strictEqual(a.clientLimitOf(owner(0)), I);
+  assert.strictEqual(a.clientLimitOf(owner(1)), I + 1);
+  assert.strictEqual(a.clientLimitOf(owner(M - I)), M);
+  assert.strictEqual(a.clientLimitOf(owner(M - I + 1)), M);
+});
+
+test('limit: negative, fractional and invalid extra slots never give a fractional or reduced limit', () => {
+  const I = AGENCY.includedClients;
+  assert.strictEqual(a.clientLimitOf(owner(-3)), I);
+  assert.strictEqual(a.clientLimitOf(owner(2.7)), I + 2);
+  assert.strictEqual(a.clientLimitOf(owner(0.9)), I);
+  assert.strictEqual(a.clientLimitOf(owner(NaN)), I);
+  assert.strictEqual(a.clientLimitOf(owner(Infinity)), I);
+  assert.strictEqual(a.clientLimitOf(owner(-Infinity)), I);
+  assert.strictEqual(a.clientLimitOf(owner('3')), I);
+  assert.strictEqual(a.clientLimitOf(owner(null)), I);
+  assert.strictEqual(a.clientLimitOf(owner(undefined)), I);
+  assert.strictEqual(a.clientLimitOf(owner({})), I);
+  assert.strictEqual(a.clientLimitOf({ plan: { tier: 'agency' } }), I);
+});
+
+test('a client workspace is not an agency and cannot own clients', () => {
+  const ws = { _id: 'w1', plan: { tier: 'agency' }, agency: { ownerId: 'o1', extraSlots: 5 } };
+  assert.strictEqual(a.isWorkspace(ws), true);
+  assert.strictEqual(a.isAgency(ws), false);
+  assert.strictEqual(a.clientLimitOf(ws), 0);
+  assert.strictEqual(a.isAgency(owner()), true);
+});
+
+test('rule functions do not mutate their input', () => {
+  const o = owner(2.7);
+  const w = { _id: 'w1', plan: { tier: 'agency' }, agency: { ownerId: 'o1', extraSlots: 1 } };
+  const before = JSON.stringify([o, w]);
+  a.isAgency(o); a.isAgency(w); a.isWorkspace(w); a.clientLimitOf(o); a.clientLimitOf(w);
+  a.payerIdOf(w); a.payerIdOf(o); a.workspacePlanFields(o);
+  assert.strictEqual(JSON.stringify([o, w]), before);
+});

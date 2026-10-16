@@ -8,12 +8,16 @@ const { AGENCY } = require('../config/apiCosts');
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const idOf = (v) => (v ? String(v._id || v.id || v) : '');
 
-const isAgency = (u) => !!(u && u.plan && u.plan.tier === 'agency');
 const isWorkspace = (u) => !!(u && u.agency && u.agency.ownerId);
+// A client workspace mirrors tier 'agency' from its owner, but it is not itself an agency and cannot own clients.
+const isAgency = (u) => !!(u && u.plan && u.plan.tier === 'agency') && !isWorkspace(u);
+
+/** Paid extra client slots: a whole number >= 0; negative, fractional-below-1, non-finite and non-numeric values give 0. */
+const slotsOf = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
 
 function clientLimitOf(owner) {
   if (!isAgency(owner)) return 0;
-  return Math.min(AGENCY.maxClients, AGENCY.includedClients + Math.max(0, num(owner.agency && owner.agency.extraSlots)));
+  return Math.min(AGENCY.maxClients, AGENCY.includedClients + slotsOf(owner.agency && owner.agency.extraSlots));
 }
 
 /** The account whose Quarks are spent: the agency for a client workspace, the user themselves otherwise. */
