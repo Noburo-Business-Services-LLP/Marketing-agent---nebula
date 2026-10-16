@@ -165,6 +165,14 @@ router.get('/ai-spend', requireStaff('manage_ai_switches'), async (req, res) => 
   catch (error) { console.error('[staff] ai spend failed:', error.message); res.status(500).json({ success: false, message: 'We could not load this right now.' }); }
 });
 
+// GET /api/staff/ayrshare-profiles: social profiles in use against the flat-fee limit, counted from our own accounts.
+router.get('/ayrshare-profiles', requireStaff('manage_ai_switches'), async (req, res) => {
+  try {
+    const watch = require('../services/ayrshareProfileWatch');
+    res.json({ success: true, ...watch.status(await watch.countProfiles({ User })) });
+  } catch (error) { console.error('[staff] profile count failed:', error.message); res.status(500).json({ success: false, message: 'We could not load this right now.' }); }
+});
+
 // POST /api/staff/ai-switches { provider, disabled, note }: stop or resume one AI provider (Owner only).
 router.post('/ai-switches', requireStaff('manage_ai_switches'), async (req, res) => {
   try {

@@ -8,6 +8,7 @@ const { PLANS, ADDONS, AGENCY, TOPUP_PACKS, USD_PER_QUARK, gstPaise, chargePaise
 const { PLAN_PRESENTATION, INVOICE_ITEMS } = require('../../config/plans');
 const { resolveTier } = require('../../config/entitlements');
 const { AYRSHARE } = require('../../config/vendorPlans');
+const { PROFILE_FILTER, status: profileStatus } = require('../ayrshareProfileWatch');
 const { paymentFailureMessage } = require('../providerErrors');
 const { dayKey } = require('./home');
 
@@ -263,6 +264,7 @@ function ayrshareOf(profiles) {
     perExtraProfileUsdCents: Math.round(AYRSHARE.extraProfileUsd * 100),
     extraUsdCents: extra * Math.round(AYRSHARE.extraProfileUsd * 100),
     planUsdPerMonth: AYRSHARE.planUsdPerMonth,
+    alertAt: AYRSHARE.alertAtProfiles, level: profileStatus(profiles).level, message: profileStatus(profiles).message,
     note: 'Estimate: accounts that have a social profile, against the profiles the plan includes. The extra-profile rate is from our own config, not from an invoice.'
   };
 }
@@ -308,7 +310,7 @@ async function loadMoneyData({ models }) {
     } catch (error) { console.error('[staff] could not read managed invoices for the money page:', error.message); }
   }
   let ayrshareProfiles = null;
-  try { ayrshareProfiles = await User.countDocuments({ 'ayrshare.profileKey': { $exists: true, $nin: ['', null] } }); }
+  try { ayrshareProfiles = await User.countDocuments(PROFILE_FILTER); }
   catch (error) { console.error('[staff] could not count social profiles:', error.message); }
   return { users, ayrshareProfiles, invoices };
 }

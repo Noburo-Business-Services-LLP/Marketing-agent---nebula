@@ -8,7 +8,9 @@ const AYRSHARE = {
   planUsdPerMonth: 599,
   includedProfiles: 30,
   extraProfileUsd: 8.99,
-  maxProfiles: 100
+  maxProfiles: 100,
+  // The owner is emailed when the platform reaches this many profiles, so the Agency price for new sign-ups can change before the cliff.
+  alertAtProfiles: 25
 };
 
 module.exports = { AYRSHARE };

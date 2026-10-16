@@ -120,3 +120,20 @@ test('no provider text, keys or password fields appear in the response', async (
   const text = JSON.stringify((await call('/money', { as: OWNER })).body);
   assert.doesNotMatch(text, /razorpay|BAD_REQUEST|password|profileKey|k1|pay_secret/i);
 });
+
+test('the profile watch route gives the Owner the count, the limit and the alert level, and refuses everyone else', async () => {
+  seed();
+  const r = await call('/ayrshare-profiles', { as: OWNER });
+  assert.strictEqual(r.statusCode, 200);
+  assert.deepStrictEqual([r.body.count, r.body.limit, r.body.alertAt, r.body.level], [1, 30, 25, 'ok']);
+  assert.match(r.body.message, /1 of 30/);
+  for (const who of [ADMIN, CSM, CUST]) assert.strictEqual((await call('/ayrshare-profiles', { as: who })).statusCode, 403);
+  assert.strictEqual((await call('/ayrshare-profiles', { as: null })).statusCode, 401);
+});
+
+test('the Money page carries the alert level and message with the gauge', async () => {
+  seed();
+  const r = await call('/money', { as: OWNER });
+  assert.deepStrictEqual([r.body.ayrshare.alertAt, r.body.ayrshare.level], [25, 'ok']);
+  assert.match(r.body.ayrshare.message, /1 of 30/);
+});

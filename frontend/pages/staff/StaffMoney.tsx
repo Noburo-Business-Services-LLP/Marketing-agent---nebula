@@ -390,6 +390,9 @@ const StaffMoney: React.FC = () => {
       <Section title="Social profiles" hint="Estimate, counted by us">
         {!ay.available ? <Unavailable reason={ay.reason} /> : gauge && (
           <div className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-4">
+            {ay.level && ay.level !== 'ok' && ay.message && (
+              <p role="status" className="mb-3 rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-bg)] p-3 text-sm font-medium text-[var(--gv-text-primary)]">{ay.message}</p>
+            )}
             <p className="text-base font-semibold text-[var(--gv-text-primary)]"><span className="tabular-nums">{ay.profiles}</span> of <span className="tabular-nums">{ay.included}</span> included profiles used{ay.extra > 0 ? `, ${ay.extra} extra` : ''}</p>
             <div className="relative mt-3 h-3 rounded-full bg-[var(--gv-bg)]" role="img" aria-label={`${ay.profiles} profiles. ${ay.included} are included. The most the plan allows is ${ay.maxProfiles}.`}>
               <div className="h-3 rounded-full" style={{ width: `${gauge.used}%`, background: gauge.over ? 'var(--gv-text-secondary)' : 'var(--gv-accent-display)' }} />
