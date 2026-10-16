@@ -40,7 +40,7 @@ import AccountMenu from './AccountMenu';
 import { groupHasPath } from '../utils/navMenu';
 import { apiService } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
-import { actingBannerText, isAgencyUser, isInsideClient, returnButtonLabel, showClientSwitcher } from '../utils/agency';
+import { actingBannerText, actingClientName, isAgencyUser, isInsideClient, isLapsedAgency, returnButtonLabel, showClientSwitcher, showsPostsNotQuarks } from '../utils/agency';
 
 interface TrialData {
   creditsBalance: number;
@@ -138,7 +138,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   const primaryNav = [
     ...(staffEntry?.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
     ...(user?.isCsm && !localStorage.getItem('csmReturnToken') ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),
-    ...(isAgencyUser(user) ? [{ path: '/agency/clients', label: 'Clients', icon: Users }] : []),
+    ...(isAgencyUser(user) || isLapsedAgency(user) ? [{ path: '/agency/clients', label: 'Clients', icon: Users }] : []),
     { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
@@ -194,6 +194,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
 
   const topBarMeta = resolveTopBarMeta(location.pathname);
   // With two switchers in the bar, a computer-sized screen has no room for the page title; the page has its own heading.
+  // Agencies and their clients see posts and videos, never Quarks, so the Quark balance is not shown to them.
+  const hideQuarks = showsPostsNotQuarks(user);
   const clientSwitcherShown = showClientSwitcher(user, Boolean(localStorage.getItem('csmReturnToken')));
   const isActive = (path: string) =>
     path === '/staff/home' ? location.pathname.startsWith('/staff') :
@@ -331,7 +333,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
             <div className="shrink-0 border-b border-[#F5A623]/50 bg-[#FDF1DC] px-4 md:px-8 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
               <p className="text-[13px] text-[var(--gv-text-primary)]">
                 {isInsideClient(user)
-                  ? actingBannerText(user?.actingAgency?.name || localStorage.getItem('csmActingClient') || '')
+                  ? actingBannerText(actingClientName(user, localStorage.getItem('csmActingClient')))
                   : <>You are working in <strong>{localStorage.getItem('csmActingClient') || 'a client'}</strong>'s account. Payments, plans and passwords stay with the client.</>}
               </p>
               <button
@@ -354,7 +356,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
             </button>
             <img src="/assets/brand/logo-nebulaa.png" alt="Nebulaa" width={784} height={360} className="h-8 w-auto" />
             <div className="flex items-center gap-2">
-              {trialInfo && (
+              {trialInfo && !hideQuarks && (
                 <div
                   className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium ${
                     trialInfo.creditsBalance <= 25
@@ -397,7 +399,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
               </div>
 
               {/* Quarks pill */}
-              {trialInfo && (() => {
+              {trialInfo && !hideQuarks && (() => {
                 // An absolute threshold, not percent-of-100: the old bar
                 // computed balance / startingCredits, and startingCredits
                 // was a hard-coded 100 with no real meaning once an account

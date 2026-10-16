@@ -4,7 +4,8 @@ import { Check, ChevronDown, Loader2, Users } from 'lucide-react';
 import { apiService } from '../services/api';
 import type { AgencyClient } from '../services/api';
 import type { User } from '../types';
-import { agencyErrorMessage, clientStatus, isInsideClient, limitLabel, showClientSwitcher } from '../utils/agency';
+import { returnHashAfterActing } from '../utils/staffHome';
+import { actingClientName, agencyErrorMessage, clientStatus, isInsideClient, limitLabel, showClientSwitcher } from '../utils/agency';
 
 const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent-text)]';
 
@@ -24,10 +25,13 @@ const ClientSwitcher: React.FC<{ user: User | null; onNavigate?: () => void }> =
   let holdsPass = false;
   try { holdsPass = Boolean(localStorage.getItem('csmReturnToken')); } catch { /* storage may be blocked */ }
   const inside = isInsideClient(user);
-  const currentName = inside ? (user?.actingAgency?.name || localStorage.getItem('csmActingClient') || 'Client') : '';
+  let storedName = '', storedId = '';
+  try { storedName = localStorage.getItem('csmActingClient') || ''; storedId = localStorage.getItem('csmActingClientId') || ''; } catch { /* storage may be blocked */ }
+  // The client's own name, never the agency owner's name that the server puts on actingAgency.
+  const currentName = inside ? (actingClientName(user, storedName) || 'Client') : '';
 
   const load = () => {
-    setState('loading'); setProblem('');
+    setState((s) => (s === 'ready' ? s : 'loading')); setProblem('');
     apiService.getAgencyClients()
       .then((r) => { setClients(r.clients || []); setLimit(r.limit || 0); setState('ready'); })
       .catch(() => setState('error'));
@@ -45,7 +49,7 @@ const ClientSwitcher: React.FC<{ user: User | null; onNavigate?: () => void }> =
   if (!showClientSwitcher(user, holdsPass)) return null;
 
   const toggle = () => {
-    if (!open && state !== 'ready') load();
+    if (!open) load(); // fresh every time it opens; the old rows stay while it loads
     setOpen((o) => !o);
   };
 
@@ -65,7 +69,7 @@ const ClientSwitcher: React.FC<{ user: User | null; onNavigate?: () => void }> =
     setOpen(false);
     onNavigate?.();
     if (inside) {
-      if (apiService.returnToCsmAccount()) { window.location.hash = '#/agency/clients'; window.location.reload(); }
+      const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); }
     } else {
       navigate('/agency/clients');
     }
@@ -106,7 +110,7 @@ const ClientSwitcher: React.FC<{ user: User | null; onNavigate?: () => void }> =
           )}
           {state === 'ready' && clients.map((c) => {
             const st = clientStatus(c, limit);
-            const isCurrent = inside && c.name === currentName;
+            const isCurrent = inside && (storedId ? c.id === storedId : c.name === currentName);
             return (
               <button
                 key={c.id}

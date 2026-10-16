@@ -9,6 +9,7 @@ import {
 import BillingDetailsForm from '../components/BillingDetailsForm';
 import ExtraClientDialog from '../components/ExtraClientDialog';
 import LegalLinks from '../components/LegalLinks';
+import { returnHashAfterActing } from '../utils/staffHome';
 
 declare global {
   interface Window {
@@ -259,14 +260,15 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
             <div className="p-8 text-center">
               <h1 className="text-xl font-bold text-white mb-2">{n.title}</h1>
               <p className={`${muted} text-sm mb-5`}>{n.body}</p>
-              <button className={PRIMARY_BTN} onClick={() => { if (apiService.returnToCsmAccount()) { window.location.hash = '#/agency/clients'; window.location.reload(); } }}>{n.action}</button>
+              <button className={PRIMARY_BTN} onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}>{n.action}</button>
             </div>
           </GlassCard>
         </div>
       </SpaceBg>
     );
   }
-  if (loading) {
+  // Wait for the account too, so an agency never sees the "Choose a plan" page for a moment.
+  if (loading || !accountLoaded) {
     return <SpaceBg><Loader2 className="w-10 h-10 animate-spin text-[#ffcc29]" /></SpaceBg>;
   }
   if (loadError || !catalogue) {
@@ -429,14 +431,14 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
         </div>
         </>}
 
-        <h2 className={h2}>Extra Quarks</h2>
-        <p className={`${muted} text-sm -mt-2 mb-4`}>Extra Quarks stay valid for 60 days from the purchase and are used after your monthly ones. Prices are before GST.</p>
+        <h2 className={h2}>{isAgencyPlan ? 'Top up the shared pool' : 'Extra Quarks'}</h2>
+        <p className={`${muted} text-sm -mt-2 mb-4`}>{isAgencyPlan ? 'Extra posts and videos stay valid for 60 days from the purchase and are used after your monthly ones. Prices are before GST.' : 'Extra Quarks stay valid for 60 days from the purchase and are used after your monthly ones. Prices are before GST.'}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
           {catalogue.topups.map((t) => (
             <GlassCard key={t.inr}>
               <div className="p-6 flex flex-col h-full">
                 <p className="text-xl font-extrabold text-white">
-                  {t.outputs ? <>{t.outputs.posts.toLocaleString('en-IN')} posts</> : <>{t.quarks.toLocaleString('en-IN')} Quarks</>}
+                  {t.outputs ? <>{t.outputs.posts.toLocaleString('en-IN')} posts</> : isAgencyPlan ? <>More posts and videos</> : <>{t.quarks.toLocaleString('en-IN')} Quarks</>}
                 </p>
                 {t.outputs && <p className={`${muted} text-sm`}>or {t.outputs.videos.toLocaleString('en-IN')} video{t.outputs.videos === 1 ? '' : 's'}</p>}
                 <p className={`${muted} text-xs mt-2 mb-4 flex-1`}>{formatInr(t.inr)} plus GST ({formatPaise(t.chargePaise)} including GST)</p>

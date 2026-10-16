@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Check, Download, Loader2, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import { apiService } from '../services/api';
 import type { AgencyClient } from '../services/api';
 import type { User } from '../types';
 import {
-  addClientCheck, agencyErrorMessage, canConfirmRemoval, clientStatus, includedText, isAgencyUser, isInsideClient,
+  addClientCheck, agencyErrorMessage, canConfirmRemoval, clientStatus, includedText, isAgencyUser, isInsideClient, isLapsedAgency,
   lastActiveText, limitLabel, mergeUsage, removalExplainer, slotOffer, usageText,
 } from '../utils/agency';
 import type { UsageRow } from '../utils/agency';
+import { returnHashAfterActing } from '../utils/staffHome';
 import Dialog from '../components/AgencyDialog';
 import ExtraClientDialog from '../components/ExtraClientDialog';
 
@@ -39,6 +40,9 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
   const [csvBusy, setCsvBusy] = useState(false);
 
   const agency = isAgencyUser(user);
+  // A plan that has ended still leaves the owner a way to see the paused clients and remove them.
+  const lapsed = isLapsedAgency(user);
+  const enabled = agency || lapsed;
 
   const load = useCallback(async () => {
     setLoadError('');
@@ -55,12 +59,13 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
   }, []);
 
   useEffect(() => {
-    if (!agency) return;
+    if (!enabled) return;
     load();
+    if (!agency) return;
     apiService.getPlans()
       .then((p) => { if (p?.agency) setInfo({ includedClients: p.agency.includedClients, maxClients: p.agency.maxClients, slotInr: p.slot ? Math.round(p.slot.inr ?? p.agency.slotInr) : p.agency.slotInr, slot: p.slot }); })
       .catch(() => undefined);
-  }, [agency, load]);
+  }, [enabled, agency, load]);
 
   if (!user) return null;
   if (isInsideClient(user)) {
@@ -69,17 +74,18 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
         <div className={CARD}>
           <h1 className="text-[20px] font-semibold text-[var(--gv-text-primary)]">Clients are managed from your agency account</h1>
           <p className="mt-1 text-[14px] text-[var(--gv-text-secondary)]">To add, rename or remove clients, go back to your clients first.</p>
-          <button type="button" className={`${BTN_MAIN} mt-3`} onClick={() => { if (apiService.returnToCsmAccount()) { window.location.hash = '#/agency/clients'; window.location.reload(); } }}>Back to my clients</button>
+          <button type="button" className={`${BTN_MAIN} mt-3`} onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}>Back to my clients</button>
         </div>
       </div>
     );
   }
-  if (!agency) return <Navigate to="/dashboard" replace />;
+  if (!enabled) return <Navigate to="/dashboard" replace />;
+  const inactive = lapsed || (!!data && data.limit === 0);
 
   const maxClients = info?.maxClients ?? 25;
   const slotInr = data?.slotInr || info?.slotInr || 0;
   const room = { used: data?.used ?? 0, limit: data?.limit ?? 0, maxClients };
-  const offer = data ? slotOffer({ ...room, slotInr }) : null;
+  const offer = data && !inactive ? slotOffer({ ...room, slotInr }) : null;
 
   const open = async (c: UsageRow) => {
     setOpening(c.id); setPageError('');
@@ -115,13 +121,21 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
             Each client has its own brand details, calendar, library and connected accounts. {info ? includedText(info.includedClients, slotInr) : ''}
           </p>
         </div>
-        {data && (
+        {data && !inactive && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-[var(--gv-accent-fill)] px-3 py-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)]" aria-label={`Clients in use: ${limitLabel(data.used, data.limit)}`}>{limitLabel(data.used, data.limit)}</span>
             <button type="button" className={BTN_MAIN} onClick={() => { setNotice(''); setDialog({ kind: 'add' }); }}><Plus className="h-4 w-4" /> Add a client</button>
           </div>
         )}
       </div>
+
+      {data && inactive && (
+        <div className={`${CARD} bg-[var(--gv-accent-fill)]`} role="status">
+          <p className="text-[14px] font-semibold text-[var(--gv-text-primary)]">Your Agency plan has ended, so every client is paused.</p>
+          <p className="mt-1 text-[13.5px] leading-relaxed text-[var(--gv-text-secondary)]">Nothing was deleted. You can remove a client below to erase it for good, or renew your plan to use them again.</p>
+          <Link to="/trial-expired" className={`${BTN_MAIN} mt-3`}>See plans</Link>
+        </div>
+      )}
 
       {notice && <p role="status" className="flex items-center gap-1.5 rounded-lg bg-[var(--gv-mint)] px-3 py-2 text-[13px] text-[var(--gv-text-primary)]"><Check className="h-4 w-4 shrink-0" />{notice}</p>}
       {pageError && <p role="alert" className="flex items-start gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{pageError}</p>}
@@ -145,7 +159,7 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
         </div>
       )}
 
-      {data && rows.length === 0 && (
+      {data && !inactive && rows.length === 0 && (
         <div className={`${CARD} text-center`}>
           <Users className="mx-auto h-9 w-9 text-[var(--gv-accent-text)]" aria-hidden="true" />
           <h2 className="mt-3 text-[17px] font-semibold text-[var(--gv-text-primary)]">You have no clients yet</h2>
@@ -157,7 +171,7 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
       {data && rows.length > 0 && (
         <ul className="space-y-3">
           {rows.map((c) => {
-            const st = clientStatus(c, data.limit);
+            const st = clientStatus(inactive ? { ...c, frozen: true } : c, data.limit);
             const editing = renaming?.id === c.id;
             return (
               <li key={c.id} className={`${CARD} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
@@ -196,13 +210,13 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
         </ul>
       )}
 
-      {data && rows.length > 0 && month && (
+      {data && !inactive && rows.length > 0 && month && (
         <div className="flex justify-end">
           <button type="button" className={BTN} onClick={downloadCsv} disabled={csvBusy}>{csvBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download this month's usage</button>
         </div>
       )}
 
-      {dialog?.kind === 'add' && data && (
+      {dialog?.kind === 'add' && data && !inactive && (
         <AddDialog
           room={room}
           offer={offer}
@@ -270,7 +284,7 @@ const AddDialog: React.FC<{
   }
 
   return (
-    <Dialog title="Add a client" onClose={onClose}>
+    <Dialog title="Add a client" onClose={onClose} busy={busy}>
       <form onSubmit={submit} className="space-y-3" noValidate>
         <p className="text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">{included} You are using {room.used} of {room.limit}.</p>
         <label className="block text-[13px] font-semibold text-[var(--gv-text-primary)]">Client business name
@@ -307,7 +321,7 @@ const RemoveDialog: React.FC<{ client: UsageRow; onClose: () => void; onRemoved:
   };
 
   return (
-    <Dialog title={`Remove ${client.name}`} onClose={onClose}>
+    <Dialog title={`Remove ${client.name}`} onClose={onClose} busy={busy}>
       <form onSubmit={submit} className="space-y-3" noValidate>
         <p className="text-[13.5px] leading-relaxed text-[var(--gv-text-primary)]">{text.erased}</p>
         <p className="text-[13.5px] leading-relaxed text-[var(--gv-text-secondary)]">{text.kept}</p>

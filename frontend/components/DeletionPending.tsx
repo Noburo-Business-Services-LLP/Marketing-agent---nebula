@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Loader2, RotateCcw, LogOut } from 'lucide-react';
 import { apiService } from '../services/api';
-import { daysUntil, longDate } from '../utils/accountDeletion';
+import { clientBrandsErasedText, daysUntil, longDate } from '../utils/accountDeletion';
 import type { User } from '../types';
 
 /** Shown instead of the app while an account waits to be deleted. The only choices are to restore it or sign out. */
@@ -22,7 +22,7 @@ const DeletionPending: React.FC<{ user: User; onRestored: (u: User) => void; onL
       <div className="w-full max-w-md rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] p-7 shadow-xl">
         <h1 className="font-serif-display text-[26px] leading-tight text-[var(--gv-text-primary)]">Your account is set to be deleted</h1>
         <p className="mt-3 text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">
-          Everything will be erased on {longDate(user.deletion?.purgeAfter) || 'the date shown in your email'}{left > 0 ? `, in ${left} ${left === 1 ? 'day' : 'days'}` : ''}. Your plan has already stopped. If you restore the account now, your posts, videos and settings come back as they were. Scheduled posts return to your calendar. A plan has to be started again.
+          Everything will be erased on {longDate(user.deletion?.purgeAfter) || 'the date shown in your email'}{left > 0 ? `, in ${left} ${left === 1 ? 'day' : 'days'}` : ''}. {clientBrandsErasedText(user.agency?.clientCount)} Your plan has already stopped. If you restore the account now, your posts, videos and settings come back as they were. Scheduled posts return to your calendar. A plan has to be started again.
         </p>
         {error && <p className="mt-3 text-[13px] text-red-600">{error}</p>}
         <div className="mt-6 flex flex-wrap gap-2">

@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Download, Trash2, Loader2, AlertCircle, Check } from 'lucide-react';
 import { apiService } from '../services/api';
-import { canConfirmDeletion } from '../utils/accountDeletion';
+import { canConfirmDeletion, clientBrandsErasedText, exportClientsNote } from '../utils/accountDeletion';
 
 const input = 'w-full rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-3 py-2.5 text-[14px] text-[var(--gv-text-primary)] outline-none focus:border-[var(--gv-accent)]';
 const card = 'rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] p-5';
 
 /** Settings, Security: download everything held about the account, or ask for the account to be deleted. */
 const AccountPrivacy: React.FC<{ onDeletionRequested: (purgeAfter: string) => void }> = ({ onDeletionRequested }) => {
-  const [status, setStatus] = useState<{ canDelete: boolean; reason: string; graceDays: number } | null>(null);
+  const [status, setStatus] = useState<{ canDelete: boolean; reason: string; graceDays: number; clients?: number } | null>(null);
   const [exportPw, setExportPw] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -42,7 +42,7 @@ const AccountPrivacy: React.FC<{ onDeletionRequested: (purgeAfter: string) => vo
     <div className="mt-10 space-y-5">
       <div className={card}>
         <h3 className="flex items-center gap-2 text-[16px] font-semibold text-[var(--gv-text-primary)]"><Download className="h-4 w-4 text-[var(--gv-accent)]" /> Download my data</h3>
-        <p className="mt-1 text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">One file with your profile, posts, videos, brand details, messages and payments. You can download it once a day. Enter your password to confirm it is you.</p>
+        <p className="mt-1 text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">One file with your profile, posts, videos, brand details, messages and payments. You can download it once a day.{exportClientsNote(status?.clients)} Enter your password to confirm it is you.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <input type="password" autoComplete="current-password" value={exportPw} onChange={(e) => setExportPw(e.target.value)} placeholder="Your password" className={`${input} max-w-xs`} aria-label="Password to download your data" />
           <button type="button" onClick={download} disabled={exporting || !exportPw} className="inline-flex items-center gap-2 rounded-lg bg-[var(--gv-accent)] px-4 py-2.5 text-[13px] font-semibold text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)] disabled:opacity-50">
@@ -58,12 +58,12 @@ const AccountPrivacy: React.FC<{ onDeletionRequested: (purgeAfter: string) => vo
           <p className="mt-1 text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">{status.reason}</p>
         ) : !open ? (
           <>
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">Deleting removes your posts, videos, brand details, messages and connected accounts for good. Your plan stops straight away. You have {days} days to change your mind before anything is erased. Invoices and payment records are kept for the years the law requires.</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">Deleting removes your posts, videos, brand details, messages and connected accounts for good.{status?.clients ? ` ${clientBrandsErasedText(status.clients)}` : ''} Your plan stops straight away. You have {days} days to change your mind before anything is erased. Invoices and payment records are kept for the years the law requires.</p>
             <button type="button" onClick={() => setOpen(true)} className="mt-3 rounded-lg border border-red-400 px-4 py-2.5 text-[13px] font-semibold text-red-600 hover:bg-red-50">Delete my account</button>
           </>
         ) : (
           <div className="mt-2">
-            <p className="text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">Download your data above first if you want a copy. Then enter your password and type DELETE. Your plan stops now, and everything is erased after {days} days unless you restore the account.</p>
+            <p className="text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">Download your data above first if you want a copy. {status?.clients ? `${clientBrandsErasedText(status.clients)} ` : ''}Then enter your password and type DELETE. Your plan stops now, and everything is erased after {days} days unless you restore the account.</p>
             <div className="mt-3 grid gap-2 sm:max-w-sm">
               <input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Your password" className={input} aria-label="Password to delete your account" />
               <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Type DELETE" className={input} aria-label="Type DELETE to confirm" />
