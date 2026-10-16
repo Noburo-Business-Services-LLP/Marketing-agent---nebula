@@ -1,6 +1,7 @@
 'use strict';
 const mongoose = require('mongoose');
 const { STATUS, MODES } = require('../config/blueprint');
+const { TIERS } = require('../config/entitlements');
 
 // Brand Growth Blueprint job. A separate collection, like hero jobs.
 const blueprintSchema = new mongoose.Schema(
@@ -8,7 +9,7 @@ const blueprintSchema = new mongoose.Schema(
     blueprintId: { type: String, required: true, unique: true, index: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     emailKey: { type: String, required: true },
-    tierAtStart: { type: String, enum: ['free', 'starter', 'professional', 'managed'], required: true },
+    tierAtStart: { type: String, enum: TIERS, required: true },
     mode: { type: String, enum: MODES, default: 'auto' },
     status: { type: String, enum: STATUS, default: 'queued', index: true },
     step: { type: String, default: 'queued' },

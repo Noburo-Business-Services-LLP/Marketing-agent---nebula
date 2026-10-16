@@ -29,3 +29,10 @@ test('the catalogue lists the agency plan and its client rules', () => {
   assert.ok(c.plans.some((p) => p.id === 'agency' && p.name === 'Agency'));
   assert.deepStrictEqual(c.agency, { includedClients: 5, maxClients: 25, slotInr: 1499, slotQuarks: 500 });
 });
+
+test('the Blueprint schema accepts the agency tier', () => {
+  const Blueprint = require('../models/Blueprint');
+  const mongoose = require('mongoose');
+  const err = new Blueprint({ blueprintId: 'b1', userId: new mongoose.Types.ObjectId(), emailKey: 'a@b.c', tierAtStart: 'agency' }).validateSync();
+  assert.ok(!err || !err.errors.tierAtStart);
+});

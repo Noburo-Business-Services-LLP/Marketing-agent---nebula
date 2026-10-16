@@ -70,8 +70,8 @@ const heldBy = (held, name) => held.includes(name) || held.includes('bundle');
 
 function canBuyAddon(user, addon) {
   if (!isAddonId(addon)) return { ok: false, message: 'Please choose one of the available add-ons.' };
-  if (resolveTier(user) === 'agency') return { ok: false, message: 'Publishing, inbox and competitor insights are included in the Agency plan.' };
   const tier = resolveTier(user);
+  if (tier === 'agency') return { ok: false, message: 'Publishing, inbox and competitor insights are included in the Agency plan.' };
   if (tier !== 'starter' && tier !== 'professional') {
     return { ok: false, message: 'Add-ons are available on the Starter and Growth plans. Please choose a plan first.' };
   }
