@@ -1364,6 +1364,8 @@ export const apiService = {
     return apiCall(`/staff/clients?${qs.toString()}`, { method: 'GET' }, true);
   },
   getStaffHome: async (): Promise<any> => apiCall('/staff/home', { method: 'GET' }, true),
+  getAiSpend: async (): Promise<any> => apiCall('/staff/ai-spend', { method: 'GET' }, true),
+  setAiSwitch: async (provider: string, disabled: boolean): Promise<any> => apiCall('/staff/ai-switches', { method: 'POST', body: JSON.stringify({ provider, disabled }) }, true),
   // ---- Staff area: money (Owner only) ----
   getStaffMoney: async (): Promise<any> => apiCall('/staff/money', { method: 'GET' }, true),
   getStaffPayments: async (page: number): Promise<any> => apiCall(`/staff/money/payments?page=${encodeURIComponent(String(page))}`, { method: 'GET' }, true),

@@ -6,6 +6,7 @@ import { customerMessage } from '../../utils/errors';
 import { attentionText, whenLabel } from './staffLabels';
 import { formatChange, healthSummary, niceMax, orderAttention, seriesSummary, shapeSeries, sinceLabel, STATUS_TEXT } from '../../utils/staffHome';
 import type { ShapedSeries } from '../../utils/staffHome';
+import StaffAiSpend from './StaffAiSpend';
 
 type HealthCard = { key: string; label: string; status: 'green' | 'amber' | 'red'; note: string; lastHour: number; lastDay: number; latest: Array<{ at: string; detail: string }> };
 type AttentionRow = { id: string; name: string; email: string; quarks: number; reasons: string[]; csm: { id: string; name: string } | null; lastActiveAt: string | null };
@@ -190,6 +191,8 @@ const StaffHome: React.FC<{ role: 'owner' | 'admin' | 'csm'; can?: Record<string
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Refresh
         </button>
       </div>
+
+      {can.manage_ai_switches && <StaffAiSpend />}
 
       <Section title="Health" hint={summary.text}>
         {cards.length === 0 ? <p className="text-sm text-[var(--gv-text-tertiary)]">No health data yet.</p> : (
