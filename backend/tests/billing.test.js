@@ -26,6 +26,7 @@ function matchFilter(doc, filter) {
     for (const p of parts) vals = vals.flatMap((x) => (x == null ? [] : Array.isArray(x[p]) ? x[p] : [x[p]]));
     if (v === null) return vals.every((x) => x == null);
     if (v && typeof v === 'object' && '$ne' in v) return !vals.some((x) => x === v.$ne);
+    if (v && typeof v === 'object' && '$in' in v) return v.$in.some((c) => (c === null ? vals.every((x) => x == null) : vals.some((x) => x === c)));
     return vals.some((x) => x === v);
   });
 }

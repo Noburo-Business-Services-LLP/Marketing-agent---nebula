@@ -12,3 +12,13 @@ test('A-I1: staff usage does not throw for an Agency account and lists the tier'
 test('A-M9: agency has an explicit hero limit', () => {
   assert.strictEqual(heroLimitForUser({ plan: { tier: 'agency' } }), Infinity);
 });
+
+test('A-M8: staff MRR counts each active extra client slot of an Agency account', () => {
+  const { buildRecurring } = require('../services/staff/recurring');
+  const { PLANS, AGENCY } = require('../config/apiCosts');
+  const u = { _id: 'a', plan: { tier: 'agency', subscriptions: [
+    { kind: 'plan', key: 'agency', active: true }, { kind: 'slot', key: 'client', active: true }, { kind: 'slot', key: 'client', active: true }, { kind: 'slot', key: 'client', active: false }
+  ] }, subscription: { status: 'active' } };
+  const r = buildRecurring({ users: [u], now: Date.now() });
+  assert.strictEqual(r.now.onlineMrrPaise, (PLANS.agency.inr + 2 * AGENCY.slot.inr) * 100);
+});

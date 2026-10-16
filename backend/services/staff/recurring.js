@@ -4,7 +4,7 @@
  * History comes from the managed-client billing ledger; online plans are counted for the current month only.
  */
 const L = require('./billingLedger');
-const { PLANS } = require('../../config/apiCosts');
+const { PLANS, AGENCY } = require('../../config/apiCosts');
 const { isPaying } = require('./clientStatus');
 const { resolveTier } = require('../../config/entitlements');
 
@@ -48,6 +48,8 @@ function buildRecurring({ users = [], records = [], now = Date.now(), months = 1
     const tier = resolveTier(u);
     if (PLANS[tier] && u.subscription && u.subscription.status === 'active' && (u.plan.subscriptions || []).some((s) => s && s.kind === 'plan' && s.active)) {
       onlineMrr += PLANS[tier].inr * 100; onlinePaying += 1;
+      // An Agency account also pays for each extra client slot, every month (at today's configured price).
+      if (tier === 'agency') onlineMrr += AGENCY.slot.inr * 100 * (u.plan.subscriptions || []).filter((s) => s && s.kind === 'slot' && s.active).length;
     }
   }
 

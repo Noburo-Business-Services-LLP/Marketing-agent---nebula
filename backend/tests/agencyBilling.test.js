@@ -119,6 +119,7 @@ function matchFilter(doc, filter) {
     if (v === null) return vals.every((x) => x == null);
     if (v && typeof v === 'object' && !(v instanceof Date)) {
       if ('$ne' in v) return !vals.some((x) => x === v.$ne);
+      if ('$in' in v) return v.$in.some((c) => (c === null ? vals.every((x) => x == null) || vals.some((x) => x === null) : vals.some((x) => x === c)));
       if ('$lt' in v) return vals.some((x) => typeof x === 'number' && x < v.$lt);
       if ('$elemMatch' in v) return vals.some((el) => el && typeof el === 'object' && matchFilter(el, v.$elemMatch));
       throw new Error(`fake does not support ${JSON.stringify(v)}`);

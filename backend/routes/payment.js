@@ -270,7 +270,9 @@ function createPaymentRouter(deps = {}) {
       if ((fresh.payments || []).some((p) => p && p.razorpayPaymentId === paymentId)) return { applied: false, reason: 'already_processed' };
       const c = fresh.credits || {};
       expiring = Math.min(Math.max(0, Number(c.planBalance) || 0), Math.max(0, Number(c.balance) || 0));
-      planGuard = { 'credits.planBalance': c.planBalance === undefined ? null : c.planBalance, 'credits.topupHeld': c.topupHeld === undefined ? null : c.topupHeld };
+      // Zero (or never stored: the model fills in 0 when it reads an older account) matches both a stored 0 and a missing field.
+      const same = (v) => (Number(v) > 0 || Number(v) < 0 ? Number(v) : { $in: [0, null] });
+      planGuard = { 'credits.planBalance': same(c.planBalance), 'credits.topupHeld': same(c.topupHeld) };
       user = fresh;
     }
     const held = !alreadyApplied && record.kind === 'plan' ? Math.max(0, Number(user.credits?.topupHeld) || 0) : 0;
