@@ -170,7 +170,7 @@ test('top feature per plan comes from the 30-day feature use of the clients on t
   const t = buildUsage({ users, usage, now: NOW }).topByTier;
   assert.strictEqual(t.available, true);
   const tier = (id) => t.tiers.find((x) => x.id === id);
-  assert.deepStrictEqual(t.tiers.map((x) => x.id), ['free', 'starter', 'professional', 'managed']);
+  assert.deepStrictEqual(t.tiers.map((x) => x.id), ['free', 'starter', 'professional', 'managed', 'agency']);
   assert.deepStrictEqual([tier('free').clients, tier('free').top.key, tier('free').top.count, tier('free').top.clients], [2, 'images', 4, 1]);
   assert.deepStrictEqual([tier('starter').top.key, tier('starter').top.count], ['postsDrafted', 9]);
   assert.strictEqual(tier('professional').top, null);

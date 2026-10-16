@@ -173,11 +173,11 @@ function topByTierOf(customers, usage, unavailable) {
   const okFeatures = FEATURES.filter((f) => !unavailable[f.key]);
   if (okFeatures.length === 0) return { available: false, reason: 'We could not read any feature records right now.' };
   const tierOf = new Map(customers.map((u) => [idOf(u), resolveTier(u)]));
-  const ids = ['free', 'starter', 'professional', 'managed'];
-  const labels = { free: 'Free', starter: 'Starter', professional: 'Professional', managed: 'Managed' };
+  const ids = ['free', 'starter', 'professional', 'managed', 'agency'];
+  const labels = { free: 'Free', starter: 'Starter', professional: 'Professional', managed: 'Managed', agency: 'Agency' };
   const tiers = ids.map((id) => ({ id, label: labels[id], clients: 0, top: null, _use: {} }));
   const byId = Object.fromEntries(tiers.map((t) => [t.id, t]));
-  customers.forEach((u) => { byId[resolveTier(u)].clients += 1; });
+  customers.forEach((u) => { { const b = byId[resolveTier(u)]; if (b) b.clients += 1; } });
   for (const f of okFeatures) {
     for (const r of usage[f.key] || []) {
       const t = tierOf.get(String(r._id)); const n = Number(r.n);

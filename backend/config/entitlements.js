@@ -18,7 +18,7 @@ const FEATURE_ADDON = {
 };
 
 // No monthly cap on Hero videos: the Quark price is the limit. HERO_VIDEO_MONTHLY_LIMIT can still set one as an emergency brake.
-const HERO_LIMITS = { managed: Infinity, professional: Infinity, starter: Infinity, free: Infinity };
+const HERO_LIMITS = { managed: Infinity, professional: Infinity, starter: Infinity, free: Infinity, agency: Infinity };
 
 const MESSAGES = {
   upgrade: 'This is not included in the free plan. Please upgrade your plan, or buy an add-on pack.',
