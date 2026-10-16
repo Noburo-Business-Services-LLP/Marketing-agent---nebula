@@ -19,8 +19,9 @@ export function longDate(iso: string | undefined | null): string {
 }
 
 /** An existing customer who has never agreed to the current terms is asked once. Staff and unfinished sign-ups are not. */
-export function needsTermsPrompt(user: { consent?: { acceptedAt?: string } | null; onboardingCompleted?: boolean; staffRole?: string | null; isCsm?: boolean; deletion?: { status?: string } | null } | null): boolean {
+export function needsTermsPrompt(user: { consent?: { acceptedAt?: string } | null; onboardingCompleted?: boolean; staffRole?: string | null; isCsm?: boolean; deletion?: { status?: string } | null; actingAgency?: unknown } | null): boolean {
   if (!user || !user.onboardingCompleted || user.staffRole || user.isCsm) return false;
+  if (user.actingAgency) return false; // a client workspace has no login of its own; the agency accepted for it
   if (user.deletion && user.deletion.status === 'pending') return false;
   return !(user.consent && user.consent.acceptedAt);
 }

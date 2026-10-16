@@ -38,8 +38,11 @@
   var AUDIT = (window.__AUDIT = { log: [], blocked: [], unmatched: [], startedAt: Date.now() });
 
   // ---- 1. fake session ------------------------------------------------------------------
+  var CLIENT_TOKEN = 'audit-fake-client-token'; // what the mock "open a client" answer hands out
+  var cameWithClientToken = false;
+  try { cameWithClientToken = localStorage.getItem('authToken') === CLIENT_TOKEN; } catch (e) { /* ignore */ }
   try {
-    localStorage.setItem('authToken', 'audit-fake-token');
+    localStorage.setItem('authToken', cameWithClientToken ? CLIENT_TOKEN : 'audit-fake-token');
     localStorage.setItem('token', 'audit-fake-token');
     localStorage.removeItem('nebulaa-theme');
     // Keep first-run tours and popups from covering the pages.
@@ -53,6 +56,25 @@
   var LOGGED_OUT = MODE === 'logged-out';
   var NEEDS_ONBOARDING = MODE === 'onboarding';
   var STAFF = MODE === 'staff'; // a signed-in Owner, so the staff area and its menu entry show
+  // Agency modes: agency = the agency's own account; agency-client = already inside the client "Sweet Co".
+  // ?agencystate= full | empty | error | slow | busy | wrongpw | nosession picks the Clients page variant (kept for the tab).
+  var AGENCY = MODE === 'agency' || MODE === 'agency-client';
+  if (params.get('agencystate')) sessionStorage.setItem('audit-agency-state', params.get('agencystate'));
+  var ASTATE = sessionStorage.getItem('audit-agency-state') || '';
+  var INSIDE = false;
+  if (AGENCY) {
+    try {
+      if (MODE === 'agency-client' && !sessionStorage.getItem('audit-client-seeded')) {
+        sessionStorage.setItem('audit-client-seeded', '1');
+        localStorage.setItem('authToken', CLIENT_TOKEN);
+        localStorage.setItem('csmReturnToken', 'audit-fake-token');
+        localStorage.setItem('csmActingClient', 'Sweet Co');
+        localStorage.setItem('csmReturnTo', '#/agency/clients');
+      }
+      INSIDE = localStorage.getItem('authToken') === CLIENT_TOKEN;
+      if (!INSIDE) { localStorage.removeItem('csmReturnToken'); localStorage.removeItem('csmActingClient'); localStorage.removeItem('csmReturnTo'); }
+    } catch (e) { /* ignore */ }
+  }
   AUDIT.mode = MODE;
   if (LOGGED_OUT) { localStorage.removeItem('authToken'); localStorage.removeItem('token'); }
 
@@ -89,6 +111,7 @@
     brandScore: { score: 72, metrics: { engagement: 68, consistency: 75, authenticity: 74 } },
     preferences: { emailNotifications: true }, createdAt: iso(-30),
   };
+  if (AGENCY) { var clientName = (function () { try { return localStorage.getItem('csmActingClient') || 'Sweet Co'; } catch (e) { return 'Sweet Co'; } })(); user.plan = { tier: 'agency' }; if (!INSIDE) user.consent = { acceptedAt: iso(-30), termsVersion: 'audit' }; user.actingAgency = INSIDE ? { name: clientName } : null; if (INSIDE) { user.businessProfile = Object.assign({}, businessProfile, { name: clientName }); user.firstName = clientName; } else { user.firstName = 'Studio North'; user.businessProfile = Object.assign({}, businessProfile, { name: 'Studio North' }); } }
 
   var draft = function (i, status, sourceType, img) {
     return {
@@ -196,13 +219,48 @@
 
   // [method or '*', RegExp on pathname after /api, response object or function(ctx) -> object|{__status,body}]
   var ROUTES = [
+    // ---- Agency (Task 10): the Clients page, the switcher, add / rename / remove / open, usage ----
+    ['GET', /^\/agency\/clients$/, function () {
+      if (ASTATE === 'error') return { __status: 500, body: { success: false, message: 'Something went wrong.' } };
+      var list = ASTATE === 'empty' ? [] : ASTATE === 'full'
+        ? [['a1', 'Sweet Co', false], ['a2', 'Green Leaf Cafe', false], ['a3', 'Meera Jewellers', true], ['a4', 'Harbour Dental Care', false], ['a5', 'A very long client business name that has to wrap on a small screen without breaking the card', false]]
+        : [['a1', 'Sweet Co', false], ['a2', 'Green Leaf Cafe', false], ['a3', 'Meera Jewellers', true]];
+      var out = { success: true, clients: list.map(function (c, i) { return { id: c[0], name: c[1], createdAt: iso(-40 + i * 5), frozen: c[2] }; }), limit: 5, used: list.length, slotInr: 1499 };
+      if (ASTATE === 'slow') out.__delay = 4000;
+      return out.__delay ? { __status: 200, __delay: out.__delay, body: out } : out;
+    }],
+    ['POST', /^\/agency\/clients$/, function () { return { __status: 201, body: { success: true, client: { id: 'a9', name: 'New client', createdAt: iso(0), frozen: false } } }; }],
+    ['PATCH', /^\/agency\/clients\/[^/]+$/, ok({})],
+    ['DELETE', /^\/agency\/clients\/[^/]+$/, function () {
+      if (ASTATE === 'busy') return { __status: 409, body: { success: false, message: "Wait until this client's videos and jobs finish, then try again." } };
+      if (ASTATE === 'wrongpw') return { __status: 403, body: { success: false, message: 'That password is not correct.' } };
+      return ok({});
+    }],
+    ['POST', /^\/agency\/clients\/[^/]+\/open$/, function (c) {
+      var id = c.path.split('/')[3];
+      var names = { a1: 'Sweet Co', a2: 'Green Leaf Cafe', a4: 'Harbour Dental Care' };
+      return ok({ token: CLIENT_TOKEN, expiresInHours: 8, client: { id: id, name: names[id] || 'Sweet Co' } });
+    }],
+    ['GET', /^\/agency\/usage\.csv$/, 'Client,Posts,Videos\nSweet Co,12,2\nGreen Leaf Cafe,7,0\n'],
+    ['GET', /^\/agency\/usage$/, function () {
+      return ok({
+        month: '2026-10', monthLabel: 'October 2026', poolPosts: 381, poolVideos: 26, total: 3, page: 1, limit: 25, hasMore: false,
+        clients: [
+          { id: 'a1', name: 'Sweet Co', frozen: false, posts: 12, videos: 2, lastActive: iso(0), quarksSpent: 540, total: { posts: 30, videos: 5, quarksSpent: 1200 } },
+          { id: 'a2', name: 'Green Leaf Cafe', frozen: false, posts: 7, videos: 0, lastActive: iso(-6), quarksSpent: 140, total: { posts: 9, videos: 0, quarksSpent: 180 } },
+          { id: 'a3', name: 'Meera Jewellers', frozen: true, posts: 0, videos: 0, lastActive: null, quarksSpent: 0, total: { posts: 0, videos: 0, quarksSpent: 0 } },
+          { id: 'removed', name: 'Removed client', removed: true, posts: 1, videos: 0, quarksSpent: 11 },
+        ],
+      });
+    }],
+    ['POST', /^\/payment\/create-slot-subscription$/, { __status: 200, body: { success: false, message: 'Audit stub: no payment is started in this preview.' } }],
     ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
     ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {
       var cyc = function (amt) { return { monthly: { planId: 'audit-m', amount: amt, label: 'Monthly', per: 'per month' }, quarterly: { planId: 'audit-q', amount: amt * 3, label: 'Quarterly', per: 'per quarter' }, annual: { planId: 'audit-a', amount: amt * 10, label: 'Annual', per: 'per year' } }; };
       var plan = function (name, amt) { return { name: name, description: 'Audit placeholder plan.', features: ['Feature one', 'Feature two', 'Feature three'], cycles: cyc(amt) }; };
-      return ok({ plans: { pro: plan('Pro', 1000), growth: plan('Growth', 2000), scale: plan('Scale', 3000) } });
+      return ok({ plans: { pro: plan('Pro', 1000), growth: plan('Growth', 2000), scale: plan('Scale', 3000) }, agency: { includedClients: 5, maxClients: 25, slotInr: 1499, slotQuarks: 500 }, slot: { id: 'client', inr: 1499, gstPaise: 26982, chargePaise: 176882, quarks: 500 } });
     }],
     ['GET', /^\/payment\/(status|billing)/, ok({ subscription: user.subscription, credits: credits, payments: [] })],
     ['GET', /^\/drafts\/?$/, ok({ drafts: drafts, total: drafts.length })],
@@ -446,7 +504,7 @@
           var out = typeof r[2] === 'function' ? r[2]({ method: m, path: p, url: u }) : r[2];
           var res = out && out.__status ? out : { __status: 200, body: out };
           AUDIT.log.push({ method: m, url: u.href, route: String(r[1]), status: res.__status });
-          return { kind: 'mock', status: res.__status, body: res.body };
+          return { kind: 'mock', status: res.__status, body: res.body, delay: res.__delay || 0 };
         }
       }
       var fb = m === 'GET' ? { __status: 200, body: GENERIC_GET() } : GENERIC_WRITE();
@@ -469,6 +527,7 @@
     var method = (init && init.method) || (input && input.method) || 'GET';
     var r = route(method, url);
     if (r.kind === 'pass') return realFetch(input, init);
+    if (r.kind === 'mock' && r.delay) return new Promise(function (ok2) { setTimeout(function () { ok2(jsonResponse(r.status, r.body)); }, r.delay); });
     if (r.kind === 'mock') return Promise.resolve(jsonResponse(r.status, r.body));
     return Promise.resolve(jsonResponse(503, { success: false, auditBlocked: true, message: 'Blocked by audit stub' }));
   };

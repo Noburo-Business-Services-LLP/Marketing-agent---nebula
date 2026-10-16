@@ -1,5 +1,6 @@
 import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft } from '../types';
 import { apiErrorFrom } from '../utils/plans';
+import { agencyErrorMessage } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
 import type { BlueprintView } from '../utils/blueprint';
 
@@ -306,6 +307,16 @@ export interface PlansResponse {
   plans: Array<PlanPrice & { id: 'starter' | 'professional'; name: string; description: string; quarks: number; outputs?: { posts: number; videos: number }; features: string[] }>;
   topups: Array<PlanPrice & { quarks: number; outputs?: { posts: number; videos: number } }>;
   addons: Array<PlanPrice & { id: 'publish' | 'competitors' | 'inbox' | 'bundle'; label: string; requires: string[]; includes: string[] }>;
+  /** Agency plan figures; every rupee amount comes from the server. */
+  agency?: { includedClients: number; maxClients: number; slotInr: number; slotQuarks?: number };
+  slot?: { id: 'client'; inr: number; gstPaise: number; chargePaise: number };
+}
+
+export interface AgencyClient { id: string; name: string; createdAt: string; frozen: boolean }
+export interface AgencyClientsResponse { success: boolean; clients: AgencyClient[]; limit: number; used: number; slotInr: number }
+export interface AgencyUsageResponse {
+  success: boolean; month: string; monthLabel?: string; poolPosts: number; poolVideos?: number; total?: number; hasMore?: boolean;
+  clients: Array<{ id: string; name: string; removed?: boolean; frozen?: boolean; posts: number; videos: number; lastActive?: string | null }>;
 }
 
 export const apiService = {
@@ -1455,6 +1466,52 @@ export const apiService = {
     }
     return res;
   },
+
+  // ---- Agency: client brands under one account ----
+  getAgencyClients: async (): Promise<AgencyClientsResponse> =>
+    apiCall('/agency/clients', { method: 'GET' }, true),
+  createAgencyClient: async (d: { name: string; industry?: string }): Promise<{ success: boolean; client?: AgencyClient; message?: string }> => {
+    try { return await apiCall('/agency/clients', { method: 'POST', body: JSON.stringify(d) }, true); }
+    catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not add this client. Please try again.') }; }
+  },
+  renameAgencyClient: async (id: string, name: string): Promise<{ success: boolean; message?: string }> => {
+    try { return await apiCall(`/agency/clients/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ name }) }, true); }
+    catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not rename this client. Please try again.') }; }
+  },
+  removeAgencyClient: async (id: string, password: string): Promise<{ success: boolean; message?: string }> => {
+    try { return await apiCall(`/agency/clients/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ password, confirm: 'REMOVE' }) }, true); }
+    catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not remove this client. Nothing was changed.') }; }
+  },
+  // Opens a client with the same hand-off the CSM pass uses, so the banner and "back" already work.
+  openAgencyClient: async (id: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const r: any = await apiCall(`/agency/clients/${encodeURIComponent(id)}/open`, { method: 'POST' }, true);
+      if (!r?.success || !r.token) return { success: false, message: r?.message };
+      const own = getToken();
+      if (own && !localStorage.getItem('csmReturnToken')) localStorage.setItem('csmReturnToken', own);
+      localStorage.setItem('csmActingClient', r.client?.name || '');
+      localStorage.setItem('csmReturnTo', '#/agency/clients');
+      setToken(r.token);
+      return { success: true };
+    } catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not open this client. Please try again.') }; }
+  },
+  getAgencyUsage: async (month?: string): Promise<AgencyUsageResponse> =>
+    apiCall(`/agency/usage${month ? `?month=${encodeURIComponent(month)}` : ''}`, { method: 'GET' }, true),
+  downloadAgencyUsage: async (month: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/agency/usage.csv?month=${encodeURIComponent(month)}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (!res.ok) { const j = await safeReadJson(res); return { success: false, message: agencyErrorMessage(j, 'We could not prepare the usage report. Please try again.') }; }
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `client-usage-${month}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      return { success: true };
+    } catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not prepare the usage report. Please try again.') }; }
+  },
+  createSlotSubscription: async (): Promise<any> =>
+    apiCall('/payment/create-slot-subscription', { method: 'POST', body: '{}' }, true),
 
   getCsmClients: async (): Promise<{ success: boolean; clients: Array<{ id: string; name: string; email: string; industry: string; quarks: number; connectedAccounts: number; onboardingCompleted: boolean; draftsWaiting: number; lastLoginAt: string | null; isActive: boolean }> }> => {
     return apiCall('/csm/clients', { method: 'GET' }, true);

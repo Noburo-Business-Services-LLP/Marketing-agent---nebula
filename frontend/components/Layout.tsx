@@ -35,10 +35,12 @@ import {
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
 import AppSwitcher from './AppSwitcher';
+import ClientSwitcher from './ClientSwitcher';
 import AccountMenu from './AccountMenu';
 import { groupHasPath } from '../utils/navMenu';
 import { apiService } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
+import { actingBannerText, isAgencyUser, isInsideClient, returnButtonLabel, showClientSwitcher } from '../utils/agency';
 
 interface TrialData {
   creditsBalance: number;
@@ -136,6 +138,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   const primaryNav = [
     ...(staffEntry?.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
     ...(user?.isCsm && !localStorage.getItem('csmReturnToken') ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),
+    ...(isAgencyUser(user) ? [{ path: '/agency/clients', label: 'Clients', icon: Users }] : []),
     { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
@@ -172,6 +175,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
     if (pathname.startsWith('/staff')) return { title: 'Staff area', crumb: '' };
     if (pathname.startsWith('/clients')) return { title: 'My clients', crumb: '' };
+    if (pathname.startsWith('/agency/clients')) return { title: 'Clients', crumb: '' };
     if (pathname.startsWith('/inbox')) return { title: 'Inbox', crumb: '' };
     if (pathname.startsWith('/connect-socials')) return { title: 'Connected accounts', crumb: '' };
     if (pathname.startsWith('/brand-assets')) return { title: 'Brand assets', crumb: '' };
@@ -189,6 +193,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   };
 
   const topBarMeta = resolveTopBarMeta(location.pathname);
+  // With two switchers in the bar, a computer-sized screen has no room for the page title; the page has its own heading.
+  const clientSwitcherShown = showClientSwitcher(user, Boolean(localStorage.getItem('csmReturnToken')));
   const isActive = (path: string) =>
     path === '/staff/home' ? location.pathname.startsWith('/staff') :
     location.pathname === path || (path !== '/dashboard' && location.pathname.startsWith(path));
@@ -274,6 +280,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
             {/* On a phone the workspace switch lives here; on a computer it sits in the top bar. */}
             <div className="px-4 mb-3 md:hidden">
               <AppSwitcher onNavigate={() => setSidebarOpen(false)} />
+              <div className="mt-2"><ClientSwitcher user={user} onNavigate={() => setSidebarOpen(false)} /></div>
             </div>
 
             {/* Nav — scroll region */}
@@ -323,13 +330,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
             // A CSM working inside a client's account: always visible above the header, never scrolls away, one click back.
             <div className="shrink-0 border-b border-[#F5A623]/50 bg-[#FDF1DC] px-4 md:px-8 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
               <p className="text-[13px] text-[var(--gv-text-primary)]">
-                You are working in <strong>{localStorage.getItem('csmActingClient') || 'a client'}</strong>'s account. Payments, plans and passwords stay with the client.
+                {isInsideClient(user)
+                  ? actingBannerText(user?.actingAgency?.name || localStorage.getItem('csmActingClient') || '')
+                  : <>You are working in <strong>{localStorage.getItem('csmActingClient') || 'a client'}</strong>'s account. Payments, plans and passwords stay with the client.</>}
               </p>
               <button
                 onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}
                 className="px-3 py-1 rounded-lg bg-[#F5A623] text-[#070A12] text-[13px] font-bold"
               >
-                {localStorage.getItem('csmReturnTo') === '#/staff/clients' ? 'Back to staff area' : 'Back to my clients'}
+                {returnButtonLabel(localStorage.getItem('csmReturnTo'))}
               </button>
             </div>
           )}
@@ -366,8 +375,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
           {/* Desktop top bar */}
           <header className="hidden md:flex items-center h-16 px-8 border-b border-[var(--gv-border-subtle)] bg-transparent">
             <div className="w-[170px] mr-5 shrink-0"><AppSwitcher /></div>
-            <div className="flex items-baseline gap-3 min-w-0">
-              <h1 className="text-[15px] font-semibold text-[var(--gv-text-primary)] tracking-[-0.01em]">{topBarMeta.title}</h1>
+            <div className="w-[170px] mr-5 shrink-0 empty:hidden"><ClientSwitcher user={user} /></div>
+            <div className={`${clientSwitcherShown ? 'hidden xl:flex' : 'flex'} items-baseline gap-3 min-w-0 flex-1`}>
+              <h1 className="text-[15px] font-semibold text-[var(--gv-text-primary)] tracking-[-0.01em] truncate">{topBarMeta.title}</h1>
               {topBarMeta.crumb && (
                 <>
                   <span className="text-[var(--gv-text-muted)] text-[13px]">/</span>
@@ -375,7 +385,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                 </>
               )}
             </div>
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 ml-auto shrink-0">
               <button
                 className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] transition-colors"
                 aria-label="Search"
@@ -443,20 +453,26 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                             <span className="text-[var(--gv-accent-text)]">View in Settings →</span>
                           </button>
                         </div>
-                        <div className="px-5 py-3 border-t border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Zap className="w-3.5 h-3.5 text-[var(--gv-text-muted)]" />
-                              <span className="text-[11px] text-[var(--gv-text-tertiary)]">Need more Quarks?</span>
-                            </div>
-                            <button
-                              onClick={() => navigate('/trial-expired')}
-                              className="text-[11px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)] transition-colors"
-                            >
-                              See plans
-                            </button>
+                        {isInsideClient(user) ? (
+                          <div className="px-5 py-3 border-t border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
+                            <p className="text-[11px] text-[var(--gv-text-tertiary)]">Plans and top-ups are handled in your agency account.</p>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="px-5 py-3 border-t border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Zap className="w-3.5 h-3.5 text-[var(--gv-text-muted)]" />
+                                <span className="text-[11px] text-[var(--gv-text-tertiary)]">Need more Quarks?</span>
+                              </div>
+                              <button
+                                onClick={() => navigate('/trial-expired')}
+                                className="text-[11px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)] transition-colors"
+                              >
+                                See plans
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

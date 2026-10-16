@@ -5,6 +5,7 @@ import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditC
 import { User, BillingData, BusinessProfile } from '../types';
 import BillingDetailsForm from '../components/BillingDetailsForm';
 import { tierLabel } from '../utils/plans';
+import { isInsideClient } from '../utils/agency';
 import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { buildStrategyPdf } from '../utils/strategyPdf';
@@ -34,6 +35,8 @@ const Field = ({ label, labelCls, children }: { label: string; labelCls: string;
 );
 
 const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
+  // Inside a client workspace, payments, plans, passwords and deletion stay with the agency account.
+  const insideClient = isInsideClient(user);
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   // `?tab=business` deep-links straight into the Business Profile tab — used
@@ -119,7 +122,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
   // Fetch billing data when Billing tab is active
   useEffect(() => {
-    if (activeTab === 'Billing' && !billingData) {
+    if (activeTab === 'Billing' && !insideClient && !billingData) {
       setLoadingBilling(true);
       apiService.getBillingData()
         .then((res: BillingData) => setBillingData(res))
@@ -296,14 +299,17 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
         align="left"
         eyebrow="Settings"
         headline={<>Manage your <GravityEmphasis>account</GravityEmphasis></>}
-        subcopy="Manage your profile, business details, notifications, security and billing in one place."
+        subcopy={insideClient ? "Manage this client's profile and business details." : "Manage your profile, business details, notifications, security and billing in one place."}
       />
 
       {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
           toggle — the one tab control style the whole app should share. */}
+      {insideClient && (
+        <p className="mb-4 text-[13px] text-[var(--gv-text-secondary)]">Payments, plans, passwords and account deletion are handled in your agency account.</p>
+      )}
       <div className="mb-8 overflow-x-auto">
         <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
-          {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].map(tab => (
+          {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].filter(tab => !insideClient || (tab !== 'Security' && tab !== 'Billing')).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -528,7 +534,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                     );
                   })()}
 
-                  {activeTab === 'Security' && (
+                  {activeTab === 'Security' && !insideClient && (
                       <div className="animate-in fade-in duration-300">
                           <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Change password</h2>
                           
@@ -647,7 +653,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                       </div>
                   )}
 
-                  {activeTab === 'Billing' && (
+                  {activeTab === 'Billing' && !insideClient && (
                       <div className="animate-in fade-in duration-300">
                           <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Billing and invoices</h2>
 

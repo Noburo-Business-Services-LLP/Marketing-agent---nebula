@@ -38,5 +38,9 @@
   "components/calendar/PlanMonthGrid.tsx",
   "components/calendar/PlanDayList.tsx",
   "components/AdditionalLanguagePicker.tsx",
-  "components/AddLanguagesControl.tsx"
+  "components/AddLanguagesControl.tsx",
+  "pages/AgencyClients.tsx",
+  "components/ClientSwitcher.tsx",
+  "utils/agency.ts",
+  "utils/razorpayCheckout.ts"
 ]

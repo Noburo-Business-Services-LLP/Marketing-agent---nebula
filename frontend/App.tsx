@@ -25,8 +25,10 @@ import CalendarHome from './pages/CalendarHome';
 import IdeaInbox from './pages/IdeaInbox';
 import SocialInbox from './pages/SocialInbox';
 import CsmClients from './pages/CsmClients';
+import AgencyClients from './pages/AgencyClients';
 import StaffLayout from './pages/staff/StaffLayout';
 import { landingPath } from './utils/staffHome';
+import { isInsideClient } from './utils/agency';
 import ReelGenerator from './pages/ReelGenerator';
 import HeroVideo from './pages/HeroVideo';
 import AdCampaigns from './pages/AdCampaigns';
@@ -301,6 +303,7 @@ const App: React.FC = () => {
                     <Route path="/connect-socials" element={<ConnectSocials />} />
                     <Route path="/inbox" element={<SocialInbox />} />
                     <Route path="/clients" element={<CsmClients />} />
+                    <Route path="/agency/clients" element={<AgencyClients user={user} />} />
                     <Route path="/staff" element={<StaffLayout />} />
                     <Route path="/staff/:section" element={<StaffLayout />} />
                     <Route path="/staff/:section/:id" element={<StaffLayout />} />
@@ -335,6 +338,8 @@ const App: React.FC = () => {
                         hasPlan={!needsPlan}
                         onSeePlans={() => { clearCreditsPaywall(); window.location.hash = '#/trial-expired'; }}
                         onDismiss={clearCreditsPaywall}
+                        insideClient={isInsideClient(user)}
+                        onBackToAgency={() => { clearCreditsPaywall(); if (apiService.returnToCsmAccount()) { window.location.hash = '#/agency/clients'; window.location.reload(); } }}
                       />
                     )}
                 </Layout>

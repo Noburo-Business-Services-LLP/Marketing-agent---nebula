@@ -25,3 +25,7 @@ test('the terms prompt is for finished, non-staff accounts that have not agreed 
   assert.equal(needsTermsPrompt({ ...base, deletion: { status: 'pending' } }), false);
   assert.equal(needsTermsPrompt(null), false);
 });
+
+test('a client workspace is never asked to agree: the agency already did', () => {
+  assert.equal(needsTermsPrompt({ onboardingCompleted: true, staffRole: null, consent: null, actingAgency: { name: 'Sweet Co' } }), false);
+});

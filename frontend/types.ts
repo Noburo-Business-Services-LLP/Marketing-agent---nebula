@@ -75,7 +75,9 @@ export interface User {
     balance: number;
     totalUsed: number;
   };
-  plan?: { tier: 'free' | 'starter' | 'professional' | 'managed' | null };
+  plan?: { tier: 'free' | 'starter' | 'professional' | 'managed' | 'agency' | null };
+  /** Set by the server while this is a client workspace opened from an agency account. */
+  actingAgency?: { name: string } | null;
   consent?: { acceptedAt?: string; termsVersion?: string } | null;
   deletion?: { status: 'pending'; purgeAfter?: string; requestedAt?: string } | null;
   brandScore?: {

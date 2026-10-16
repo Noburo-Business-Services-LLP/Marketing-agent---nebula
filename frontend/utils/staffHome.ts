@@ -116,7 +116,9 @@ export function staffMenuEntry(user: Who, acting: boolean): { path: string; labe
   return null;
 }
 
-/** Where "Back to my clients" goes: the staff client list when the client was opened from the staff area, else the CSM list. */
+/** Where "Back to my clients" goes: the staff client list or the agency Clients page when that is where the client was opened from, else the CSM list. */
 export function returnHashAfterActing(stored: string | null | undefined): string {
-  return stored === '#/staff/clients' ? '#/staff/clients' : '#/clients';
+  if (stored === '#/staff/clients') return '#/staff/clients';
+  if (stored === '#/agency/clients') return '#/agency/clients';
+  return '#/clients';
 }
