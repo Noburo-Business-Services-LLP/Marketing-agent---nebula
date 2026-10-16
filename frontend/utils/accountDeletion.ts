@@ -18,10 +18,23 @@ export function longDate(iso: string | undefined | null): string {
   return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 }
 
-/** An existing customer who has never agreed to the current terms is asked once. Staff and unfinished sign-ups are not. */
-export function needsTermsPrompt(user: { consent?: { acceptedAt?: string } | null; onboardingCompleted?: boolean; staffRole?: string | null; isCsm?: boolean; deletion?: { status?: string } | null; actingAgency?: unknown } | null): boolean {
+/** An existing customer who has never agreed to the current terms is asked once. Staff, unfinished sign-ups, client workspaces and anyone working through a pass are not. */
+export function needsTermsPrompt(user: { consent?: { acceptedAt?: string } | null; onboardingCompleted?: boolean; staffRole?: string | null; isCsm?: boolean; deletion?: { status?: string } | null; actingAgency?: unknown } | null, holdsPass = false): boolean {
   if (!user || !user.onboardingCompleted || user.staffRole || user.isCsm) return false;
+  if (holdsPass) return false; // a staff, CSM or agency pass is held: never ask on the customer's behalf
   if (user.actingAgency) return false; // a client workspace has no login of its own; the agency accepted for it
   if (user.deletion && user.deletion.status === 'pending') return false;
   return !(user.consent && user.consent.acceptedAt);
+}
+
+/** What deleting an agency also erases. Empty for an account with no client brands. */
+export function clientBrandsErasedText(n: number | null | undefined): string {
+  const c = Math.max(0, Math.floor(Number(n) || 0));
+  if (!c) return '';
+  return `This also erases your ${c} client ${c === 1 ? 'brand' : 'brands'}, with every post, video, file and connected account in ${c === 1 ? 'it' : 'them'}.`;
+}
+
+/** The download is the account's own data; an agency's client brands are not in it. */
+export function exportClientsNote(n: number | null | undefined): string {
+  return Number(n) > 0 ? ' The brands of your clients are not in this file; download their usage report from the Clients page.' : '';
 }

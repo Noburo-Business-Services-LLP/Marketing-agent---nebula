@@ -1,10 +1,33 @@
 /** Small rules for the agency screens, kept apart so they can be tested. Nothing here shows Quarks. */
 
-type PlanLike = { plan?: { tier?: string | null } | null; actingAgency?: unknown } | null | undefined;
+type PlanLike = { plan?: { tier?: string | null } | null; actingAgency?: unknown; agency?: { clientCount?: number } | null } | null | undefined;
+
+/** The server sends actingAgency and actingCsm NEXT to user on /auth/me; the app keeps them on the user so the checks work. */
+export function mergeActing<U extends object>(response: { user?: U | null; actingAgency?: unknown; actingCsm?: unknown } | null | undefined): (U & { actingAgency: unknown; actingCsm: unknown }) | null {
+  if (!response || !response.user) return null;
+  return { ...response.user, actingAgency: response.actingAgency ?? null, actingCsm: response.actingCsm ?? null };
+}
 
 /** An account on the Agency plan; a client workspace inside it is not an agency. */
 export function isAgencyUser(user: PlanLike): boolean {
   return !!user && user.plan?.tier === 'agency' && !user.actingAgency;
+}
+
+/** An owner whose Agency plan ended but who still has client brands: they can still see them, remove them and renew. */
+export function isLapsedAgency(user: PlanLike): boolean {
+  return !!user && !user.actingAgency && user.plan?.tier !== 'agency' && Number(user.agency?.clientCount || 0) > 0;
+}
+
+/** Agency accounts and client workspaces see posts and videos, never Quarks. */
+export function showsPostsNotQuarks(user: PlanLike): boolean {
+  return isAgencyUser(user) || isInsideClient(user) || isLapsedAgency(user);
+}
+
+/** What the shared pool holds, in the words an agency uses. */
+export function poolText(posts: number, videos: number): string {
+  const p = Math.max(0, Math.floor(Number(posts) || 0));
+  const v = Math.max(0, Math.floor(Number(videos) || 0));
+  return `${p} ${p === 1 ? 'post' : 'posts'} and ${v} ${v === 1 ? 'video' : 'videos'} left in the shared pool`;
 }
 
 /** True while working inside one of an agency's clients (the server says so on the user). */
@@ -22,6 +45,12 @@ export const clientsLeft = (used: number, limit: number): number => Math.max(0, 
 export const limitLabel = (used: number, limit: number): string => `${used} of ${limit} clients`;
 export const actingBannerText = (name: string): string =>
   `You are working in ${name || 'a client'}'s brand. Payments, plans and passwords are handled in your agency account.`;
+
+/** The client's own name: the one the open call returned, else the workspace's own name. Never the agency owner's name. */
+export function actingClientName(user: { businessProfile?: { name?: string } | null; companyName?: string; agency?: { workspaceName?: string } | null } | null | undefined, stored?: string | null): string {
+  const a = user as { agency?: { workspaceName?: string } | null } | null | undefined;
+  return (stored || '').trim() || a?.agency?.workspaceName || user?.businessProfile?.name || user?.companyName || '';
+}
 
 /** The return button in the bar at the top while inside a client or a staff-opened account. */
 export function returnButtonLabel(returnTo: string | null | undefined): string {
@@ -124,7 +153,17 @@ export function agencyErrorMessage(err: unknown, fallback: string): string {
   const text = typeof raw === 'string' ? raw.trim() : '';
   if (!text || text.length > 240) return fallback;
   if (/https?:|ECONN|ETIMEDOUT|stack|undefined|\bat \S+:\d+/i.test(text)) return fallback;
+  if (/quark|gemini|openai|anthropic|claude|veo|seedance|higgsfield|ayrshare|cloudinary|razorpay|mongo|\bfal\b/i.test(text)) return fallback;
   return text;
+}
+
+/** Wording for an agency account (not inside a client) whose shared pool has run out. */
+export function agencyAllowanceEmpty(): { title: string; body: string; action: string } {
+  return {
+    title: 'The shared pool has run out',
+    body: 'There are not enough posts and videos left for this. Top up the shared pool, or wait for your plan to renew, and carry on.',
+    action: 'Top up the shared pool',
+  };
 }
 
 /** Wording for the prompt shown inside a client when the agency's shared allowance has run out. Plans and top-ups are not available inside a client. */

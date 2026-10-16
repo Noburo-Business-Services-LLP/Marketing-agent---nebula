@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canConfirmDeletion, daysUntil, needsTermsPrompt } from '../utils/accountDeletion.ts';
+import { canConfirmDeletion, daysUntil, needsTermsPrompt, clientBrandsErasedText, exportClientsNote } from '../utils/accountDeletion.ts';
 
 test('delete stays off until the password is in and DELETE is typed exactly', () => {
   assert.equal(canConfirmDeletion('', 'DELETE'), false);
@@ -28,4 +28,20 @@ test('the terms prompt is for finished, non-staff accounts that have not agreed 
 
 test('a client workspace is never asked to agree: the agency already did', () => {
   assert.equal(needsTermsPrompt({ onboardingCompleted: true, staffRole: null, consent: null, actingAgency: { name: 'Sweet Co' } }), false);
+});
+
+test('the Terms prompt never shows in a client workspace or while a pass is held', () => {
+  const customer = { onboardingCompleted: true, consent: null };
+  assert.equal(needsTermsPrompt(customer), true);
+  assert.equal(needsTermsPrompt({ ...customer, actingAgency: { name: 'Owner' } }), false);
+  assert.equal(needsTermsPrompt(customer, true), false);
+  assert.equal(needsTermsPrompt({ ...customer, consent: { acceptedAt: '2026-10-01' } }), false);
+});
+
+test('deleting an agency says how many client brands go with it', () => {
+  assert.equal(clientBrandsErasedText(0), '');
+  assert.match(clientBrandsErasedText(1), /1 client brand,.* in it\./);
+  assert.match(clientBrandsErasedText(12), /12 client brands/);
+  assert.equal(exportClientsNote(0), '');
+  assert.match(exportClientsNote(3), /not in this file/);
 });

@@ -129,7 +129,7 @@
   if (MANAGED) user.plan = { tier: 'managed' };
   // The Terms prompt would cover the plans page; the Task 11 plans-page routes are audited with the terms already accepted.
   if (MANAGED || MODE === 'normal') user.consent = { acceptedAt: iso(-30), termsVersion: 'audit' };
-  if (AGENCY) { var clientName = (function () { try { return localStorage.getItem('csmActingClient') || 'Sweet Co'; } catch (e) { return 'Sweet Co'; } })(); user.plan = { tier: 'agency' }; if (!INSIDE) user.consent = { acceptedAt: iso(-30), termsVersion: 'audit' }; user.actingAgency = INSIDE ? { name: clientName } : null; if (INSIDE) { user.businessProfile = Object.assign({}, businessProfile, { name: clientName }); user.firstName = clientName; } else { user.firstName = 'Studio North'; user.businessProfile = Object.assign({}, businessProfile, { name: 'Studio North' }); } }
+  if (AGENCY) { var clientName = (function () { try { return localStorage.getItem('csmActingClient') || 'Sweet Co'; } catch (e) { return 'Sweet Co'; } })(); user.plan = { tier: 'agency' }; if (!INSIDE) user.consent = { acceptedAt: iso(-30), termsVersion: 'audit' }; user.actingAgency = INSIDE ? { name: 'Studio North' } : null; if (INSIDE) { user.businessProfile = Object.assign({}, businessProfile, { name: clientName }); user.firstName = clientName; } else { user.firstName = 'Studio North'; user.businessProfile = Object.assign({}, businessProfile, { name: 'Studio North' }); } }
 
   var draft = function (i, status, sourceType, img) {
     return {
@@ -295,7 +295,7 @@
       try { sessionStorage.setItem('audit-extra-bought', String(BOUGHT)); } catch (e) { /* ignore */ }
       return ok({ alreadyProcessed: false, message: 'Your extra client is added.', kind: 'slot', key: 'client', clientLimit: CLIENT_LIMIT });
     }],
-    ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user }); }],
+    ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user, actingAgency: user.actingAgency || null, actingCsm: null }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
     ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {

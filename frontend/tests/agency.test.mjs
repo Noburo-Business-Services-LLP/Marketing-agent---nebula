@@ -4,6 +4,7 @@ import {
   isAgencyUser, clientsLeft, limitLabel, actingBannerText, isInsideClient, showClientSwitcher,
   returnButtonLabel, clientStatus, mergeUsage, usageText, lastActiveText, addClientCheck, slotOffer,
   slotPriceText, includedText, canConfirmRemoval, removalExplainer, agencyErrorMessage, pausedReason, clientAllowanceEmpty,
+  mergeActing, isLapsedAgency, showsPostsNotQuarks, poolText, actingClientName, agencyAllowanceEmpty,
 } from '../utils/agency.ts';
 import { returnHashAfterActing } from '../utils/staffHome.ts';
 
@@ -176,4 +177,46 @@ test('when the shared allowance runs out inside a client, the prompt sends the p
   assert.match(t.body, /agency account/i);
   assert.equal(t.action, 'Back to my clients');
   assert.doesNotMatch(JSON.stringify(t), /quark|credit|trial|!|\u2014/i);
+});
+
+test('the server sends actingAgency next to user; mergeActing puts it on the user so the checks work', () => {
+  const real = { success: true, user: { plan: { tier: 'agency' }, firstName: 'Owner' }, actingAgency: { name: 'Owner' }, actingCsm: null };
+  const u = mergeActing(real);
+  assert.equal(isInsideClient(u), true);
+  assert.equal(isAgencyUser(u), false);
+  assert.equal(showClientSwitcher(u, true), true);
+  const own = mergeActing({ success: true, user: { plan: { tier: 'agency' } } });
+  assert.equal(isAgencyUser(own), true);
+  assert.equal(own.actingAgency, null);
+  assert.equal(mergeActing({ user: { a: 1 }, actingCsm: { name: 'C' } }).actingCsm.name, 'C');
+  assert.equal(mergeActing({ success: true }), null);
+  assert.equal(mergeActing(null), null);
+});
+
+test('a lapsed agency is an owner of clients with a plan that is not the agency plan', () => {
+  assert.equal(isLapsedAgency({ plan: { tier: 'free' }, agency: { clientCount: 2 } }), true);
+  assert.equal(isLapsedAgency({ plan: { tier: 'agency' }, agency: { clientCount: 2 } }), false);
+  assert.equal(isLapsedAgency({ plan: { tier: 'free' }, agency: { clientCount: 0 } }), false);
+  assert.equal(isLapsedAgency({ plan: { tier: 'agency' }, actingAgency: { name: 'x' }, agency: { clientCount: 2 } }), false);
+});
+
+test('agencies and their clients see posts and videos, other customers keep Quarks', () => {
+  assert.equal(showsPostsNotQuarks({ plan: { tier: 'agency' } }), true);
+  assert.equal(showsPostsNotQuarks({ plan: { tier: 'agency' }, actingAgency: { name: 'x' } }), true);
+  assert.equal(showsPostsNotQuarks({ plan: { tier: 'professional' } }), false);
+  assert.equal(showsPostsNotQuarks(null), false);
+  assert.equal(poolText(12, 1), '12 posts and 1 video left in the shared pool');
+  assert.doesNotMatch(agencyAllowanceEmpty().body + agencyAllowanceEmpty().title, /quark/i);
+});
+
+test('the client name is the client, never the agency owner', () => {
+  assert.equal(actingClientName({ agency: { workspaceName: 'Sweet Co' } }, ''), 'Sweet Co');
+  assert.equal(actingClientName({ agency: { workspaceName: 'Sweet Co' } }, 'Bakery'), 'Bakery');
+  assert.equal(actingClientName({ businessProfile: { name: 'Biz' } }, null), 'Biz');
+  assert.equal(actingClientName(null, null), '');
+});
+
+test('error text never shows Quarks or vendor names', () => {
+  assert.equal(agencyErrorMessage({ message: 'You have used all of your Quarks.' }, 'fb'), 'fb');
+  assert.equal(agencyErrorMessage({ message: 'Gemini timed out' }, 'fb'), 'fb');
 });

@@ -78,6 +78,10 @@ export interface User {
   plan?: { tier: 'free' | 'starter' | 'professional' | 'managed' | 'agency' | null };
   /** Set by the server while this is a client workspace opened from an agency account. */
   actingAgency?: { name: string } | null;
+  /** How many client brands this account owns (set by the server). */
+  agency?: { clientCount?: number; workspaceName?: string } | null;
+  /** Set by the server while a customer-success manager is working inside this account. */
+  actingCsm?: { name: string } | null;
   consent?: { acceptedAt?: string; termsVersion?: string } | null;
   deletion?: { status: 'pending'; purgeAfter?: string; requestedAt?: string } | null;
   brandScore?: {

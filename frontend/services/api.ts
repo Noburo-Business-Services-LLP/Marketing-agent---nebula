@@ -1,6 +1,6 @@
 import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft } from '../types';
 import { apiErrorFrom } from '../utils/plans';
-import { agencyErrorMessage } from '../utils/agency';
+import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
 import type { BlueprintView } from '../utils/blueprint';
 
@@ -20,6 +20,10 @@ const setToken = (token: string): void => localStorage.setItem('authToken', toke
 
 // Helper to remove auth token
 const removeToken = (): void => localStorage.removeItem('authToken');
+/** Drops any held staff, CSM or agency pass (its return token is a full session of someone else). */
+const clearPass = (): void => {
+  try { ['csmReturnToken', 'csmActingClient', 'csmActingClientId', 'csmReturnTo'].forEach((k) => localStorage.removeItem(k)); } catch { /* storage may be blocked */ }
+};
 
 // Helper to get stored website analysis context (from onboarding)
 export const getWebsiteAnalysisContext = (): {
@@ -134,7 +138,7 @@ async function apiCall<T>(
           creditsRemaining: data.creditsRemaining
         }
       }));
-      throw new Error(data.message || 'You have used all of your Quarks.');
+      throw new Error(data.message || 'There is nothing left to create with right now.');
     }
 
     if (!response.ok) {
@@ -344,6 +348,7 @@ export const apiService = {
 
     // SECURITY: Do NOT save token until OTP is verified
     if (response.token && !response.requiresVerification) {
+      clearPass();
       setToken(response.token);
     }
 
@@ -363,6 +368,7 @@ export const apiService = {
 
     // SECURITY: Do NOT save token until OTP is verified
     if (response.token && !response.requiresVerification) {
+      clearPass();
       setToken(response.token);
     }
 
@@ -389,6 +395,7 @@ export const apiService = {
     );
 
     if (response.token) {
+      clearPass();
       setToken(response.token);
     }
 
@@ -425,16 +432,17 @@ export const apiService = {
     try {
       const token = getToken();
       if (!token) {
+        clearPass(); // a pass left behind must not swap the next person into the previous account
         return { user: null };
       }
 
-      const response = await apiCall<{ success: boolean; user: User }>(
+      const response = await apiCall<{ success: boolean; user: User; actingAgency?: { name: string } | null; actingCsm?: { name: string } | null }>(
         '/auth/me',
         { method: 'GET' },
         true
       );
 
-      return { user: response.user };
+      return { user: mergeActing(response) as User | null };
     } catch (error) {
       // The server being stopped, restarting or slow must not delete the saved login; only a "no" from the server does.
       if (!serverRejectedSession(error)) return { user: null };
@@ -445,13 +453,13 @@ export const apiService = {
         localStorage.removeItem('csmReturnToken');
         localStorage.removeItem('csmActingClient');
         try {
-          const back = await apiCall<{ success: boolean; user: User }>('/auth/me', { method: 'GET' }, true);
-          return { user: back.user };
+          localStorage.removeItem('csmReturnTo');
+          const back = await apiCall<{ success: boolean; user: User; actingAgency?: { name: string } | null; actingCsm?: { name: string } | null }>('/auth/me', { method: 'GET' }, true);
+          return { user: mergeActing(back) as User | null };
         } catch (_) { /* fall through to signing out */ }
       }
       removeToken();
-      localStorage.removeItem('csmReturnToken');
-      localStorage.removeItem('csmActingClient');
+      clearPass();
       return { user: null };
     }
   },
@@ -527,7 +535,7 @@ export const apiService = {
   saveBillingDetails: async (d: { gstin: string; legalName: string; address: string; pin: string; stateCode: string }): Promise<{ success: boolean; message?: string; errors?: Record<string, string> }> =>
     apiCall('/payment/billing-details', { method: 'PUT', body: JSON.stringify(d) }, true),
   // Your data and your account
-  getAccountStatus: async (): Promise<{ success: boolean; deletion: { status: 'pending'; purgeAfter: string } | null; canDelete: boolean; reason: string; graceDays: number }> =>
+  getAccountStatus: async (): Promise<{ success: boolean; deletion: { status: 'pending'; purgeAfter: string } | null; canDelete: boolean; reason: string; graceDays: number; clients?: number }> =>
     apiCall('/account/status', { method: 'GET' }, true),
   downloadMyData: async (password: string): Promise<{ success: boolean; message?: string }> => {
     const res = await fetch(`${API_BASE_URL}/account/export`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify({ password }) });
@@ -1490,9 +1498,14 @@ export const apiService = {
     try {
       const r: any = await apiCall(`/agency/clients/${encodeURIComponent(id)}/open`, { method: 'POST' }, true);
       if (!r?.success || !r.token) return { success: false, message: r?.message };
+      // A staff or CSM pass is already held: keep that chain intact rather than overwrite its return target.
+      if (localStorage.getItem('csmReturnToken') && localStorage.getItem('csmReturnTo') !== '#/agency/clients') {
+        return { success: false, message: 'You are working in this account on a staff pass. Go back to the staff area first, then open the client from your own agency account.' };
+      }
       const own = getToken();
       if (own && !localStorage.getItem('csmReturnToken')) localStorage.setItem('csmReturnToken', own);
       localStorage.setItem('csmActingClient', r.client?.name || '');
+      localStorage.setItem('csmActingClientId', String(r.client?.id || ''));
       localStorage.setItem('csmReturnTo', '#/agency/clients');
       setToken(r.token);
       return { success: true };
@@ -1543,9 +1556,7 @@ export const apiService = {
     const own = localStorage.getItem('csmReturnToken');
     if (!own) return false;
     setToken(own);
-    localStorage.removeItem('csmReturnToken');
-    localStorage.removeItem('csmActingClient');
-    localStorage.removeItem('csmReturnTo');
+    clearPass();
     return true;
   },
 

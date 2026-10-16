@@ -27,8 +27,8 @@ import SocialInbox from './pages/SocialInbox';
 import CsmClients from './pages/CsmClients';
 import AgencyClients from './pages/AgencyClients';
 import StaffLayout from './pages/staff/StaffLayout';
-import { landingPath } from './utils/staffHome';
-import { isInsideClient } from './utils/agency';
+import { landingPath, returnHashAfterActing } from './utils/staffHome';
+import { isAgencyUser, isInsideClient } from './utils/agency';
 import ReelGenerator from './pages/ReelGenerator';
 import HeroVideo from './pages/HeroVideo';
 import AdCampaigns from './pages/AdCampaigns';
@@ -201,7 +201,7 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
     <ConfirmProvider>
-    {needsTermsPrompt(user) && (
+    {needsTermsPrompt(user, Boolean(localStorage.getItem('csmReturnToken'))) && (
       <TermsPrompt
         onAccepted={() => setUser((u) => (u ? { ...u, consent: { acceptedAt: new Date().toISOString() } } : u))}
         onLogout={handleLogout}
@@ -340,7 +340,8 @@ const App: React.FC = () => {
                         onSeePlans={() => { clearCreditsPaywall(); window.location.hash = '#/trial-expired'; }}
                         onDismiss={clearCreditsPaywall}
                         insideClient={isInsideClient(user)}
-                        onBackToAgency={() => { clearCreditsPaywall(); if (apiService.returnToCsmAccount()) { window.location.hash = '#/agency/clients'; window.location.reload(); } }}
+                        agency={isAgencyUser(user)}
+                        onBackToAgency={() => { clearCreditsPaywall(); const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}
                       />
                     )}
                 </Layout>

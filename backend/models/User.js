@@ -343,6 +343,7 @@ const userSchema = new mongoose.Schema({
       couponCode: { type: String },
       expectedPaise: { type: Number },   // agency plan and client slot: the price (paise, GST included) when it was bought
       active: { type: Boolean, default: false },
+      ended: { type: Boolean },          // a client slot that was cancelled or completed: a late charge must not reactivate it
       createdAt: { type: Date, default: Date.now }
     }]
   },
@@ -450,6 +451,8 @@ userSchema.methods.toPublicJSON = function () {
     consent: this.consent && this.consent.acceptedAt ? { acceptedAt: this.consent.acceptedAt, termsVersion: this.consent.termsVersion } : null,
     // The plan tier (starter, professional, free) or null for a managed account. Used to show the plan prompt.
     plan: { tier: (this.plan && this.plan.tier) || null },
+    // How many client brands this account owns; lets an agency whose plan ended still reach its clients to see or remove them.
+    agency: { clientCount: Number((this.agency && this.agency.clientCount) || 0), workspaceName: (this.agency && this.agency.workspaceName) || '' },
     credits: this.credits ? {
       balance: this.credits.balance,
       totalUsed: this.credits.totalUsed
