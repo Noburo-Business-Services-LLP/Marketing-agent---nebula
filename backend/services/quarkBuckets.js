@@ -76,7 +76,7 @@ function spendPipeline(cost, entry) {
   }];
 }
 
-async function spend(userId, cost, { action = 'spend', description = '', ref = '' } = {}) {
+async function spend(userId, cost, { action = 'spend', description = '', ref = '', units = 1 } = {}) {
   const amount = num(cost);
   if (amount <= 0) return { success: true, balance: null, spent: 0 };
   const entry = { action, amount: -amount, description: description || action, createdAt: new Date() };
@@ -87,6 +87,8 @@ async function spend(userId, cost, { action = 'spend', description = '', ref = '
   );
   if (!doc) return { success: false, balance: null, spent: 0 };
   record({ user: userId, type: 'spend', quarks: -amount, balanceAfter: doc.credits.balance, action, ref });
+  // What this cost us, for the daily ceiling and the staff screen. Never blocks the spend.
+  try { require('./spendGuard').record(action, units); } catch (_) { /* cost tracking is best effort */ }
   return { success: true, balance: doc.credits.balance, spent: amount, user: doc };
 }
 

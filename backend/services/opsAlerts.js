@@ -106,8 +106,24 @@ function createAlerter({ env = process.env, now = () => Date.now(), send = null 
     return { since: new Date(startedAt).toISOString(), categories: out };
   }
 
-  return { recordFailure, recordCritical, snapshot };
+  // A plain alert with its own wording, sent at most once per `key` within `cooldownMs`. Never throws.
+  async function notify({ key, subject, text, cooldownMs = 6 * 3600000 }) {
+    try {
+      const t = now();
+      if (t - (lastSent.get(key) ?? -Infinity) < cooldownMs) return false;
+      const to = recipients();
+      if (to.length === 0) return false;
+      lastSent.set(key, t);
+      await sendEmail({ to, subject, text });
+      return true;
+    } catch (error) {
+      console.error('[opsAlerts] could not send alert:', error.message);
+      return false;
+    }
+  }
+
+  return { recordFailure, recordCritical, notify, snapshot };
 }
 
 const shared = createAlerter();
-module.exports = { createAlerter, recordFailure: (...args) => shared.recordFailure(...args), recordCritical: (...args) => shared.recordCritical(...args), snapshot: () => shared.snapshot() };
+module.exports = { createAlerter, recordFailure: (...args) => shared.recordFailure(...args), recordCritical: (...args) => shared.recordCritical(...args), notify: (...args) => shared.notify(...args), snapshot: () => shared.snapshot() };

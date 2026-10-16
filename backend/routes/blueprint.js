@@ -37,7 +37,12 @@ function createBlueprintRouter(impl = {}) {
   // The free Blueprint is the one thing a new account can make without Quarks, so the balance checks apply only to
   // paid tiers. One free Blueprint per business is enforced in the service.
   const unlessFree = (mw) => (req, res, next) => (resolveTier(req.user) === 'free' ? next() : mw(req, res, next));
-  router.post('/', protect, requireFeature('blueprint'), unlessFree(checkTrial), unlessFree(requireCredits('blueprint', 1)), writeLimiter,
+  // Even the free Blueprint costs us a model call, so the daily ceiling and the provider switches apply to it.
+  const spendGate = async (req, res, next) => {
+    const g = await require('../services/spendGuard').check('blueprint');
+    return g.ok ? next() : res.status(503).json({ success: false, serviceBusy: true, message: g.message });
+  };
+  router.post('/', protect, requireFeature('blueprint'), spendGate, unlessFree(checkTrial), unlessFree(requireCredits('blueprint', 1)), writeLimiter,
     handle((svc, req) => svc.start({ user: req.user, tier: resolveTier(req.user), body: req.body || {}, ip: req.ip })));
   router.get('/', protect, readLimiter, handle((svc, req, userId) => svc.list({ userId })));
   router.get('/:id', protect, readLimiter, handle((svc, req, userId) => svc.get({ userId, id: req.params.id })));

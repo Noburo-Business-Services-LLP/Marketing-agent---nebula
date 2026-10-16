@@ -23,6 +23,7 @@ const TABLE = {
   view_usage_full:    [true, false, false],
   view_usage_summary: [true, true, false],
   manage_coupons:     [true, false, false],
+  manage_ai_switches: [true, false, false],
   export_csv:         [true, false, false],
   view_activity_all:  [true, true, false]
 };

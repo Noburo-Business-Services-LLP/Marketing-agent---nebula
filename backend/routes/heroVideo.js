@@ -447,6 +447,8 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
 
   router.post('/generate', protect, checkTrial, heroWriteLimiter, async (req, res) => {
     try {
+      const gate = await require('../services/spendGuard').check('hero_video_clip');
+      if (!gate.ok) return res.status(503).json({ success: false, serviceBusy: true, message: gate.message });
       const out = await flow().startHeroGeneration(getDeps(), { userId: toUserId(req.user), body: req.body || {} });
       return res.status(out.status).json(out.json);
     } catch (err) {

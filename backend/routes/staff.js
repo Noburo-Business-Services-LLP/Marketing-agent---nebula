@@ -159,6 +159,22 @@ router.post('/coupons/:code/deactivate', requireStaff('manage_coupons'), (req, r
 router.delete('/coupons/:code', requireStaff('manage_coupons'), (req, res) =>
   runTeam(res, 'coupon delete', () => tools.deleteCoupon({ actor: req.staff, code: req.params.code, ...toolDeps() })));
 
+// GET /api/staff/ai-spend: what the AI providers have cost today (estimated), the daily ceiling, and each provider switch.
+router.get('/ai-spend', requireStaff('manage_ai_switches'), async (req, res) => {
+  try { res.json({ success: true, ...(await require('../services/spendGuard').status()) }); }
+  catch (error) { console.error('[staff] ai spend failed:', error.message); res.status(500).json({ success: false, message: 'We could not load this right now.' }); }
+});
+
+// POST /api/staff/ai-switches { provider, disabled, note }: stop or resume one AI provider (Owner only).
+router.post('/ai-switches', requireStaff('manage_ai_switches'), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const out = await require('../services/spendGuard').setSwitch(String(b.provider || ''), b.disabled === true, { note: b.note, by: req.staff && req.staff.email });
+    if (!out.ok) return res.status(400).json({ success: false, message: out.message });
+    res.json({ success: true, ...(await require('../services/spendGuard').status()) });
+  } catch (error) { console.error('[staff] ai switch failed:', error.message); res.status(500).json({ success: false, message: 'We could not change this right now.' }); }
+});
+
 // GET /api/staff/home: health, clients that need attention, growth. A CSM sees only their own clients;
 // error details are shown to Owners and Admins only.
 router.get('/home', requireStaff('view_home'), async (req, res) => {

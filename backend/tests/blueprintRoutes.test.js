@@ -22,14 +22,15 @@ test('the five routes exist and protect is first on every one', () => {
   for (const r of found) assert.strictEqual(r.handlers[0], protect, `${r.method} ${r.path}`);
 });
 
-test('POST / chain: protect, feature gate, checkTrial, credits guard, limiter, handler', () => {
+test('POST / chain: protect, feature gate, spend gate, trial and credits guards (paid tiers), limiter, handler', () => {
   const post = routesOf(router).find((r) => r.method === 'post' && r.path === '/');
-  assert.strictEqual(post.handlers.length, 6);
+  assert.strictEqual(post.handlers.length, 7);
   assert.strictEqual(post.handlers[0], protect);
   assert.strictEqual(typeof post.handlers[2], 'function'); // checkTrial and the credits guard apply to paid tiers only
   assert.strictEqual(typeof post.handlers[1], 'function');
   assert.strictEqual(typeof post.handlers[3], 'function');
   assert.ok(post.handlers[1] !== post.handlers[3]);
+  assert.strictEqual(typeof post.handlers[4], 'function');
 });
 
 test('the route uses the Blueprint feature gate and the Blueprint price from the cost table', async () => {

@@ -17,6 +17,14 @@ const { QUARK_COSTS, STUDIO_CLIP_SECONDS } = require('../config/apiCosts');
 const { generateOpenAIImage } = require('../services/openaiImage');
 
 const COST = () => QUARK_COSTS.studio_video;
+const spendGuard = require('../services/spendGuard');
+// Refuse before charging when the daily ceiling is reached or the provider is switched off.
+async function busy(res, action) {
+  const g = await spendGuard.check(action);
+  if (g.ok) return false;
+  res.status(503).json({ success: false, serviceBusy: true, message: g.message });
+  return true;
+}
 const MAX_REFS = 3;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const STALE_MS = 15 * 60 * 1000;
@@ -151,6 +159,7 @@ router.post('/create', protect, async (req, res) => {
   try {
     const userId = userIdOf(req);
     if (!allowed('create', userId, 30)) return res.status(429).json({ success: false, message: 'Please wait a little before making another video.' });
+    if (await busy(res, 'studio_video')) return;
     const active = await StudioVideo.countDocuments({ user: userId, status: 'processing', startedAt: { $gt: new Date(Date.now() - STALE_MS) } });
     if (active >= 2) return res.status(429).json({ success: false, message: 'Two videos are already being made. Please wait for one to finish.' });
     const b = req.body || {};
@@ -215,6 +224,7 @@ router.post('/reference', protect, async (req, res) => {
   const kind = req.body && req.body.kind === 'place' ? 'place' : 'person';
   try {
     if (!allowed('reference', userId, 20)) return res.status(429).json({ success: false, message: 'Please wait a little before making more pictures.' });
+    if (await busy(res, 'studio_reference')) return;
     const cost = QUARK_COSTS.studio_reference;
     await quarkBuckets.settle(userId).catch(() => null);
     const paid = await quarkBuckets.spend(userId, cost, { action: 'studio_reference', description: kind === 'person' ? 'Person for a video' : 'Place for a video' });
@@ -259,6 +269,7 @@ router.post('/:id/change', protect, async (req, res) => {
   try {
     const userId = userIdOf(req);
     if (!allowed('create', userId, 30)) return res.status(429).json({ success: false, message: 'Please wait a little before making another change.' });
+    if (await busy(res, 'studio_video')) return;
     const instruction = sv.clip(req.body && req.body.instruction, 400);
     if (!instruction) return res.status(400).json({ success: false, message: 'Say what to change.' });
     const base = await StudioVideo.findOne({ _id: req.params.id, user: userId, status: 'completed' });

@@ -76,7 +76,7 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
     // Anything past its date is taken off first, then one atomic step checks the balance and subtracts from the
     // buckets together, so many requests at the same moment cannot all pass the check and overdraw the account.
     await quarkBuckets.settle(userId).catch(() => null);
-    const spent = await quarkBuckets.spend(userId, totalCost, { action, description: description || `${action} x${count}` });
+    const spent = await quarkBuckets.spend(userId, totalCost, { action, description: description || `${action} x${count}`, units: count });
     const result = spent.success ? spent.user : null;
 
     if (!result) {
@@ -121,6 +121,10 @@ const requireCredits = (action, countOrFn = 1) => {
 
       const count = typeof countOrFn === 'function' ? countOrFn(req) : countOrFn;
       const totalCost = cost * count;
+
+      // The daily spend ceiling and the provider switches: refuse new work before anything is generated.
+      const gate = await require('../services/spendGuard').check(action);
+      if (!gate.ok) return res.status(503).json({ success: false, serviceBusy: true, message: gate.message });
 
       await quarkBuckets.settle(userId).catch(() => null);
       const user = await User.findById(userId);

@@ -29,6 +29,16 @@ const ENDING_EVENTS = ['subscription.cancelled', 'subscription.halted', 'subscri
 function createPaymentRouter(deps = {}) {
   const router = express.Router();
   const protect = deps.protect || require('../middleware/auth').protect;
+  // Checkout attempts are limited per account and address: a person pays a handful of times, a card-testing script
+  // tries hundreds. The test harness injects its own `protect`, and is not limited.
+  const payLimiter = deps.protect ? (_req, _res, next) => next() : (() => {
+    const rateLimit = require('express-rate-limit');
+    return rateLimit({
+      windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false,
+      message: { success: false, message: 'Too many payment attempts. Please wait a few minutes and try again.' },
+      keyGenerator: (req) => `${String(req.user?._id || req.user?.id || '')}|${rateLimit.ipKeyGenerator ? rateLimit.ipKeyGenerator(req.ip) : req.ip}`
+    });
+  })();
   const User = deps.User || require('../models/User');
   const Coupon = deps.Coupon || require('../models/Coupon');
   const createInvoice = deps.createInvoice || require('../services/zohoBooks').createInvoice;
@@ -143,7 +153,7 @@ function createPaymentRouter(deps = {}) {
    * POST /api/payment/validate-coupon
    * Validate a coupon code without redeeming it
    */
-  router.post('/validate-coupon', protect, async (req, res) => {
+  router.post('/validate-coupon', protect, payLimiter, async (req, res) => {
     try {
       const { code } = req.body;
       if (!code) return res.status(400).json({ success: false, message: 'Coupon code required' });
@@ -189,7 +199,7 @@ function createPaymentRouter(deps = {}) {
    * POST /api/payment/create-subscription  { planId: 'starter' | 'professional' }
    * Creates a Razorpay subscription at price plus GST.
    */
-  router.post('/create-subscription', protect, async (req, res) => {
+  router.post('/create-subscription', protect, payLimiter, async (req, res) => {
     try {
       const userId = userIdOf(req);
       const user = await User.findById(userId);
@@ -252,7 +262,7 @@ function createPaymentRouter(deps = {}) {
    * POST /api/payment/create-addon-subscription  { addon }
    * Add-ons need a Starter or Professional plan; Inbox needs Publish and schedule.
    */
-  router.post('/create-addon-subscription', protect, async (req, res) => {
+  router.post('/create-addon-subscription', protect, payLimiter, async (req, res) => {
     try {
       const userId = userIdOf(req);
       const user = await User.findById(userId);
@@ -293,14 +303,14 @@ function createPaymentRouter(deps = {}) {
    * POST /api/payment/verify-subscription
    * Verifies the first payment of a plan or add-on subscription, then grants it.
    */
-  router.post('/verify-subscription', protect, async (req, res) => {
+  router.post('/verify-subscription', protect, payLimiter, async (req, res) => {
     try {
       const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body || {};
       if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
         return res.status(400).json({ success: false, message: 'Missing payment details' });
       }
       if (!bp.verifyCheckoutSignature(`${razorpay_payment_id}|${razorpay_subscription_id}`, razorpay_signature, env().RAZORPAY_KEY_SECRET)) {
-        return res.status(400).json({ success: false, message: 'Payment verification failed: invalid signature' });
+        { require('../services/opsAlerts').recordFailure('payment', 'checkout signature failed'); return res.status(400).json({ success: false, message: 'Payment verification failed: invalid signature' }); }
       }
 
       const user = await User.findById(userIdOf(req));
@@ -391,7 +401,7 @@ function createPaymentRouter(deps = {}) {
    * Quark top-up. Only the three pack prices are accepted; the Quarks are recorded
    * from config in the order notes.
    */
-  router.post('/create-order', protect, async (req, res) => {
+  router.post('/create-order', protect, payLimiter, async (req, res) => {
     try {
       const pack = bp.findTopupPack(req.body?.packInr);
       if (!pack) {
@@ -432,14 +442,14 @@ function createPaymentRouter(deps = {}) {
    * POST /api/payment/verify
    * Verifies a top-up payment, then grants the pack's Quarks (from config).
    */
-  router.post('/verify', protect, async (req, res) => {
+  router.post('/verify', protect, payLimiter, async (req, res) => {
     try {
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
         return res.status(400).json({ success: false, message: 'Missing payment details' });
       }
       if (!bp.verifyCheckoutSignature(`${razorpay_order_id}|${razorpay_payment_id}`, razorpay_signature, env().RAZORPAY_KEY_SECRET)) {
-        return res.status(400).json({ success: false, message: 'Payment verification failed: invalid signature' });
+        { require('../services/opsAlerts').recordFailure('payment', 'checkout signature failed'); return res.status(400).json({ success: false, message: 'Payment verification failed: invalid signature' }); }
       }
 
       const user = await User.findById(userIdOf(req));
