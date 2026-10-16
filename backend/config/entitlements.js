@@ -4,7 +4,7 @@
  * resolve to `managed`, which is never blocked.
  */
 
-const TIERS = ['free', 'starter', 'professional', 'managed'];
+const TIERS = ['free', 'starter', 'professional', 'agency', 'managed'];
 const FEATURES = ['create', 'video', 'social_connect', 'publish', 'schedule', 'inbox', 'auto_reply', 'competitors', 'blueprint'];
 
 // Feature -> the add-on that unlocks it on a paid plan.
@@ -37,6 +37,7 @@ function resolveTier(user) {
 }
 
 function addonsOf(user) {
+  if (user && user.plan && user.plan.tier === 'agency') return ['bundle'];
   const a = user && user.plan && user.plan.addons;
   return Array.isArray(a) ? a : [];
 }

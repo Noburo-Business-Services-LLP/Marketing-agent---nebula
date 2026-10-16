@@ -64,7 +64,7 @@ test('add-ons shape', () => {
 const U = (tier, addons) => ({ plan: { tier, addons } });
 
 test('resolveTier and addonsOf', () => {
-  assert.deepEqual(ent.TIERS, ['free', 'starter', 'professional', 'managed']);
+  assert.deepEqual(ent.TIERS, ['free', 'starter', 'professional', 'agency', 'managed']);
   assert.equal(ent.resolveTier({}), 'managed');
   assert.equal(ent.resolveTier({ plan: {} }), 'managed');
   assert.equal(ent.resolveTier(null), 'managed');

@@ -4,7 +4,7 @@
  * nothing here accepts an amount from a request.
  */
 const crypto = require('crypto');
-const { PLANS, TOPUP_PACKS, ADDONS, GST_RATE, gstPaise, chargePaise, outputsFor } = require('../config/apiCosts');
+const { PLANS, TOPUP_PACKS, ADDONS, AGENCY, GST_RATE, gstPaise, chargePaise, outputsFor } = require('../config/apiCosts');
 const { PLAN_PRESENTATION, ADDON_ENV_VARS, INVOICE_ITEMS } = require('../config/plans');
 const { resolveTier, addonsOf } = require('../config/entitlements');
 const buckets = require('./quarkBuckets');
@@ -49,7 +49,8 @@ function planCatalogue() {
     addons: ADDON_IDS.map((id) => ({
       id, label: ADDONS[id].label, ...priceBlock(ADDONS[id].inr),
       requires: [...(ADDONS[id].requires || [])], includes: [...(ADDONS[id].includes || [])]
-    }))
+    })),
+    agency: { includedClients: AGENCY.includedClients, maxClients: AGENCY.maxClients, slotInr: AGENCY.slot.inr, slotQuarks: AGENCY.slot.quarks }
   };
 }
 
@@ -69,6 +70,7 @@ const heldBy = (held, name) => held.includes(name) || held.includes('bundle');
 
 function canBuyAddon(user, addon) {
   if (!isAddonId(addon)) return { ok: false, message: 'Please choose one of the available add-ons.' };
+  if (resolveTier(user) === 'agency') return { ok: false, message: 'Publishing, inbox and competitor insights are included in the Agency plan.' };
   const tier = resolveTier(user);
   if (tier !== 'starter' && tier !== 'professional') {
     return { ok: false, message: 'Add-ons are available on the Starter and Growth plans. Please choose a plan first.' };

@@ -582,6 +582,13 @@ const PLANS = {
     label: 'Growth',
     commits: { image_generated: 100, studio_video: 3 },
     grant: 2000
+  },
+  agency: {
+    inr: 6999,
+    label: 'Agency',
+    // Commitments sized so the allowance guard below holds: about 300 posts and 10 videos a month across the clients.
+    commits: { image_generated: 300, studio_video: 10 },
+    grant: 6000
   }
 };
 
@@ -661,6 +668,9 @@ function chargePaise(inrAmount) {
   return toPaise(inrAmount) + gstPaise(inrAmount);
 }
 
+// The agency plan: clients are separate workspaces paid from one shared pool. Prices here only.
+const AGENCY = { includedClients: 5, maxClients: 25, slot: { inr: 1499, quarks: 500 } };
+
 const ADDONS = {
   publish: { label: 'Publish and schedule', inr: 1000, requires: [] },
   competitors: { label: 'Competitor insights', inr: 500, requires: [] },
@@ -671,7 +681,7 @@ const ADDONS = {
 module.exports = {
   PROVIDER_RATES, HERO_CLIP_SECONDS, STUDIO_CLIP_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
-  assertPlanAllowance, TOPUP_PACKS, TOPUP_INR_PER_QUARK, outputsFor, GST_RATE, gstPaise, chargePaise, ADDONS,
+  assertPlanAllowance, TOPUP_PACKS, TOPUP_INR_PER_QUARK, outputsFor, GST_RATE, gstPaise, chargePaise, ADDONS, AGENCY,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,
   PIPELINE_SECONDS, videoWallClockSeconds
 };

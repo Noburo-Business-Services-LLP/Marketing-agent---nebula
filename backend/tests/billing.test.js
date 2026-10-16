@@ -161,9 +161,9 @@ async function startPlan(ctx, planId) {
 }
 
 // ---------------------------------------------------------------- pure helpers
-test('plans catalogue: only starter and professional, numbers from config', () => {
+test('plans catalogue: starter, professional and agency, numbers from config', () => {
   const c = bp.planCatalogue();
-  assert.deepStrictEqual(c.plans.map((p) => p.id), ['starter', 'professional']);
+  assert.deepStrictEqual(c.plans.map((p) => p.id), ['starter', 'professional', 'agency']);
   const [s, p] = c.plans;
   assert.strictEqual(s.inr, 999); assert.strictEqual(s.gstPaise, 17982); assert.strictEqual(s.chargePaise, 117882); assert.strictEqual(s.quarks, 600);
   assert.strictEqual(p.inr, 1999); assert.strictEqual(p.gstPaise, 35982); assert.strictEqual(p.chargePaise, 235882); assert.strictEqual(p.quarks, 2000);
@@ -220,7 +220,7 @@ test('GET /plans returns only the new catalogue', async () => {
   const { r } = setup();
   const res = await call(r, 'get', '/plans', {});
   assert.strictEqual(res.code, 200);
-  assert.deepStrictEqual(res.body.plans.map((p) => p.id), ['starter', 'professional']);
+  assert.deepStrictEqual(res.body.plans.map((p) => p.id), ['starter', 'professional', 'agency']);
   assert.strictEqual(res.body.topups.length, 5);
   assert.strictEqual(res.body.addons.length, 4);
   assert.ok(!/plan_Sra|"scale"|7500/i.test(JSON.stringify(res.body)));
