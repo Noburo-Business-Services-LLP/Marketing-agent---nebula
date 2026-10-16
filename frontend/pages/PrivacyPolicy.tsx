@@ -33,7 +33,7 @@ const PrivacyPolicy: React.FC = () => {
           <div className="mb-10">
             <h1 className={`text-4xl font-bold mb-1 ${text}`}>NEBULAA</h1>
             <h2 className="text-2xl font-bold text-[var(--gv-accent-text)] mb-2">Privacy Policy</h2>
-            <p className={`text-sm italic ${textSec}`}>Effective Date: 10 March 2025 | Version 1.0</p>
+            <p className={`text-sm italic ${textSec}`}>Effective Date: 16 October 2026 | Version 2026-10-16</p>
             <p className={`text-sm italic ${textSec}`}>Governing Entity: Noburo Systems Private Limited, India</p>
           </div>
 
@@ -164,6 +164,7 @@ const PrivacyPolicy: React.FC = () => {
               <ul className="list-disc pl-6 space-y-2 mb-4">
                 <li><strong className={text}>Active account data:</strong> Kept while your account is open, so we can provide the Services;</li>
                 <li><strong className={text}>When you delete your account:</strong> You can download your data and delete your account yourself in Settings, under Security. Billing stops at once and nothing is erased for 14 days, so you can change your mind. After that your profile, brand details, posts, videos, messages, uploaded files and connected social profiles are erased for good;</li>
+                <li><strong className={text}>Agency accounts:</strong> Deleting an agency account erases all of its client brands in the same way, with their posts, videos, files and connected social profiles. Removing a single client erases that client at once; a usage record (counts of posts and videos, with no content) is kept without the client's name, as "Removed client", so that past usage reports still add up;</li>
                 <li><strong className={text}>Invoices and payment records:</strong> Kept for 8 years after deletion, as Indian tax and accounting laws require, together with the billing name and GST details printed on them;</li>
                 <li><strong className={text}>Repeat free offers:</strong> We keep a one-way scrambled form of your email address (a hash that cannot be turned back into the address) so that a deleted account cannot claim a free Growth Blueprint again;</li>
                 <li><strong className={text}>Staff activity log:</strong> Records of what our team did on an account are kept, with the link to you removed;</li>
@@ -277,7 +278,7 @@ const PrivacyPolicy: React.FC = () => {
               <div className={`mt-6 border-l-4 border-[#ffcc29] pl-4 italic ${textSec}`}>
                 Your privacy is important to us. We are committed to handling your personal data with transparency, integrity, and care.
               </div>
-              <p className={`mt-4 text-sm italic ${textSec}`}>Last Updated: 10 March 2025 | Document Version: 1.0</p>
+              <p className={`mt-4 text-sm italic ${textSec}`}>Last Updated: 16 October 2026 | Document Version: 2026-10-16</p>
             </section>
           </div>
         </div>

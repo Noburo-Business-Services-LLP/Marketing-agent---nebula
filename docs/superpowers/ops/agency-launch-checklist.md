@@ -28,7 +28,7 @@ The preview refuses payment, so neither checkout has ever been run for real.
 
 ## 4. Lawyer review
 
-Send the new text for review: Terms section 21 and Privacy section 5.6 (both pages stay marked as drafts). Points to ask about: the agency's confirmation of client permission, the agency as contact for client data requests, and immediate erasure when a client is removed.
+Send the new text for review: Terms section 21 and Privacy section 5.6 (the new text is a draft until the lawyer has reviewed it; the pages carry no "draft" banner, so do not describe them as final or send the "We have updated our Terms" notice before the review is done). Points to ask about: the agency's confirmation of client permission, the agency as contact for client data requests, and immediate erasure when a client is removed.
 
 ## 5. Re-measure the real cost per Quark
 

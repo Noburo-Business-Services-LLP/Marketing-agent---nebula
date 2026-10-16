@@ -33,7 +33,7 @@ const TermsAndConditions: React.FC = () => {
           <div className="mb-10">
             <h1 className={`text-4xl font-bold mb-1 ${text}`}>NEBULAA</h1>
             <h2 className="text-2xl font-bold text-[var(--gv-accent-text)] mb-2">Terms & Conditions of Service</h2>
-            <p className={`text-sm italic ${textSec}`}>Effective Date: 10 March 2025 | Version 1.0</p>
+            <p className={`text-sm italic ${textSec}`}>Effective Date: 16 October 2026 | Version 2026-10-16</p>
             <p className={`text-sm italic ${textSec}`}>Governing Entity: Noburo Systems Private Limited, India</p>
           </div>
 
@@ -246,7 +246,7 @@ const TermsAndConditions: React.FC = () => {
               <ul className="list-disc pl-6 space-y-2">
                 <li>Your licence to use the Platform immediately ceases;</li>
                 <li>You must discontinue all use of the Platform;</li>
-                <li>Provisions that by their nature should survive termination (including Sections 8, 9, 13, 14, 15, 16, 19, 20) shall continue in full force;</li>
+                <li>Provisions that by their nature should survive termination (including Sections 8, 9, 13, 14, 15, 16, 19, 20, 21) shall continue in full force;</li>
                 <li>We may retain or delete your data in accordance with our data retention policy and Privacy Policy.</li>
               </ul>
             </section>
@@ -297,7 +297,7 @@ const TermsAndConditions: React.FC = () => {
               <p className="mb-3">21.2 You are responsible for everything that is created and published for your clients through your account, including its accuracy and its compliance with these Terms and with the rules of each social network.</p>
               <p className="mb-3">21.3 Your clients are not billed separately. Their work is paid for from your agency plan and the shared pool of posts and videos that comes with it.</p>
               <p className="mb-3">21.4 If you remove a client, we erase that client's data at once. This cannot be undone.</p>
-              <p className="mb-3">21.5 If you cancel the agency plan, or it ends, all your clients are paused. Nothing is deleted until you remove a client or delete your account.</p>
+              <p className="mb-3">21.5 If you cancel the agency plan, or it ends, all your clients are paused. Nothing is deleted until you remove a client or delete your account. If you delete your agency account, every client brand in it is erased with it, including its posts, videos, files and connected accounts, after the same 14 days.</p>
               <p>21.6 If you have more clients than your agency plan allows, the clients above the limit are paused, not deleted. They open again when there is room for them.</p>
             </section>
 
@@ -314,7 +314,7 @@ const TermsAndConditions: React.FC = () => {
               <div className={`mt-6 border-l-4 border-[#ffcc29] pl-4 italic ${textSec}`}>
                 By using Nebulaa, you acknowledge that you have read, understood, and agreed to these Terms & Conditions.
               </div>
-              <p className={`mt-4 text-sm italic ${textSec}`}>Last Updated: 10 March 2025 | Document Version: 1.0</p>
+              <p className={`mt-4 text-sm italic ${textSec}`}>Last Updated: 16 October 2026 | Document Version: 2026-10-16</p>
             </section>
           </div>
         </div>
