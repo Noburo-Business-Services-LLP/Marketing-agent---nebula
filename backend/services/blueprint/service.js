@@ -37,6 +37,7 @@ function defaultDeps() {
   return {
     Blueprint: require('../../models/Blueprint'),
     freeBlueprintIsFree: true,
+    deletedBefore: async (email) => !!(await require('../../models/DeletedAccount').exists({ emailHash: require('../accountDeletion').emailHash(email) })),
     deduct: (...a) => require('../../middleware/trialGuard').deductCredits(...a),
     refund: (...a) => require('../../middleware/trialGuard').refundCredits(...a),
     uploadLogo: async (dataUrl) => {
@@ -150,6 +151,9 @@ function createBlueprintService(depsIn) {
   async function start({ user, tier, body, ip }) {
     const userId = idOf(user);
     if (tier === 'free' && user.isVerified !== true) return reply(403, { success: false, verificationRequired: true, message: MSG.verify });
+
+    // Someone who deleted their account and signed up again does not get a second free Blueprint.
+    if (tier === 'free' && deps.deletedBefore && await deps.deletedBefore(user.email).catch(() => false)) return reply(409, { success: false, alreadyUsed: true, message: MSG.usedOther });
 
     const n = normaliseInput(body, { allowGuided: tier !== 'free' });
     if (!n.ok) return reply(400, { success: false, errors: n.errors, message: MSG.fields });

@@ -551,3 +551,14 @@ test('a paid tier is still charged for a Blueprint', async () => {
   assert.strictEqual(r.status, 202);
   assert.strictEqual(deps.calls.deduct.length, 1);
 });
+
+test('an email that belonged to a deleted account does not get another free Blueprint, but a paid one is fine', async () => {
+  const { deps, begin } = setup({ deletedBefore: async (email) => email === 'back@example.com' });
+  const r = await begin(user('u9', 'back@example.com'), form());
+  assert.strictEqual(r.status, 409);
+  assert.strictEqual(r.json.alreadyUsed, true);
+  assert.strictEqual(deps.Blueprint.docs.length, 0);
+  assert.strictEqual(deps.calls.deduct.length, 0);
+  const paid = await begin(user('u9', 'back@example.com'), form(), 'starter');
+  assert.strictEqual(paid.status, 202);
+});

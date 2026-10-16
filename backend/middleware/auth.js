@@ -66,6 +66,11 @@ const protect = async (req, res, next) => {
       });
     }
 
+    // An account waiting to be deleted can only see its own status, undo the deletion, or sign out.
+    if (user.deletion && user.deletion.status === 'pending' && !/^\/api\/(account\/|auth\/(me|logout)(\?|$))/.test(String(req.originalUrl || ''))) {
+      return res.status(423).json({ success: false, code: 'deletion_pending', purgeAfter: user.deletion.purgeAfter, message: 'This account is set to be deleted. Sign in and choose Restore if you want to keep it.' });
+    }
+
     // A CSM working inside a client's account: re-check the assignment on every request.
     if (decoded.actingCsm) {
       const { canActFor, isBlockedWhileActing } = require('../services/csmAccess');

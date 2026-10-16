@@ -512,6 +512,32 @@ export const apiService = {
     apiCall('/payment/billing-details', { method: 'GET' }, true),
   saveBillingDetails: async (d: { gstin: string; legalName: string; address: string; pin: string; stateCode: string }): Promise<{ success: boolean; message?: string; errors?: Record<string, string> }> =>
     apiCall('/payment/billing-details', { method: 'PUT', body: JSON.stringify(d) }, true),
+  // Your data and your account
+  getAccountStatus: async (): Promise<{ success: boolean; deletion: { status: 'pending'; purgeAfter: string } | null; canDelete: boolean; reason: string; graceDays: number }> =>
+    apiCall('/account/status', { method: 'GET' }, true),
+  downloadMyData: async (password: string): Promise<{ success: boolean; message?: string }> => {
+    const res = await fetch(`${API_BASE_URL}/account/export`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` }, body: JSON.stringify({ password }) });
+    if (!res.ok) { const j = await safeReadJson(res); return { success: false, message: j?.message || 'We could not prepare your data. Please try again.' }; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `nebulaa-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    return { success: true };
+  },
+  requestAccountDeletion: async (password: string, confirm: string): Promise<{ success: boolean; purgeAfter?: string; message?: string }> => {
+    try { return await apiCall('/account/deletion/request', { method: 'POST', body: JSON.stringify({ password, confirm }) }, true); }
+    catch (e: any) { return { success: false, message: e?.message || 'We could not start the deletion. Nothing was changed.' }; }
+  },
+  restoreAccount: async (): Promise<{ success: boolean; message?: string }> => {
+    try { return await apiCall('/account/deletion/restore', { method: 'POST' }, true); }
+    catch (e: any) { return { success: false, message: e?.message || 'We could not restore the account. Please try again.' }; }
+  },
+  acceptCurrentTerms: async (): Promise<{ success: boolean; message?: string }> => {
+    try { return await apiCall('/account/consent', { method: 'POST', body: JSON.stringify({ accept: true }) }, true); }
+    catch (e: any) { return { success: false, message: e?.message || 'We could not save that. Please try again.' }; }
+  },
   getBillingData: async (): Promise<any> => {
     return apiCall('/payment/billing', { method: 'GET' }, true);
   },

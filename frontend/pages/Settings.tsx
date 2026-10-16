@@ -1,3 +1,4 @@
+import AccountPrivacy from '../components/AccountPrivacy';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
@@ -634,6 +635,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                   <><Save className="w-4 h-4" /> Change password</>
                               )}
                           </button>
+                          <AccountPrivacy onDeletionRequested={(purgeAfter) => onUserUpdate?.({ ...user, deletion: { status: 'pending', purgeAfter } })} />
                       </div>
                   )}
 

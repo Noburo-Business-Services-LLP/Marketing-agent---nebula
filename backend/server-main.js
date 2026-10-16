@@ -470,6 +470,8 @@ app.use('/api/video-generation', protect, requireFeature('video', { when: (req) 
 app.use('/api/video-generation', videoGenerationRoutes);
 app.use('/api/hero-video', protect, requireFeature('video', { when: (req) => req.method === 'POST' && /^\/(concepts|plan|generate)\/?$/.test(req.path) }));
 app.use('/api/hero-video', heroVideoRoutes);
+// Download your data, delete your account, undo that, and agree to the current terms.
+app.use('/api/account', require('./routes/account'));
 // The single Videos flow (Gemini Omni): idea, concept, one clip, changes.
 app.use('/api/videos', protect, requireFeature('video', { when: (req) => req.method === 'POST' && /^\/(create|[a-f0-9]{24}\/change)\/?$/.test(req.path) }));
 app.use('/api/videos', require('./routes/studioVideos'));
@@ -786,6 +788,13 @@ const startServer = async () => {
       require('./services/billingScheduler').startBillingScheduler();
     } catch (schedulerError) {
       console.warn('Billing scheduler failed to start:', schedulerError.message);
+    }
+
+    // Accounts that asked to be deleted are erased once their 14 days are over
+    try {
+      require('./services/accountDeletion').startAccountPurge();
+    } catch (schedulerError) {
+      console.warn('Account purge failed to start:', schedulerError.message);
     }
 
     // A reminder email three days before each monthly plan charge

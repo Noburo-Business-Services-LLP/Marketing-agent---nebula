@@ -25,6 +25,8 @@ const campaignSchema = new mongoose.Schema({
     enum: ['draft', 'scheduled', 'active', 'posted', 'paused', 'archived', 'failed'],
     default: 'draft'
   },
+  // Set when the owner asked to delete their account and this scheduled post was held back. Put back if they restore it.
+  pausedForDeletion: { type: Boolean, default: false },
   priority: {
     type: String,
     enum: ['low', 'medium', 'high'],

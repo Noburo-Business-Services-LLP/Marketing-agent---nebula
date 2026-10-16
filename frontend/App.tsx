@@ -49,6 +49,9 @@ import InfluencerProfile from './pages/InfluencerProfile';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import RefundPolicy from './pages/RefundPolicy';
+import DeletionPending from './components/DeletionPending';
+import TermsPrompt from './components/TermsPrompt';
+import { needsTermsPrompt } from './utils/accountDeletion';
 import BlueprintRoutes from './pages/BlueprintRoutes';
 import { postAuthTarget, BLUEPRINT_SIGNUP_PATH } from './utils/blueprint';
 import { ThemeProvider } from './context/ThemeContext';
@@ -184,9 +187,24 @@ const App: React.FC = () => {
     );
   }
 
+  // An account waiting to be deleted sees only the restore screen.
+  if (user && user.deletion?.status === 'pending') {
+    return (
+      <ThemeProvider>
+        <DeletionPending user={user} onRestored={setUser} onLogout={handleLogout} />
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider>
     <ConfirmProvider>
+    {needsTermsPrompt(user) && (
+      <TermsPrompt
+        onAccepted={() => setUser((u) => (u ? { ...u, consent: { acceptedAt: new Date().toISOString() } } : u))}
+        onLogout={handleLogout}
+      />
+    )}
     <Router>
       <RouteChangeWatcher onChange={recheckPaywallOnNavigate} />
       <Routes>

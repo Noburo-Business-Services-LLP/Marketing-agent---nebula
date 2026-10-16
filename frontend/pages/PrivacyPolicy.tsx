@@ -159,13 +159,15 @@ const PrivacyPolicy: React.FC = () => {
               <h2 className={`text-xl font-bold mb-4 ${text}`}>6. Data Retention</h2>
               <p className="mb-4">We retain your personal data for as long as your account is active, as necessary to provide you with the Services, or as required by applicable laws and regulations.</p>
               <ul className="list-disc pl-6 space-y-2 mb-4">
-                <li><strong className={text}>Active account data:</strong> Retained for the duration of your Subscription plus 2 years post-termination for legal and audit purposes;</li>
-                <li><strong className={text}>Free Account data:</strong> Retained while your account is active. If you ask us to close your account, or the account is inactive for 12 months, it is deleted or anonymised;</li>
-                <li><strong className={text}>Financial and billing records:</strong> Retained for 7 years as required under Indian tax and accounting laws;</li>
-                <li><strong className={text}>Usage logs and analytics:</strong> Retained for up to 24 months, after which they are anonymised;</li>
-                <li><strong className={text}>Support communications:</strong> Retained for 3 years from the date of last communication.</li>
+                <li><strong className={text}>Active account data:</strong> Kept while your account is open, so we can provide the Services;</li>
+                <li><strong className={text}>When you delete your account:</strong> You can download your data and delete your account yourself in Settings, under Security. Billing stops at once and nothing is erased for 14 days, so you can change your mind. After that your profile, brand details, posts, videos, messages, uploaded files and connected social profiles are erased for good;</li>
+                <li><strong className={text}>Invoices and payment records:</strong> Kept for 8 years after deletion, as Indian tax and accounting laws require, together with the billing name and GST details printed on them;</li>
+                <li><strong className={text}>Repeat free offers:</strong> We keep a one-way scrambled form of your email address (a hash that cannot be turned back into the address) so that a deleted account cannot claim a free Growth Blueprint again;</li>
+                <li><strong className={text}>Staff activity log:</strong> Records of what our team did on an account are kept, with the link to you removed;</li>
+                <li><strong className={text}>Usage logs and analytics:</strong> Kept for up to 24 months, then anonymised;</li>
+                <li><strong className={text}>Support communications:</strong> Kept for 3 years from the date of last communication.</li>
               </ul>
-              <p>You may request deletion of your data at any time (see Section 9). We will comply subject to our legal retention obligations.</p>
+              <p>Accounts that we manage for you as a service are closed through our support team at support@nebulaa.ai. You may also ask us to delete your data at any time (see Section 9), subject to the records we must keep by law.</p>
             </section>
 
             {/* 7 */}

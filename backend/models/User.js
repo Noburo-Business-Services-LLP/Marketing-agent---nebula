@@ -195,6 +195,16 @@ const userSchema = new mongoose.Schema({
     acceptedAt: { type: Date },
     source: { type: String, default: '' }
   },
+  // Privacy: a pending request to delete the account (it is erased after the waiting period unless restored),
+  // and when data was last exported (one export a day).
+  deletion: {
+    status: { type: String, enum: ['', 'pending'], default: '' },
+    requestedAt: { type: Date },
+    purgeAfter: { type: Date }
+  },
+  privacy: {
+    lastExportAt: { type: Date }
+  },
   // Optional invoice details the customer adds: a GSTIN for a tax invoice in the business name, and the state
   // the supply is made to (Zoho's two letter code). Read when an invoice is made; never required to pay.
   billingDetails: {
@@ -423,6 +433,8 @@ userSchema.methods.toPublicJSON = function () {
       connectedAt: s.connectedAt
     })),
     subscription: this.subscription,
+    deletion: this.deletion && this.deletion.status === 'pending' ? { status: 'pending', purgeAfter: this.deletion.purgeAfter } : null,
+    consent: this.consent && this.consent.acceptedAt ? { acceptedAt: this.consent.acceptedAt, termsVersion: this.consent.termsVersion } : null,
     // The plan tier (starter, professional, free) or null for a managed account. Used to show the plan prompt.
     plan: { tier: (this.plan && this.plan.tier) || null },
     credits: this.credits ? {

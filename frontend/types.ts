@@ -76,6 +76,8 @@ export interface User {
     totalUsed: number;
   };
   plan?: { tier: 'free' | 'starter' | 'professional' | 'managed' | null };
+  consent?: { acceptedAt?: string; termsVersion?: string } | null;
+  deletion?: { status: 'pending'; purgeAfter?: string; requestedAt?: string } | null;
   brandScore?: {
     score: number;
     metrics: {
