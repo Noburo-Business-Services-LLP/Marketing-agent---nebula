@@ -16,7 +16,7 @@ const TermsPrompt: React.FC<{ onAccepted: () => void; onLogout: () => void }> = 
   };
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="terms-title">
-      <div className="w-full max-w-md rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--gv-border-default)] p-6 shadow-2xl" style={{ background: '#fffdf8' }}>
         <h2 id="terms-title" className="font-serif-display text-[24px] leading-tight text-[var(--gv-text-primary)]">We have updated our Terms</h2>
         <p className="mt-2 text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">Please read and agree to the updated Terms and Privacy Policy to keep using Nebulaa. It covers how plans renew, refunds, and how you can download or delete your data.</p>
         <label className="mt-4 flex items-start gap-2.5 text-[13px] text-[var(--gv-text-primary)]">
