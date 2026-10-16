@@ -292,7 +292,18 @@ const TermsAndConditions: React.FC = () => {
 
             {/* 21 */}
             <section>
-              <h2 className={`text-xl font-bold mb-4 ${text}`}>21. Contact Information</h2>
+              <h2 className={`text-xl font-bold mb-4 ${text}`}>21. Agency accounts and client brands</h2>
+              <p className="mb-3">21.1 An agency account lets you run several client brands from one account. By adding a client brand you confirm that the client has given you permission to manage its brand, content and social accounts on Nebulaa.</p>
+              <p className="mb-3">21.2 You are responsible for everything that is created and published for your clients through your account, including its accuracy and its compliance with these Terms and with the rules of each social network.</p>
+              <p className="mb-3">21.3 Your clients are not billed separately. Their work is paid for from your agency plan and the shared pool of posts and videos that comes with it.</p>
+              <p className="mb-3">21.4 If you remove a client, we erase that client's data at once. This cannot be undone.</p>
+              <p className="mb-3">21.5 If you cancel the agency plan, or it ends, all your clients are paused. Nothing is deleted until you remove a client or delete your account.</p>
+              <p>21.6 If you have more clients than your agency plan allows, the clients above the limit are paused, not deleted. They open again when there is room for them.</p>
+            </section>
+
+            {/* 22 */}
+            <section>
+              <h2 className={`text-xl font-bold mb-4 ${text}`}>22. Contact Information</h2>
               <p className="mb-4">For questions, concerns, or notices under these Terms, please contact:</p>
               <div className={`rounded-lg p-5 space-y-1 ${infoBox}`}>
                 <p><strong className={text}>Noburo Systems Private Limited</strong></p>

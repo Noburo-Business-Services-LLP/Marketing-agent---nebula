@@ -151,7 +151,10 @@ const PrivacyPolicy: React.FC = () => {
               <p className="mb-4">We may share your data with third parties when you have explicitly consented to such sharing.</p>
 
               <h3 className={`text-lg font-semibold mb-3 ${text}`}>5.5 Aggregated & Anonymised Data</h3>
-              <p>We may share aggregated, anonymised, or de-identified data that cannot reasonably identify you, for research, analytics, or commercial purposes.</p>
+              <p className="mb-4">We may share aggregated, anonymised, or de-identified data that cannot reasonably identify you, for research, analytics, or commercial purposes.</p>
+
+              <h3 className={`text-lg font-semibold mb-3 ${text}`}>5.6 Agency Accounts and Client Brands</h3>
+              <p>When an agency adds a client brand to its account, the agency decides what happens to that client's data and is the contact for any request about it, including access, correction and deletion. We act on the agency's instructions for that data. Removing a client erases that client's data at once.</p>
             </section>
 
             {/* 6 */}
