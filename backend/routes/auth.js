@@ -1157,11 +1157,19 @@ router.get('/me', protect, async (req, res) => {
       });
     }
 
+    const publicUser = { ...user.toPublicJSON(), isCsm: Boolean(user.isCsm) };
+    // A client workspace spends from the agency's Quarks, so show the agency's balance (response only, never saved).
+    if (user.agency && user.agency.ownerId) {
+      const payer = await User.findById(user.agency.ownerId).select('credits.balance credits.totalUsed').lean();
+      if (payer && payer.credits) publicUser.credits = { balance: payer.credits.balance, totalUsed: payer.credits.totalUsed };
+    }
     res.status(200).json({
       success: true,
-      user: { ...user.toPublicJSON(), isCsm: Boolean(user.isCsm) },
+      user: publicUser,
       // Set when a CSM is working inside this account, so the app can show who is acting.
-      actingCsm: req.actingCsm ? { name: [req.actingCsm.firstName, req.actingCsm.lastName].filter(Boolean).join(' ') || req.actingCsm.email } : null
+      actingCsm: req.actingCsm ? { name: [req.actingCsm.firstName, req.actingCsm.lastName].filter(Boolean).join(' ') || req.actingCsm.email } : null,
+      // Set when an agency is working inside one of its clients.
+      actingAgency: req.actingAgency ? { name: [req.actingAgency.firstName, req.actingAgency.lastName].filter(Boolean).join(' ') || req.actingAgency.email } : null
     });
   } catch (error) {
     console.error('Get user error:', error);

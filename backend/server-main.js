@@ -472,6 +472,8 @@ app.use('/api/hero-video', protect, requireFeature('video', { when: (req) => req
 app.use('/api/hero-video', heroVideoRoutes);
 // Download your data, delete your account, undo that, and agree to the current terms.
 app.use('/api/account', require('./routes/account'));
+// An agency's client brands: list, add, rename and open.
+app.use('/api/agency', require('./routes/agency'));
 // The single Videos flow (Gemini Omni): idea, concept, one clip, changes.
 app.use('/api/videos', protect, requireFeature('video', { when: (req) => req.method === 'POST' && /^\/(create|[a-f0-9]{24}\/change)\/?$/.test(req.path) }));
 app.use('/api/videos', require('./routes/studioVideos'));

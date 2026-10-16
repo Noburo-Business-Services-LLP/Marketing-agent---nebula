@@ -15,6 +15,18 @@ const generateToken = (userId) => {
   );
 };
 
+/** Empty when an agency client pass is still good, otherwise the message to show. */
+function _agencyPassProblem(owner, workspace) {
+  const ended = 'Your access to this client has ended. Please open it again from your clients list.';
+  if (!owner || owner.isActive === false) return ended;
+  if (owner.agency && owner.agency.ownerId) return ended; // a client can never be the agency
+  if (owner.deletion && owner.deletion.status === 'pending') return ended;
+  if (!workspace || !workspace.agency || !workspace.agency.ownerId || String(workspace.agency.ownerId) !== String(owner._id)) return ended;
+  if (!owner.plan || owner.plan.tier !== 'agency') return 'The agency plan is not active, so this client is paused. Ask the agency to renew.';
+  if (workspace.agency.frozen) return 'This client is over the agency\'s client limit and is paused. Add a client slot to open it.';
+  return '';
+}
+
 // Protect routes - verify token
 const protect = async (req, res, next) => {
   try {
@@ -82,6 +94,18 @@ const protect = async (req, res, next) => {
         return res.status(403).json({ success: false, message: 'Payments, plans and passwords can only be changed by the client.' });
       }
       req.actingCsm = csm;
+    }
+
+    // An agency working inside one of its clients: re-check ownership and plan on every request.
+    if (decoded.actingAgency) {
+      const ws = require('../services/agencyWorkspaces');
+      const owner = await User.findById(decoded.actingAgency).select('isActive plan agency.ownerId deletion.status firstName lastName email').lean();
+      const problem = _agencyPassProblem(owner, user);
+      if (problem) return res.status(401).json({ success: false, message: problem });
+      if (ws.isBlockedInsideClient(req.originalUrl, req.method)) {
+        return res.status(403).json({ success: false, message: 'Payments, plans and passwords are managed in your agency account. Go back to the agency to change them.' });
+      }
+      req.actingAgency = owner;
     }
 
     // Grant access to protected route
@@ -154,4 +178,4 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { generateToken, protect, optionalAuth };
+module.exports = { generateToken, protect, optionalAuth, _agencyPassProblem };

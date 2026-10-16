@@ -2,6 +2,7 @@
 'use strict';
 /** Client workspaces for the agency plan: make, list, rename, keep in step with the agency's plan, and stay within the limit. */
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { AGENCY } = require('../config/apiCosts');
 const ag = require('./agency');
 
@@ -80,4 +81,28 @@ async function syncWorkspacePlans({ owner, models }) {
   return n;
 }
 
-module.exports = { claimSlot, releaseSlot, createWorkspace, listWorkspaces, renameWorkspace, syncWorkspacePlans, cleanName };
+const PASS_HOURS = 8;
+/** The short-lived pass an agency uses to work inside one client. Names the client and the agency. */
+function issueAgencyPass({ workspaceId, ownerId, secret = process.env.JWT_SECRET }) {
+  return jwt.sign({ id: ag.idOf(workspaceId), actingAgency: ag.idOf(ownerId) }, secret, { expiresIn: `${PASS_HOURS}h` });
+}
+
+// Money, plan and identity changes, and client management, stay with the agency account itself.
+const BLOCKED_INSIDE_CLIENT = [
+  /^\/api\/payment(\/|$)/,
+  /^\/api\/auth\/change-password/,
+  /^\/api\/auth\/(delete|deactivate)/,
+  /^\/api\/users?\/(me\/)?delete/,
+  /^\/api\/account\/(deletion|export)/
+];
+function isBlockedInsideClient(url, method = 'GET') {
+  let path = String(url || '').split('?')[0].split('#')[0];
+  try { path = decodeURIComponent(path); } catch (_) { return true; } // an undecodable path is never allowed through
+  path = path.toLowerCase(); // the router ignores case, so this check must too
+  if (BLOCKED_INSIDE_CLIENT.some((re) => re.test(path))) return true;
+  // The client list may be read, and another client opened, from inside a client; nothing else under /api/agency.
+  if (/^\/api\/agency(\/|$)/.test(path)) return !(String(method).toUpperCase() === 'GET' && path === '/api/agency/clients') && !/^\/api\/agency\/clients\/[^/]+\/open$/.test(path);
+  return false;
+}
+
+module.exports = { issueAgencyPass, BLOCKED_INSIDE_CLIENT, isBlockedInsideClient, PASS_HOURS, claimSlot, releaseSlot, createWorkspace, listWorkspaces, renameWorkspace, syncWorkspacePlans, cleanName };
