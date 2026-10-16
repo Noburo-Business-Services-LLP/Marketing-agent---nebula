@@ -30,8 +30,10 @@ function initializeSocketHub(server, corsOrigins = []) {
         }
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id).select('_id isActive');
+        const user = await User.findById(decoded.id).select('_id isActive deletion.status agency.ownerId agency.frozen');
         if (!user || !user.isActive) return next(new Error('Unauthorized'));
+        // The same pass, CSM and deletion checks as every other request.
+        if (await require('../middleware/auth')._tokenProblem(decoded, user)) return next(new Error('Unauthorized'));
         socket.userId = String(user._id);
         return next();
       } catch (error) {

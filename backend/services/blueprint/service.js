@@ -37,7 +37,7 @@ function defaultDeps() {
   return {
     Blueprint: require('../../models/Blueprint'),
     freeBlueprintIsFree: true,
-    deletedBefore: async (email) => !!(await require('../../models/DeletedAccount').exists({ emailHash: require('../accountDeletion').emailHash(email) })),
+    deletedBefore: async (email) => !!(await require('../../models/DeletedAccount').exists({ emailHash: { $in: require('../accountDeletion').emailHashes(email) } })),
     deduct: (...a) => require('../../middleware/trialGuard').deductCredits(...a),
     refund: (...a) => require('../../middleware/trialGuard').refundCredits(...a),
     uploadLogo: async (dataUrl) => {

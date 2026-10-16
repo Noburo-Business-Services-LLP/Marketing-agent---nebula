@@ -20,6 +20,7 @@ class NotificationScheduler {
     this.intervalId = null;
     this.isProcessing = false;
     this.lastProcessingStart = null;
+    this.UserModel = User; // replaceable in tests
   }
 
   /**
@@ -246,12 +247,32 @@ class NotificationScheduler {
   /**
    * Send email notification via AWS SES
    */
+  /**
+   * Who gets the reminder email: the campaign's own owner, at the address on their account, and nobody else.
+   * Null (no email is sent) for a client workspace (its placeholder address is not a mailbox), a switched-off account,
+   * an account waiting to be deleted, or an owner we cannot find. Customer data is never sent to a fixed address.
+   */
+  async recipientFor(campaign) {
+    const ownerId = campaign && campaign.userId && (campaign.userId._id || campaign.userId);
+    if (!ownerId) return null;
+    const owner = await this.UserModel.findById(ownerId).select('email isActive deletion.status agency.ownerId').lean();
+    if (!owner || owner.isActive === false) return null;
+    if (owner.agency && owner.agency.ownerId) return null;
+    if (owner.deletion && owner.deletion.status === 'pending') return null;
+    const email = String(owner.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || /\.invalid$/i.test(email)) return null;
+    return email;
+  }
+
   async sendEmailNotification(campaign, minutesLeft, scheduledTime) {
     try {
-      // Use specific email for notifications - configured for testing
-      const userEmail = 'navaneethakrishnan821@gmail.com';
-      
-      console.log(`📧 Preparing to send email to: ${userEmail}`);
+      const userEmail = await this.recipientFor(campaign);
+      if (!userEmail) {
+        console.log('📧 No owner email for this campaign - skipping email');
+        return;
+      }
+
+      console.log(`📧 Preparing to send reminder email for: ${campaign.name}`);
 
       if (!sesEmailService.initialized) {
         console.log('⚠️  SES not initialized - skipping email');
@@ -267,7 +288,7 @@ class NotificationScheduler {
       });
 
       if (result.success) {
-        console.log(`📧 Email sent to ${userEmail}: ${campaign.name} - ${minutesLeft} min reminder`);
+        console.log(`📧 Email sent: ${campaign.name} - ${minutesLeft} min reminder`);
       } else {
         console.error(`❌ Email failed: ${result.error}`);
       }
@@ -325,9 +346,9 @@ class NotificationScheduler {
 
       await notification.save();
 
-      // Also send test email to configured address
-      if (sesEmailService.initialized) {
-        const userEmail = 'navaneethakrishnan821@gmail.com';
+      // Also send a test email, to the owner of the campaign only
+      const userEmail = sesEmailService.initialized ? await this.recipientFor(campaign) : null;
+      if (userEmail) {
         await sesEmailService.sendCampaignReminder({
           to: userEmail,
           campaignName: campaign.name,
@@ -335,7 +356,7 @@ class NotificationScheduler {
           scheduledTime: this.formatTime(scheduledTime),
           platforms: campaign.platforms || []
         });
-        console.log(`📧 Test email sent to ${userEmail}`);
+        console.log('📧 Test email sent to the campaign owner');
       }
 
       return { success: true, notification };

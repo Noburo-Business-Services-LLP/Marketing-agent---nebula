@@ -190,8 +190,11 @@ async function waitForFacebookPostId({ profileKey = '', ayrsharePostId = '', ini
 
 async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
   const MAX_PUBLISH_ATTEMPTS = Number(process.env.CAMPAIGN_MAX_PUBLISH_ATTEMPTS || 3);
+  // Nothing goes out for a frozen client, a client whose agency plan ended, or an account waiting to be deleted.
+  const paused = await require('./backgroundGate').blockedAccountIdsSafe();
   const dueCampaigns = await Campaign.find({
     status: 'scheduled',
+    ...(paused.length ? { userId: { $nin: paused } } : {}),
     'scheduling.startDate': { $lte: now },
     // Defense-in-depth: skip campaigns already at the failure ceiling even if
     // their status somehow got reset back to 'scheduled'. Prevents the Ayrshare

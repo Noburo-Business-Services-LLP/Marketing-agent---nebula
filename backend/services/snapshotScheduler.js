@@ -50,8 +50,10 @@ class SnapshotScheduler {
 
     try {
       // Find all users with Ayrshare profile keys
+      const paused = await require('./backgroundGate').blockedAccountIdsSafe();
       const users = await User.find({
-        'ayrshare.profileKey': { $exists: true, $ne: null }
+        'ayrshare.profileKey': { $exists: true, $ne: null },
+        ...(paused.length ? { _id: { $nin: paused } } : {})
       }).select('_id ayrshare.profileKey');
 
       if (users.length === 0) {

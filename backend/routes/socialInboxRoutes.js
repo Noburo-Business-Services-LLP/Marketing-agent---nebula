@@ -36,6 +36,9 @@ const streamAuth = async (req, res, next) => {
     if (!user || !user.isActive) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
+    // The same pass, CSM and deletion checks as every other request.
+    const problem = await require('../middleware/auth')._tokenProblem(decoded, user);
+    if (problem) return res.status(401).json({ success: false, message: problem });
     req.user = user;
     return next();
   } catch (error) {

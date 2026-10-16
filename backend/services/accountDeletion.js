@@ -18,6 +18,11 @@ const secret = () => process.env.JWT_SECRET || 'nebulaa-account-hash';
 const hmac = (v) => crypto.createHmac('sha256', secret()).update(String(v)).digest('hex');
 const accountHash = (userId) => hmac(`account:${userId}`);
 const emailHash = (email) => hmac(`email:${String(email || '').trim().toLowerCase()}`);
+/**
+ * Every hash an address is kept or looked up by: the plain lower-case address (what earlier tombstones used) and its
+ * canonical form (no +tag, no dots for Gmail), so a deleted person cannot come back under j.ohn+2@gmail.com.
+ */
+const emailHashes = (email) => [...new Set([emailHash(email), emailHash(require('./signupGuard').canonicalEmail(email))])];
 
 /** Who may ask to be deleted from the app. Staff and managed clients go through support. */
 function eligibility(user, { isStaff = () => false, resolveTier = () => 'free' } = {}) {
@@ -172,7 +177,7 @@ function stepsFor({ user, models, deps, now, clientCount }) {
     },
     {
       name: 'tombstone',
-      run: async () => { await models.DeletedAccount.updateOne({ emailHash: emailHash(user.email) }, { $setOnInsert: { emailHash: emailHash(user.email), deletedAt: now } }, { upsert: true }); return { detail: 'one-way hash kept so a free Blueprint cannot be repeated' }; }
+      run: async () => { for (const h of emailHashes(user.email)) await models.DeletedAccount.updateOne({ emailHash: h }, { $setOnInsert: { emailHash: h, deletedAt: now } }, { upsert: true }); return { detail: 'one-way hash kept so a free Blueprint cannot be repeated' }; }
     },
     {
       name: 'account',
@@ -287,4 +292,4 @@ function startAccountPurge({ intervalMs = 6 * 60 * 60 * 1000, logger = console }
   return () => clearInterval(timer);
 }
 
-module.exports = { RUNNING_STALE_MS, passwordOk, ownsClients, realClientCount, purgeWorkspace, GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };
+module.exports = { RUNNING_STALE_MS, passwordOk, ownsClients, realClientCount, purgeWorkspace, GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, emailHashes, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };

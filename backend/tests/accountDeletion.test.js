@@ -149,3 +149,18 @@ test('hashes are stable, one way, and different for an account and an email', ()
   assert.match(d.accountHash('u1'), /^[0-9a-f]{64}$/);
   assert.ok(!d.emailHash('asha@example.com').includes('asha'));
 });
+
+// ---- B-M7: the tombstone also covers the canonical address
+test('B-M7: the tombstone keeps the plain hash (as before) and the canonical hash, so an alias cannot return', async () => {
+  const { w, models, deps } = world({ user: { email: 'J.Ohn+shop@gmail.com' } });
+  const user = w.users[0];
+  const step = d.stepsFor({ user, models, deps, now: NOW }).find((s) => s.name === 'tombstone');
+  await step.run();
+  const kept = w.tombstones.map((t) => t.emailHash).sort();
+  assert.deepStrictEqual(kept, [d.emailHash('j.ohn+shop@gmail.com'), d.emailHash('john@gmail.com')].sort());
+  // a new sign-up as another alias is found through its canonical hash; the old plain hash still works too
+  const lookup = d.emailHashes('JOHN+another@googlemail.com');
+  assert.ok(lookup.some((h) => kept.includes(h)));
+  assert.ok(d.emailHashes('j.ohn+shop@gmail.com').some((h) => kept.includes(h)));
+  assert.strictEqual(d.emailHashes('asha@example.com').length, 1, 'a plain address has one hash');
+});

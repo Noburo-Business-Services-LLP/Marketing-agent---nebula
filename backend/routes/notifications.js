@@ -323,6 +323,8 @@ router.post('/check-now', protect, async (req, res) => {
     
     const now = new Date();
     const createdNotifications = [];
+    // Reminder emails go to this account's own address only (null for a client workspace: no email).
+    const reminderTo = await require('../services/notificationScheduler').recipientFor({ userId });
     
     for (const campaign of campaigns) {
       // Parse campaign scheduled time
@@ -370,9 +372,9 @@ router.post('/check-now', protect, async (req, res) => {
           console.log(`✅ Created 30-min notification for: ${campaign.name}`);
           
           // Send email
-          if (sesEmailService.initialized) {
+          if (sesEmailService.initialized && reminderTo) {
             await sesEmailService.sendCampaignReminder({
-              to: 'navaneethakrishnan821@gmail.com',
+              to: reminderTo,
               campaignName: campaign.name,
               minutesBefore: 30,
               scheduledTime: startDate.toLocaleString(),
@@ -412,9 +414,9 @@ router.post('/check-now', protect, async (req, res) => {
           console.log(`✅ Created 15-min notification for: ${campaign.name}`);
           
           // Send email
-          if (sesEmailService.initialized) {
+          if (sesEmailService.initialized && reminderTo) {
             await sesEmailService.sendCampaignReminder({
-              to: 'navaneethakrishnan821@gmail.com',
+              to: reminderTo,
               campaignName: campaign.name,
               minutesBefore: 15,
               scheduledTime: startDate.toLocaleString(),

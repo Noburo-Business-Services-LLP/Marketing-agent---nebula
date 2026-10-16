@@ -816,9 +816,13 @@ async function createDraftsForItem(calendar, item, { publish = false } = {}) {
 }
 
 async function processAutoGeneration({ now = new Date(), limit = 20 } = {}) {
+  // No automatic drafts (which cost real image and text generation) for a frozen client, a client whose agency plan
+  // ended, or an account waiting to be deleted.
+  const paused = await require('./backgroundGate').blockedAccountIdsSafe();
   const calendars = await ContentCalendar.find({
     autoGenerate: true,
-    approved: true
+    approved: true,
+    ...(paused.length ? { userId: { $nin: paused } } : {})
   }).limit(limit);
 
   for (const calendar of calendars) {

@@ -29,7 +29,28 @@ function _agencyPassProblem(owner, workspace) {
   if (owner.deletion && owner.deletion.status === 'pending') return ended;
   if (!workspace || !workspace.agency || !workspace.agency.ownerId || String(workspace.agency.ownerId) !== String(owner._id)) return ended;
   if (!owner.plan || owner.plan.tier !== 'agency') return 'The agency plan is not active, so this client is paused. Ask the agency to renew.';
+  if (owner.subscription && owner.subscription.status === 'halted') return 'The agency plan is not active, so this client is paused. Ask the agency to renew.'; // the same test as canPayForClients
   if (workspace.agency.frozen) return 'This client is over the agency\'s client limit and is paused. Add a client slot to open it.';
+  return '';
+}
+
+/**
+ * The checks every way in must make for a token that names a pass: an account waiting to be deleted, a CSM whose
+ * assignment ended, an agency pass whose plan, ownership or client state no longer holds. Returns the message to show,
+ * or '' when the token is still good. Used by `protect` for the normal API, and by the live inbox stream and socket hub,
+ * which would otherwise keep a revoked pass working for hours.
+ */
+async function _tokenProblem(decoded, user, { UserModel = User } = {}) {
+  if (user.deletion && user.deletion.status === 'pending') return 'This account is set to be deleted.';
+  if (decoded && decoded.actingCsm) {
+    const { canActFor } = require('../services/csmAccess');
+    const csm = await UserModel.findById(decoded.actingCsm).select('isCsm staffRole isActive firstName lastName email').lean();
+    if (!canActFor(csm, user)) return 'Your access to this client has ended. Please open it again from your client list.';
+  }
+  if (decoded && decoded.actingAgency) {
+    const owner = await UserModel.findById(decoded.actingAgency).select('isActive plan subscription.status agency.ownerId deletion.status firstName lastName email').lean();
+    return _agencyPassProblem(owner, user);
+  }
   return '';
 }
 
@@ -105,7 +126,7 @@ const protect = async (req, res, next) => {
     // An agency working inside one of its clients: re-check ownership and plan on every request.
     if (decoded.actingAgency) {
       const ws = require('../services/agencyWorkspaces');
-      const owner = await User.findById(decoded.actingAgency).select('isActive plan agency.ownerId deletion.status firstName lastName email').lean();
+      const owner = await User.findById(decoded.actingAgency).select('isActive plan subscription.status agency.ownerId deletion.status firstName lastName email').lean();
       const problem = _agencyPassProblem(owner, user);
       if (problem) return res.status(401).json({ success: false, message: problem });
       if (ws.isBlockedInsideClient(req.originalUrl, req.method)) {
@@ -184,4 +205,4 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { generateToken, protect, optionalAuth, _agencyPassProblem, _allowedWhileDeleting };
+module.exports = { generateToken, protect, optionalAuth, _agencyPassProblem, _tokenProblem, _allowedWhileDeleting };

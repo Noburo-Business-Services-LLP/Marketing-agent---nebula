@@ -90,6 +90,8 @@ router.delete('/clients/:id', protect, limiter, async (req, res) => {
 
 router.post('/clients/:id/open', protect, limiter, async (req, res) => {
   try {
+    // Staff working inside an agency account cannot hand themselves a pass into its clients (the pass would outlive their assignment).
+    if (req.actingCsm) return res.status(403).json({ success: false, message: 'Clients can only be opened by the agency itself.' });
     const owner = await agencyOwner(req);
     if (!owner || !ag.isAgency(owner)) return res.status(403).json({ success: false, message: 'Client brands are part of the Agency plan.' });
     const mine = (await ws.listWorkspaces({ owner, models: models() })).find((c) => c.id === String(req.params.id));
