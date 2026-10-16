@@ -20,6 +20,7 @@ const AccountDeletionSchema = new mongoose.Schema({
   purgeAfter: { type: Date, index: true },
   completedAt: { type: Date },
   attempts: { type: Number, default: 0 },
+  runningSince: { type: Date },        // when a purge claimed this request; one that stays running too long was interrupted
   steps: { type: [StepSchema], default: [] }
 }, { collection: 'account_deletions', timestamps: true });
 

@@ -353,7 +353,9 @@ const userSchema = new mongoose.Schema({
     workspaceName: { type: String, default: '' },
     clientCount: { type: Number, default: 0 },  // on the agency: workspaces it has
     extraSlots: { type: Number, default: 0 },   // on the agency: paid extra client slots
-    frozen: { type: Boolean, default: false }   // on a workspace: over the limit after a downgrade
+    frozen: { type: Boolean, default: false },  // on a workspace: over the limit after a downgrade
+    removing: { type: Boolean },                // on a workspace: a removal has claimed it (so only one request removes it)
+    removingAt: { type: Date }
   },
   // Trial tracking
   trial: {

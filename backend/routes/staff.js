@@ -14,7 +14,7 @@ const { buildHealth } = require('../services/staff/health');
 const { buildMoney, buildPayments, loadMoneyData } = require('../services/staff/money');
 const { buildRecurring } = require('../services/staff/recurring');
 const { buildUsage, loadUsageData, parseWindow } = require('../services/staff/usage');
-const { parseQuarkAmount, checkAssignment, isCustomer } = require('../services/staff/clientActions');
+const { parseQuarkAmount, checkAssignment, isCustomer, openProblem } = require('../services/staff/clientActions');
 const { canActFor, issueActingToken, ACTING_TOKEN_HOURS } = require('../services/csmAccess');
 const tools = require('../services/staff/tools');
 const billing = require('../services/staff/billingLedger');
@@ -509,7 +509,8 @@ router.post('/clients/:id/open', requireStaff('open_client'), async (req, res) =
   try {
     const client = await clientFor(req, res, 'open_client');
     if (!client) return;
-    if (client.isActive === false) return res.status(400).json({ success: false, message: 'This account is switched off. Switch it on first.' });
+    const problem = openProblem(client);
+    if (problem) return res.status(400).json({ success: false, message: problem });
     if (!canActFor(req.staff, client)) return res.status(403).json({ success: false, message: 'Your role cannot open this account.' });
     const CsmSession = require('../models/CsmSession');
     await CsmSession.create({ csm: req.staff._id, client: client._id, ip: req.ip || '', userAgent: String(req.headers['user-agent'] || '').slice(0, 300) });

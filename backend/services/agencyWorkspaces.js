@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { AGENCY } = require('../config/apiCosts');
 const ag = require('./agency');
+const { normalisePath } = require('./requestPath');
 
 const MAX_NAME = 80;
 const cleanName = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
@@ -21,7 +22,8 @@ function claimSlot(User, ownerId) {
     { new: true }
   );
 }
-const releaseSlot = (User, ownerId) => User.updateOne({ _id: ownerId }, { $inc: { 'agency.clientCount': -1 } });
+// Never below zero, whatever the stored number says.
+const releaseSlot = (User, ownerId) => User.updateOne({ _id: ownerId, 'agency.clientCount': { $gt: 0 } }, { $inc: { 'agency.clientCount': -1 } });
 
 async function createWorkspace({ owner, name, industry = '', website = '', models, randomId = () => crypto.randomBytes(8).toString('hex') }) {
   const { User } = models;
@@ -74,6 +76,7 @@ async function syncWorkspacePlans({ owner, models }) {
   const limit = ag.clientLimitOf(owner);
   let n = 0;
   for (const [i, r] of rows.entries()) {
+    if (r.agency && r.agency.removing) continue; // a client being removed stays paused until it is gone
     const frozen = i >= limit;
     if (frozen !== !!(r.agency && r.agency.frozen)) await User.updateOne({ _id: r._id }, { $set: { 'agency.frozen': frozen } });
     n += 1;
@@ -81,6 +84,7 @@ async function syncWorkspacePlans({ owner, models }) {
   return n;
 }
 
+const REMOVAL_CLAIM_MS = 10 * 60 * 1000;
 const WORKSPACE_BUSY = 'Wait until this client\'s videos and jobs finish, then try again.';
 const MAX_PUBLISH_ATTEMPTS = () => Number(process.env.CAMPAIGN_MAX_PUBLISH_ATTEMPTS || 3);
 const RUNNING = ['queued', 'processing'];
@@ -124,14 +128,28 @@ async function runningWork(workspaceId, models, now = Date.now()) {
 async function removeWorkspace({ owner, workspaceId, models, purge, isBusy }) {
   const mine = (await listWorkspaces({ owner, models })).find((c) => c.id === String(workspaceId));
   if (!mine) return { ok: false, message: 'That client was not found.' };
-  const pause = (frozen) => models.User.updateOne({ _id: mine.id, 'agency.ownerId': owner._id }, { $set: { 'agency.frozen': frozen } });
-  await pause(true);
+  const mineFilter = { _id: mine.id, 'agency.ownerId': owner._id };
+  // One request claims the removal and pauses the client in the same atomic step; a second one (a double click, another
+  // tab) finds the claim taken and stops, so the slot can only ever be released once. A claim left behind by a crash
+  // goes stale after a few minutes and can then be taken again.
+  const claim = await models.User.updateOne(
+    { ...mineFilter, $or: [{ 'agency.removing': { $ne: true } }, { 'agency.removingAt': { $lt: new Date(Date.now() - REMOVAL_CLAIM_MS) } }] },
+    { $set: { 'agency.frozen': true, 'agency.removing': true, 'agency.removingAt': new Date() } }
+  );
+  if (!claim || !(claim.modifiedCount > 0)) return { ok: false, message: 'This client is already being removed.' };
+  const unclaim = (frozen) => models.User.updateOne(mineFilter, { $set: { 'agency.frozen': frozen }, $unset: { 'agency.removing': '', 'agency.removingAt': '' } });
   let busy;
   try { busy = await (isBusy ? isBusy(mine.id) : runningWork(mine.id, models)); }
-  catch (e) { await pause(mine.frozen); throw e; }
-  if (busy && busy.length) { await pause(mine.frozen); return { ok: false, busy: true, running: busy, message: WORKSPACE_BUSY }; }
-  const out = await purge(mine.id);
-  if (!out || out.ok === false) return { ok: false, message: 'We could not finish removing this client. Nothing else was changed. Please try again.' };
+  catch (e) { await unclaim(mine.frozen); throw e; }
+  if (busy && busy.length) { await unclaim(mine.frozen); return { ok: false, busy: true, running: busy, message: WORKSPACE_BUSY }; }
+  let out;
+  try { out = await purge(mine.id); }
+  catch (e) { await models.User.updateOne(mineFilter, { $unset: { 'agency.removing': '', 'agency.removingAt': '' } }); throw e; }
+  if (!out || out.ok === false) {
+    // Left in place (still paused) so removing it can be tried again.
+    await models.User.updateOne(mineFilter, { $unset: { 'agency.removing': '', 'agency.removingAt': '' } });
+    return { ok: false, message: 'We could not finish removing this client. Nothing else was changed. Please try again.' };
+  }
   await releaseSlot(models.User, owner._id);
   return { ok: true };
 }
@@ -148,12 +166,11 @@ const BLOCKED_INSIDE_CLIENT = [
   /^\/api\/auth\/change-password/,
   /^\/api\/auth\/(delete|deactivate)/,
   /^\/api\/users?\/(me\/)?delete/,
-  /^\/api\/account\/(deletion|export)/
+  /^\/api\/account\/(deletion|export|consent)/
 ];
 function isBlockedInsideClient(url, method = 'GET') {
-  let path = String(url || '').split('?')[0].split('#')[0];
-  try { path = decodeURIComponent(path); } catch (_) { return true; } // an undecodable path is never allowed through
-  path = path.toLowerCase(); // the router ignores case, so this check must too
+  const path = normalisePath(url); // the same reading as every other path check: pathname only, decoded, lower case
+  if (path === null) return true; // an unreadable path is never allowed through
   if (BLOCKED_INSIDE_CLIENT.some((re) => re.test(path))) return true;
   // The client list may be read, and another client opened, from inside a client; nothing else under /api/agency.
   if (/^\/api\/agency(\/|$)/.test(path)) return !(String(method).toUpperCase() === 'GET' && path === '/api/agency/clients') && !/^\/api\/agency\/clients\/[^/]+\/open$/.test(path);

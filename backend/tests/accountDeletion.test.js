@@ -6,6 +6,10 @@ const { erasable } = require('../services/dataRegistry');
 const DAY = 86400000;
 const NOW = new Date('2026-10-16T06:00:00Z');
 
+
+// The purge query: pending or failed requests that are due, plus "running" ones whose claim is older than the cutoff.
+const dueFilter = (q, x) => x.purgeAfter <= q.purgeAfter.$lte && x.attempts < q.attempts.$lt && q.$or.some((c) => (c.status.$in ? c.status.$in.includes(x.status) : (x.status === c.status && x.runningSince && x.runningSince < c.$or[0].runningSince.$lt)));
+const claimMatch = (f, y) => y._id === f._id && (f.status.$in ? f.status.$in.includes(y.status) : (y.status === f.status && (f.runningSince == null ? y.runningSince == null : +y.runningSince === +f.runningSince)));
 // ---- small in-memory stand-ins for the collections the service touches
 function world(over = {}) {
   const w = { users: [{ _id: 'u1', email: 'asha@example.com', firstName: 'Asha', lastName: 'K', companyName: 'Asha Sweets', ayrshare: { profileKey: 'PK' },
@@ -26,7 +30,8 @@ function world(over = {}) {
       create: async (doc) => { const x = { _id: `r${w.deletions.length + 1}`, attempts: 0, steps: [], ...doc }; w.deletions.push(x); return x; },
       updateOne: async (f, u) => { const x = w.deletions.find((y) => match(y, f)); if (x) apply(x, u); },
       updateMany: async (f, u) => { w.deletions.filter((y) => (!f.user || y.user === f.user) && (!f.status || y.status === f.status)).forEach((x) => apply(x, u)); },
-      find: (q) => ({ limit: () => ({ lean: async () => w.deletions.filter((x) => q.status.$in.includes(x.status) && x.purgeAfter <= q.purgeAfter.$lte && x.attempts < q.attempts.$lt) }) })
+      find: (q) => ({ limit: () => ({ lean: async () => w.deletions.filter((x) => dueFilter(q, x)) }) }),
+      findOneAndUpdate: async (f, u) => { const x = w.deletions.find((y) => claimMatch(f, y)); if (!x) return null; apply(x, u); return x; }
     },
     RetainedPayment: { updateOne: async (f, u, o) => { if (!w.retained.some((r) => r.razorpayPaymentId === f.razorpayPaymentId)) w.retained.push(u.$setOnInsert); } },
     DeletedAccount: { updateOne: async (f, u) => { if (!w.tombstones.some((t) => t.emailHash === f.emailHash)) w.tombstones.push(u.$setOnInsert); } },

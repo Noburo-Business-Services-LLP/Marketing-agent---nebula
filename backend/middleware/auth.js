@@ -15,6 +15,12 @@ const generateToken = (userId) => {
   );
 };
 
+/** What an account waiting to be deleted may still call: its own account routes, who it is, and sign out. */
+function _allowedWhileDeleting(url) {
+  const path = require('../services/requestPath').normalisePath(url);
+  return path !== null && /^\/api\/(account(\/|$)|auth\/(me|logout)$)/.test(path);
+}
+
 /** Empty when an agency client pass is still good, otherwise the message to show. */
 function _agencyPassProblem(owner, workspace) {
   const ended = 'Your access to this client has ended. Please open it again from your clients list.';
@@ -79,7 +85,7 @@ const protect = async (req, res, next) => {
     }
 
     // An account waiting to be deleted can only see its own status, undo the deletion, or sign out.
-    if (user.deletion && user.deletion.status === 'pending' && !/^\/api\/(account\/|auth\/(me|logout)(\?|$))/.test(String(req.originalUrl || ''))) {
+    if (user.deletion && user.deletion.status === 'pending' && !_allowedWhileDeleting(req.originalUrl)) {
       return res.status(423).json({ success: false, code: 'deletion_pending', purgeAfter: user.deletion.purgeAfter, message: 'This account is set to be deleted. Sign in and choose Restore if you want to keep it.' });
     }
 
@@ -90,7 +96,7 @@ const protect = async (req, res, next) => {
       if (!canActFor(csm, user)) {
         return res.status(401).json({ success: false, message: 'Your access to this client has ended. Please open it again from your client list.' });
       }
-      if (isBlockedWhileActing(req.originalUrl)) {
+      if (isBlockedWhileActing(req.originalUrl, req.method)) {
         return res.status(403).json({ success: false, message: 'Payments, plans and passwords can only be changed by the client.' });
       }
       req.actingCsm = csm;
@@ -178,4 +184,4 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { generateToken, protect, optionalAuth, _agencyPassProblem };
+module.exports = { generateToken, protect, optionalAuth, _agencyPassProblem, _allowedWhileDeleting };

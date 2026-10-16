@@ -5,6 +5,7 @@
  * that the CSM still exists, is still a CSM and is still assigned to that client.
  */
 const jwt = require('jsonwebtoken');
+const { normalisePath } = require('./requestPath');
 
 const ACTING_TOKEN_HOURS = 8;
 
@@ -14,8 +15,12 @@ const BLOCKED_WHILE_ACTING = [
   /^\/api\/auth\/change-password/,
   /^\/api\/auth\/(delete|deactivate)/,
   /^\/api\/users?\/(me\/)?delete/,
-  /^\/api\/csm(\/|$)/
+  /^\/api\/csm(\/|$)/,
+  // The customer's own privacy choices (undo a deletion, accept the Terms, export) are never made by staff for them.
+  /^\/api\/account(\/|$)/
 ];
+// The one thing staff may still read under /api/account: whether the account is set to be deleted.
+const ALLOWED_WHILE_ACTING = (path, method) => String(method || 'GET').toUpperCase() === 'GET' && path === '/api/account/status';
 
 function idOf(value) {
   if (!value) return '';
@@ -29,8 +34,10 @@ function canActFor(staff, client) {
   return require('./staff/permissions').can(staff, 'open_client', client);
 }
 
-function isBlockedWhileActing(url) {
-  const path = String(url || '').split('?')[0];
+function isBlockedWhileActing(url, method = 'GET') {
+  const path = normalisePath(url);
+  if (path === null) return true; // an unreadable path is never allowed through
+  if (ALLOWED_WHILE_ACTING(path, method)) return false;
   return BLOCKED_WHILE_ACTING.some((re) => re.test(path));
 }
 

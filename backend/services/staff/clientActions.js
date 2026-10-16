@@ -11,8 +11,18 @@ function parseQuarkAmount(value) {
   return { ok: true, amount: n };
 }
 
+// A customer is a real account. A hidden client workspace of an agency is not one: staff cannot add Quarks to it,
+// assign a CSM to it or open it (its Quarks live on the agency account).
 function isCustomer(u) {
-  return Boolean(u) && !u.staffRole && !u.isCsm;
+  return Boolean(u) && !u.staffRole && !u.isCsm && !(u.agency && u.agency.ownerId);
+}
+
+/** Why staff cannot open this account right now, in plain words, or null when they can. */
+function openProblem(client) {
+  if (!client) return 'That client was not found.';
+  if (client.isActive === false) return 'This account is switched off. Switch it on first.';
+  if (client.deletion && client.deletion.status === 'pending') return 'This account has a deletion request waiting. It cannot be opened while the customer is deciding.';
+  return null;
 }
 
 /** Who may be set as a client's CSM, and on whom. `csm` null clears the assignment. */
@@ -24,4 +34,4 @@ function checkAssignment({ csm, client }) {
   return { ok: true };
 }
 
-module.exports = { parseQuarkAmount, checkAssignment, isCustomer, MAX_QUARKS_PER_GRANT };
+module.exports = { parseQuarkAmount, checkAssignment, isCustomer, openProblem, MAX_QUARKS_PER_GRANT };

@@ -11,13 +11,20 @@ const DAY = 86400000;
 const NOW = new Date('2026-10-16T06:00:00Z');
 const REFUSAL = /Wait until this client's videos and jobs finish, then try again/;
 
+
+// The purge query: pending or failed requests that are due, plus "running" ones whose claim is older than the cutoff.
+const dueFilter = (q, x) => x.purgeAfter <= q.purgeAfter.$lte && x.attempts < q.attempts.$lt && q.$or.some((c) => (c.status.$in ? c.status.$in.includes(x.status) : (x.status === c.status && x.runningSince && x.runningSince < c.$or[0].runningSince.$lt)));
+const claimMatch = (f, y) => y._id === f._id && (f.status.$in ? f.status.$in.includes(y.status) : (y.status === f.status && (f.runningSince == null ? y.runningSince == null : +y.runningSince === +f.runningSince)));
+
 // ---- a small in-memory world: one agency, two clients, one ordinary customer
 const match = (doc, f) => {
-  if (f.$or) return f.$or.some((x) => match(doc, x));
-  return Object.entries(f).every(([k, v]) => {
+  if (f.$or && !f.$or.some((x) => match(doc, x))) return false;
+  return Object.entries(f).filter(([k]) => k !== '$or').every(([k, v]) => {
     const have = k.split('.').reduce((c, p) => (c == null ? c : c[p]), doc);
     if (v && typeof v === 'object' && '$in' in v) return v.$in.map(String).includes(String(have));
     if (v && typeof v === 'object' && '$ne' in v) return String(have) !== String(v.$ne);
+    if (v && typeof v === 'object' && '$gt' in v) return Number(have) > v.$gt;
+    if (v && typeof v === 'object' && '$lt' in v) return have != null && +have < +v.$lt;
     return String(have) === String(v);
   });
 };
@@ -25,7 +32,7 @@ const apply = (doc, u) => {
   for (const [k, v] of Object.entries(u.$set || {})) { const ps = k.split('.'); let c = doc; ps.slice(0, -1).forEach((p) => { c[p] = c[p] || {}; c = c[p]; }); c[ps.at(-1)] = v; }
   for (const [k, v] of Object.entries(u.$inc || {})) { const ps = k.split('.'); let c = doc; ps.slice(0, -1).forEach((p) => { c[p] = c[p] || {}; c = c[p]; }); c[ps.at(-1)] = (c[ps.at(-1)] || 0) + v; }
   if (u.$push) for (const [k, v] of Object.entries(u.$push)) (doc[k] = doc[k] || []).push(v);
-  for (const k of Object.keys(u.$unset || {})) delete doc[k];
+  for (const k of Object.keys(u.$unset || {})) { const ps = k.split('.'); let c = doc; ps.slice(0, -1).forEach((p) => { c = c && c[p]; }); if (c) delete c[ps.at(-1)]; }
 };
 
 function world(over = {}) {
@@ -55,7 +62,8 @@ function world(over = {}) {
       create: async (doc) => { const r = { _id: `r${x.deletions.length + 1}`, attempts: 0, steps: [], ...doc }; x.deletions.push(r); return r; },
       updateOne: async (f, u) => { const r = x.deletions.find((y) => y._id === f._id); if (r) apply(r, u); },
       updateMany: async () => {},
-      find: (qq) => ({ limit: () => ({ lean: async () => x.deletions.filter((r) => qq.status.$in.includes(r.status) && r.purgeAfter <= qq.purgeAfter.$lte && r.attempts < qq.attempts.$lt) }) })
+      find: (qq) => ({ limit: () => ({ lean: async () => x.deletions.filter((r) => dueFilter(qq, r)).map((r) => structuredClone(r)) }) }),
+      findOneAndUpdate: async (f, u) => { const r = x.deletions.find((y) => claimMatch(f, y)); if (!r) return null; apply(r, u); return r; }
     },
     RetainedPayment: { updateOne: async (f, u) => { if (!x.retained.some((r) => r.razorpayPaymentId === f.razorpayPaymentId)) x.retained.push(u.$setOnInsert); } },
     DeletedAccount: { updateOne: async (f, u) => { x.tombstones.push(u.$setOnInsert); } },
@@ -158,7 +166,7 @@ test('removing a client erases it at once, releases the slot and sends no email'
   const calls = [];
   const out = await w.removeWorkspace({
     owner: { _id: 'o1', plan: { tier: 'agency' } }, workspaceId: 'w1',
-    models: { User: { find: () => ({ sort: () => ({ lean: async () => [{ _id: 'w1', agency: { ownerId: 'o1', workspaceName: 'Sweet' } }] }) }), updateOne: async (f, u) => calls.push(['update', u]) } },
+    models: { User: { find: () => ({ sort: () => ({ lean: async () => [{ _id: 'w1', agency: { ownerId: 'o1', workspaceName: 'Sweet' } }] }) }), updateOne: async (f, u) => { calls.push(['update', u]); return { modifiedCount: 1 }; } } },
     isBusy: async () => [],
     purge: async (id) => { calls.push(['purged', id]); return { ok: true }; }
   });
@@ -322,4 +330,66 @@ test('DELETE on a client is among the things blocked from inside a client', () =
 
 test('agency rules: the filter that keeps workspaces out is the same shape everywhere', () => {
   assert.deepStrictEqual(ag.NOT_A_WORKSPACE, { 'agency.ownerId': null });
+});
+
+// ================================================================ final review fixes
+test('B-I2: two removals of the same client at once erase it once and release the slot once', async () => {
+  const { x, models, deps } = world();
+  let purges = 0;
+  const go = () => w.removeWorkspace({
+    owner: owner(x), workspaceId: 'w1', models,
+    isBusy: async () => { await new Promise((r) => setImmediate(r)); return []; },
+    purge: async (id) => { purges += 1; await new Promise((r) => setImmediate(r)); return d.purgeWorkspace(id, { models, deps, now: NOW }); }
+  });
+  const [a, b] = await Promise.all([go(), go()]);
+  assert.deepStrictEqual([a.ok, b.ok].sort(), [false, true]);
+  assert.match([a, b].find((r) => !r.ok).message, /already being removed/);
+  assert.strictEqual(purges, 1);
+  assert.strictEqual(owner(x).agency.clientCount, 1, '2 clients, one removed: 1 left, not 0');
+});
+
+test('B-I2: a slot is never released below zero, and a failed removal gives the claim back so it can be tried again', async () => {
+  const { x, models, deps } = world({ owner: { agency: { clientCount: 0, extraSlots: 0 } } });
+  await w.releaseSlot(models.User, 'o1');
+  assert.strictEqual(owner(x).agency.clientCount, 0);
+  deps.deleteSocialProfile = async () => ({ success: false, error: 'boom' });
+  const out = await w.removeWorkspace({ owner: owner(x), workspaceId: 'w1', models, isBusy: async () => [], purge: (id) => d.purgeWorkspace(id, { models, deps, now: NOW }) });
+  assert.strictEqual(out.ok, false);
+  assert.ok(!x.users.find((u) => u._id === 'w1').agency.removing, 'the claim is cleared');
+  deps.deleteSocialProfile = async () => ({ success: true });
+  const again = await w.removeWorkspace({ owner: owner(x), workspaceId: 'w1', models, isBusy: async () => [], purge: (id) => d.purgeWorkspace(id, { models, deps, now: NOW }) });
+  assert.strictEqual(again.ok, true);
+});
+
+test('B-I2: deleting an agency erases its clients even when the stored client count has drifted to zero', async () => {
+  const { x, models, razorpay, deps } = world({ owner: { plan: { tier: 'free', subscriptions: [] }, agency: { clientCount: 0, extraSlots: 0 } } });
+  assert.strictEqual(d.ownsClients(owner(x), 2), true, 'the real count decides');
+  assert.strictEqual(d.ownsClients(owner(x), 0), false);
+  assert.strictEqual(d.ownsClients(owner(x)), false, 'only without a real count does the stored one stand in');
+  await d.requestDeletion({ user: owner(x), models, razorpay, now: NOW, mail: { sendDeletionRequested: async () => {} } });
+  assert.deepStrictEqual(x.campaigns.map((c) => c.status), ['paused', 'paused', 'scheduled'], 'the clients\' posts were held');
+  const out = await d.runPurgeOnce({ models, deps, now: new Date(NOW.getTime() + 15 * DAY) });
+  assert.deepStrictEqual(out, { completed: 1, failed: 0 });
+  assert.deepStrictEqual(x.users.map((u) => u._id), ['u9'], 'no client is left behind');
+});
+
+test('B-I4: two purge runs at once erase an account once and send one "deleted" email', async () => {
+  const { x, models, razorpay, deps } = world();
+  await d.requestDeletion({ user: owner(x), models, razorpay, now: NOW, mail: { sendDeletionRequested: async () => {} } });
+  const later = new Date(NOW.getTime() + 15 * DAY);
+  const [a, b] = await Promise.all([d.runPurgeOnce({ models, deps, now: later }), d.runPurgeOnce({ models, deps, now: later })]);
+  assert.strictEqual(a.completed + b.completed, 1);
+  assert.deepStrictEqual(x.mails, [['deleted', 'boss@agency.example']]);
+});
+
+test('B-I4: a purge left "running" by a crash is picked up after 30 minutes, not before', async () => {
+  const { x, models, razorpay, deps } = world();
+  await d.requestDeletion({ user: owner(x), models, razorpay, now: NOW, mail: { sendDeletionRequested: async () => {} } });
+  const later = new Date(NOW.getTime() + 15 * DAY);
+  Object.assign(x.deletions[0], { status: 'running', runningSince: new Date(later.getTime() - 10 * 60 * 1000) });
+  assert.deepStrictEqual(await d.runPurgeOnce({ models, deps, now: later }), { completed: 0, failed: 0 }, 'still within 30 minutes: another run owns it');
+  assert.ok(x.users.some((u) => u._id === 'o1'));
+  x.deletions[0].runningSince = new Date(later.getTime() - 40 * 60 * 1000);
+  assert.deepStrictEqual(await d.runPurgeOnce({ models, deps, now: later }), { completed: 1, failed: 0 });
+  assert.deepStrictEqual(x.users.map((u) => u._id), ['u9']);
 });

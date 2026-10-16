@@ -30,8 +30,22 @@ function eligibility(user, { isStaff = () => false, resolveTier = () => 'free' }
   return ownsClients(user) ? { ok: true, clients: Number(user.agency && user.agency.clientCount) || 0 } : { ok: true };
 }
 
-/** An agency, or any account that still has client brands, even if its plan has since ended. */
-const ownsClients = (user) => ag.isAgency(user) || !!(user && !ag.isWorkspace(user) && user.agency && Number(user.agency.clientCount) > 0);
+/**
+ * An agency, or any account that still has client brands, even if its plan has since ended. Pass `realCount` (the
+ * number of workspaces that name this account as their owner) wherever you can: the stored `clientCount` is only a
+ * counter and can drift, and a drifted zero must never leave client brands behind when their agency is erased.
+ */
+const ownsClients = (user, realCount) => {
+  if (ag.isAgency(user)) return true;
+  if (!user || ag.isWorkspace(user)) return false;
+  if (Number.isFinite(realCount)) return realCount > 0;
+  return !!(user.agency && Number(user.agency.clientCount) > 0);
+};
+/** How many workspaces this account really owns, counted from the workspaces themselves. undefined if it cannot be counted. */
+async function realClientCount(user, User) {
+  if (!User || typeof User.find !== 'function') return undefined;
+  return (await clientIds(user, User)).length;
+}
 
 /** The password is asked again for anything that downloads or erases an account. */
 async function passwordOk(userId, password, { User } = {}) {
@@ -46,6 +60,8 @@ async function clientIds(user, User) {
   const rows = await User.find({ 'agency.ownerId': user._id }).select('_id').lean();
   return rows.map((r) => r._id);
 }
+
+const clientIdsOf = async (user, User) => (User && typeof User.find === 'function' ? clientIds(user, User) : []);
 
 /** Stops billing now: the plan and any add-ons are cancelled immediately. "Already cancelled" counts as done. */
 async function cancelBilling(user, razorpay) {
@@ -69,11 +85,9 @@ async function requestDeletion({ user, via = 'self', models, razorpay, now = new
   await User.updateOne({ _id: user._id }, { $set: { 'deletion.status': 'pending', 'deletion.requestedAt': now, 'deletion.purgeAfter': purgeAfter, 'subscription.cancelAtPeriodEnd': true } });
   // Scheduled posts stop going out. They are put back if the account is restored.
   await Campaign.updateMany({ userId: user._id, status: 'scheduled' }, { $set: { status: 'paused', pausedForDeletion: true } });
-  // An agency's clients go with it, so their scheduled posts stop too.
-  if (ownsClients(user)) {
-    const ids = await clientIds(user, User);
-    if (ids.length) await Campaign.updateMany({ userId: { $in: ids }, status: 'scheduled' }, { $set: { status: 'paused', pausedForDeletion: true } });
-  }
+  // An agency's clients go with it, so their scheduled posts stop too. Counted from the workspaces, never from the stored counter.
+  const ids = await clientIdsOf(user, User);
+  if (ids.length) await Campaign.updateMany({ userId: { $in: ids }, status: 'scheduled' }, { $set: { status: 'paused', pausedForDeletion: true } });
   if (mail && user.email) await mail.sendDeletionRequested(user, purgeAfter).catch((e) => console.error('[account delete] email failed:', e && e.message));
   return { ok: true, purgeAfter };
 }
@@ -84,15 +98,13 @@ async function restoreDeletion({ user, models, now = new Date() }) {
   await AccountDeletion.updateMany({ user: user._id, status: 'pending' }, { $set: { status: 'restored', completedAt: now } });
   await User.updateOne({ _id: user._id }, { $set: { 'deletion.status': '' }, $unset: { 'deletion.requestedAt': '', 'deletion.purgeAfter': '' } });
   await Campaign.updateMany({ userId: user._id, pausedForDeletion: true }, { $set: { status: 'scheduled' }, $unset: { pausedForDeletion: '' } });
-  if (ownsClients(user)) {
-    const ids = await clientIds(user, User);
-    if (ids.length) await Campaign.updateMany({ userId: { $in: ids }, pausedForDeletion: true }, { $set: { status: 'scheduled' }, $unset: { pausedForDeletion: '' } });
-  }
+  const ids = await clientIdsOf(user, User);
+  if (ids.length) await Campaign.updateMany({ userId: { $in: ids }, pausedForDeletion: true }, { $set: { status: 'scheduled' }, $unset: { pausedForDeletion: '' } });
   return { ok: true, note: 'Your account is back. Your plan was cancelled, so choose a plan again if you want to carry on creating.' };
 }
 
 /** The ordered erase steps for one account. Each returns { detail } or throws. */
-function stepsFor({ user, models, deps, now }) {
+function stepsFor({ user, models, deps, now, clientCount }) {
   const ownerFilters = erasable().map((rule) => ({ rule, Model: models[rule.model], filter: (id) => filterFor(rule, id) })).filter((x) => x.Model);
   return [
     {
@@ -109,7 +121,7 @@ function stepsFor({ user, models, deps, now }) {
         return { detail: `${kept} payment records kept for tax` };
       }
     },
-    ...(ownsClients(user) ? [{
+    ...(ownsClients(user, clientCount) ? [{
       name: 'clients',
       run: async () => {
         // Every client is erased the same way a single removal erases it (files, connected accounts, data, then the record).
@@ -195,13 +207,14 @@ async function purgeWorkspace(workspaceId, { models, deps, now = new Date() }) {
 /** Runs the erase for one pending request that is due. Safe to run again after a failure: finished steps are not repeated. */
 async function purgeOne(request, { models, deps, now = new Date() }) {
   const user = await models.User.findById(request.user).select('+emailKey').lean();
-  await models.AccountDeletion.updateOne({ _id: request._id }, { $set: { status: 'running' }, $inc: { attempts: 1 } });
+  await models.AccountDeletion.updateOne({ _id: request._id }, { $set: { status: 'running', runningSince: now }, $inc: { attempts: 1 } });
   const done = new Set((request.steps || []).filter((s) => s.status === 'done' || s.status === 'skipped').map((s) => s.name));
   if (!user) {
     await models.AccountDeletion.updateOne({ _id: request._id }, { $set: { status: 'completed', completedAt: now } });
     return { status: 'completed', note: 'the account was already gone' };
   }
-  for (const step of stepsFor({ user, models, deps, now })) {
+  const clientCount = await realClientCount(user, models.User);
+  for (const step of stepsFor({ user, models, deps, now, clientCount })) {
     if (done.has(step.name)) continue;
     try {
       const out = await step.run();
@@ -215,10 +228,30 @@ async function purgeOne(request, { models, deps, now = new Date() }) {
   return { status: 'completed' };
 }
 
+// A purge that has been "running" this long was interrupted (a deploy, a crash) and is picked up again.
+const RUNNING_STALE_MS = 30 * 60 * 1000;
+
+/**
+ * Finds the requests that are due and runs each one. A request is claimed with one conditional update (pending or
+ * failed, or running for too long, to running), so two instances or two overlapping runs can never both erase the same
+ * account or send its "deleted" email twice.
+ */
 async function runPurgeOnce({ models, deps, now = new Date(), alert = () => {} } = {}) {
-  const due = await models.AccountDeletion.find({ status: { $in: ['pending', 'failed'] }, purgeAfter: { $lte: now }, attempts: { $lt: MAX_ATTEMPTS } }).limit(10).lean();
+  const cutoff = new Date(now.getTime() - RUNNING_STALE_MS);
+  const due = await models.AccountDeletion.find({
+    purgeAfter: { $lte: now }, attempts: { $lt: MAX_ATTEMPTS },
+    $or: [
+      { status: { $in: ['pending', 'failed'] } },
+      { status: 'running', $or: [{ runningSince: { $lt: cutoff } }, { runningSince: null, updatedAt: { $lt: cutoff } }] }
+    ]
+  }).limit(10).lean();
   const out = { completed: 0, failed: 0 };
   for (const req of due) {
+    const claimFilter = req.status === 'running'
+      ? { _id: req._id, status: 'running', runningSince: req.runningSince === undefined ? null : req.runningSince }
+      : { _id: req._id, status: { $in: ['pending', 'failed'] } };
+    const claimed = await models.AccountDeletion.findOneAndUpdate(claimFilter, { $set: { status: 'running', runningSince: now } }, { new: true });
+    if (!claimed) continue; // another run took it
     const r = await purgeOne(req, { models, deps, now });
     if (r.status === 'completed') out.completed += 1; else { out.failed += 1; alert(`Deleting an account stopped at "${r.step}": ${r.error}`); }
   }
@@ -254,4 +287,4 @@ function startAccountPurge({ intervalMs = 6 * 60 * 60 * 1000, logger = console }
   return () => clearInterval(timer);
 }
 
-module.exports = { passwordOk, ownsClients, purgeWorkspace, GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };
+module.exports = { RUNNING_STALE_MS, passwordOk, ownsClients, realClientCount, purgeWorkspace, GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };
