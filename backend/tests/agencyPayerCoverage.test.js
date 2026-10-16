@@ -263,3 +263,32 @@ test('/me and both profile routes put the pool balance on the response through p
   assert.match(src, /agencyRules\.publicCredits\(user\)/);
   assert.ok(!/select\('credits\.balance credits\.totalUsed'\)/.test(src), '/me must not read the agency record directly');
 });
+
+// ---- final review: a client sees the pool balance only, and a frozen client is refused ----
+test('A-M10/B-M8: inside a client the credits routes show the pool balance and no history', async () => {
+  reset([agency(321), client(777)]);
+  const res = resp();
+  await handler(creditsRouter, '/', 'get')({ user: { userId: 'w1' } }, res);
+  assert.strictEqual(res.body.credits.balance, 321);
+  assert.deepStrictEqual(res.body.credits.history, []);
+  assert.doesNotMatch(JSON.stringify(res.body), /agency_only_line/);
+  const h = resp();
+  await handler(creditsRouter, '/history', 'get')({ user: { userId: 'w1' } }, h);
+  assert.deepStrictEqual(h.body.history, []);
+  assert.strictEqual(h.body.balance, 321);
+  assert.doesNotMatch(JSON.stringify(h.body), /agency_only_line/);
+  // the agency itself still sees its own history
+  const own = resp();
+  await handler(creditsRouter, '/history', 'get')({ user: { userId: 'o1' } }, own);
+  assert.strictEqual(own.body.history.length, 1);
+});
+
+test('A-M10/B-M8: a frozen client is refused on the credits routes', async () => {
+  reset([agency(321), { ...client(777), agency: { ownerId: 'o1', frozen: true } }]);
+  for (const p of ['/', '/history']) {
+    const res = resp();
+    await handler(creditsRouter, p, 'get')({ user: { userId: 'w1' } }, res);
+    assert.strictEqual(res.code, 403, p);
+    assert.doesNotMatch(JSON.stringify(res.body), /321/);
+  }
+});

@@ -98,7 +98,8 @@ test('only an agency account may buy a slot, and never beyond the most clients',
 test('ending a slot subscription removes one slot and nothing else', () => {
   const u = bp.endUpdateFor({ kind: 'slot', key: 'client', subscriptionId: 'sub_s' });
   assert.deepStrictEqual(u.$inc, { 'agency.extraSlots': -1 });
-  assert.deepStrictEqual(u.$set, { 'plan.subscriptions.$[sub].active': false });
+  assert.deepStrictEqual(u.$set, { 'plan.subscriptions.$[sub].active': false, 'plan.subscriptions.$[sub].ended': true });
+  assert.strictEqual(bp.endUpdateFor({ kind: 'slot', key: 'client', subscriptionId: 'sub_s' }, 'subscription.halted').$set['plan.subscriptions.$[sub].ended'], undefined, 'a halted slot can still be resumed');
   assert.strictEqual(bp.endUpdateFor({ kind: 'plan', key: 'agency' }), null);
   const built = bp.buildEndUpdate({ plan: { subscriptions: [] } }, { kind: 'slot', key: 'client', subscriptionId: 'sub_s' }, 'subscription.cancelled');
   assert.deepStrictEqual(built.update.$inc, { 'agency.extraSlots': -1 });
@@ -145,7 +146,8 @@ function applyUpdate(doc, update, arrayFilters) {
   for (const [k, v] of Object.entries(update.$inc || {})) setAt(doc, k.split('.'), (getAt(doc, k) || 0) + v, arrayFilters);
   for (const [k, v] of Object.entries(update.$push || {})) {
     const parts = k.split('.'); const parent = parts.slice(0, -1).reduce((c, x) => (c[x] = c[x] || {}), doc);
-    const key = parts[parts.length - 1]; parent[key] = parent[key] || []; parent[key].push(JSON.parse(JSON.stringify(v)));
+    const key = parts[parts.length - 1]; parent[key] = parent[key] || [];
+    if (v && v.$each) parent[key].push(...JSON.parse(JSON.stringify(v.$each))); else parent[key].push(JSON.parse(JSON.stringify(v)));
   }
   for (const [k, v] of Object.entries(update.$addToSet || {})) {
     const parts = k.split('.'); const parent = parts.slice(0, -1).reduce((c, x) => (c[x] = c[x] || {}), doc);
@@ -214,14 +216,14 @@ function fakeRazorpay() {
     payments: { fetch: async function (id) { return { id, amount: Object.prototype.hasOwnProperty.call(this.amounts, id) ? this.amounts[id] : this.defaultAmount }; } }
   };
 }
-function setup({ user = mkAgency(), extra = [], env = ENV } = {}) {
+function setup({ user = mkAgency(), extra = [], env = ENV, settle } = {}) {
   const welcomes = []; const invoices = []; const alerts = [];
   const User = fakeUserModel([user, ...extra]);
   const razorpay = fakeRazorpay();
   razorpay.payments.fetch = razorpay.payments.fetch.bind(razorpay);
   const notifies = [];
   const r = createPaymentRouter({
-    razorpay, User, env, alert: (c, d) => alerts.push([c, d]),
+    razorpay, User, env, alert: (c, d) => alerts.push([c, d]), ...(settle ? { settle: settle(User) } : {}),
     notifyNow: async (m) => { notifies.push(m); return true; },
     protect: (req, res, next) => next(),
     Coupon: { findOne: async () => null, findOneAndUpdate: async () => null },
@@ -993,4 +995,147 @@ test('a record made before the price was stored falls back to the price in confi
   assert.strictEqual(failedRows(stored(ctx)).length, 1);
   await sendHook(ctx.r, slotCharge(s, 'pay_old2', SLOT_PAISE));
   assert.strictEqual(paidRows(stored(ctx)).length, 1);
+});
+
+
+// ================================================================ final review fixes (money path)
+// Mirrors quarkBuckets.settle against the fake store: expires the plan bucket when due (or forced), with the same balance check.
+const fakeSettle = (User) => async (id, now = new Date(), { forcePlan = false } = {}) => {
+  const u = await User.findById(id); const c = (u && u.credits) || {};
+  const due = forcePlan || (c.planExpiresAt && new Date(c.planExpiresAt) <= now);
+  const plan = Math.min(Math.max(0, c.planBalance || 0), Math.max(0, c.balance || 0));
+  if (!due || !plan) return { changed: false };
+  const doc = await User.findOneAndUpdate({ _id: id, 'credits.balance': c.balance }, { $set: { 'credits.planBalance': 0 }, $inc: { 'credits.balance': -plan } });
+  return { changed: !!doc };
+};
+
+test('A-I2: retry-invoices never makes a tax invoice for a refused or refunded payment', async () => {
+  const base = { razorpayOrderId: 'o', currency: 'INR', credits: 0, paidAt: new Date() };
+  const ctx = setup({ user: mkAgency({ payments: [
+    { ...base, razorpayPaymentId: 'pay_failed', amount: 1768.82, status: 'failed', needsRefund: true },
+    { ...base, razorpayPaymentId: 'pay_refunded', amount: 100, status: 'refunded' },
+    { ...base, razorpayPaymentId: 'pay_ok', amount: 100, status: 'paid' }
+  ] }) });
+  const realFindById = ctx.User.findById.bind(ctx.User);
+  ctx.User.findById = async (id) => { const d = await realFindById(id); if (d) d.save = async function () { Object.assign(ctx.User.users[0], { payments: this.payments }); }; return d; };
+  const res = await call(ctx.r, 'post', '/retry-invoices', {});
+  assert.strictEqual(res.code, 200, JSON.stringify(res.body));
+  assert.deepStrictEqual(ctx.invoices.map((i) => i.razorpayPaymentId), ['pay_ok']);
+  assert.ok(!stored(ctx).payments.find((p) => p.razorpayPaymentId === 'pay_failed').invoiceUrl);
+});
+
+test('A-I3: a verify and a webhook for the first payment arriving together leave the paid month intact', async () => {
+  const ctx = setup({ user: mkFree(), settle: fakeSettle });
+  const s = await startAgency(ctx);
+  const q = PLANS.agency.quarks;
+  let armed = true; const realFindOne = ctx.User.findOne.bind(ctx.User);
+  // The webhook reads the account (no payment on it yet); before it carries on, the checkout verify applies the same payment.
+  ctx.User.findOne = async (f) => {
+    const doc = await realFindOne(f);
+    if (armed) { armed = false; const v = await call(ctx.r, 'post', '/verify-subscription', verifyBody('pay_race', s.id)); assert.strictEqual(v.code, 200, JSON.stringify(v.body)); }
+    return doc;
+  };
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_race', { amount: AGENCY_PAISE }));
+  const u = stored(ctx);
+  assert.strictEqual(u.credits.planBalance, q, 'the month stays granted');
+  assert.strictEqual(u.credits.balance, 100 + q);
+  assert.strictEqual(paidRows(u).length, 1);
+});
+
+test('A-I3: two copies of the same renewal webhook at once grant once and never wipe the grant', async () => {
+  const ctx = setup({ user: mkFree(), settle: fakeSettle });
+  const s = await startAgency(ctx);
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_1', { amount: AGENCY_PAISE }));
+  const q = PLANS.agency.quarks;
+  const ev = () => sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_2', { amount: AGENCY_PAISE }));
+  await Promise.all([ev(), ev()]);
+  const u = stored(ctx);
+  assert.strictEqual(paidRows(u).length, 2);
+  assert.strictEqual(u.credits.planBalance, q);
+  assert.strictEqual(u.credits.balance, 100 + q);
+});
+
+test('A-I3: a renewal replaces what is left of last month, and retries when a spend lands in between', async () => {
+  const ctx = setup({ user: mkFree({ credits: { balance: 150, topupBalance: 0, planBalance: 50, totalUsed: 0 } }), settle: fakeSettle });
+  const s = await startAgency(ctx);
+  const q = PLANS.agency.quarks;
+  let reads = 0; const realFindById = ctx.User.findById.bind(ctx.User);
+  ctx.User.findById = async (id) => {
+    const doc = await realFindById(id); reads += 1;
+    if (reads === 2) { const d = ctx.User.users[0]; d.credits.planBalance = 30; d.credits.balance = 130; } // a spend after we read
+    return doc;
+  };
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_r', { amount: AGENCY_PAISE }));
+  const u = stored(ctx);
+  assert.strictEqual(u.credits.planBalance, q);
+  assert.strictEqual(u.credits.balance, 100 + q, '130 held, 30 of it last month: 100 + the new month');
+  assert.ok(u.credits.history.some((h) => h.action === 'plan_quarks_expired' && h.amount === -30));
+});
+
+test('A-I4: slot Quarks do not lengthen the life of top-up Quarks already held', () => {
+  const now = new Date('2026-10-20T00:00:00Z'); const later = new Date(now.getTime() + 10 * 86400000);
+  const rec = { kind: 'slot', key: 'client', subscriptionId: 'sub_s' };
+  const withTopup = bp.buildChargeUpdate(rec, { paymentId: 'p1', paidPaise: 1, now, firstCycle: false, topup: { balance: 300, expiresAt: later } });
+  assert.strictEqual(withTopup.update.$set['credits.topupExpiresAt'], undefined, 'end date untouched');
+  assert.strictEqual(withTopup.update.$inc['credits.topupBalance'], AGENCY.slot.quarks, 'still added to the top-up bucket');
+  const empty = bp.buildChargeUpdate(rec, { paymentId: 'p2', paidPaise: 1, now, firstCycle: false, topup: { balance: 0, expiresAt: null } });
+  assert.strictEqual(+empty.update.$set['credits.topupExpiresAt'], now.getTime() + 60 * 86400000, 'an empty bucket starts its 60 days');
+  const expired = bp.buildChargeUpdate(rec, { paymentId: 'p3', paidPaise: 1, now, firstCycle: false, topup: { balance: 300, expiresAt: new Date(now.getTime() - 1) } });
+  assert.ok(expired.update.$set['credits.topupExpiresAt'], 'an already ended bucket does not keep an old end date');
+  const pack = bp.buildChargeUpdate({ kind: 'topup', key: 1000, orderId: 'o' }, { paymentId: 'p4', paidPaise: 1, now, topup: { balance: 300, expiresAt: later } });
+  assert.ok(pack.update.$set['credits.topupExpiresAt'], 'a bought pack still renews the 60 days');
+});
+
+test('A-I4: a slot renewal through the webhook leaves the top-up end date alone', async () => {
+  const end = new Date(Date.now() + 5 * 86400000);
+  const ctx = setup({ user: mkAgency({ credits: { balance: 400, topupBalance: 300, topupExpiresAt: end, totalUsed: 0 } }) });
+  const s = await startSlot(ctx);
+  await sendHook(ctx.r, slotCharge(s, 'pay_s1'));
+  const u = stored(ctx);
+  assert.strictEqual(+u.credits.topupExpiresAt, +end);
+  assert.strictEqual(u.credits.topupBalance, 300 + AGENCY.slot.quarks);
+});
+
+test('A-M3: a charge that arrives after the slot was cancelled does not bring the slot back', async () => {
+  const ctx = setup({});
+  const s = await startSlot(ctx);
+  await sendHook(ctx.r, slotCharge(s, 'pay_s1'));
+  assert.strictEqual(stored(ctx).agency.extraSlots, 1);
+  await sendHook(ctx.r, hook('subscription.cancelled', s.id, s.planId, null));
+  assert.strictEqual(stored(ctx).agency.extraSlots, 0);
+  await sendHook(ctx.r, slotCharge(s, 'pay_late'));
+  const u = stored(ctx);
+  assert.strictEqual(u.agency.extraSlots, 0);
+  assert.strictEqual(u.plan.subscriptions.find((x) => x.subscriptionId === s.id).active, false);
+  const row = failedRows(u).find((p) => p.razorpayPaymentId === 'pay_late');
+  assert.ok(row && row.needsRefund, 'recorded for a refund');
+  assert.strictEqual(ctx.notifies.length, 1);
+});
+
+test('A-M4: a first Agency plan payment of the wrong amount is cancelled at Razorpay; a running plan is only recorded', async () => {
+  const ctx = setup({ user: mkFree() });
+  const s = await startAgency(ctx);
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_bad', { amount: AGENCY_PAISE - 100 }));
+  assert.deepStrictEqual(ctx.razorpay.calls.cancels, [[s.id, 0]]);
+  assert.strictEqual(failedRows(stored(ctx)).length, 1);
+  assert.strictEqual(stored(ctx).plan.tier, 'free');
+  // an active plan renewing at a wrong amount: recorded and alerted, not cancelled by us
+  const ctx2 = setup({});
+  const rec = stored(ctx2).plan.subscriptions[0];
+  await sendHook(ctx2.r, hook('subscription.charged', rec.subscriptionId, rec.razorpayPlanId, 'pay_bad2', { amount: 1 }));
+  assert.strictEqual(ctx2.razorpay.calls.cancels.length, 0);
+  assert.strictEqual(failedRows(stored(ctx2)).length, 1);
+  assert.ok(ctx2.alerts.length >= 1);
+});
+
+test('A-M6: no "cancel it in Razorpay" alert for a slot that is already cancelled; a real failure still alerts', async () => {
+  for (const [message, expectAlert] of [['The subscription is already cancelled', false], ['network down', true]]) {
+    const ctx = setup({});
+    const s = await startSlot(ctx);
+    await sendHook(ctx.r, slotCharge(s, 'pay_s1'));
+    ctx.razorpay.subscriptions.cancel = async () => { throw new Error(message); };
+    await sendHook(ctx.r, hook('subscription.cancelled', 'sub_plan', 'plan_agency', null));
+    assert.strictEqual(ctx.alerts.some(([, d]) => /cancel it in Razorpay/.test(d)), expectAlert, message);
+    assert.strictEqual(stored(ctx).agency.extraSlots, 0);
+  }
 });

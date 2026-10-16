@@ -385,7 +385,7 @@ test('webhook subscription.charged grants the plan Quarks from config and is ide
     assert.strictEqual(ctx.invoices.length, 1);
     // next month is a different payment id
     await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_B', { amount: chargePaise(inr) }));
-    assert.strictEqual(ctx.user.credits.balance, 100 + 2 * quarks);
+    assert.strictEqual(ctx.user.credits.balance, 100 + quarks, 'the new month replaces last month, it does not pile on');
   }
 });
 
@@ -594,7 +594,7 @@ test('welcome email is sent once on the first verified activation, never on a re
   await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_w1', { amount: chargePaise(1999) }));
   await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_w2', { amount: chargePaise(1999) }));
   assert.strictEqual(ctx.welcomes.length, 1);
-  assert.strictEqual(ctx.user.credits.balance, 100 + 2 * 2000);
+  assert.strictEqual(ctx.user.credits.balance, 100 + 2000, 'a renewal replaces the allowance');
 });
 
 test('welcome email is sent from the webhook for a Starter first charge', async () => {

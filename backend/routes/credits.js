@@ -7,13 +7,9 @@ const { ensureCreditCycle } = require('../middleware/creditGuard');
 const quarkBuckets = require('../services/quarkBuckets');
 const agencyRules = require('../services/agency');
 
-// Whose Quarks this person sees: their own, or the agency's shared pool for a client workspace
-// (an empty pool when the agency cannot pay, so a client never sees its own record's numbers).
-async function holderOf(user) {
-  if (!agencyRules.isWorkspace(user)) return user;
-  const owner = await User.findById(agencyRules.idOf(user.agency.ownerId));
-  return owner && agencyRules.canPayForClients(owner) ? owner : null;
-}
+// Inside a client, only the shared pool's balance is shown: never the agency's history, buckets or other clients' spend.
+// A frozen client (over the agency's limit) is refused outright.
+const FROZEN_MESSAGE = 'This client is paused because the agency is over its client limit.';
 
 /**
  * GET /api/credits
@@ -32,8 +28,21 @@ router.get('/', protect, async (req, res) => {
     await ensureCreditCycle(user);
     // Take off anything that has run out of time, then read the account again.
     const settled = await quarkBuckets.settleWallet(userId).catch(() => ({ changed: false }));
-    const holder = await holderOf(user);
-    const fresh = (settled.changed && holder) ? await User.findById(holder._id) : (holder || {});
+    if (agencyRules.isWorkspace(user)) {
+      if (user.agency.frozen) return res.status(403).json({ success: false, message: FROZEN_MESSAGE });
+      const pool = await agencyRules.publicCredits(user);
+      return res.json({
+        success: true,
+        credits: {
+          balance: pool.balance, totalUsed: pool.totalUsed, history: [],
+          parts: { plan: 0, planExpiresAt: null, topup: 0, topupExpiresAt: null, held: 0, kept: pool.balance }
+        },
+        trial: { startDate: user.trial?.startDate || user.createdAt, isExpired: false },
+        costs: CREDIT_COSTS,
+        units: ACTION_UNITS
+      });
+    }
+    const fresh = settled.changed ? await User.findById(user._id) : user;
     const parts = quarkBuckets.summarise(fresh);
 
     res.json({
@@ -80,13 +89,17 @@ router.get('/history', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // A client sees the agency's shared pool and its history.
-    const holder = (await holderOf(user)) || {};
+    // A client sees the shared pool's balance only, with no history.
+    if (agencyRules.isWorkspace(user)) {
+      if (user.agency.frozen) return res.status(403).json({ success: false, message: FROZEN_MESSAGE });
+      const pool = await agencyRules.publicCredits(user);
+      return res.json({ success: true, history: [], balance: pool.balance, totalUsed: pool.totalUsed });
+    }
     res.json({
       success: true,
-      history: holder.credits?.history || [],
-      balance: holder.credits?.balance ?? 0,
-      totalUsed: holder.credits?.totalUsed ?? 0
+      history: user.credits?.history || [],
+      balance: user.credits?.balance ?? 0,
+      totalUsed: user.credits?.totalUsed ?? 0
     });
   } catch (error) {
     console.error('Get credit history error:', error);

@@ -178,7 +178,7 @@ const expectedPaiseOf = (record, spec) => priceOfRecord(record, spec).totalPaise
  *   record: our own stored subscription record { subscriptionId, kind, key }
  *   kind 'topup': record = { kind:'topup', key: packInr, orderId }
  */
-function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date(), heldToRelease = 0, firstCycle = true }) {
+function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date(), heldToRelease = 0, firstCycle = true, topup = null }) {
   let quarks = 0; const $set = {}; const update = {}; let inc = null;
   const spec = priceOfRecord(record, invoiceSpec(record.kind, record.key));
   if (!spec) return null;
@@ -193,7 +193,7 @@ function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = n
     if (subscription && subscription.current_end) $set['subscription.currentPeriodEnd'] = new Date(subscription.current_end * 1000);
     if (subscription && subscription.charge_at) $set['subscription.nextBillingAt'] = new Date(subscription.charge_at * 1000);
     // The monthly allowance replaces what was left of the last one and ends with the paid month.
-    // The caller has already expired the previous allowance, so adding the new one gives exactly the allowance.
+    // The caller subtracts what is left of the previous allowance in the same guarded update, so the result is exactly the new allowance.
     const grant = buckets.planGrantUpdate(quarks, {
       now, heldToRelease,
       periodEnd: subscription && subscription.current_end ? new Date(subscription.current_end * 1000) : undefined
@@ -204,7 +204,8 @@ function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = n
   } else if (record.kind === 'slot') {
     // Every paid cycle brings the slot's Quarks; only the first payment of the subscription adds the client slot.
     quarks = AGENCY.slot.quarks;
-    const grant = buckets.topupGrantUpdate(quarks, { now });
+    // They never lengthen the life of top-up Quarks already held: the 60 days only start when the bucket is empty.
+    const grant = buckets.topupGrantUpdate(quarks, { now, keepExpiry: buckets.topupIsLive(topup, now) });
     Object.assign($set, grant.set); inc = { ...grant.inc };
     if (firstCycle) inc['agency.extraSlots'] = 1;
   } else if (record.kind === 'topup') {
@@ -231,16 +232,20 @@ function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = n
  * Plan: back to free with add-ons cleared. Add-on: remove only what no other
  * active add-on subscription still provides.
  */
-function endUpdateFor(record) {
+function endUpdateFor(record, eventName) {
   if (!record || record.kind !== 'slot') return null;
-  return { $inc: { 'agency.extraSlots': -1 }, $set: { 'plan.subscriptions.$[sub].active': false } };
+  const $set = { 'plan.subscriptions.$[sub].active': false };
+  // A cancelled or completed slot is over for good: a charge that arrives later must not bring it back.
+  // A halted one can be resumed by the customer, so it is not marked.
+  if (eventName !== 'subscription.halted') $set['plan.subscriptions.$[sub].ended'] = true;
+  return { $inc: { 'agency.extraSlots': -1 }, $set };
 }
 
 function buildEndUpdate(user, record, eventName) {
   if (record.kind === 'slot') {
     // Lowers the limit once, and only for a slot that was active: the filter makes a repeated or early event do nothing.
     return {
-      update: endUpdateFor(record), arrayFilters: [{ 'sub.subscriptionId': record.subscriptionId }], endsSlot: true,
+      update: endUpdateFor(record, eventName), arrayFilters: [{ 'sub.subscriptionId': record.subscriptionId }], endsSlot: true,
       filter: { 'plan.subscriptions': { $elemMatch: { subscriptionId: record.subscriptionId, active: true } } }
     };
   }

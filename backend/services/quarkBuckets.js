@@ -185,14 +185,21 @@ function planGrantUpdate(quarks, { periodEnd, now = new Date(), heldToRelease = 
 }
 
 /** Update parts for a top-up: more Quarks, and 60 days counted from this purchase. */
-function topupGrantUpdate(quarks, { now = new Date() } = {}) {
+function topupGrantUpdate(quarks, { now = new Date(), keepExpiry = false } = {}) {
   return {
-    set: { 'credits.topupExpiresAt': new Date(now.getTime() + TOPUP_VALID_DAYS * DAY) },
+    // keepExpiry: the Quarks join a bucket that is already counting down, so its end date is left alone.
+    set: keepExpiry ? {} : { 'credits.topupExpiresAt': new Date(now.getTime() + TOPUP_VALID_DAYS * DAY) },
     inc: { 'credits.balance': quarks, 'credits.topupBalance': quarks }
   };
 }
 
+/** True when the top-up bucket holds Quarks that are still valid (so its end date should not move). */
+function topupIsLive(topup, now = new Date()) {
+  if (!topup || !(num(topup.balance) > 0) || !topup.expiresAt) return false;
+  return new Date(topup.expiresAt) > now;
+}
+
 module.exports = {
   DAY, TOPUP_VALID_DAYS, PLAN_GRACE_DAYS, hasActivePlan, summarise, spend, spendPipeline, refundTo, settle, settleWallet,
-  planGrantUpdate, topupGrantUpdate, record
+  planGrantUpdate, topupGrantUpdate, topupIsLive, record
 };

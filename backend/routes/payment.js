@@ -58,6 +58,7 @@ function createPaymentRouter(deps = {}) {
   const alert = deps.alert || ((category, detail) => { try { require('../services/opsAlerts').recordFailure(category, detail); } catch (_) { /* alerting never stops billing */ } });
   // Emails the owner at once about one refused payment, once per payment id (best effort, never throws).
   const notifyNow = deps.notifyNow || ((m) => require('../services/opsAlerts').notify(m));
+  const settleQuarks = deps.settle || ((...a) => quarkBuckets.settle(...a));
   const syncWorkspacePlans = deps.syncWorkspacePlans || ((args) => require('../services/agencyWorkspaces').syncWorkspacePlans(args));
   const sendWelcome = deps.sendWelcome || require('../services/welcomeEmail').sendSubscriberWelcome;
   let defaultRazorpay = null;
@@ -110,6 +111,8 @@ function createPaymentRouter(deps = {}) {
     return true;
   }
 
+  const alreadyCancelled = (e) => /already|cancelled|canceled|completed|not cancel/i.test(String((e && (e.error && e.error.description || e.message)) || ''));
+
   // When a plan ends, its add-ons and extra client slots must stop billing too (best effort per subscription).
   async function cancelAddonSubscriptions(user) {
     const addons = storedSubscriptions(user).filter((s) => s.kind === 'addon' && s.active);
@@ -121,8 +124,11 @@ function createPaymentRouter(deps = {}) {
     for (const slot of storedSubscriptions(user).filter((s) => s.kind === 'slot' && s.active)) {
       try { await rz().subscriptions.cancel(slot.subscriptionId, 0); }
       catch (e) {
-        console.warn(`Could not cancel slot subscription ${slot.subscriptionId}:`, e.message);
-        alert('payment', `could not stop extra client subscription ${slot.subscriptionId} after the Agency plan ended: cancel it in Razorpay`);
+        // A slot that is already cancelled (a normal cancellation, or an earlier attempt) is done, not a problem.
+        if (!alreadyCancelled(e)) {
+          console.warn(`Could not cancel slot subscription ${slot.subscriptionId}:`, e.message);
+          alert('payment', `could not stop extra client subscription ${slot.subscriptionId} after the Agency plan ended: cancel it in Razorpay`);
+        }
       }
       await endSlot(user._id, slot);
     }
@@ -172,6 +178,7 @@ function createPaymentRouter(deps = {}) {
     at_limit: 'the account already has the most clients',
     no_agency_plan: 'the Agency plan is not active',
     slot_conflict: 'the account changed while the payment was being applied',
+    slot_ended: 'the extra client subscription had already ended',
     amount_mismatch: 'the amount paid does not match the price'
   };
   async function recordRefusal(user, record, paymentId, paidPaise, reason) {
@@ -210,6 +217,15 @@ function createPaymentRouter(deps = {}) {
     } catch (e) { console.warn('Could not email the refused payment alert:', e.message); }
     return true;
   }
+  // A first Agency plan payment of the wrong amount: nothing was granted, so the subscription is stopped at Razorpay
+  // (it would bill the wrong amount every month). A plan already running is only recorded and alerted: staff decide.
+  async function stopUnappliedPlan(record) {
+    if (record.kind !== 'plan' || record.active === true) return;
+    try { await rz().subscriptions.cancel(record.subscriptionId, 0); }
+    catch (e) {
+      if (!alreadyCancelled(e)) alert('payment', `could not stop subscription ${record.subscriptionId} after a wrong-amount first payment: cancel it in Razorpay`);
+    }
+  }
   async function refuseSlot(user, record, paymentId, reason, paidPaise) {
     await recordRefusal(user, record, paymentId, paidPaise, reason);
     try { await rz().subscriptions.cancel(record.subscriptionId, 0); }
@@ -219,6 +235,7 @@ function createPaymentRouter(deps = {}) {
   const REFUSALS = {
     no_agency_plan: 'We received your payment, but your Agency plan is not active, so the extra client could not be added. Our team has been told and will contact you about a refund.',
     at_limit: `We received your payment, but your account already has the most clients (${AGENCY.maxClients}), so the extra client could not be added. Our team has been told and will contact you about a refund.`,
+    slot_ended: 'We received your payment, but this extra client subscription had already ended, so nothing was added. Our team has been told and will contact you about a refund.',
     slot_conflict: 'We received your payment, but could not add the extra client just now. Our team has been told and will contact you.',
     amount_mismatch: 'We received your payment, but the amount did not match the price of this plan, so it was not applied. Our team has been told and will refund or fix it.',
     amount_unconfirmed: 'We are still confirming your payment. It will show on your account shortly. If it does not, our team will sort it out.'
@@ -236,22 +253,51 @@ function createPaymentRouter(deps = {}) {
     let firstCycle = true; let gate = {};
     if (record.kind === 'slot' && !alreadyApplied) {
       firstCycle = record.active !== true;
+      // A charge that arrives after the slot was ended (webhook order is not guaranteed) must not bring it back.
+      if (record.ended) return refuseSlot(user, record, paymentId, 'slot_ended', paidPaise);
       const refusal = slotRefusal(user, firstCycle);
       if (refusal) return refuseSlot(user, record, paymentId, refusal, paidPaise);
       gate = slotGate(record, firstCycle);
     }
+    // A new month starts: last month's allowance ends now, so the new one replaces it instead of piling on. The
+    // expiry is part of the same guarded update as the grant (never a separate step), so a verify and a webhook for
+    // the same payment arriving together cannot expire what the other just granted. The update only applies if the
+    // plan and held buckets are still what we read; when they moved, we read again and retry.
+    let planGuard = {}; let expiring = 0;
     if (!alreadyApplied && record.kind === 'plan') {
-      // A new month starts: last month's allowance ends now, so the new one replaces it instead of piling on.
-      try { await quarkBuckets.settle(user._id, new Date(), { forcePlan: true }); } catch (e) { console.warn('Quark expiry before renewal failed:', e.message); }
+      try { await settleQuarks(user._id, new Date()); } catch (e) { console.warn('Quark expiry before renewal failed:', e.message); }
+      const fresh = (await User.findById(user._id)) || user;
+      if ((fresh.payments || []).some((p) => p && p.razorpayPaymentId === paymentId)) return { applied: false, reason: 'already_processed' };
+      const c = fresh.credits || {};
+      expiring = Math.min(Math.max(0, Number(c.planBalance) || 0), Math.max(0, Number(c.balance) || 0));
+      planGuard = { 'credits.planBalance': c.planBalance === undefined ? null : c.planBalance, 'credits.topupHeld': c.topupHeld === undefined ? null : c.topupHeld };
+      user = fresh;
     }
     const held = !alreadyApplied && record.kind === 'plan' ? Math.max(0, Number(user.credits?.topupHeld) || 0) : 0;
-    const built = bp.buildChargeUpdate(record, { paymentId, paidPaise, subscription, heldToRelease: record.kind === 'plan' ? held : 0, firstCycle });
+    const built = bp.buildChargeUpdate(record, {
+      paymentId, paidPaise, subscription, heldToRelease: record.kind === 'plan' ? held : 0, firstCycle,
+      topup: { balance: user.credits?.topupBalance, expiresAt: user.credits?.topupExpiresAt }
+    });
     if (!built) return { applied: false, reason: 'unknown_item' };
+    if (expiring > 0) {
+      built.update.$inc['credits.balance'] -= expiring;
+      built.update.$push['credits.history'] = { $each: [{ action: 'plan_quarks_expired', amount: -expiring, description: 'Monthly Quarks ended with the paid month', createdAt: new Date() }], $slice: -100 };
+    }
     const opts = { new: true, ...(built.arrayFilters ? { arrayFilters: built.arrayFilters } : {}) };
     const doc = await User.findOneAndUpdate(
-      { _id: user._id, 'payments.razorpayPaymentId': { $ne: paymentId }, ...gate },
+      { _id: user._id, 'payments.razorpayPaymentId': { $ne: paymentId }, ...planGuard, ...gate },
       built.update, opts
     );
+    if (doc && expiring > 0) quarkBuckets.record({ user: user._id, type: 'expiry', bucket: 'plan', quarks: -expiring, balanceAfter: doc.credits && doc.credits.balance, action: 'plan_expired' });
+    if (!doc && record.kind === 'plan' && !alreadyApplied) {
+      const fresh = await User.findById(user._id);
+      const freshRecord = fresh && findRecord(fresh, record.subscriptionId);
+      const replay = !fresh || (fresh.payments || []).some((p) => p && p.razorpayPaymentId === paymentId);
+      if (replay || !freshRecord) return { applied: false, reason: 'already_processed' };
+      if (attempt < 4) return applyCharge(fresh, freshRecord, { paymentId, paidPaise, subscription }, attempt + 1);
+      alert('payment', `plan payment ${paymentId} for account ${user._id} could not be applied after retries: check the account`);
+      return { applied: false, reason: 'already_processed' };
+    }
     if (!doc) {
       if (record.kind === 'slot' && !alreadyApplied) {
         // Either a replay, or the account changed between our read and the update (for example another payment
@@ -534,6 +580,7 @@ function createPaymentRouter(deps = {}) {
         if (amount !== spec.totalPaise) {
           console.warn(`Verify payment ${razorpay_payment_id} for ${razorpay_subscription_id} has an unexpected amount: not applied`);
           await recordRefusal(user, record, razorpay_payment_id, amount, 'amount_mismatch');
+          await stopUnappliedPlan(record);
           return res.status(409).json({ success: false, message: REFUSALS.amount_mismatch });
         }
         paidPaise = amount;
@@ -605,6 +652,7 @@ function createPaymentRouter(deps = {}) {
           console.warn(`Webhook payment ${payment.id} for ${subscription.id} has an unexpected amount: not applied`);
           const existing = (user.payments || []).some((p) => p && p.razorpayPaymentId === payment.id);
           if (!existing) await recordRefusal(user, record, payment.id, Number(payment.amount), 'amount_mismatch');
+          if (!existing) await stopUnappliedPlan(record);
           return res.json({ success: true });
         }
         const paidPaise = Number.isFinite(payment.amount) ? payment.amount : spec.totalPaise;
@@ -813,7 +861,7 @@ function createPaymentRouter(deps = {}) {
       }
       const addonIds = storedSubscriptions(user).filter((s) => (s.kind === 'addon' || s.kind === 'slot') && s.active).map((s) => s.subscriptionId);
       // "Already cancelled" counts as done, so a repeated press or an earlier partial attempt does not fail.
-      const alreadyDone = (e) => /already|cancelled|canceled|completed|not cancel/i.test(String((e && (e.error && e.error.description || e.message)) || ''));
+      const alreadyDone = alreadyCancelled;
       let planCancelled = 0;
       for (const id of planIds) {
         try { await rz().subscriptions.cancel(id, 1); planCancelled += 1; }
@@ -922,6 +970,12 @@ function createPaymentRouter(deps = {}) {
 
       for (const payment of payments) {
         console.log(`📄 [RETRY-INVOICES] Processing payment: ${payment.razorpayPaymentId}, amount: ₹${payment.amount}, hasInvoice: ${!!payment.invoiceUrl}`);
+
+        // Only money we kept gets a tax invoice: a refused or refunded payment is never invoiced.
+        if ((payment.status || 'paid') !== 'paid') {
+          results.push({ paymentId: payment.razorpayPaymentId, status: 'skipped_not_paid' });
+          continue;
+        }
 
         if (payment.invoiceUrl) {
           console.log(`📄 [RETRY-INVOICES] Skipping ${payment.razorpayPaymentId} — invoice already exists`);
