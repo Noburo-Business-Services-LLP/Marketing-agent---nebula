@@ -11,6 +11,7 @@ const otpService = require('../services/otpService');
 const { newAccountPlan } = require('../config/entitlements');
 const rateLimit = require('express-rate-limit');
 const { signupGuard, publicConfig, canonicalEmail, MSG: SIGNUP_MSG } = require('../services/signupGuard');
+const agencyRules = require('../services/agency');
 const { determineBrandColors } = require('../services/brandIntelligenceService');
 const { scrapeWebsite } = require('../services/scraper');
 
@@ -101,6 +102,14 @@ const { sanitizeAdditionalLanguages } = require('../services/languageSupport');
 function withCleanLanguages(profile) {
   if (!profile || typeof profile !== 'object') return profile;
   return { ...profile, additionalLanguages: sanitizeAdditionalLanguages(profile.additionalLanguages, profile.contentLanguage) };
+}
+
+// The public profile, with a client workspace's Quarks replaced by the agency pool balance (no history).
+async function withPoolCredits(user) {
+  const pub = user.toPublicJSON();
+  const pool = await agencyRules.publicCredits(user);
+  if (pool) pub.credits = pool;
+  return pub;
 }
 
 const router = express.Router();
@@ -1157,12 +1166,8 @@ router.get('/me', protect, async (req, res) => {
       });
     }
 
-    const publicUser = { ...user.toPublicJSON(), isCsm: Boolean(user.isCsm) };
-    // A client workspace spends from the agency's Quarks, so show the agency's balance (response only, never saved).
-    if (user.agency && user.agency.ownerId) {
-      const payer = await User.findById(user.agency.ownerId).select('credits.balance credits.totalUsed').lean();
-      if (payer && payer.credits) publicUser.credits = { balance: payer.credits.balance, totalUsed: payer.credits.totalUsed };
-    }
+    // A client workspace spends from the agency's Quarks, so it shows the pool balance (response only, never saved).
+    const publicUser = { ...(await withPoolCredits(user)), isCsm: Boolean(user.isCsm) };
     res.status(200).json({
       success: true,
       user: publicUser,
@@ -1225,7 +1230,7 @@ router.put('/update-profile', protect, [
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
-      user: user.toPublicJSON()
+      user: await withPoolCredits(user)
     });
   } catch (error) {
     console.error('Update profile error:', error);
@@ -1422,7 +1427,7 @@ router.put('/complete-onboarding', protect, async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Onboarding completed successfully',
-      user: user.toPublicJSON()
+      user: await withPoolCredits(user)
     });
   } catch (error) {
     console.error('Complete onboarding error:', error);

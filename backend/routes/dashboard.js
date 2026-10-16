@@ -9,7 +9,7 @@ const { protect } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
 const { canUse } = require('../config/entitlements');
 const { deductCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
-const { walletBalance } = require('../services/agency');
+const { walletBalance, freeFirstBatch } = require('../services/agency');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
 const Campaign = require('../models/Campaign');
@@ -792,7 +792,7 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
     console.log(`🔄 Generating fresh campaigns for user ${user._id}${platformsParam ? ` [platforms: ${platformsParam.join(',')}]` : ''}`);
     
     // Check if this is the first-ever generation (onboarding) — free of charge
-    const isFirstGeneration = !user.initialCampaignsGenerated;
+    const isFirstGeneration = freeFirstBatch(user);
     
     // Credit check before generation (skip for first-time onboarding generation)
     if (!isFirstGeneration) {
@@ -951,7 +951,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
     
     // Generate campaigns one by one using streaming
     // Check if this is the first-ever generation (onboarding) — free of charge
-    const isFirstStreamGen = !user.initialCampaignsGenerated;
+    const isFirstStreamGen = freeFirstBatch(user);
     
     // Credit check before generation (skip for first-time onboarding generation)
     if (!isFirstStreamGen) {

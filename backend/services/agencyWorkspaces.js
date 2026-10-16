@@ -40,7 +40,7 @@ async function createWorkspace({ owner, name, industry = '', website = '', model
       email: ag.placeholderEmail(id),
       password: crypto.randomBytes(32).toString('hex'),
       firstName: clean, lastName: '', companyName: clean,
-      isVerified: true, onboardingCompleted: true,
+      isVerified: true, onboardingCompleted: true, initialCampaignsGenerated: true, // no free first batch: the agency's pool pays
       businessProfile: { name: clean, industry: String(industry || '').slice(0, 80), website: String(website || '').slice(0, 200) },
       agency: { ownerId: owner._id, workspaceName: clean },
       plan: { tier: planFields['plan.tier'], addons: planFields['plan.addons'] }

@@ -321,3 +321,4 @@ router.delete('/:id', protect, async (req, res) => {
 
 module.exports = router;
 module.exports.run = run;
+module.exports._money = { charge, fail }; // for tests: the two places the Videos flow moves Quarks

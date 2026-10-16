@@ -15,8 +15,17 @@ const REVIEWED = new Set([
 
 function files(dir) { return fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : [])); }
 
+// Every way of reading the balance we know of: credits.balance, credits?.balance, 'credits.balance' in either quote
+// style, credits['balance'], and destructuring `{ balance } = ...credits`.
+const BALANCE_ACCESS = /credits\??\.balance|['"`]credits\.balance['"`]|credits\??\[\s*['"`]balance['"`]\s*\]|\{[^{}]*\bbalance\b[^{}]*\}\s*=\s*[\w.?$]*credits\b/;
+
+test('the balance pattern catches the ways of reading a balance', () => {
+  for (const code of ['u.credits.balance', 'u.credits?.balance', "'credits.balance'", '"credits.balance"', "u.credits['balance']", 'const { balance } = user.credits;', 'const { totalUsed, balance } = u?.credits']) assert.ok(BALANCE_ACCESS.test(code), code);
+  for (const code of ['walletBalance(id)', 'const balance = 5', 'user.credits.history']) assert.ok(!BALANCE_ACCESS.test(code), code);
+});
+
 test('every file that touches credits.balance has been reviewed for agency clients', () => {
-  const unreviewed = ['routes', 'services', 'middleware'].flatMap(files).filter((f) => /credits\??\.balance|'credits\.balance'/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')) && !REVIEWED.has(f.replace(/\\/g, '/')));
+  const unreviewed = ['routes', 'services', 'middleware', 'controllers', 'utils'].filter((d) => fs.existsSync(path.join(ROOT, d))).flatMap(files).filter((f) => BALANCE_ACCESS.test(fs.readFileSync(path.join(ROOT, f), 'utf8')) && !REVIEWED.has(f.replace(/\\/g, '/')));
   assert.deepStrictEqual(unreviewed, [], `New Quark balance access in: ${unreviewed.join(', ')}. Decide how it works for an agency client, then add it to REVIEWED.`);
 });
 

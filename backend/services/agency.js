@@ -67,4 +67,18 @@ async function walletBalance(userId, { User = require('../models/User') } = {}) 
   return payer && canPayForClients(payer) ? Math.max(0, num(payer.credits && payer.credits.balance)) : 0;
 }
 
-module.exports = { isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };
+/**
+ * What a client workspace's own `credits` field shows on a profile response: the agency pool's balance and total used
+ * (0 when the agency cannot pay), and nothing else, so the agency's history is never exposed. null for any other account.
+ */
+async function publicCredits(user, { User = require('../models/User') } = {}) {
+  if (!isWorkspace(user)) return null;
+  const payer = await User.findById(idOf(user.agency.ownerId)).select('credits.balance credits.totalUsed plan agency.ownerId isActive deletion.status subscription.status').lean();
+  if (!payer || !canPayForClients(payer)) return { balance: 0, totalUsed: 0 };
+  return { balance: Math.max(0, num(payer.credits && payer.credits.balance)), totalUsed: Math.max(0, num(payer.credits && payer.credits.totalUsed)) };
+}
+
+/** The free first campaign batch is for a person's own first run. A client's work is paid from the agency's shared pool. */
+const freeFirstBatch = (u) => !isWorkspace(u) && !(u && u.initialCampaignsGenerated);
+
+module.exports = { publicCredits, freeFirstBatch, isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };
