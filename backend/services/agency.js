@@ -32,11 +32,12 @@ const placeholderEmail = (id) => `ws-${id}@workspace.invalid`;
 
 /** Resolve who to charge for `userId`: { payerId, workspaceId|null }. Reads the user once. */
 async function resolvePayer(userId, { User = require('../models/User') } = {}) {
-  const q = User.findById(userId).select('agency.ownerId');
+  const q = User.findById(userId).select('agency.ownerId agency.frozen');
   const me = await (q && typeof q.lean === 'function' ? q.lean() : q);
   if (!me) return { payerId: null, workspaceId: null };
+  // `frozen` is present (true) only for a client over the limit; the shape is otherwise unchanged.
   return isWorkspace(me)
-    ? { payerId: idOf(me.agency.ownerId), workspaceId: idOf(userId) }
+    ? { payerId: idOf(me.agency.ownerId), workspaceId: idOf(userId), ...(me.agency.frozen ? { frozen: true } : {}) }
     : { payerId: idOf(userId), workspaceId: null };
 }
 
@@ -60,9 +61,10 @@ const CLIENT_PAYER_FILTER = Object.freeze({
 
 /** Quarks available to this user: the payer's balance. 0 if the payer cannot be found or a client's agency cannot pay. */
 async function walletBalance(userId, { User = require('../models/User') } = {}) {
-  const me = await User.findById(userId).select('credits.balance agency.ownerId').lean();
+  const me = await User.findById(userId).select('credits.balance agency.ownerId agency.frozen').lean();
   if (!me) return 0;
   if (!isWorkspace(me)) return Math.max(0, num(me.credits && me.credits.balance));
+  if (me.agency.frozen) return 0; // a frozen client (over the limit) has no Quarks to use until the agency has a place for it
   const payer = await User.findById(idOf(me.agency.ownerId)).select('credits.balance plan agency.ownerId isActive deletion.status subscription.status').lean();
   return payer && canPayForClients(payer) ? Math.max(0, num(payer.credits && payer.credits.balance)) : 0;
 }
@@ -73,6 +75,7 @@ async function walletBalance(userId, { User = require('../models/User') } = {}) 
  */
 async function publicCredits(user, { User = require('../models/User') } = {}) {
   if (!isWorkspace(user)) return null;
+  if (user.agency.frozen) return { balance: 0, totalUsed: 0 };
   const payer = await User.findById(idOf(user.agency.ownerId)).select('credits.balance credits.totalUsed plan agency.ownerId isActive deletion.status subscription.status').lean();
   if (!payer || !canPayForClients(payer)) return { balance: 0, totalUsed: 0 };
   return { balance: Math.max(0, num(payer.credits && payer.credits.balance)), totalUsed: Math.max(0, num(payer.credits && payer.credits.totalUsed)) };

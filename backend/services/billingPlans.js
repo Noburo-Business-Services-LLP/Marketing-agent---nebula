@@ -155,6 +155,23 @@ function verifyCheckoutSignature(payload, signature, secret) {
 }
 
 /**
+ * The price a subscription must be charged: the one stored on the record when it was bought (paise, GST included),
+ * so a later change of the price for new sign-ups never changes what an existing subscription renews at. A record
+ * made before this was stored uses today's price. Returns the invoice spec with that price.
+ */
+function priceOfRecord(record, spec) {
+  if (!spec || !record) return spec;
+  const stored = record.expectedPaise;
+  if (!Number.isInteger(stored) || stored <= 0 || stored === spec.totalPaise) return spec;
+  // Prices are whole rupees, so the ex-GST price is the one whose price plus GST is the stored total.
+  const ex = Math.round(stored / (100 + GST_PERCENT));
+  if (chargePaise(ex) === stored) return { ...spec, amountInr: ex, gstPaise: gstPaise(ex), totalPaise: stored };
+  const exPaise = Math.round((stored * 100) / (100 + GST_PERCENT));
+  return { ...spec, amountInr: exPaise / 100, gstPaise: stored - exPaise, totalPaise: stored };
+}
+const expectedPaiseOf = (record, spec) => priceOfRecord(record, spec).totalPaise;
+
+/**
  * The single atomic update for one captured payment. The caller applies it with a
  * filter that includes `'payments.razorpayPaymentId': { $ne: paymentId }`, so a
  * replay matches nothing and grants nothing. Quarks come from config only.
@@ -163,7 +180,7 @@ function verifyCheckoutSignature(payload, signature, secret) {
  */
 function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date(), heldToRelease = 0, firstCycle = true }) {
   let quarks = 0; const $set = {}; const update = {}; let inc = null;
-  const spec = invoiceSpec(record.kind, record.key);
+  const spec = priceOfRecord(record, invoiceSpec(record.kind, record.key));
   if (!spec) return null;
   if (record.kind === 'plan') {
     quarks = PLANS[record.key].quarks;
@@ -250,5 +267,5 @@ function buildEndUpdate(user, record, eventName) {
 module.exports = {
   PLAN_IDS, ADDON_IDS, SLOT_KEY, MAX_EXTRA_SLOTS, isPlanId, isAddonId, isSlotKey, planQuote, addonQuote, slotQuote, planCatalogue, findTopupPack,
   expandAddon, canBuyAddon, canBuySlot, invoiceSpec, razorpayPlanBody, envVarFor,
-  verifyWebhookSignature, verifyCheckoutSignature, buildChargeUpdate, buildEndUpdate, endUpdateFor
+  verifyWebhookSignature, verifyCheckoutSignature, buildChargeUpdate, buildEndUpdate, endUpdateFor, priceOfRecord, expectedPaiseOf
 };

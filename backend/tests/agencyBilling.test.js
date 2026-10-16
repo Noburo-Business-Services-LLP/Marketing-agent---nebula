@@ -209,21 +209,26 @@ function fakeRazorpay() {
       cancel: async (id, atEnd) => { calls.cancels.push([id, atEnd]); return { id, status: 'cancelled' }; }
     },
     orders: { create: async () => { throw new Error('no orders here'); }, fetch: async () => null },
-    payments: { fetch: async () => ({}) }
+    // What Razorpay reports for a payment: set per payment id in `amounts`, otherwise the price the test is about.
+    amounts: {}, defaultAmount: undefined,
+    payments: { fetch: async function (id) { return { id, amount: Object.prototype.hasOwnProperty.call(this.amounts, id) ? this.amounts[id] : this.defaultAmount }; } }
   };
 }
 function setup({ user = mkAgency(), extra = [], env = ENV } = {}) {
   const welcomes = []; const invoices = []; const alerts = [];
   const User = fakeUserModel([user, ...extra]);
   const razorpay = fakeRazorpay();
+  razorpay.payments.fetch = razorpay.payments.fetch.bind(razorpay);
+  const notifies = [];
   const r = createPaymentRouter({
     razorpay, User, env, alert: (c, d) => alerts.push([c, d]),
+    notifyNow: async (m) => { notifies.push(m); return true; },
     protect: (req, res, next) => next(),
     Coupon: { findOne: async () => null, findOneAndUpdate: async () => null },
     createInvoice: async (p) => { invoices.push(p); return { invoiceNumber: 'INV-1', invoiceUrl: 'https://invoice.example/1' }; },
     sendWelcome: async (u, info) => { welcomes.push({ email: u.email, ...info }); return { sent: true }; }
   });
-  return { r, User, razorpay, invoices, user, welcomes, alerts };
+  return { r, User, razorpay, invoices, user, welcomes, alerts, notifies };
 }
 const stored = (ctx, id = 'user1') => ctx.User.users.find((u) => String(u._id) === id);
 function handlerOf(r, method, p) {
@@ -257,12 +262,14 @@ async function startSlot(ctx) {
   const res = await call(ctx.r, 'post', '/create-slot-subscription', {});
   assert.strictEqual(res.code, 200, JSON.stringify(res.body));
   const created = ctx.razorpay.calls.subs[ctx.razorpay.calls.subs.length - 1];
+  ctx.razorpay.defaultAmount = res.body.amount;
   return { id: res.body.subscription_id, planId: created.plan_id, res };
 }
 async function startAgency(ctx) {
   const res = await call(ctx.r, 'post', '/create-subscription', { body: { planId: 'agency' } });
   assert.strictEqual(res.code, 200, JSON.stringify(res.body));
   const created = ctx.razorpay.calls.subs[ctx.razorpay.calls.subs.length - 1];
+  ctx.razorpay.defaultAmount = res.body.amount;
   return { id: res.body.subscription_id, planId: created.plan_id, res };
 }
 const SLOT_PAISE = chargePaise(AGENCY.slot.inr);
@@ -331,7 +338,7 @@ test('the agency plan webhook grants the configured Quarks, mirrors the plan to 
 test('agency plan webhook: a forged amount, a forged plan id or another owner grants nothing', async () => {
   const ctx = setup({ user: mkFree() });
   const s = await startAgency(ctx);
-  const grants = () => [stored(ctx).credits.balance, stored(ctx).payments.length, stored(ctx).plan.tier];
+  const grants = () => [stored(ctx).credits.balance, stored(ctx).payments.filter((p) => p.status === 'paid').length, stored(ctx).plan.tier];
   const before = grants();
   assert.strictEqual((await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_low', { amount: chargePaise(PLANS.starter.inr) }))).code, 200);
   assert.strictEqual((await sendHook(ctx.r, hook('subscription.charged', s.id, 'plan_other', 'pay_p', { amount: AGENCY_PAISE }))).code, 200);
@@ -507,7 +514,7 @@ test('slot webhook: bad signature, no signature and no configured secret grant n
 test('slot webhook: a forged amount, plan id, owner, slot key or event grants nothing', async () => {
   const ctx = setup();
   const s = await startSlot(ctx);
-  const before = () => JSON.stringify([stored(ctx).agency, stored(ctx).credits.balance, stored(ctx).payments]);
+  const before = () => JSON.stringify([stored(ctx).agency, stored(ctx).credits.balance, stored(ctx).payments.filter((p) => p.status === 'paid')]);
   const snap = before();
   for (const amount of [1, SLOT_PAISE - 1, SLOT_PAISE + 1, AGENCY_PAISE]) {
     assert.strictEqual((await sendHook(ctx.r, slotCharge(s, `pay_a${amount}`, amount))).code, 200);
@@ -532,9 +539,11 @@ test('slot webhook: a payment with no agency plan grants nothing, the owner is t
     const u = stored(ctx);
     assert.strictEqual(u.agency.extraSlots, 0);
     assert.strictEqual(u.credits.balance, 100);
-    assert.strictEqual(u.payments.length, 0);
+    assert.strictEqual(u.payments.filter((p) => p.status === 'paid').length, 0);
+    assert.strictEqual(u.payments.filter((p) => p.status === 'failed' && p.needsRefund && p.reason === 'no_agency_plan').length, 1, 'recorded for staff');
     assert.strictEqual(ctx.invoices.length, 0);
     assert.ok(ctx.alerts.some(([c, d]) => c === 'payment' && /pay_late/.test(d)), 'the owner is told');
+    assert.strictEqual(ctx.notifies.length, 1, 'and emailed at once');
     assert.deepStrictEqual(ctx.razorpay.calls.cancels, [[s.id, 0]], 'further charges are stopped');
   }
 });
@@ -559,7 +568,7 @@ test('slot webhook: a slot beyond the most clients grants nothing', async () => 
   assert.strictEqual(stored(ctx).agency.extraSlots, CAP, 'never above the most');
   assert.strictEqual(ag.clientLimitOf(stored(ctx)), AGENCY.maxClients);
   assert.strictEqual(stored(ctx).credits.balance, bal);
-  assert.strictEqual(stored(ctx).payments.length, 1);
+  assert.strictEqual(stored(ctx).payments.filter((p) => p.status === 'paid').length, 1);
   assert.ok(ctx.alerts.some(([, d]) => /pay_b/.test(d)));
   assert.deepStrictEqual(ctx.razorpay.calls.cancels, [[b.id, 0]]);
   // verify path refuses the same way and says so
@@ -567,6 +576,7 @@ test('slot webhook: a slot beyond the most clients grants nothing', async () => 
   assert.strictEqual(v.code, 409);
   assert.strictEqual(v.body.success, false);
   assert.doesNotMatch(v.body.message, /!|—|credit|trial/i);
+  assert.match(v.body.message, /most clients/, 'the at-limit reason is the one given');
   assert.strictEqual(stored(ctx).agency.extraSlots, CAP);
 });
 
@@ -711,4 +721,276 @@ test('the ops scripts know the two new plan id names (read only check of the tex
     assert.ok(/^ALLOWED="[^"]*"/m.exec(allow)[0].split(/[ "=]/).includes(name), `${name} is allowed`);
     assert.ok(/^OPTIONAL="[^"]*"/m.exec(check)[0].split(/[ "=]/).includes(name), `${name} is checked as optional`);
   }
+});
+
+// ================================================================ fix round: refused payments, verify amount, stored price
+const verifyBody = (payId, subId) => ({ body: { razorpay_payment_id: payId, razorpay_subscription_id: subId, razorpay_signature: hmac(ENV.RAZORPAY_KEY_SECRET, `${payId}|${subId}`) } });
+const paidRows = (u) => (u.payments || []).filter((p) => p.status === 'paid');
+const failedRows = (u) => (u.payments || []).filter((p) => p.status === 'failed');
+// Nothing but the money state, with the refused-payment records left out, to prove a refusal changes none of it.
+const moneyState = (u) => JSON.stringify([u.agency, u.credits, u.plan, paidRows(u)]);
+
+test('a slot payment refused at the limit is recorded for staff with everything needed to refund it, and the owner is emailed at once', async () => {
+  const ctx = setup({ user: mkAgency({ agency: { clientCount: 24, extraSlots: CAP - 1 } }) });
+  const a = await startSlot(ctx);
+  const b = await startSlot(ctx);
+  await sendHook(ctx.r, slotCharge(a, 'pay_a'));
+  await sendHook(ctx.r, slotCharge(b, 'pay_b'));
+  const rows = failedRows(stored(ctx));
+  assert.strictEqual(rows.length, 1);
+  const row = rows[0];
+  assert.strictEqual(row.razorpayPaymentId, 'pay_b');
+  assert.strictEqual(row.razorpayOrderId, b.id);
+  assert.strictEqual(row.subscriptionId, b.id);
+  assert.strictEqual(row.needsRefund, true);
+  assert.strictEqual(row.reason, 'at_limit');
+  assert.strictEqual(row.amount, SLOT_PAISE / 100);
+  assert.ok(row.paidAt, 'the time is stored');
+  assert.strictEqual(paidRows(stored(ctx)).length, 1, 'only the first slot payment counts as paid');
+  // one email, straight away, naming user, subscription, payment, amount and reason
+  assert.strictEqual(ctx.notifies.length, 1);
+  const m = ctx.notifies[0];
+  for (const needle of ['user1', b.id, 'pay_b', String(SLOT_PAISE / 100), 'at_limit']) assert.ok(`${m.subject} ${m.text}`.includes(needle), needle);
+  assert.match(m.key, /pay_b/);
+  assert.match(m.text, /refund/i);
+  // the same webhook again, and the checkout verify for the same payment: no second record, no second email
+  await sendHook(ctx.r, slotCharge(b, 'pay_b'));
+  const v = await call(ctx.r, 'post', '/verify-subscription', verifyBody('pay_b', b.id));
+  assert.strictEqual(v.code, 409, 'a replayed verify still says the payment was not applied');
+  assert.strictEqual(failedRows(stored(ctx)).length, 1);
+  assert.strictEqual(ctx.notifies.length, 1);
+  assert.strictEqual(stored(ctx).agency.extraSlots, CAP);
+});
+
+test('the staff Money failures list shows a refused payment as needing a refund, with the reason in plain words', () => {
+  const { buildMoney } = require('../services/staff/money');
+  const now = Date.now();
+  const u = { _id: 'u1', email: 'a@x.com', companyName: 'Acme', createdAt: new Date(now - 864e5 * 60), plan: { tier: 'agency', addons: [], subscriptions: [{ subscriptionId: 'sub_x', kind: 'slot', key: 'client', active: false }] }, credits: { balance: 1, history: [] },
+    payments: [{ razorpayOrderId: 'sub_x', razorpayPaymentId: 'pay_x', amount: SLOT_PAISE / 100, exGstAmount: AGENCY.slot.inr, status: 'failed', needsRefund: true, reason: 'at_limit', subscriptionId: 'sub_x', item: 'Nebulaa extra client', paidAt: new Date(now - 864e5) }] };
+  const items = buildMoney({ users: [u], now, ayrshareProfiles: 0 }).failures.payments.items;
+  assert.strictEqual(items.length, 1);
+  assert.strictEqual(items[0].needsRefund, true);
+  assert.match(items[0].reason, /refund/i);
+  assert.doesNotMatch(items[0].reason, /razorpay|zoho|at_limit/i);
+  assert.strictEqual(items[0].totalPaise, SLOT_PAISE);
+});
+
+test('a charge with the wrong amount (webhook) is recorded as needing a refund, emailed once, and never granted', async () => {
+  const ctx = setup({ user: mkFree() });
+  const s = await startAgency(ctx);
+  const wrong = chargePaise(PLANS.starter.inr);
+  const snap = moneyState(stored(ctx));
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_low', { amount: wrong }));
+  assert.strictEqual(moneyState(stored(ctx)), snap);
+  const rows = failedRows(stored(ctx));
+  assert.strictEqual(rows.length, 1);
+  assert.deepStrictEqual([rows[0].reason, rows[0].needsRefund, rows[0].amount, rows[0].subscriptionId], ['amount_mismatch', true, wrong / 100, s.id]);
+  assert.strictEqual(ctx.notifies.length, 1);
+  assert.ok(ctx.notifies[0].text.includes('pay_low') && ctx.notifies[0].text.includes('user1') && ctx.notifies[0].text.includes(s.id));
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_low', { amount: wrong }));
+  assert.strictEqual(failedRows(stored(ctx)).length, 1, 'a replayed webhook records nothing more');
+  assert.strictEqual(ctx.notifies.length, 1, 'and emails nothing more');
+});
+
+test('an email that cannot be sent never fails the webhook or the verify, and the record is still kept', async () => {
+  const ctx = setup({ user: mkFree() });
+  const s = await startAgency(ctx);
+  const r2 = createPaymentRouter({
+    razorpay: ctx.razorpay, User: ctx.User, env: ENV, alert: () => {}, notifyNow: async () => { throw new Error('mail down'); },
+    protect: (req, res, next) => next(), Coupon: { findOne: async () => null }, createInvoice: async () => ({}), sendWelcome: async () => ({})
+  });
+  const res = await sendHook(r2, hook('subscription.charged', s.id, s.planId, 'pay_m', { amount: 5 }));
+  assert.strictEqual(res.code, 200);
+  assert.strictEqual(failedRows(stored(ctx)).length, 1);
+  ctx.razorpay.amounts.pay_v = 7;
+  const v = await call(r2, 'post', '/verify-subscription', verifyBody('pay_v', s.id));
+  assert.strictEqual(v.code, 409);
+  assert.strictEqual(failedRows(stored(ctx)).length, 2);
+});
+
+test('verify checks the amount Razorpay reports: a wrong amount grants nothing for the agency plan and for a slot', async () => {
+  for (const kind of ['agency', 'slot']) {
+    const ctx = setup({ user: kind === 'agency' ? mkFree() : mkAgency() });
+    const s = kind === 'agency' ? await startAgency(ctx) : await startSlot(ctx);
+    const wrong = (kind === 'agency' ? AGENCY_PAISE : SLOT_PAISE) - 100;
+    ctx.razorpay.amounts.pay_w = wrong;
+    const snap = moneyState(stored(ctx));
+    const v = await call(ctx.r, 'post', '/verify-subscription', verifyBody('pay_w', s.id));
+    assert.strictEqual(v.code, 409, kind);
+    assert.strictEqual(v.body.success, false);
+    assert.match(v.body.message, /refund or fix/);
+    assert.doesNotMatch(v.body.message, /razorpay|zoho|ayrshare|!|—|credit|trial/i);
+    assert.strictEqual(moneyState(stored(ctx)), snap, kind);
+    assert.strictEqual(ctx.invoices.length, 0);
+    const rows = failedRows(stored(ctx));
+    assert.deepStrictEqual([rows.length, rows[0].reason, rows[0].needsRefund, rows[0].amount], [1, 'amount_mismatch', true, wrong / 100], kind);
+    assert.strictEqual(ctx.notifies.length, 1);
+    // the webhook for the same payment (a correct-looking amount cannot rescue it) records and emails nothing more, and grants nothing
+    await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_w', { amount: wrong }));
+    assert.strictEqual(failedRows(stored(ctx)).length, 1);
+    assert.strictEqual(ctx.notifies.length, 1);
+    assert.strictEqual(moneyState(stored(ctx)), snap);
+  }
+});
+
+test('verify with the right amount grants once, and the webhook for the same payment afterwards (or before) does not grant again', async () => {
+  for (const order of ['verify-first', 'webhook-first']) {
+    const ctx = setup({ user: mkAgency() });
+    const s = await startSlot(ctx);
+    const doVerify = () => call(ctx.r, 'post', '/verify-subscription', verifyBody('pay_ok', s.id));
+    const doHook = () => sendHook(ctx.r, slotCharge(s, 'pay_ok'));
+    if (order === 'verify-first') { await doVerify(); await doHook(); } else { await doHook(); await doVerify(); }
+    assert.strictEqual(stored(ctx).agency.extraSlots, 1, order);
+    assert.strictEqual(stored(ctx).credits.balance, 100 + AGENCY.slot.quarks, order);
+    assert.strictEqual(paidRows(stored(ctx)).length, 1, order);
+    assert.strictEqual(failedRows(stored(ctx)).length, 0, order);
+    assert.strictEqual(ctx.notifies.length, 0, order);
+  }
+  const both = setup({ user: mkAgency() });
+  const s = await startSlot(both);
+  await Promise.all([call(both.r, 'post', '/verify-subscription', verifyBody('pay_r', s.id)), sendHook(both.r, slotCharge(s, 'pay_r'))]);
+  assert.strictEqual(stored(both).agency.extraSlots, 1);
+  assert.strictEqual(paidRows(stored(both)).length, 1);
+});
+
+test('verify grants nothing when the amount cannot be confirmed, and leaves the grant to the webhook', async () => {
+  const ctx = setup({ user: mkFree() });
+  const s = await startAgency(ctx);
+  ctx.razorpay.defaultAmount = undefined;
+  const snap = moneyState(stored(ctx));
+  const v = await call(ctx.r, 'post', '/verify-subscription', verifyBody('pay_u', s.id));
+  assert.strictEqual(v.code, 409);
+  assert.strictEqual(moneyState(stored(ctx)), snap);
+  assert.strictEqual(failedRows(stored(ctx)).length, 0, 'nothing is recorded as refused: it is only unconfirmed');
+  assert.strictEqual(ctx.notifies.length, 0);
+  await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_u', { amount: AGENCY_PAISE }));
+  assert.strictEqual(stored(ctx).plan.tier, 'agency');
+  assert.strictEqual(paidRows(stored(ctx)).length, 1);
+});
+
+test('verify with no active agency plan: 409, the pinned wording, a record with the reason, and the subscription is stopped', async () => {
+  const ctx = setup({ user: mkAgency() });
+  const s = await startSlot(ctx);
+  stored(ctx).plan.tier = 'free'; // the plan ended before the slot payment
+  const v = await call(ctx.r, 'post', '/verify-subscription', verifyBody('pay_n', s.id));
+  assert.strictEqual(v.code, 409);
+  assert.strictEqual(v.body.message, 'We received your payment, but your Agency plan is not active, so the extra client could not be added. Our team has been told and will contact you about a refund.');
+  assert.strictEqual(stored(ctx).agency.extraSlots, 0);
+  assert.strictEqual(stored(ctx).credits.balance, 100);
+  const rows = failedRows(stored(ctx));
+  assert.deepStrictEqual([rows.length, rows[0].reason, rows[0].needsRefund], [1, 'no_agency_plan', true]);
+  assert.deepStrictEqual(ctx.razorpay.calls.cancels, [[s.id, 0]]);
+  assert.strictEqual(ctx.notifies.length, 1);
+});
+
+test('the at-limit refusal reason and wording are pinned', async () => {
+  const ctx = setup({ user: mkAgency({ agency: { clientCount: 24, extraSlots: CAP } }) });
+  const s = await startSlot(ctx).catch(() => null);
+  assert.strictEqual(s, null, 'create-slot-subscription itself refuses at the limit');
+  // two checkouts open below the limit, the second paid after the first filled the last place
+  const ctx2 = setup({ user: mkAgency({ agency: { clientCount: 24, extraSlots: CAP - 1 } }) });
+  const a = await startSlot(ctx2); const b = await startSlot(ctx2);
+  await sendHook(ctx2.r, slotCharge(a, 'pay_a'));
+  const v = await call(ctx2.r, 'post', '/verify-subscription', verifyBody('pay_b', b.id));
+  assert.strictEqual(v.code, 409);
+  assert.strictEqual(v.body.message, `We received your payment, but your account already has the most clients (${AGENCY.maxClients}), so the extra client could not be added. Our team has been told and will contact you about a refund.`);
+  assert.strictEqual(failedRows(stored(ctx2))[0].reason, 'at_limit');
+});
+
+test('slot_conflict: when the account keeps changing under the update, nothing is granted, the payment is recorded and emailed, and the slot subscription is stopped', async () => {
+  const ctx = setup({ user: mkAgency() });
+  const s = await startSlot(ctx);
+  const original = ctx.User.findOneAndUpdate;
+  let blocked = 0;
+  // Every grant attempt (the update that adds a paid payment row) finds the account changed and matches nothing.
+  ctx.User.findOneAndUpdate = async (filter, update, opts) => {
+    if (update.$push && update.$push.payments && update.$push.payments.status === 'paid') { blocked += 1; return null; }
+    return original(filter, update, opts);
+  };
+  const v = await call(ctx.r, 'post', '/verify-subscription', verifyBody('pay_c', s.id));
+  assert.strictEqual(blocked, 2, 'it tries again once with a fresh read');
+  assert.strictEqual(v.code, 409);
+  assert.strictEqual(v.body.message, 'We received your payment, but could not add the extra client just now. Our team has been told and will contact you.');
+  assert.strictEqual(stored(ctx).agency.extraSlots, 0);
+  assert.strictEqual(stored(ctx).credits.balance, 100);
+  assert.strictEqual(paidRows(stored(ctx)).length, 0);
+  const rows = failedRows(stored(ctx));
+  assert.deepStrictEqual([rows.length, rows[0].reason, rows[0].needsRefund], [1, 'slot_conflict', true]);
+  assert.deepStrictEqual(ctx.razorpay.calls.cancels, [[s.id, 0]]);
+  assert.strictEqual(ctx.notifies.length, 1);
+  assert.ok(ctx.alerts.some(([c, d]) => c === 'payment' && /pay_c/.test(d) && /slot_conflict/.test(d)));
+});
+
+test('the immediate owner alert is deduplicated by payment id through the real alerter, and an alert error is swallowed', async () => {
+  const { createAlerter } = require('../services/opsAlerts');
+  const sent = [];
+  const alerter = createAlerter({ env: { ALERT_EMAILS: 'owner@example.com' }, now: () => 1, send: async (m) => { sent.push(m); } });
+  const mk = (id) => ({ key: `refused_payment:${id}`, subject: 's', text: 't', cooldownMs: 1e12 });
+  assert.strictEqual(await alerter.notify(mk('pay_1')), true);
+  assert.strictEqual(await alerter.notify(mk('pay_1')), false, 'the same payment is not emailed twice');
+  assert.strictEqual(await alerter.notify(mk('pay_2')), true, 'another payment is');
+  assert.strictEqual(sent.length, 2);
+  const broken = createAlerter({ env: { ALERT_EMAILS: 'o@example.com' }, send: async () => { throw new Error('mail down'); } });
+  assert.strictEqual(await broken.notify(mk('pay_3')), false);
+  // the default alert in the router uses notify with that key and the 'unlimited' cooldown
+  const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'payment.js'), 'utf8');
+  assert.match(src, /refused_payment:\$\{/);
+});
+
+// ---- the price stored when the subscription was created decides what a charge must be
+test('create-subscription stores the price (paise, GST included) on the record for the agency plan and for a slot', async () => {
+  const ctx = setup({ user: mkFree() });
+  await startAgency(ctx);
+  const rec = stored(ctx).plan.subscriptions.find((x) => x.kind === 'plan');
+  assert.strictEqual(rec.expectedPaise, AGENCY_PAISE);
+  const ctx2 = setup();
+  await startSlot(ctx2);
+  assert.strictEqual(stored(ctx2).plan.subscriptions.find((x) => x.kind === 'slot').expectedPaise, SLOT_PAISE);
+});
+
+test('repricing new sign-ups in config does not break renewals of an existing agency or slot, on the webhook or on verify', async () => {
+  const oldSlot = AGENCY.slot.inr; const oldPlan = PLANS.agency.inr;
+  try {
+    const ctx = setup({ user: mkAgency() });
+    const s = await startSlot(ctx);
+    const slotPaid = SLOT_PAISE;
+    const ctxA = setup({ user: mkFree() });
+    const a = await startAgency(ctxA);
+    const planPaid = AGENCY_PAISE;
+    AGENCY.slot.inr = oldSlot + 500; PLANS.agency.inr = oldPlan + 3000; // the price for new sign-ups goes up
+    assert.notStrictEqual(chargePaise(AGENCY.slot.inr), slotPaid);
+    // first payment by verify and a renewal by webhook, both at the price stored at purchase
+    ctx.razorpay.amounts.pay_1 = slotPaid;
+    assert.strictEqual((await call(ctx.r, 'post', '/verify-subscription', verifyBody('pay_1', s.id))).code, 200);
+    await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_2', { amount: slotPaid }));
+    assert.strictEqual(paidRows(stored(ctx)).length, 2, 'both granted');
+    assert.strictEqual(stored(ctx).agency.extraSlots, 1);
+    assert.strictEqual(paidRows(stored(ctx))[0].exGstAmount, oldSlot, 'the invoice shows the price the customer signed up at');
+    assert.strictEqual(paidRows(stored(ctx))[0].amount, slotPaid / 100);
+    assert.strictEqual(ctx.notifies.length, 0);
+    await sendHook(ctxA.r, hook('subscription.charged', a.id, a.planId, 'pay_a1', { amount: planPaid }));
+    await sendHook(ctxA.r, hook('subscription.charged', a.id, a.planId, 'pay_a2', { amount: planPaid }));
+    assert.strictEqual(paidRows(stored(ctxA)).length, 2);
+    assert.strictEqual(stored(ctxA).plan.tier, 'agency');
+    assert.strictEqual(ctxA.invoices[0].amount, oldPlan);
+    // but a charge at today's new price on an old record is the mismatch now
+    await sendHook(ctx.r, hook('subscription.charged', s.id, s.planId, 'pay_3', { amount: chargePaise(AGENCY.slot.inr) }));
+    assert.strictEqual(paidRows(stored(ctx)).length, 2);
+    assert.strictEqual(failedRows(stored(ctx)).length, 1);
+    // a new sign-up after the change is stored and charged at the new price
+    const fresh = setup();
+    await startSlot(fresh);
+    assert.strictEqual(stored(fresh).plan.subscriptions.find((x) => x.kind === 'slot').expectedPaise, chargePaise(AGENCY.slot.inr));
+  } finally { AGENCY.slot.inr = oldSlot; PLANS.agency.inr = oldPlan; }
+});
+
+test('a record made before the price was stored falls back to the price in config today', async () => {
+  const ctx = setup({ user: mkAgency() });
+  const s = await startSlot(ctx);
+  delete stored(ctx).plan.subscriptions.find((x) => x.kind === 'slot').expectedPaise;
+  await sendHook(ctx.r, slotCharge(s, 'pay_old', SLOT_PAISE + 1));
+  assert.strictEqual(paidRows(stored(ctx)).length, 0);
+  assert.strictEqual(failedRows(stored(ctx)).length, 1);
+  await sendHook(ctx.r, slotCharge(s, 'pay_old2', SLOT_PAISE));
+  assert.strictEqual(paidRows(stored(ctx)).length, 1);
 });

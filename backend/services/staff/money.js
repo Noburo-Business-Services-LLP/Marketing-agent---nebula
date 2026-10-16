@@ -15,6 +15,13 @@ const DAY = 86400000;
 const IST_OFFSET_MIN = 330;
 const RENEWAL_DAYS = 14;
 const FAILURE_DAYS = 30;
+// Why a payment that was taken could not be applied, in words for staff (the payment row stores a short code).
+const REFUND_REASONS = {
+  at_limit: 'the account already has the most clients',
+  no_agency_plan: 'the Agency plan was not active',
+  slot_conflict: 'the account changed while it was being applied',
+  amount_mismatch: 'the amount did not match the price'
+};
 const HISTORY_CAP_WARN = 50; // the app keeps only the last 50 to 100 history entries per account
 
 const toMs = (v) => { const t = v ? new Date(v).getTime() : NaN; return Number.isFinite(t) ? t : null; };
@@ -182,7 +189,13 @@ function failuresOf(customers, now) {
     (u.payments || []).forEach((p) => {
       const at = toMs(p && p.paidAt);
       if (p && p.status === 'failed' && at !== null && at >= from && at <= now) {
-        failedPayments.push({ clientId: idOf(u), clientName: displayName(u), what: describePayment(u, p), at: new Date(at).toISOString(), totalPaise: (paise(p) || { total: 0 }).total, reason: paymentFailureMessage('failed'), _t: at });
+        const refund = p.needsRefund === true;
+        failedPayments.push({
+          clientId: idOf(u), clientName: displayName(u), what: describePayment(u, p), at: new Date(at).toISOString(),
+          totalPaise: (paise(p) || { total: 0 }).total,
+          reason: refund ? `The payment was taken but could not be applied (${REFUND_REASONS[p.reason] || 'see the email alert'}). It needs a refund or a fix.` : paymentFailureMessage('failed'),
+          ...(refund ? { needsRefund: true } : {}), _t: at
+        });
       }
     });
     const status = u.subscription && u.subscription.status;

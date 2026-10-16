@@ -78,7 +78,7 @@ function spendPipeline(cost, entry) {
 
 /**
  * Spend from the wallet that pays for `userId`: the user's own, or the agency's shared pool when the user is a
- * client workspace. The agency must be able to pay (see CLIENT_PAYER_FILTER), checked in the same atomic update.
+ * client workspace. The agency must be able to pay (see CLIENT_PAYER_FILTER), checked in the same atomic update, and the client must not be frozen.
  * The ledger row sits on the payer and names the client in `workspace`. Nothing is ever charged to the client record.
  * The result also names who paid (`payerId`, `workspaceId`) so a later refund can go to the same wallet.
  */
@@ -86,8 +86,11 @@ async function spend(userId, cost, { action = 'spend', description = '', ref = '
   const amount = num(cost);
   if (amount <= 0) return { success: true, balance: null, spent: 0 };
   const agencyRules = require('./agency');
-  const { payerId, workspaceId } = await agencyRules.resolvePayer(userId);
+  const { payerId, workspaceId, frozen } = await agencyRules.resolvePayer(userId);
   if (!payerId) return { success: false, balance: null, spent: 0 }; // never charge a record we cannot place
+  // A frozen client (over the agency's limit) cannot spend or reserve the shared pool by any path, pass or no pass:
+  // scheduled jobs, automatic replies and queued work are refused like a balance that is too low. Refunds are not blocked.
+  if (workspaceId && frozen) return { success: false, balance: null, spent: 0, frozen: true };
   const entry = { action, amount: -amount, description: description || action, createdAt: new Date() };
   const filter = { _id: workspaceId ? payerId : userId, 'credits.balance': { $gte: amount } };
   if (workspaceId) Object.assign(filter, agencyRules.CLIENT_PAYER_FILTER);

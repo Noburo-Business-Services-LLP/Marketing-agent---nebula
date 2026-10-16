@@ -56,6 +56,8 @@ function createPaymentRouter(deps = {}) {
   const env = () => deps.env || process.env;
   // Tells the owner about a payment that needs a person (best effort, never throws).
   const alert = deps.alert || ((category, detail) => { try { require('../services/opsAlerts').recordFailure(category, detail); } catch (_) { /* alerting never stops billing */ } });
+  // Emails the owner at once about one refused payment, once per payment id (best effort, never throws).
+  const notifyNow = deps.notifyNow || ((m) => require('../services/opsAlerts').notify(m));
   const syncWorkspacePlans = deps.syncWorkspacePlans || ((args) => require('../services/agencyWorkspaces').syncWorkspacePlans(args));
   const sendWelcome = deps.sendWelcome || require('../services/welcomeEmail').sendSubscriberWelcome;
   let defaultRazorpay = null;
@@ -162,28 +164,80 @@ function createPaymentRouter(deps = {}) {
       ...(firstCycle ? { $or: [{ 'agency.extraSlots': null }, { 'agency.extraSlots': { $lt: MAX_EXTRA } }] } : {})
     };
   }
-  // Money was taken that we cannot honour: grant nothing, tell the owner, and stop the subscription charging again.
-  async function refuseSlot(user, record, paymentId, reason) {
-    alert('payment', `extra client payment ${paymentId} for account ${user._id} was not applied (${reason}): refund it in Razorpay`);
+  // Money was taken that we cannot honour: grant nothing, keep a durable record staff can see and act on, and tell the
+  // owner at once. The record is the payment itself (status 'failed', needsRefund) so the Money failures list shows it,
+  // and it is added only if this payment id is not stored yet, so a replayed webhook or verify neither duplicates it
+  // nor emails twice. Nothing in here may fail the request.
+  const REASON_WORDS = {
+    at_limit: 'the account already has the most clients',
+    no_agency_plan: 'the Agency plan is not active',
+    slot_conflict: 'the account changed while the payment was being applied',
+    amount_mismatch: 'the amount paid does not match the price'
+  };
+  async function recordRefusal(user, record, paymentId, paidPaise, reason) {
+    let recorded = false;
+    try {
+      const spec = bp.invoiceSpec(record.kind, record.key) || {};
+      const doc = await User.findOneAndUpdate(
+        { _id: user._id, 'payments.razorpayPaymentId': { $ne: paymentId } },
+        { $push: { payments: {
+          razorpayOrderId: record.subscriptionId, razorpayPaymentId: paymentId, subscriptionId: record.subscriptionId,
+          amount: Number.isFinite(paidPaise) ? paidPaise / 100 : 0, currency: PLAN_CURRENCY, credits: 0,
+          status: 'failed', needsRefund: true, reason, item: spec.itemName, paidAt: new Date()
+        } } },
+        { new: true }
+      );
+      recorded = !!doc;
+    } catch (e) {
+      console.error(`Could not record refused payment ${paymentId}:`, e.message);
+      alert('payment', `could not record refused payment ${paymentId} for account ${user._id}: ${e.message}`);
+      recorded = true; // we cannot tell if it is a repeat, so the owner is told rather than risk silence
+    }
+    if (!recorded) return false;
+    alert('payment', `payment ${paymentId} for ${record.kind} ${record.key} on account ${user._id} was not applied (${reason}): refund or fix it`);
+    try {
+      const rupees = Number.isFinite(paidPaise) ? (paidPaise / 100).toFixed(2) : 'unknown';
+      await notifyNow({
+        key: `refused_payment:${paymentId}`, cooldownMs: 1e12,
+        subject: 'Nebulaa: a payment was taken but not applied',
+        text: [
+          'A customer paid, but the payment could not be applied. Nothing was granted. It needs a refund or a fix.', '',
+          `Account: ${user._id}`, `Subscription: ${record.subscriptionId}`, `Payment: ${paymentId}`, `Amount paid: Rs ${rupees}`,
+          `Reason: ${reason} (${REASON_WORDS[reason] || 'see the Money page'})`, 'Needs refund: yes', '',
+          'It is listed under Failures on the Money page. You will not get another email for this payment.'
+        ].join('\n')
+      });
+    } catch (e) { console.warn('Could not email the refused payment alert:', e.message); }
+    return true;
+  }
+  async function refuseSlot(user, record, paymentId, reason, paidPaise) {
+    await recordRefusal(user, record, paymentId, paidPaise, reason);
     try { await rz().subscriptions.cancel(record.subscriptionId, 0); }
     catch (e) { console.warn(`Could not cancel slot subscription ${record.subscriptionId}:`, e.message); }
     return { applied: false, reason };
   }
-  const SLOT_REFUSALS = {
+  const REFUSALS = {
     no_agency_plan: 'We received your payment, but your Agency plan is not active, so the extra client could not be added. Our team has been told and will contact you about a refund.',
     at_limit: `We received your payment, but your account already has the most clients (${AGENCY.maxClients}), so the extra client could not be added. Our team has been told and will contact you about a refund.`,
-    slot_conflict: 'We received your payment, but could not add the extra client just now. Our team has been told and will contact you.'
+    slot_conflict: 'We received your payment, but could not add the extra client just now. Our team has been told and will contact you.',
+    amount_mismatch: 'We received your payment, but the amount did not match the price of this plan, so it was not applied. Our team has been told and will refund or fix it.',
+    amount_unconfirmed: 'We are still confirming your payment. It will show on your account shortly. If it does not, our team will sort it out.'
   };
   const isStrictAmount = (record) => record.kind === 'slot' || (record.kind === 'plan' && record.key === 'agency');
+  // What this subscription must be charged: the price stored when it was bought, else today's price (older records).
+  const expectedPaiseOf = (record) => bp.expectedPaiseOf(record, bp.invoiceSpec(record.kind, record.key));
 
   // One payment, applied once. Returns { applied:false } on a replay.
   async function applyCharge(user, record, { paymentId, paidPaise, subscription }, attempt = 0) {
-    const alreadyApplied = (user.payments || []).some((p) => p && p.razorpayPaymentId === paymentId);
+    const existing = (user.payments || []).find((p) => p && p.razorpayPaymentId === paymentId);
+    // A payment we already refused stays refused: a replayed verify or webhook says so again and records nothing more.
+    if (existing && existing.status === 'failed' && existing.needsRefund) return { applied: false, reason: existing.reason || 'slot_conflict' };
+    const alreadyApplied = !!existing;
     let firstCycle = true; let gate = {};
     if (record.kind === 'slot' && !alreadyApplied) {
       firstCycle = record.active !== true;
       const refusal = slotRefusal(user, firstCycle);
-      if (refusal) return refuseSlot(user, record, paymentId, refusal);
+      if (refusal) return refuseSlot(user, record, paymentId, refusal, paidPaise);
       gate = slotGate(record, firstCycle);
     }
     if (!alreadyApplied && record.kind === 'plan') {
@@ -207,7 +261,7 @@ function createPaymentRouter(deps = {}) {
         const replay = !fresh || (fresh.payments || []).some((p) => p && p.razorpayPaymentId === paymentId);
         if (replay || !freshRecord) return { applied: false, reason: 'already_processed' };
         if (attempt < 1) return applyCharge(fresh, freshRecord, { paymentId, paidPaise, subscription }, attempt + 1);
-        return refuseSlot(user, record, paymentId, 'slot_conflict');
+        return refuseSlot(user, record, paymentId, 'slot_conflict', paidPaise);
       }
       return { applied: false, reason: 'already_processed' };
     }
@@ -340,7 +394,7 @@ function createPaymentRouter(deps = {}) {
         notes: { userId: userId.toString(), email: user.email, tier: planId, couponCode: appliedCoupon?.code || '' }
       });
       await User.updateOne({ _id: user._id }, {
-        $push: { 'plan.subscriptions': { subscriptionId: subscription.id, kind: 'plan', key: planId, razorpayPlanId, active: false, createdAt: new Date() } }
+        $push: { 'plan.subscriptions': { subscriptionId: subscription.id, kind: 'plan', key: planId, razorpayPlanId, ...(planId === 'agency' ? { expectedPaise: quote.chargePaise } : {}), active: false, createdAt: new Date() } }
       });
 
       res.json({
@@ -424,7 +478,7 @@ function createPaymentRouter(deps = {}) {
         notes: { userId: userId.toString(), email: user.email, slot: bp.SLOT_KEY }
       });
       await User.updateOne({ _id: user._id }, {
-        $push: { 'plan.subscriptions': { subscriptionId: subscription.id, kind: 'slot', key: bp.SLOT_KEY, razorpayPlanId, active: false, createdAt: new Date() } }
+        $push: { 'plan.subscriptions': { subscriptionId: subscription.id, kind: 'slot', key: bp.SLOT_KEY, razorpayPlanId, expectedPaise: quote.chargePaise, active: false, createdAt: new Date() } }
       });
 
       res.json({
@@ -466,10 +520,27 @@ function createPaymentRouter(deps = {}) {
         return res.status(400).json({ success: false, message: 'This subscription does not match your account.' });
       }
 
-      const spec = bp.invoiceSpec(record.kind, record.key);
-      const result = await applyCharge(user, record, { paymentId: razorpay_payment_id, paidPaise: spec.totalPaise, subscription: rzpSub });
-      if (!result.applied && SLOT_REFUSALS[result.reason]) {
-        return res.status(409).json({ success: false, message: SLOT_REFUSALS[result.reason] });
+      const spec = bp.priceOfRecord(record, bp.invoiceSpec(record.kind, record.key));
+      let paidPaise = spec.totalPaise;
+      // The Agency plan and client slots are checked against the amount Razorpay says was paid, as the webhook does.
+      // A payment we already hold a row for (applied, or refused earlier) is not looked up again.
+      if (isStrictAmount(record) && !(user.payments || []).some((p) => p && p.razorpayPaymentId === razorpay_payment_id)) {
+        const reported = await rz().payments.fetch(razorpay_payment_id);
+        const amount = Number(reported && reported.amount);
+        if (!reported || reported.amount === undefined || reported.amount === null || !Number.isFinite(amount)) {
+          // Cannot confirm the amount: grant nothing here. The webhook for this payment applies it once it is confirmed.
+          return res.status(409).json({ success: false, message: REFUSALS.amount_unconfirmed });
+        }
+        if (amount !== spec.totalPaise) {
+          console.warn(`Verify payment ${razorpay_payment_id} for ${razorpay_subscription_id} has an unexpected amount: not applied`);
+          await recordRefusal(user, record, razorpay_payment_id, amount, 'amount_mismatch');
+          return res.status(409).json({ success: false, message: REFUSALS.amount_mismatch });
+        }
+        paidPaise = amount;
+      }
+      const result = await applyCharge(user, record, { paymentId: razorpay_payment_id, paidPaise, subscription: rzpSub });
+      if (!result.applied && REFUSALS[result.reason]) {
+        return res.status(409).json({ success: false, message: REFUSALS[result.reason] });
       }
       if (result.applied && record.kind === 'plan' && rzpSub.notes?.couponCode) {
         await Coupon.findOneAndUpdate(
@@ -527,11 +598,13 @@ function createPaymentRouter(deps = {}) {
       if (eventName === 'subscription.charged') {
         if (!payment?.id) return res.json({ success: true });
         const spec = bp.invoiceSpec(record.kind, record.key);
-        // The Agency plan and client slots only accept exactly the configured price plus GST. A different amount
-        // (a wrongly configured Razorpay plan, for example) grants nothing and is reported.
-        if (isStrictAmount(record) && payment.amount !== spec.totalPaise) {
-          console.warn(`Webhook payment ${payment.id} for ${subscription.id} has an unexpected amount: ignored`);
-          alert('payment', `payment ${payment.id} for ${record.kind} ${record.key} had an unexpected amount (${payment.amount} paise, expected ${spec.totalPaise}): nothing was granted`);
+        // The Agency plan and client slots only accept exactly the price stored when they were bought (GST included).
+        // A different amount (a wrongly configured Razorpay plan, for example) grants nothing, is recorded for staff
+        // and the owner is told at once.
+        if (isStrictAmount(record) && payment.amount !== expectedPaiseOf(record)) {
+          console.warn(`Webhook payment ${payment.id} for ${subscription.id} has an unexpected amount: not applied`);
+          const existing = (user.payments || []).some((p) => p && p.razorpayPaymentId === payment.id);
+          if (!existing) await recordRefusal(user, record, payment.id, Number(payment.amount), 'amount_mismatch');
           return res.json({ success: true });
         }
         const paidPaise = Number.isFinite(payment.amount) ? payment.amount : spec.totalPaise;

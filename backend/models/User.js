@@ -301,6 +301,10 @@ const userSchema = new mongoose.Schema({
     invoiceUrl: { type: String, default: '' },
     item: { type: String },
     exGstAmount: { type: Number },
+    // A payment we received but could not apply (status 'failed' with needsRefund): staff see it on the Money page.
+    needsRefund: { type: Boolean },
+    reason: { type: String },            // short code: at_limit, no_agency_plan, slot_conflict, amount_mismatch
+    subscriptionId: { type: String },
     paidAt: { type: Date, default: Date.now }
   }],
   // Managed service billing (set by Owner or Admin): what the client pays each month (with or without GST included), and when service began.
@@ -337,6 +341,7 @@ const userSchema = new mongoose.Schema({
       key: { type: String },
       razorpayPlanId: { type: String },
       couponCode: { type: String },
+      expectedPaise: { type: Number },   // agency plan and client slot: the price (paise, GST included) when it was bought
       active: { type: Boolean, default: false },
       createdAt: { type: Date, default: Date.now }
     }]
