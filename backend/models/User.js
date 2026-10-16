@@ -341,6 +341,14 @@ const userSchema = new mongoose.Schema({
       createdAt: { type: Date, default: Date.now }
     }]
   },
+  // Agency plan: an agency account owns hidden client workspaces (User records) that spend its Quarks.
+  agency: {
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }, // set on a client workspace
+    workspaceName: { type: String, default: '' },
+    clientCount: { type: Number, default: 0 },  // on the agency: workspaces it has
+    extraSlots: { type: Number, default: 0 },   // on the agency: paid extra client slots
+    frozen: { type: Boolean, default: false }   // on a workspace: over the limit after a downgrade
+  },
   // Trial tracking
   trial: {
     startDate: { type: Date },
