@@ -10,7 +10,8 @@ const REVIEWED = new Set([
   'services/quarkBuckets.js', 'services/billingPlans.js', 'services/agency.js', 'middleware/trialGuard.js', 'middleware/creditGuard.js',
   'routes/credits.js', 'routes/dashboard.js', 'routes/content.js', 'routes/chat.js', 'routes/campaigns.js', 'routes/videoGeneration.js',
   'routes/studioVideos.js', 'routes/social.js', 'routes/payment.js', 'routes/csm.js', 'routes/staff.js', 'routes/auth.js',
-  'services/staff/clientBulk.js', 'services/staff/clientList.js', 'services/staff/clientStatus.js'
+  'services/staff/clientBulk.js', 'services/staff/clientList.js', 'services/staff/clientStatus.js',
+  'services/agencyUsage.js' // reads the pool balance of the signed-in agency account only (the route refuses clients and passes)
 ]);
 
 function files(dir) { return fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : e.name.endsWith('.js') ? [path.join(dir, e.name)] : [])); }

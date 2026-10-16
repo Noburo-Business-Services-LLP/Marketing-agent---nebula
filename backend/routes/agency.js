@@ -7,6 +7,7 @@ const { AGENCY } = require('../config/apiCosts');
 const ag = require('../services/agency');
 const ws = require('../services/agencyWorkspaces');
 const del = require('../services/accountDeletion');
+const usage = require('../services/agencyUsage');
 
 const router = express.Router();
 const idOf = (req) => String(req.user?._id || req.user?.id || '');
@@ -76,6 +77,44 @@ router.post('/clients/:id/open', protect, limiter, async (req, res) => {
   } catch (e) {
     console.error('[agency] open failed:', e.message);
     res.status(500).json({ success: false, message: 'We could not open this client. Please try again.' });
+  }
+});
+
+/**
+ * The usage report. Always for the signed-in agency account (the owner is read from the session, never from the
+ * request), never from inside a client. `month` is YYYY-MM; `page` and `limit` page the client list.
+ */
+async function usageFor(req, res) {
+  if (req.actingAgency || ag.isWorkspace(req.user)) { res.status(403).json({ success: false, message: 'The usage report is part of your agency account.' }); return null; }
+  const owner = await models().User.findById(req.user._id);
+  if (!owner || !ag.isAgency(owner)) { res.status(403).json({ success: false, message: 'The usage report is part of the Agency plan.' }); return null; }
+  const q = req.query || {};
+  return usage.usageForMonth({ owner, month: typeof q.month === 'string' ? q.month : '', page: typeof q.page === 'string' ? q.page : '', limit: typeof q.limit === 'string' ? q.limit : '', models: models() });
+}
+
+router.get('/usage', protect, limiter, async (req, res) => {
+  try {
+    const r = await usageFor(req, res);
+    if (r) res.json({ success: true, ...r });
+  } catch (e) {
+    console.error('[agency] usage failed:', e.message);
+    res.status(500).json({ success: false, message: 'We could not load your usage report. Please try again.' });
+  }
+});
+
+router.get('/usage.csv', protect, limiter, async (req, res) => {
+  try {
+    // The whole client list in one file: at most 25 clients, so no paging.
+    req.query = { ...(req.query || {}), page: '1', limit: String(usage.MAX_PAGE) };
+    const r = await usageFor(req, res);
+    if (!r) return;
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="client-usage-${r.month}.csv"`);
+    res.set('Cache-Control', 'no-store');
+    res.send(usage.toCsv(r.clients, r.monthLabel));
+  } catch (e) {
+    console.error('[agency] usage csv failed:', e.message);
+    res.status(500).json({ success: false, message: 'We could not prepare your usage file. Please try again.' });
   }
 });
 
