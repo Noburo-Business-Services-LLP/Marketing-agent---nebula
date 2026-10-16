@@ -48,6 +48,7 @@ import InfluencerAnalytics from './pages/InfluencerAnalytics';
 import InfluencerProfile from './pages/InfluencerProfile';
 import TermsAndConditions from './pages/TermsAndConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import RefundPolicy from './pages/RefundPolicy';
 import BlueprintRoutes from './pages/BlueprintRoutes';
 import { postAuthTarget, BLUEPRINT_SIGNUP_PATH } from './utils/blueprint';
 import { ThemeProvider } from './context/ThemeContext';
@@ -203,6 +204,7 @@ const App: React.FC = () => {
         {/* Public legal pages */}
         <Route path="/terms" element={<TermsAndConditions />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/refund-policy" element={<RefundPolicy />} />
 
         {/* Brand Growth Blueprint: outside the onboarding gate and the Quark paywall on purpose. */}
         <Route

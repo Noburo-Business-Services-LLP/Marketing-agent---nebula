@@ -4,6 +4,7 @@ import { CreditCard, CheckCircle, Loader2, Shield, Check } from 'lucide-react';
 import { apiService, PlansResponse } from '../services/api';
 import { formatInr, formatPaise, tierLabel } from '../utils/plans';
 import BillingDetailsForm from '../components/BillingDetailsForm';
+import LegalLinks from '../components/LegalLinks';
 
 declare global {
   interface Window {
@@ -375,6 +376,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, onLogout }) => {
             <button onClick={() => navigate('/dashboard')} className="block mx-auto text-[#ededed]/75 hover:text-[#ededed] text-sm underline">Back to Nebulaa</button>
           )}
           <button onClick={onLogout} className="text-[#ededed]/75 hover:text-[#ededed] text-sm transition-colors underline">Log out</button>
+          <LegalLinks className="pt-1 text-xs text-[#ededed]/60" linkClassName="hover:text-[#ededed] underline underline-offset-2" />
         </div>
       </div>
     </SpaceBg>

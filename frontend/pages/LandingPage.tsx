@@ -521,6 +521,7 @@ const LandingPage: React.FC = () => {
           <div className="flex items-center gap-8 text-[14px]" style={{ color: INK2 }}>
             <a href="/#/privacy-policy" className="hover:opacity-70">Privacy</a>
             <a href="/#/terms" className="hover:opacity-70">Terms</a>
+            <a href="/#/refund-policy" className="hover:opacity-70">Refunds</a>
             <button onClick={() => setShowContact(true)} className="hover:opacity-70">Contact</button>
           </div>
           <p className="text-[13px]" style={{ color: MUTED }}>© {new Date().getFullYear()} Nebulaa. All rights reserved.</p>

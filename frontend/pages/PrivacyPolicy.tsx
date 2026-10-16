@@ -34,13 +34,13 @@ const PrivacyPolicy: React.FC = () => {
             <h1 className={`text-4xl font-bold mb-1 ${text}`}>NEBULAA</h1>
             <h2 className="text-2xl font-bold text-[var(--gv-accent-text)] mb-2">Privacy Policy</h2>
             <p className={`text-sm italic ${textSec}`}>Effective Date: 10 March 2025 | Version 1.0</p>
-            <p className={`text-sm italic ${textSec}`}>Governing Entity: Noburo Business Services LLP, India</p>
+            <p className={`text-sm italic ${textSec}`}>Governing Entity: Noburo Systems Private Limited, India</p>
           </div>
 
           <div className={`space-y-8 leading-relaxed ${textSec}`}>
             {/* Preamble */}
             <div className={`border-l-4 border-[#ffcc29] pl-4 italic ${textSec}`}>
-              At Nebulaa, we take your privacy seriously. This Privacy Policy describes how Noburo Business Services LLP collects, uses, stores, discloses, and protects your personal information when you use the Nebulaa platform. Please read this policy carefully before providing your information.
+              At Nebulaa, we take your privacy seriously. This Privacy Policy describes how Noburo Systems Private Limited collects, uses, stores, discloses, and protects your personal information when you use the Nebulaa platform. Please read this policy carefully before providing your information.
             </div>
 
             {/* 1 */}
@@ -48,7 +48,7 @@ const PrivacyPolicy: React.FC = () => {
               <h2 className={`text-xl font-bold mb-4 ${text}`}>1. Identity of Data Controller</h2>
               <p className="mb-3">The data controller responsible for your personal data is:</p>
               <div className={`rounded-lg p-5 space-y-1 ${infoBox}`}>
-                <p><strong className={text}>Noburo Business Services LLP</strong></p>
+                <p><strong className={text}>Noburo Systems Private Limited</strong></p>
                 <p>Platform: Nebulaa — www.nebulaa.ai</p>
                 <p>Registered in India under the Limited Liability Partnership Act, 2008</p>
                 <p>Email for support & grievance: <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a></p>
@@ -235,7 +235,7 @@ const PrivacyPolicy: React.FC = () => {
               <p className="mb-4">In accordance with the Information Technology Act, 2000 and applicable rules, we have appointed a Grievance Officer to address privacy-related concerns:</p>
               <div className={`rounded-lg p-5 space-y-1 ${infoBox}`}>
                 <p><strong className={text}>Grievance Officer:</strong> Navaneetha Krishnan</p>
-                <p><strong className={text}>Organisation:</strong> Noburo Business Services LLP (Nebulaa)</p>
+                <p><strong className={text}>Organisation:</strong> Noburo Systems Private Limited (Nebulaa)</p>
                 <p><strong className={text}>Email:</strong> <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a></p>
                 <p><strong className={text}>Response Time:</strong> We will acknowledge your grievance within 48 hours and resolve it within 30 days.</p>
               </div>
@@ -265,7 +265,7 @@ const PrivacyPolicy: React.FC = () => {
               <h2 className={`text-xl font-bold mb-4 ${text}`}>15. Contact Us</h2>
               <p className="mb-4">For any privacy-related questions, requests, or concerns, please contact:</p>
               <div className={`rounded-lg p-5 space-y-1 ${infoBox}`}>
-                <p><strong className={text}>Noburo Business Services LLP</strong></p>
+                <p><strong className={text}>Noburo Systems Private Limited</strong></p>
                 <p>Platform: Nebulaa — www.nebulaa.ai</p>
                 <p>Support Email: <a href="mailto:support@nebulaa.ai" className="text-[var(--gv-accent-text)] hover:underline">support@nebulaa.ai</a></p>
               </div>
@@ -280,10 +280,12 @@ const PrivacyPolicy: React.FC = () => {
         {/* Footer */}
         <div className="text-center mt-10 pb-10">
           <p className={`text-sm ${isDark ? 'text-[#ededed]/50' : 'text-[var(--gv-text-tertiary)]'}`}>
-            &copy; 2024 Noburo Business Services LLP. All rights reserved.
+            &copy; {new Date().getFullYear()} Noburo Systems Private Limited. All rights reserved.
           </p>
           <div className={`mt-3 flex items-center justify-center gap-4 text-sm ${isDark ? 'text-[#ededed]/50' : 'text-[var(--gv-text-tertiary)]'}`}>
             <a href="/#/terms" className="hover:text-[var(--gv-accent-text)] transition-colors">Terms & Conditions</a>
+            <span>|</span>
+            <a href="/#/refund-policy" className="hover:text-[var(--gv-accent-text)] transition-colors">Refunds</a>
             <span>|</span>
             <a href="https://nebulaa.ai" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--gv-accent-text)] transition-colors">nebulaa.ai</a>
           </div>

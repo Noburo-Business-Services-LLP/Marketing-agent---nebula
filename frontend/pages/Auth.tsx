@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import LegalLinks from '../components/LegalLinks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { Loader2, Zap, Check, X as XIcon, ShieldCheck, Sun, Moon, Mail, ArrowLeft, RefreshCw, KeyRound, Lock, Eye, EyeOff } from 'lucide-react';
@@ -914,6 +915,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 {isLogin ? 'Sign Up' : 'Log In'}
               </button>
             </p>
+            <LegalLinks className="mt-4 text-xs text-slate-500" />
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import LegalLinks from './LegalLinks';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -301,6 +302,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
               )}
             </div>
 
+            <div className="shrink-0 border-t border-[var(--gv-border-subtle)] px-4 py-3">
+              <LegalLinks className="text-[11.5px] text-[var(--gv-text-tertiary)]" linkClassName="hover:text-[var(--gv-text-primary)] hover:underline underline-offset-2" />
+            </div>
           </div>
         </aside>
 
