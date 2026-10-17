@@ -1447,6 +1447,10 @@ export const apiService = {
     try { return await apiCall(`/week/items/${encodeURIComponent(itemId)}/made`, { method: 'POST', body: JSON.stringify(weekId ? { ref, weekId } : { ref }) }, true); }
     catch { return { success: false }; }
   },
+  /** Saves the guided tour's progress. Best effort: a failure is silent and never breaks the app. */
+  saveTour: async (action: 'step' | 'complete' | 'skip' | 'replay', step?: string): Promise<void> => {
+    try { await apiCall('/tour', { method: 'PUT', body: JSON.stringify(step ? { action, step } : { action }) }, true); } catch { /* best effort */ }
+  },
   getSetup: async (): Promise<SetupResponse> => apiCall('/setup', { method: 'GET' }, true),
   getPlan: async (): Promise<PlanView> => apiCall('/plan', { method: 'GET' }, true),
   refreshPlan: async (): Promise<PlanRefreshReply> => apiCall('/plan/refresh', { method: 'POST' }, true),

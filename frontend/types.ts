@@ -83,6 +83,8 @@ export interface User {
   /** Set by the server while a customer-success manager is working inside this account. */
   actingCsm?: { name: string } | null;
   consent?: { acceptedAt?: string; termsVersion?: string } | null;
+  /** When the guided tour was finished or skipped (set by the server). */
+  tour?: { completedAt?: string; skippedAt?: string } | null;
   deletion?: { status: 'pending'; purgeAfter?: string; requestedAt?: string } | null;
   brandScore?: {
     score: number;

@@ -54,5 +54,6 @@
   "components/SetupCard.tsx",
   "utils/week.ts",
   "utils/setup.ts",
-  "utils/tour.ts"
+  "utils/tour.ts",
+  "components/GuidedTour.tsx"
 ]
