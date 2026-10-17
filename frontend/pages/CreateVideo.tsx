@@ -10,6 +10,7 @@ import { apiService, brandAssetsAPI, studioVideosAPI, StudioVideo, StudioConcept
 import { appendText } from '../utils/ideaFiles';
 import { canPlan, waitMessage, videosLeft, CHANGE_IDEAS, StepKey } from '../utils/studioVideo';
 import { downloadImage } from '../utils/download';
+import { takePrefill, nearestLanguage } from '../utils/prefill';
 
 type Option = { key: string; label: string; hint?: string };
 const FALLBACK_STYLES: Option[] = [
@@ -69,6 +70,8 @@ const CreateVideo: React.FC = () => {
   const [idea, setIdea] = useState('');
   const [style, setStyle] = useState('natural');
   const [language, setLanguage] = useState('english');
+  const [fromPlan, setFromPlan] = useState(false);
+  const planLanguage = useRef<string | null>(null);
   const [who, setWho] = useState('');
   const [where, setWhere] = useState('');
   const [people, setPeople] = useState<PickedAsset[]>([]);
@@ -111,10 +114,28 @@ const CreateVideo: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const p = takePrefill('video');
+    if (!p) return;
+    const text = String(p.idea || '').trim();
+    if (text) { setIdea(text); setFromPlan(true); }
+    if (p.language) {
+      planLanguage.current = p.language;
+      setLanguage((cur) => nearestLanguage(p.language, ['english', 'tamil'], cur));
+    }
+  }, []);
+
+  useEffect(() => {
     studioVideosAPI.options().then((r) => {
       if (!r?.success) return;
       if (r.styles?.length) setStyles(r.styles);
-      if (r.languages?.length) setLangs(r.languages);
+      if (r.languages?.length) {
+        setLangs(r.languages);
+        if (planLanguage.current) {
+          const want = planLanguage.current;
+          planLanguage.current = null;
+          setLanguage((cur) => nearestLanguage(want, r.languages.map((l: any) => l.key), cur));
+        }
+      }
       setCost(r.quarks || 0);
       setRefCost(r.referenceQuarks || 0);
     }).catch(() => undefined);
@@ -251,11 +272,12 @@ const CreateVideo: React.FC = () => {
             <GravityLabel gold className="mb-2">What is the video about?</GravityLabel>
             <textarea
               value={idea}
-              onChange={(e) => setIdea(e.target.value)}
+              onChange={(e) => { setIdea(e.target.value); setFromPlan(false); }}
               rows={4}
               className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-[var(--gv-text-tertiary)] leading-relaxed resize-none placeholder:text-[var(--gv-text-muted)]"
               placeholder="For example: Diwali offer at our sweet shop. A gift box of kaju katli and mysore pak, 10% off, free home delivery above ₹1,000."
             />
+            {fromPlan && <p className="mt-2 text-[12.5px] text-[var(--gv-text-tertiary)]">Filled in from your plan. Change anything you like.</p>}
             <IdeaBoxTools
               languageLabel={language === 'tamil' ? 'Tamil' : 'English'}
               onText={(t) => setIdea((d) => appendText(d, t))}

@@ -7,6 +7,7 @@ import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
 import { CONTENT_LANGUAGES, OFFERED_LANGUAGE_VALUES } from '../constants/languages';
+import { takePrefill, nearestLanguage } from '../utils/prefill';
 import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 import PostDesignPanel from '../components/PostDesignPanel';
 import ModeExplainer from '../components/ModeExplainer';
@@ -238,6 +239,24 @@ const GravityCreate: React.FC = () => {
   const [visualStyle, setVisualStyle] = useState('4:5 portrait');
   const [language, setLanguage] = useState('English');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram']);
+  // True while the fields still hold what the plan filled in; the first edit clears the note.
+  const [fromPlan, setFromPlan] = useState(false);
+  useEffect(() => {
+    const p = takePrefill('carousel');
+    if (!p) return;
+    const topic = String(p.topic || '').trim();
+    if (!topic && !p.platform && !p.language) return;
+    setMode('carousel');
+    if (topic) { setName(topic.slice(0, 80)); setDescription(topic); }
+    const plat = String(p.platform || '').trim().toLowerCase();
+    if (PLATFORMS.some((x) => x.key === plat && !x.soon)) setSelectedPlatforms([plat]);
+    if (p.language) {
+      const id = nearestLanguage(p.language, OFFERED_LANGUAGE_VALUES, '');
+      const label = CONTENT_LANGUAGES.find((l) => l.value === id)?.label;
+      if (label) setLanguage(label);
+    }
+    setFromPlan(true);
+  }, []);
   const [openPopover, setOpenPopover] = useState<null | 'duration' | 'cadence' | 'tone' | 'style' | 'language'>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1252,14 +1271,14 @@ const GravityCreate: React.FC = () => {
             <span className="gravity-label text-[var(--gv-accent-text)]">{mode === 'campaign' ? 'Campaign' : mode === 'linkedin' ? 'LinkedIn post' : 'Post'}</span>
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); setFromPlan(false); }}
               placeholder={mode === 'campaign' ? 'Monsoon menu launch' : mode === 'linkedin' ? '500 customers milestone' : 'Sunday pour-over ritual'}
               className="gravity-bare flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)]"
             />
           </div>
           <textarea
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => { setDescription(e.target.value); setFromPlan(false); }}
             placeholder={mode === 'campaign'
               ? 'For example: Launch our monsoon menu over two weeks. Introduce the dishes first, then reveal the menu, then invite customers to the Saturday launch event.'
               : mode === 'linkedin'
@@ -1274,6 +1293,7 @@ const GravityCreate: React.FC = () => {
             onRead={(ups) => applyReadFiles(ups)}
             onReuse={(u) => applyReadFiles([u])}
           />
+          {fromPlan && <p className="mt-3 text-[12.5px] text-[var(--gv-text-tertiary)]">Filled in from your plan. Change anything you like.</p>}
         </div>
       </div>
       </BorderBeam>
