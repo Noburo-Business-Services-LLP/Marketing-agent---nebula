@@ -562,3 +562,52 @@ test('an email that belonged to a deleted account does not get another free Blue
   const paid = await begin(user('u9', 'back@example.com'), form(), 'starter');
   assert.strictEqual(paid.status, 202);
 });
+
+test('startSystem: a plan run is never charged, takes no free slot, is queued once and kind plan', async () => {
+  const { deps, svc, doc } = setup();
+  const r = await svc.startSystem({ user: { _id: 'u1', email: 'owner@example.com', plan: { tier: 'starter' } }, input: form(), kind: 'plan' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.id, 'bp-1');
+  const d = doc('bp-1');
+  assert.strictEqual(d.kind, 'plan');
+  assert.strictEqual(d.status, 'queued');
+  assert.strictEqual(d.freeSlot, false);
+  assert.strictEqual(d.tierAtStart, 'starter');
+  assert.deepStrictEqual(d.charge, { state: 'none', quarks: 0 });
+  assert.strictEqual(deps.calls.deduct.length, 0);
+  assert.strictEqual(deps.queued.length, 1);
+  await deps.drain();
+  assert.strictEqual(doc('bp-1').status, 'completed');
+  assert.strictEqual(deps.calls.refund.length, 0);
+});
+
+test('startSystem: spend is recorded for the daily ceiling, and invalid input starts nothing', async () => {
+  const spent = [];
+  const { deps, svc } = setup({ recordSpend: async (a, n) => { spent.push([a, n]); } });
+  const bad = await svc.startSystem({ user: { _id: 'u1', email: 'o@example.com' }, input: form({ businessName: '' }), kind: 'plan' });
+  assert.strictEqual(bad.ok, false);
+  assert.strictEqual(deps.Blueprint.docs.length, 0);
+  await svc.startSystem({ user: { _id: 'u1', email: 'o@example.com' }, input: form(), kind: 'plan' });
+  assert.deepStrictEqual(spent, [['blueprint', 1]]);
+});
+
+test('startSystem: a failed plan run stays uncharged and refunds nothing; two plan runs do not clash on the free slot', async () => {
+  const { deps, svc, doc } = setup({ plan: { build: async () => { throw new Error('model down'); }, directions: async () => [] } });
+  const u = { _id: 'u1', email: 'owner@example.com' };
+  await svc.startSystem({ user: u, input: form(), kind: 'plan' });
+  await quiet(() => deps.drain());
+  assert.strictEqual(doc('bp-1').status, 'failed');
+  assert.strictEqual(doc('bp-1').charge.state, 'none');
+  assert.strictEqual(deps.calls.refund.length, 0);
+  const again = await svc.startSystem({ user: u, input: form(), kind: 'plan' });
+  assert.strictEqual(again.ok, true);
+});
+
+test('a customer Blueprint list does not show plan runs', async () => {
+  const { svc, begin } = setup();
+  await begin(user(), form(), 'starter');
+  await svc.startSystem({ user: user(), input: form(), kind: 'plan' });
+  const l = await svc.list({ userId: 'u1' });
+  assert.strictEqual(l.json.blueprints.length, 1);
+  assert.strictEqual(l.json.blueprints[0].id, 'bp-1');
+});

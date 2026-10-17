@@ -205,6 +205,14 @@ const userSchema = new mongoose.Schema({
   privacy: {
     lastExportAt: { type: Date }
   },
+  // The plan the system makes from the business profile: when a run last started, when the customer last refreshed it
+  // (once a week), and how the first one is going.
+  planState: {
+    lastStartedAt: { type: Date },
+    lastRefreshAt: { type: Date },
+    firstPlanFailedAt: { type: Date },
+    attempts: { type: Number, default: 0 }
+  },
   // Optional invoice details the customer adds: a GSTIN for a tax invoice in the business name, and the state
   // the supply is made to (Zoho's two letter code). Read when an invoice is made; never required to pay.
   billingDetails: {

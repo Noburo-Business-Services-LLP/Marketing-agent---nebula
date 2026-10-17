@@ -251,7 +251,7 @@ async function loadUsageData({ models, window: windowDays = 30, now = Date.now()
     src('postsPublished', 'We could not read the published posts right now.', () => perClient(Campaign, byUser({ publishedAt: { $gte: since } }))),
     src('videos', 'We could not read the video jobs right now.', () => perClient(VideoJob, byUser({ status: 'completed', createdAt: { $gte: since } }))),
     src('heroVideos', 'We could not read the hero video jobs right now.', () => perClient(HeroVideoJob, byUser({ status: 'completed', createdAt: { $gte: since } }))),
-    src('blueprints', 'We could not read the Blueprints right now.', () => perClient(Blueprint, byUser({ status: 'completed', createdAt: { $gte: since } }))),
+    src('blueprints', 'We could not read the Blueprints right now.', () => perClient(Blueprint, byUser({ status: 'completed', kind: { $ne: 'plan' }, createdAt: { $gte: since } }))),
     src('repliesDrafted', 'We could not read the inbox right now.', () => perClient(SocialInboxMessage, byUser({
       'ai.generatedAt': { $gte: since },
       $or: [{ 'ai.suggestedReplies.0': { $exists: true } }, { 'ai.autoReplyCandidate': { $nin: ['', null] } }]

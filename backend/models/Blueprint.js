@@ -21,6 +21,8 @@ const blueprintSchema = new mongoose.Schema(
     input: { type: mongoose.Schema.Types.Mixed },
     businessKeys: { type: [String], default: [] },
     freeSlot: { type: Boolean, default: false },
+    // 'plan' marks a run the system starts for an account's plan; customers' own Blueprints stay 'blueprint'.
+    kind: { type: String, enum: ['blueprint', 'plan'], default: 'blueprint', index: true },
     ipHash: { type: String },
     sheet: { type: mongoose.Schema.Types.Mixed },
     sources: { type: [mongoose.Schema.Types.Mixed], default: [] },

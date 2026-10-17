@@ -5,6 +5,7 @@
 const { LIMITS } = require('../../config/blueprint');
 const { QUARK_COSTS } = require('../../config/apiCosts');
 const { normaliseInput, emailKey, businessKeysOf } = require('./input');
+const { resolveTier } = require('../../config/entitlements');
 
 const ACTION = 'blueprint';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -51,6 +52,7 @@ function defaultDeps() {
       directions: (...a) => require('./pipeline').proposeDirections(...a)
     },
     enqueue: (...a) => require('./runner').enqueue(...a),
+    recordSpend: (...a) => require('../spendGuard').record(...a),
     now: () => Date.now(),
     uuid: () => crypto.randomUUID(),
     hashIp: (ip) => crypto.createHash('sha256').update(`${process.env.JWT_SECRET || 'blueprint'}:${ip}`).digest('hex')
@@ -233,6 +235,24 @@ function createBlueprintService(depsIn) {
     return reply(202, { success: true, id: blueprintId, status: 'queued' });
   }
 
+  // A run the system starts for an account (its plan): no Quarks, no free slot, no per-account daily cap. The model
+  // call still counts against the daily spend ceiling, which is otherwise recorded only when Quarks are charged.
+  async function startSystem({ user, input, kind = 'plan' }) {
+    const userId = idOf(user);
+    const n = normaliseInput(input, { allowGuided: true });
+    if (!n.ok) return { ok: false, errors: n.errors, message: MSG.fields };
+    const blueprintId = deps.uuid();
+    const now = at();
+    await Blueprint.create({
+      blueprintId, userId, emailKey: emailKey(user.email), tierAtStart: resolveTier(user), mode: 'auto', status: 'queued', step: 'queued', progress: 0,
+      checkpoint: null, heartbeatAt: now, input: n.input, businessKeys: businessKeysOf(n.input), freeSlot: false, ipHash: '', approvals: [], qaFlags: [],
+      kind, charge: { state: 'none', quarks: 0 }, createdAt: now
+    });
+    try { if (deps.recordSpend) await deps.recordSpend(ACTION, 1); } catch (_) { /* cost tracking is best effort */ }
+    deps.enqueue(() => run(blueprintId));
+    return { ok: true, id: blueprintId };
+  }
+
   async function run(id) {
     const claimed = await Blueprint.findOneAndUpdate(
       { blueprintId: id, status: 'queued' },
@@ -325,7 +345,7 @@ function createBlueprintService(depsIn) {
   }
 
   async function list({ userId }) {
-    const rows = await Blueprint.find({ userId: String(userId) }).sort({ createdAt: -1 }).limit(20).lean();
+    const rows = await Blueprint.find({ userId: String(userId), kind: { $ne: 'plan' } }).sort({ createdAt: -1 }).limit(20).lean();
     return reply(200, { success: true, blueprints: rows.map((d) => ({ id: d.blueprintId, businessName: d.input && d.input.businessName, status: d.status, createdAt: d.createdAt })) });
   }
 
@@ -353,7 +373,7 @@ function createBlueprintService(depsIn) {
 
   const startDesigned = (args) => designedService().start(args);
 
-  return { start, run, get, list, continueRun, refundOnce, startDesigned };
+  return { start, startSystem, run, get, list, continueRun, refundOnce, startDesigned };
 }
 
 module.exports = { createBlueprintService, defaultDeps, publicView, applyLogo, ACTION, MSG };
