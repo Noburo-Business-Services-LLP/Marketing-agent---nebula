@@ -21,6 +21,10 @@ const readLimiter = makeLimiter(600, 'You have sent too many requests. Please tr
 const defaultFreeBlueprint = (userId, Model = require('../models/Blueprint')) => Model
   .findOne({ userId, kind: { $ne: 'plan' }, status: 'completed', freeSlot: true }).select('blueprintId').lean();
 
+// Marks that the customer has opened their plan. One conditional update, so only the first time is written.
+const defaultStampPlanOpened = (userId, Model = require('../models/User'), at = new Date()) => Model
+  .updateOne({ _id: userId, 'setup.planOpenedAt': { $exists: false } }, { $set: { 'setup.planOpenedAt': at } });
+
 // The body of GET /api/plan for one account (the customer's own, or a client's when staff look).
 async function viewFor(user, { service, now = new Date(), findFreeBlueprint = defaultFreeBlueprint }) {
   const userId = toUserId(user);
@@ -96,9 +100,16 @@ function createPlanRouter(impl = {}) {
     }
   };
 
-  router.get('/', protect, readLimiter, handle(async (svc, req) => ({
-    status: 200, json: await viewFor(req.user, { service: svc, now: now(), findFreeBlueprint: impl.findFreeBlueprint })
-  })));
+  const stamp = impl.stampPlanOpened || defaultStampPlanOpened;
+  router.get('/', protect, readLimiter, handle(async (svc, req, userId) => {
+    const json = await viewFor(req.user, { service: svc, now: now(), findFreeBlueprint: impl.findFreeBlueprint });
+    // Only the customer's own look counts: a CSM or agency pass, or staff, must not tick the customer's setup step.
+    if (json.plan && !req.actingCsm && !req.actingAgency && !req.user.staffRole && !req.user.isCsm) {
+      try { Promise.resolve(stamp(userId)).catch((e) => console.error('[plan] could not record the plan opening:', e && e.message)); }
+      catch (e) { console.error('[plan] could not record the plan opening:', e && e.message); }
+    }
+    return { status: 200, json };
+  }));
   router.post('/refresh', protect, refreshLimiter, handle(async (svc, req, userId) => {
     const out = await svc.refresh({ userId, user: req.user, staff: false });
     return refreshReply(out, new Date(now().getTime() + PLAN_REFRESH_DAYS * DAY_MS).toISOString());
@@ -114,4 +125,5 @@ router.staffView = staffView;
 router.staffRefresh = staffRefresh;
 router.refreshReply = refreshReply;
 router.defaultFreeBlueprint = defaultFreeBlueprint;
+router.defaultStampPlanOpened = defaultStampPlanOpened;
 module.exports = router;

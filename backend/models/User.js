@@ -480,6 +480,8 @@ userSchema.methods.toPublicJSON = function () {
       // Paid extra client places, and how many of them end with the paid month (so the app can show the state).
       extraSlots: Number((this.agency && this.agency.extraSlots) || 0), slotsEnding: require('../services/agency').slotsEndingOf(this)
     },
+    // Setup progress the app reads from /me: when the plan was first opened and the first week approved.
+    setup: { planOpenedAt: this.setup && this.setup.planOpenedAt, firstWeekApprovedAt: this.setup && this.setup.firstWeekApprovedAt },
     credits: this.credits ? {
       balance: this.credits.balance,
       totalUsed: this.credits.totalUsed
