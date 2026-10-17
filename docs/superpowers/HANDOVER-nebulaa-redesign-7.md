@@ -23,3 +23,10 @@ Removal claim has no heartbeat for very long purges (N4/N5); a second removal cl
 
 ## Next
 Push is done by the assistant to the existing branch `nebulaa-redesign`; release stays with the owner (`docs/superpowers/ops/release-prod.sh`, he types DEPLOY). Everything since production's last release `b6f374b` is in this branch.
+
+## Update 2026-10-17: decisions taken and last changes
+- Owner decisions (he asked the assistant to decide; suggestions accepted): reminder emails OFF by default; slot Quarks in the monthly allowance; single-slot cancel BUILT; Starter/Growth to Agency upgrade NOT built (add after launch only if customers ask); the move of new Agency sign-ups to Rs 9,999 near 30 Ayrshare profiles stays a MANUAL price change (the alert at 25 tells the owner); client content auto-generation keeps using the agency pool for active clients (skipped when the agency plan ended or the client is frozen); the agency data export stays agency-only (add clients' data if asked).
+- Commits since the last push (`e5edde6`): c787559 reminder emails off by default; 1c8fd06 slot Quarks in the monthly allowance; 4e9f7f0 cancel one extra client place; b406d62 adding a client respects places that are ending (counter `agency.slotsEnding`).
+- Verified at push: backend 1248, frontend 308, brand and voice audits 0, tsc only the old Influencers.tsx error. Real `nebulaa_dev` checks (throwaway users, cleaned): renewal grants 6000/7000/16000 for 0/2/20 slots; slot first payment touches only the monthly bucket (a top-up pack with 2 days left is unchanged); slot renewal grants 0; replays match nothing; two simultaneous client adds at the limit let exactly one through; a double press of cancel flags one place only; adding a client is refused while a place is ending and the count would not fit.
+- Still not proven: any real Razorpay call (plan checkout, slot checkout, slot cancel) — do these with TEST keys before launch (in the launch checklist); the cancel link was not looked at in the running app.
+- Everything since production's last release `b6f374b` is on `nebulaa-redesign` (pushed). Release remains the owner's step.
