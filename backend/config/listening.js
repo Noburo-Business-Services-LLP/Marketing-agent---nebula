@@ -30,10 +30,31 @@ module.exports = {
   REASONS: ['delivery', 'price', 'quality', 'service', 'product', 'praise', 'question', 'other'],
   LABELS: ['pos', 'neu', 'neg'],
   MODEL_VERSION: 'listen-1',
-  // Words that keep a comment from ever being shown as a quote (matched as whole words, lower case).
+  // Words that keep a comment from ever being shown as a quote (whole words, case-insensitive; the filter also catches
+  // common obfuscation such as f*ck, b!tch and spaced-out letters). This list is a MINIMUM safety net and is deliberately
+  // conservative: a harmless comment that is skipped costs nothing, a harmful quote on a customer's card costs a lot.
+  // It cannot cover every slur or every Indian-language transliteration, so the final review should confirm it.
+  // The real protection is structural: a quote is shown only when a positive or negative item passes ALL filters
+  // (public comment, length, no contact details, numbers, links, handles or addresses, low spam score, no word below),
+  // and when nothing passes, no quote is shown at all.
   ABUSE_WORDS: [
-    'fuck', 'fucking', 'fucker', 'shit', 'bitch', 'bastard', 'asshole', 'dick', 'cunt', 'slut', 'whore',
-    'idiot', 'stupid', 'moron', 'scam', 'scammer', 'fraud', 'cheat', 'cheater', 'rascal', 'bloody',
-    'bastards', 'crap', 'damn', 'piss', 'retard', 'loser', 'trash', 'garbage', 'useless', 'pathetic'
+    // English: profanity
+    'fuck', 'fucking', 'fucker', 'fucked', 'motherfucker', 'mofo', 'shit', 'shitty', 'bullshit', 'bitch', 'bastard', 'bastards',
+    'asshole', 'ass', 'arse', 'dick', 'cunt', 'slut', 'whore', 'piss', 'crap', 'damn', 'hell', 'wtf', 'stfu', 'bloody',
+    // English: insults and accusations (kept out of quotes on purpose)
+    'idiot', 'stupid', 'moron', 'dumb', 'jerk', 'scumbag', 'loser', 'trash', 'garbage', 'useless', 'pathetic', 'rascal',
+    'scam', 'scammer', 'fraud', 'cheat', 'cheater', 'thief', 'thieves', 'liar', 'liars', 'sucks',
+    // English: slurs, violence and adult content
+    'retard', 'retarded', 'nigger', 'nigga', 'faggot', 'fag', 'dyke', 'tranny', 'paki', 'chink', 'spic', 'kike',
+    'kill', 'killed', 'die', 'rape', 'rapist', 'suicide', 'terrorist', 'sex', 'porn', 'nude', 'nudes',
+    // Hindi, Marathi, Bengali and others (Latin spelling, common variants)
+    'chutiya', 'chutiye', 'chut', 'madarchod', 'maderchod', 'behenchod', 'bhenchod', 'bhosdi', 'bhosdike', 'bhosadike', 'gandu', 'gaandu',
+    'harami', 'haramkhor', 'haramzada', 'kamina', 'kamine', 'kutta', 'kutti', 'saala', 'saale', 'randi', 'lund', 'lauda', 'loda', 'bhadwa', 'bhadwe',
+    'chakka', 'zavadya', 'khanki',
+    // Tamil, Telugu, Malayalam, Kannada (Latin spelling, common variants)
+    'otha', 'ootha', 'thevidiya', 'thevdiya', 'punda', 'pundai', 'koothi', 'kuthi', 'mayiru', 'mairu', 'poolu', 'naaye', 'pottai', 'oombu',
+    'lanja', 'lanjakodaka', 'dengey', 'thendi', 'bevarsi',
+    // Native script (matched anywhere in the text)
+    'चूतिया', 'मादरचोद', 'बहनचोद', 'भोसड़ी', 'गांडू', 'हरामी', 'कमीना', 'रंडी', 'कुत्ता', 'கூதி', 'புண்டை', 'ஒத்தா', 'தேவடியா', 'பொட்டை', 'ஓழ்'
   ]
 };
