@@ -845,7 +845,7 @@ const startServer = async () => {
       console.warn('Plan run cleanup failed to start:', reapError.message);
     }
 
-    // Weekly competitor snapshots: capped scraper reads (off with ENABLE_COMPETITOR_TRACKER=off)
+    // Weekly competitor snapshots: capped scraper reads. OFF unless ENABLE_COMPETITOR_TRACKER is exactly "on" (the owner sets it in the production secret)
     try {
       require('./services/competitors/tracker').startCompetitorTracker();
     } catch (schedulerError) {

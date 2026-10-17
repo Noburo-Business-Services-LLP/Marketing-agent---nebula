@@ -11,6 +11,8 @@ const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
 const { lookupInstagramHandle } = require('../services/serperLookup');
 const { fetchPostsForCompetitors } = require('./competitors');
 const Competitor = require('../models/Competitor');
+const { removeCompetitorsWithSnapshots } = require('../services/competitors/cleanup');
+
 
 /**
  * POST /api/brand/quick-analyze
@@ -235,7 +237,7 @@ Return ONLY valid JSON, no other text.`;
       
       try {
         // Delete old auto-discovered competitors
-        await Competitor.deleteMany({ userId, isAutoDiscovered: true });
+        await removeCompetitorsWithSnapshots({ userId, isAutoDiscovered: true });
 
         // Serper handle lookup for each competitor
         console.log('Resolving Instagram handles via Serper...');
@@ -270,6 +272,7 @@ Return ONLY valid JSON, no other text.`;
               location: comp.location || extractedData.businessLocation || '',
               isActive: true,
               isAutoDiscovered: true,
+              handleStatus: 'suggested', // a guessed or searched handle: not read until verified or confirmed
               posts: [],
               metrics: { followers: 0, lastFetched: new Date() }
             });

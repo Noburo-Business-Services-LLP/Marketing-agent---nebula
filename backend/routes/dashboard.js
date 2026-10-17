@@ -14,6 +14,8 @@ const { ensureCreditCycle } = require('../middleware/creditGuard');
 const User = require('../models/User');
 const Campaign = require('../models/Campaign');
 const Competitor = require('../models/Competitor');
+const { removeCompetitorsWithSnapshots } = require('../services/competitors/cleanup');
+
 const Influencer = require('../models/Influencer');
 const CachedCampaign = require('../models/CachedCampaign');
 const OnboardingContext = require('../models/OnboardingContext');
@@ -92,7 +94,7 @@ async function autoDiscoverCompetitorsForUser(userId, businessContext) {
   
   // Delete any existing auto-discovered competitors first
   try {
-    const deleted = await Competitor.deleteMany({ userId, isAutoDiscovered: true });
+    const deleted = await removeCompetitorsWithSnapshots({ userId, isAutoDiscovered: true });
     console.log(`🗑️ Deleted ${deleted.deletedCount} old auto-discovered competitors`);
   } catch (e) {
     console.error('Could not delete old competitors:', e.message);
@@ -192,6 +194,7 @@ IMPORTANT: Return EXACTLY 15 competitors. Be accurate with company names and soc
           location: comp.location || businessContext.location,
           isActive: true,
           isAutoDiscovered: true,
+          handleStatus: 'suggested', // a guessed or searched handle: not read until verified or confirmed
           posts: [],
           metrics: {
             followers: comp.estimatedFollowers || 0,

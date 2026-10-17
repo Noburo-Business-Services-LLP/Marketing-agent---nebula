@@ -98,11 +98,35 @@ function compare(prev, cur) {
 const typeWord = (t) => (t === 'Video' ? 'reel' : t === 'Sidecar' ? 'carousel' : 'photo');
 const times = (n) => (n === 1 ? '1 time' : `${n} times`);
 
+function bestPostSentence(name, cur, at, out) {
+  const top = cur.topPost; const topAt = toDate(cur.topPostAt);
+  if (top && topAt && at - topAt <= 7 * DAY && topAt <= at) {
+    const likes = num(top.likes); const avg = num(cur.avgLikes);
+    if (likes > 0 && likes >= 1.5 * avg) {
+      out.push({
+        text: `${name}'s best post this week was a ${typeWord(top.type)} with ${likes} likes.`,
+        weight: (likes / Math.max(avg, 1)) / 6,
+      });
+    }
+  }
+  return out;
+}
+
+// weekStart values are Monday dates (YYYY-MM-DD). `next` is exactly one week after `prev`.
+const weekMs = (w) => (typeof w === 'string' ? Date.parse(`${w}T00:00:00Z`) : NaN);
+const consecutive = (prev, next) => { const a = weekMs(prev); const b = weekMs(next); return isFinite(a) && isFinite(b) && b - a === 7 * DAY; };
+
+/**
+ * Sentences are written only for a snapshot of the CURRENT week, and a week-over-week change only when the previous
+ * snapshot is exactly the week before. An older snapshot is never described as "this week".
+ */
 function sentencesFor(name, snaps, at) {
   const cur = snaps[0];
   const prev = snaps[1];
+  if (!cur || cur.weekStart !== weekStartOf(at)) return [];
   if (!prev) return [{ text: `We have started tracking ${name}. Changes show from next week.`, weight: 0.1 }];
   const out = [];
+  if (!consecutive(prev.weekStart, cur.weekStart)) return bestPostSentence(name, cur, at, out);
   const curPosts = num(cur.postsInWindow); const prevPosts = num(prev.postsInWindow);
   const diff = curPosts - prevPosts;
   if (Math.abs(diff) >= 2) {
@@ -120,17 +144,7 @@ function sentencesFor(name, snaps, at) {
       weight: (Math.abs(fDiff) / Math.max(num(prev.followers), 1)) * 10,
     });
   }
-  const top = cur.topPost; const topAt = toDate(cur.topPostAt);
-  if (top && topAt && at - topAt <= 7 * DAY && topAt <= at) {
-    const likes = num(top.likes); const avg = num(cur.avgLikes);
-    if (likes > 0 && likes >= 1.5 * avg) {
-      out.push({
-        text: `${name}'s best post this week was a ${typeWord(top.type)} with ${likes} likes.`,
-        weight: (likes / Math.max(avg, 1)) / 6,
-      });
-    }
-  }
-  return out;
+  return bestPostSentence(name, cur, at, out);
 }
 
 function insights({ items, now } = {}) {
@@ -142,9 +156,17 @@ function insights({ items, now } = {}) {
     const id = comp._id !== undefined ? comp._id : comp.id;
     const name = comp.name || 'A competitor';
     const snaps = asArray(item && item.snapshots).filter(Boolean);
+    const latest = snaps[0] || null;
+    const prior = snaps[1] || null;
+    const taken = latest && toDate(latest.takenAt);
     competitors.push({
       id, name,
       trend: snaps.slice(0, 4).reverse().map((s) => ({ weekStart: s.weekStart, postsInWindow: num(s.postsInWindow), avgLikes: num(s.avgLikes) })),
+      // Which week the numbers are from. The card must say "last checked on <date>" unless isCurrentWeek is true.
+      weekOf: latest ? latest.weekStart || null : null,
+      isCurrentWeek: !!(latest && latest.weekStart === weekStartOf(at)),
+      previousWeekOf: latest && prior && consecutive(prior.weekStart, latest.weekStart) ? prior.weekStart : null,
+      lastCheckedOn: taken ? taken.toISOString().slice(0, 10) : (latest ? latest.weekStart || null : null),
     });
     if (!snaps.length) continue;
     for (const s of sentencesFor(name, snaps, at)) highlights.push({ competitorId: id, name, text: s.text, weight: s.weight });

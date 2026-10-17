@@ -10,6 +10,7 @@ My plan (Stage 1 of the plan-led work) builds each customer's strategy automatic
 5. **Daily cost safety.** Plan runs obey the daily AI spend ceiling and the provider switches (staff AI spend card). A hard cap of 100 plan runs a day applies (`PLAN_RUNS_PER_DAY_MAX` in `backend/config/blueprint.js`); the owner is alerted if it is hit.
 
 ## Switches
+- **Competitor tracker: set `ENABLE_COMPETITOR_TRACKER=on` in the production secret to start weekly reads (about USD 0.46 a day at the 200 cap).** It is off by default in every environment, production included, and only the exact value `on` turns it on. The same switch also stops the customer-triggered competitor scrapes, so until it is set no competitor profile is read at all. Staff can also stop reads at any time with the "Competitor checks" switch on the staff AI spend card. Limits: 200 reads a day in total, 5 a day for one account (`backend/config/competitors.js`).
 - `ENABLE_PLAN_SCHEDULER=off` stops the monthly refresh pass and the retry pass (the first plan from a profile save and the Build my plan button still work).
 - Staff can refresh any client's plan from the staff client page; customers can refresh once a week.
 

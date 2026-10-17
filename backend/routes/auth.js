@@ -3,6 +3,8 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { generateToken, protect } = require('../middleware/auth');
 const Competitor = require('../models/Competitor');
+const { removeCompetitorsWithSnapshots } = require('../services/competitors/cleanup');
+
 const { generateWithLLM } = require('../services/llmRouter');
 const { lookupInstagramHandle } = require('../services/serperLookup');
 const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
@@ -167,7 +169,7 @@ async function triggerCompetitorDiscovery(userId, contextData) {
     }
 
     // Delete existing auto-discovered competitors
-    await Competitor.deleteMany({ userId, isAutoDiscovered: true });
+    await removeCompetitorsWithSnapshots({ userId, isAutoDiscovered: true });
 
     const prompt = `You are a market research expert. Find competitors for this business.
 
@@ -272,6 +274,7 @@ IMPORTANT: Return EXACTLY 15 competitors (5 local + 5 national + 5 global). Retu
           location: comp.location || businessContext.location,
           isActive: true,
           isAutoDiscovered: true,
+          handleStatus: 'suggested', // a guessed or searched handle: not read until verified or confirmed
           posts: [],
           metrics: { followers: comp.estimatedFollowers || 0, lastFetched: new Date() },
           competitorType: comp.competitorType || 'national'

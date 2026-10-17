@@ -87,6 +87,9 @@ const competitorSchema = new mongoose.Schema({
     enum: ['local', 'regional', 'national', 'global', 'startup', 'emerging', 'direct', 'indirect', 'market_leader', 'unknown'],
     default: 'unknown'
   },
+  // Who stands behind the Instagram handle: suggested (we found or guessed it; never read until the customer confirms),
+  // verified (our own profile check matched), confirmed (the customer confirmed or typed it). Older records have none.
+  handleStatus: { type: String, enum: ['suggested', 'verified', 'confirmed'] },
   // Weekly tracking state (see services/competitors/tracker.js)
   tracking: {
     failures: { type: Number, default: 0 },

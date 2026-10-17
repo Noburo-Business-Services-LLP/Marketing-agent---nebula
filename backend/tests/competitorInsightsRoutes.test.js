@@ -187,15 +187,24 @@ test('staff view is the same body for that client', async () => {
   assert.deepStrictEqual(body.competitors.map((c) => c.id), ['mine']);
 });
 
-// A small world for the real tracker pass: one client, one competitor that was read 2 hours ago (inside the cooldown).
-function trackerWorld({ readsToday = 0, spendOk = true, entitled = true } = {}) {
+// A small world for the real tracker pass, as production has it: one client, one competitor that WAS read 2 hours ago
+// this week (tracking.lastCheckedAt set, a stored row for this week, a ledger entry), so only a forced read can go ahead.
+function trackerWorld({ ledgerSeed = 0, spendOk = true, entitled = true, switchOn = true, leaseHeld = false } = {}) {
+  const { createReadLedger } = require('../services/competitors/readLedger');
   const calls = { scrape: [], recorded: [], checked: [] };
-  const rows = [{ competitorId: 'c1', weekStart: WEEK, ok: false, handle: 'h_c1', takenAt: new Date(NOW.getTime() - 2 * 36e5) }];
+  const ledger = createReadLedger({ Model: null });
+  const checkedAt = new Date(NOW.getTime() - 2 * 36e5);
+  const rows = [{ competitorId: 'c1', weekStart: WEEK, ok: true, handle: 'h_c1', takenAt: checkedAt }];
+  let held = leaseHeld;
   const deps = {
-    caps: { MAX_TRACKED: 5, READS_PER_DAY_MAX: 200, COOLDOWN_HOURS: 12, KEEP_WEEKS: 12, FAIL_PAUSE_AFTER: 3 },
-    accounts: async (limit, ids) => [{ _id: 'client1', isActive: true, onboardingCompleted: true, staffRole: null, isCsm: false, plan: { tier: 'growth' } }, { _id: 'other', isActive: true, onboardingCompleted: true, plan: { tier: 'growth' } }]
+    caps: { MAX_TRACKED: 5, READS_PER_DAY_MAX: 200, maxReadsPerAccountPerDay: 5, COOLDOWN_HOURS: 12, KEEP_WEEKS: 12, FAIL_PAUSE_AFTER: 3, ACCOUNTS_PER_PASS: 60 },
+    env: switchOn ? { ENABLE_COMPETITOR_TRACKER: 'on' } : {},
+    ledger,
+    lease: { claim: async () => (held ? null : ((held = true), { value: 'x' })), renew: async (t) => t, release: async () => { held = false; } },
+    accounts: async ({ ids } = {}) => [{ _id: 'client1', isActive: true, onboardingCompleted: true, staffRole: null, isCsm: false, plan: { tier: 'growth' } }, { _id: 'other', isActive: true, onboardingCompleted: true, plan: { tier: 'growth' } }]
       .filter((u) => !ids || ids.map(String).includes(u._id)),
-    competitorsFor: async (u) => [comp('c1', 'client1'), comp('c2', 'other')].filter((c) => c.userId === u._id),
+    markAccountRead: async () => {},
+    competitorsFor: async (u) => [comp('c1', 'client1', { tracking: { lastCheckedAt: checkedAt, lastHandle: 'h_c1', failures: 0 } }), comp('c2', 'other')].filter((c) => c.userId === u._id),
     canUse: () => ({ allowed: entitled }),
     gate: async () => [],
     spend: { check: async (a) => { calls.checked.push(a); return spendOk ? { ok: true } : { ok: false }; }, record: async (a, n) => { calls.recorded.push([a, n]); } },
@@ -203,39 +212,118 @@ function trackerWorld({ readsToday = 0, spendOk = true, entitled = true } = {}) 
     saveTracking: async () => {}, sleep: async () => {},
     store: {
       async save(s) { rows.push({ ...s }); return s; },
-      async latest() { return []; },
+      async latest(id) { return rows.filter((r) => String(r.competitorId) === String(id) && r.ok !== false); },
       async lastAttempt(id) { return rows.filter((r) => String(r.competitorId) === String(id)).sort((a, b) => b.takenAt - a.takenAt)[0] || null; },
-      async prune() {}, async readsToday() { return readsToday; }
+      async prune() {}
     }
   };
-  return { deps, calls };
+  const ready = (async () => {
+    await ledger.record({ userId: 'client1', competitorId: 'c1', handle: 'h_c1', at: checkedAt, source: 'tracker' });
+    for (let i = 0; i < ledgerSeed; i++) await ledger.record({ userId: `seed${i}`, competitorId: `s${i}`, handle: 'x', at: NOW, source: 'tracker' });
+  })();
+  return { deps, calls, ledger, ready };
 }
 const client = { _id: 'client1' };
 const staffUser = { _id: 's1', staffRole: 'admin' };
 
-test('staff check reads only that client, bypasses the cooldown, and is logged', async () => {
-  const w = trackerWorld();
+test('(I7) staff check reads a competitor that was already checked this week, reads only that client, counts the read and logs it', async () => {
+  const w = trackerWorld(); await w.ready;
   const logged = [];
+  // without force the same competitor is still waiting for next week
+  assert.strictEqual((await runTrackerOnce({ deps: trackerWorld().deps, now: NOW, accountIds: ['client1'] })).checked, 0);
   const out = await router.staffCheck({ client, staff: staffUser, record: async (r) => logged.push(r), now: NOW, runTracker: (a) => runTrackerOnce({ ...a, deps: w.deps }) });
-  assert.deepStrictEqual(out, { success: true, checked: 1, skipped: 0 });
+  assert.deepStrictEqual(out, { success: true, checked: 1, skipped: 0, busy: false, disabled: false });
   assert.deepStrictEqual(w.calls.scrape, ['h_c1'], 'the other account is not read');
+  assert.strictEqual(await w.ledger.countToday(NOW), 2, 'the forced read is counted with the earlier one');
   assert.deepStrictEqual(logged, [{ actor: staffUser, action: 'check_competitors', client: 'client1', details: { checked: 1 } }]);
-  // without force the same competitor is still cooling down
-  const w2 = trackerWorld();
-  assert.strictEqual((await runTrackerOnce({ deps: w2.deps, now: NOW, accountIds: ['client1'] })).checked, 0);
 });
 
-test('staff check still respects the daily cap and the spend guard, and the add-on', async () => {
+test('(I7) staff check still respects the daily cap, the per-account cap, the spend guard, the add-on and the switch', async () => {
   const run = (w) => (a) => runTrackerOnce({ ...a, deps: w.deps });
-  const capped = trackerWorld({ readsToday: 200 });
-  assert.strictEqual((await router.staffCheck({ client, staff: staffUser, record: async () => {}, now: NOW, runTracker: run(capped) })).checked, 0);
+  const staffRun = async (w) => { await w.ready; return router.staffCheck({ client, staff: staffUser, record: async () => {}, now: NOW, runTracker: run(w) }); };
+  const capped = trackerWorld({ ledgerSeed: 200 });
+  assert.strictEqual((await staffRun(capped)).checked, 0);
   assert.deepStrictEqual(capped.calls.scrape, []);
+  const perAccount = trackerWorld();
+  await perAccount.ready;
+  for (let i = 0; i < 4; i++) await perAccount.ledger.record({ userId: 'client1', competitorId: `x${i}`, handle: 'x', at: NOW, source: 'staff' });
+  assert.strictEqual((await staffRun(perAccount)).checked, 0, 'five reads for this account today already');
   const guarded = trackerWorld({ spendOk: false });
-  assert.strictEqual((await router.staffCheck({ client, staff: staffUser, record: async () => {}, now: NOW, runTracker: run(guarded) })).checked, 0);
+  assert.strictEqual((await staffRun(guarded)).checked, 0);
   assert.deepStrictEqual(guarded.calls.scrape, []);
   assert.deepStrictEqual(guarded.calls.recorded, []);
-  const noAddon = trackerWorld({ entitled: false });
-  assert.strictEqual((await router.staffCheck({ client, staff: staffUser, record: async () => {}, now: NOW, runTracker: run(noAddon) })).checked, 0);
+  assert.strictEqual((await staffRun(trackerWorld({ entitled: false }))).checked, 0);
+  const off = await staffRun(trackerWorld({ switchOn: false }));
+  assert.strictEqual(off.checked, 0);
+  assert.strictEqual(off.disabled, true);
+});
+
+test('(I7) staff check says so when another pass is running instead of pretending it checked', async () => {
+  const w = trackerWorld({ leaseHeld: true }); await w.ready;
+  const out = await router.staffCheck({ client, staff: staffUser, record: async () => {}, now: NOW, runTracker: (a) => runTrackerOnce({ ...a, deps: w.deps }) });
+  assert.strictEqual(out.success, true);
+  assert.strictEqual(out.checked, 0);
+  assert.strictEqual(out.busy, true);
+  assert.deepStrictEqual(w.calls.scrape, []);
+});
+
+test('(I5) the competitors shown are the ones the tracker reads: same list, same order, same cap', async () => {
+  const { trackedCompetitors } = require('../services/competitors/tracker') && require('../services/competitors/tracked');
+  const competitors = [
+    ...[1, 2, 3, 4, 5, 6, 7].map((n) => comp(`c${n}`, 'u1', { createdAt: new Date(2026, 3, n) })),
+    comp('nohandle1', 'u1', { createdAt: new Date(2026, 3, 9), socialHandles: {} }),
+    comp('paused1', 'u1', { createdAt: new Date(2026, 3, 8), tracking: { pausedAt: new Date('2026-10-01'), failures: 3 } })
+  ];
+  const res = await call({ deps: world({ competitors }).deps, user: owner() });
+  const shown = res.body.competitors.map((c) => c.id);
+  assert.deepStrictEqual(shown, trackedCompetitors(competitors).map((c) => c._id));
+  assert.deepStrictEqual(shown, ['nohandle1', 'paused1', 'c7', 'c6', 'c5']);
+  // and the tracker, given the same list, reads only from that shown set
+  const t = trackerWorld(); await t.ready;
+  t.deps.competitorsFor = async () => competitors.map((c) => ({ ...c, userId: 'client1' }));
+  await runTrackerOnce({ deps: t.deps, now: NOW, accountIds: ['client1'], force: true });
+  assert.deepStrictEqual(t.calls.scrape, ['h_c7', 'h_c6', 'h_c5']);
+});
+
+test('(I6) each row says which week its numbers are from, and an old snapshot is not described as this week', async () => {
+  const competitors = [
+    comp('fresh', 'u1', { createdAt: new Date(2026, 5, 3) }), comp('old', 'u1', { createdAt: new Date(2026, 5, 2) }), comp('gap', 'u1', { createdAt: new Date(2026, 5, 1) })
+  ];
+  const oldWeek = weekStartOf(new Date(NOW.getTime() - 5 * 7 * DAY));
+  const olderWeek = weekStartOf(new Date(NOW.getTime() - 6 * 7 * DAY));
+  const gapWeek = weekStartOf(new Date(NOW.getTime() - 3 * 7 * DAY));
+  const snapshots = [
+    snap('fresh', WEEK, { postsInWindow: 5 }), snap('fresh', PREV, { postsInWindow: 2 }),
+    snap('old', oldWeek, { postsInWindow: 5 }), snap('old', olderWeek, { postsInWindow: 2 }),
+    snap('gap', WEEK, { postsInWindow: 5 }), snap('gap', gapWeek, { postsInWindow: 2 })
+  ];
+  const res = await call({ deps: world({ competitors, snapshots }).deps, user: owner() });
+  const by = Object.fromEntries(res.body.competitors.map((c) => [c.id, c]));
+  assert.deepStrictEqual([by.fresh.weekOf, by.fresh.isCurrentWeek, by.fresh.previousWeekOf], [WEEK, true, PREV]);
+  assert.deepStrictEqual([by.old.weekOf, by.old.isCurrentWeek, by.old.previousWeekOf], [oldWeek, false, olderWeek]);
+  assert.ok(by.old.lastCheckedOn, 'a date to say "last checked on"');
+  assert.deepStrictEqual([by.gap.weekOf, by.gap.isCurrentWeek, by.gap.previousWeekOf], [WEEK, true, null]);
+  const texts = res.body.highlights.map((h) => h.text).join(' ');
+  assert.match(texts, /Rival fresh posted 5 times this week, up from 2\./);
+  assert.doesNotMatch(texts, /Rival old/);
+  assert.doesNotMatch(texts, /Rival gap posted/);
+});
+
+test('(I8) rows carry handleStatus; an unconfirmed or badly formed handle is shown as such and never as tracking', async () => {
+  const competitors = [
+    comp('sug', 'u1', { createdAt: new Date(2026, 5, 6), handleStatus: 'suggested' }),
+    comp('ver', 'u1', { createdAt: new Date(2026, 5, 5), handleStatus: 'verified' }),
+    comp('con', 'u1', { createdAt: new Date(2026, 5, 4), handleStatus: 'confirmed' }),
+    comp('legacy', 'u1', { createdAt: new Date(2026, 5, 3), handleStatus: undefined, isAutoDiscovered: true }),
+    comp('bad', 'u1', { createdAt: new Date(2026, 5, 2), socialHandles: { instagram: 'n/a' }, handleStatus: 'confirmed' })
+  ];
+  const res = await call({ deps: world({ competitors, snapshots: [snap('sug', WEEK)] }).deps, user: owner() });
+  const by = Object.fromEntries(res.body.competitors.map((c) => [c.id, c]));
+  assert.deepStrictEqual([by.sug.handleStatus, by.ver.handleStatus, by.con.handleStatus, by.legacy.handleStatus], ['suggested', 'verified', 'confirmed', 'suggested']);
+  assert.strictEqual(by.sug.status, 'unconfirmed');
+  assert.strictEqual(by.legacy.status, 'unconfirmed');
+  assert.strictEqual(by.ver.status, 'waiting');
+  assert.strictEqual(by.bad.status, 'no_handle');
 });
 
 test('the customer endpoint works inside CSM and agency passes, and is mounted before the competitors router', () => {

@@ -66,3 +66,43 @@ test('follower change needs at least 50 and 1 percent, and a best post must be r
   const photo = insights({ items: [{ competitor: { _id: 'p', name: 'Pic' }, snapshots: [{ ...base, topPost: { likes: 150, type: 'Image' }, topPostAt: new Date(NOW - DAY) }, prev] }], now: NOW });
   assert.deepStrictEqual(photo.highlights.map((h) => h.text), ["Pic's best post this week was a photo with 150 likes."]);
 });
+
+// ---- Stage 4 fix round A, I6: an old snapshot is never described as "this week" ----
+test('I6: a snapshot from an earlier week gives no "this week" sentence, and the row says which week it is from', () => {
+  const stale = { weekStart: '2026-09-07', postsInWindow: 5, followers: 1200, avgLikes: 60, takenAt: new Date('2026-09-09T06:00:00Z'), topPost: { likes: 900, type: 'Video' }, topPostAt: new Date('2026-09-08T00:00:00Z') };
+  const staleOlder = { weekStart: '2026-08-31', postsInWindow: 2, followers: 1000, avgLikes: 50 };
+  const out = insights({ items: [{ competitor: { _id: 's', name: 'Sweet Co' }, snapshots: [stale, staleOlder] }], now: NOW });
+  assert.deepStrictEqual(out.highlights, []);
+  const row = out.competitors[0];
+  assert.strictEqual(row.weekOf, '2026-09-07');
+  assert.strictEqual(row.isCurrentWeek, false);
+  assert.strictEqual(row.previousWeekOf, '2026-08-31');
+  assert.strictEqual(row.lastCheckedOn, '2026-09-09');
+});
+
+test('I6: last week\'s snapshot (the new week has not been read yet) is not "this week" either', () => {
+  const lastWeek = { weekStart: '2026-10-05', postsInWindow: 5, followers: 1200, avgLikes: 60, takenAt: new Date('2026-10-07T06:00:00Z') };
+  const before = { weekStart: '2026-09-28', postsInWindow: 2, followers: 1000, avgLikes: 50 };
+  const out = insights({ items: [{ competitor: { _id: 's', name: 'Sweet Co' }, snapshots: [lastWeek, before] }], now: NOW });
+  assert.deepStrictEqual(out.highlights, []);
+  assert.strictEqual(out.competitors[0].isCurrentWeek, false);
+  assert.strictEqual(out.competitors[0].weekOf, '2026-10-05');
+});
+
+test('I6: a change is described only when the two weeks are next to each other', () => {
+  const cur = { weekStart: '2026-10-12', postsInWindow: 5, followers: 1120, avgLikes: 60, takenAt: new Date('2026-10-14T06:00:00Z') };
+  const gap = { weekStart: '2026-09-21', postsInWindow: 2, followers: 1000, avgLikes: 50 };
+  const skipped = insights({ items: [{ competitor: { _id: 'g', name: 'Gap Co' }, snapshots: [cur, gap] }], now: NOW });
+  assert.deepStrictEqual(skipped.highlights, [], 'no "up from 2" across a skipped week');
+  assert.strictEqual(skipped.competitors[0].weekOf, '2026-10-12');
+  assert.strictEqual(skipped.competitors[0].isCurrentWeek, true);
+  assert.strictEqual(skipped.competitors[0].previousWeekOf, null);
+  const next = insights({ items: [{ competitor: { _id: 'n', name: 'Next Co' }, snapshots: [cur, { ...gap, weekStart: '2026-10-05' }] }], now: NOW });
+  assert.match(next.highlights.map((h) => h.text).join(' '), /Next Co posted 5 times this week, up from 2\./);
+  assert.strictEqual(next.competitors[0].previousWeekOf, '2026-10-05');
+});
+
+test('I6: a competitor with no snapshot has null week fields', () => {
+  const row = insights({ items: [{ competitor: { _id: 'x', name: 'New Co' }, snapshots: [] }], now: NOW }).competitors[0];
+  assert.deepStrictEqual([row.weekOf, row.isCurrentWeek, row.previousWeekOf, row.lastCheckedOn], [null, false, null, null]);
+});

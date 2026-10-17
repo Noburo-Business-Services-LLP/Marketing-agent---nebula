@@ -9,10 +9,10 @@ const { requireFeature } = require('../middleware/requireFeature');
 const caps = require('../config/competitors');
 const { weekStartOf } = require('../services/week/weekMath');
 const { insights } = require('../services/competitors/snapshot');
+const { handleOf, handleStatusOf, isValidHandle, trackedCompetitors, competitorsQuery } = require('../services/competitors/tracked');
 
 const toUserId = (user) => (!user ? null : user._id ? String(user._id) : user.id ? String(user.id) : null);
 const GENERIC_ERROR = 'We could not complete that request. Please try again.';
-const handleOf = (c) => String((c && c.socialHandles && c.socialHandles.instagram) || '').trim().replace(/^@/, '');
 
 const keyGenerator = (req) => String(req.user?._id || req.user?.id || ipKeyGenerator(req.ip));
 const makeLimiter = (max, message) => rateLimit({ windowMs: 15 * 60 * 1000, max, standardHeaders: true, legacyHeaders: false, message: { success: false, message }, keyGenerator });
@@ -24,18 +24,19 @@ function defaultDeps() {
   let store = null;
   const lazyStore = () => (store = store || require('../services/competitors/snapshotStore').snapshotStore());
   return {
-    competitorsFor: (userId) => require('../models/Competitor')
-      .find({ userId, isActive: { $ne: false }, isIgnored: { $ne: true } }).sort({ createdAt: -1 }).limit(caps.MAX_TRACKED * 4).lean(),
+    // The same query and the same trackedCompetitors() list the weekly tracker uses.
+    competitorsFor: (userId) => competitorsQuery(require('../models/Competitor'), userId),
     store: { latest: (...a) => lazyStore().latest(...a), lastAttempt: (...a) => lazyStore().lastAttempt(...a) }
   };
 }
 const withDefaults = (deps) => ({ ...defaultDeps(), ...(deps || {}) });
 
-const asTime = (v) => (v ? new Date(v).getTime() : 0);
-
-// Why a competitor shows the way it does. Order matters: no handle, then paused, then a failed latest check, then waiting.
+// Why a competitor shows the way it does. Order matters: no (usable) handle, a handle nobody confirmed yet, paused,
+// a failed latest check, then waiting.
 function statusOf({ competitor, attempt, snapshots, week }) {
-  if (!handleOf(competitor)) return 'no_handle';
+  const handle = handleOf(competitor);
+  if (!handle || !isValidHandle(handle)) return 'no_handle';
+  if (handleStatusOf(competitor) === 'suggested') return 'unconfirmed';
   if (competitor.tracking && competitor.tracking.pausedAt) return 'paused';
   const okThisWeek = snapshots.some((s) => s.weekStart === week);
   if (attempt && attempt.ok === false && !okThisWeek) return 'failed';
@@ -50,10 +51,8 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
   const userId = toUserId(user);
   const week = weekStartOf(now);
   const all = (await d.competitorsFor(userId)) || [];
-  const mine = all
-    .filter((c) => c && c.isActive !== false && !c.isIgnored && String(c.userId) === userId)
-    .sort((a, b) => asTime(b.createdAt) - asTime(a.createdAt))
-    .slice(0, caps.MAX_TRACKED);
+  // The competitors shown are the ones the tracker reads: one shared list (trackedCompetitors), owner's own only.
+  const mine = trackedCompetitors(all.filter((c) => c && String(c.userId) === userId), caps.MAX_TRACKED);
 
   const items = [];
   const rows = [];
@@ -69,24 +68,31 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
   }
 
   const made = insights({ items, now });
-  const trendOf = new Map(made.competitors.map((c) => [String(c.id), c.trend]));
+  const madeOf = new Map(made.competitors.map((c) => [String(c.id), c]));
   return {
     success: true,
     weekStart: week,
     highlights: made.highlights.map((h) => ({ competitorId: String(h.competitorId), name: h.name, text: h.text, weight: h.weight })),
-    competitors: rows.map(({ competitor, status, lastCheckedAt }) => ({
-      id: String(competitor._id), name: competitor.name, handle: handleOf(competitor), status,
-      trend: trendOf.get(String(competitor._id)) || [], lastCheckedAt
-    }))
+    competitors: rows.map(({ competitor, status, lastCheckedAt }) => {
+      const m = madeOf.get(String(competitor._id)) || {};
+      return {
+        id: String(competitor._id), name: competitor.name, handle: handleOf(competitor), handleStatus: handleStatusOf(competitor), status,
+        trend: m.trend || [], lastCheckedAt,
+        // Which week the numbers are from: when isCurrentWeek is false say "last checked on <lastCheckedOn>", not "this week".
+        weekOf: m.weekOf || null, isCurrentWeek: !!m.isCurrentWeek, previousWeekOf: m.previousWeekOf || null, lastCheckedOn: m.lastCheckedOn || null
+      };
+    })
   };
 }
 
-// Staff: read this one client's competitors now, bypassing the 12 hour cooldown but never the daily cap or the spend guard.
+// Staff: read this one client's competitors now. `force` skips the weekly cooldown (so it works on competitors already
+// checked this week) but never the switch, the daily ceiling, the per-account daily cap or the spend guard; the read is
+// counted and logged. `busy` means another pass is running; `disabled` means the competitor checks switch is off.
 async function staffCheck({ client, staff, record, runTracker, now = new Date() }) {
   const run = runTracker || ((args) => require('../services/competitors/tracker').runTrackerOnce(args));
   const out = (await run({ accountIds: [String(client._id)], force: true, now, limit: 1 })) || { checked: 0, skipped: 0 };
   await record({ actor: staff, action: 'check_competitors', client: client._id, details: { checked: out.checked || 0 } });
-  return { success: true, checked: out.checked || 0, skipped: out.skipped || 0 };
+  return { success: true, checked: out.checked || 0, skipped: out.skipped || 0, busy: !!out.busy, disabled: !!out.disabled };
 }
 
 function createCompetitorInsightsRouter(impl = {}) {

@@ -73,9 +73,14 @@ async function setup() {
     return user;
   };
   const rival = (user, name, handle) => Competitor.create({ userId: user._id, name, website: 'https://example.com', socialHandles: { instagram: handle }, isActive: true });
+  // The tracker is off unless the switch is "on" and it takes a lease and a read ledger: here all three are in-memory fakes.
+  const { createReadLedger } = require('../services/competitors/readLedger');
+  const ledger = createReadLedger({ Model: null });
+  const lease = { claim: async () => ({ value: 'check' }), renew: async (t) => t, release: async () => {} };
   const fakeDeps = (week, at) => ({
     scrapeProfile: fakeReader(week, at), sleep: async () => {}, gate: async () => [],
-    spend: { check: async () => ({ ok: true }), record: async () => {} }
+    spend: { check: async () => ({ ok: true }), record: async () => {} },
+    env: { ENABLE_COMPETITOR_TRACKER: 'on' }, ledger, lease
   });
 
   const entitled = await mk('entitled', ['competitors']);

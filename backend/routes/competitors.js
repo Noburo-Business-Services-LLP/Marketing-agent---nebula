@@ -12,12 +12,33 @@ const User = require('../models/User');
 const OnboardingContext = require('../models/OnboardingContext');
 const { lookupInstagramHandle } = require('../services/serperLookup');
 const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
+const { createHandleRouter } = require('./competitorHandle');
+const { guardedRead, sharedGuard, ReadRefused } = require('../services/competitors/readGuard');
+const { removeCompetitorsWithSnapshots } = require('../services/competitors/cleanup');
+const { handleStatusOf } = require('../services/competitors/tracked');
 
 // Import real social media API service for fetching actual posts
 const {
   scrapeInstagramProfile,
   searchInstagramByName
 } = require('../services/socialMediaAPI');
+
+// Every customer-triggered scraper call below goes through the SAME guard as the weekly tracker: the competitor checks
+// switch (ENABLE_COMPETITOR_TRACKER=on), the daily ceiling, the per-account daily cap and the spend guard. A refused call
+// throws ReadRefused with a plain message; each call that goes ahead is counted in the read ledger. `_deps` is for tests.
+const _deps = { guard: null, scrapeProfile: null, searchByName: null, Competitor: null };
+const db = () => _deps.Competitor || Competitor;
+const readProfile = (competitor, handle) => guardedRead({
+  guard: _deps.guard || sharedGuard(), userId: competitor.userId, competitorId: competitor._id, handle, source: 'customer',
+  fn: () => (_deps.scrapeProfile || scrapeInstagramProfile)(handle)
+});
+const searchByName = (competitor, hints) => guardedRead({
+  guard: _deps.guard || sharedGuard(), userId: competitor.userId, competitorId: competitor._id, handle: null, source: 'customer',
+  fn: () => (_deps.searchByName || searchInstagramByName)(competitor.name, hints)
+});
+
+// The customer confirms or corrects a competitor's Instagram handle (PUT /:id/handle).
+router.use(createHandleRouter());
 
 /**
  * POST /api/competitors/auto-discover
@@ -81,7 +102,7 @@ router.post('/auto-discover', protect, requireFeature('competitors'), async (req
     }
 
     // Delete old auto-discovered competitors
-    const deleted = await Competitor.deleteMany({ userId, isAutoDiscovered: true });
+    const deleted = await removeCompetitorsWithSnapshots({ userId, isAutoDiscovered: true });
     console.log(` Deleted ${deleted.deletedCount} old competitors`);
 
     // Competitor discovery using Claude Sonnet 4.6
@@ -182,6 +203,7 @@ IMPORTANT: Return EXACTLY 15 competitors (5 local + 5 national + 5 global). Retu
           location: comp.location || businessContext.location,
           isActive: true,
           isAutoDiscovered: true,
+          handleStatus: 'suggested', // found by search or guessed: not read weekly until verified or confirmed
           posts: [],
           metrics: {
             followers: comp.estimatedFollowers || 0,
@@ -359,18 +381,25 @@ async function findInstagramProfile(competitor) {
   const handles = competitor.socialHandles || {};
   const givenHandle = handles.instagram?.replace('@', '');
   
+  // A handle the customer confirmed is theirs to decide: it is used as it is and never replaced by a search result.
+  const customerConfirmed = competitor.handleStatus === 'confirmed';
+
   // STEP 1: Try the given handle first (fastest)
   if (givenHandle) {
     try {
       console.log(`   Trying given handle @${givenHandle} for ${competitor.name}...`);
-      const result = await scrapeInstagramProfile(givenHandle);
+      const result = await readProfile(competitor, givenHandle);
       if (result?.success && result?.data?.length > 0) {
         const profile = result.data[0];
         const posts = profile.latestPosts || profile.posts || [];
         if (posts.length > 0) {
           const validation = validateProfileMatch(profile, competitor);
-          if (validation.valid) {
+          if (validation.valid || customerConfirmed) {
             console.log(`  - @${givenHandle} VERIFIED for ${competitor.name} (${validation.reason})`);
+            if (!customerConfirmed) {
+              // Our own profile check matched: the weekly tracker may read this handle.
+              await db().updateOne({ _id: competitor._id, handleStatus: { $ne: 'confirmed' } }, { $set: { handleStatus: 'verified' } }).catch(() => {});
+            }
             return { result, handle: givenHandle };
           } else {
             console.log(`  - - @${givenHandle} has posts but FAILED validation for ${competitor.name} - searching further...`);
@@ -378,13 +407,15 @@ async function findInstagramProfile(competitor) {
         }
       }
     } catch (err) {
+      if (err instanceof ReadRefused) throw err;
       console.log(`  - @${givenHandle} failed: ${err.message}`);
     }
   }
+  if (customerConfirmed) return null;
 
   // STEP 2: Search Instagram by business name (universal, works for ANY business)
   try {
-    const searchResult = await searchInstagramByName(competitor.name, {
+    const searchResult = await searchByName(competitor, {
       industry: competitor.industry,
       website: competitor.website,
       description: competitor.description
@@ -393,7 +424,7 @@ async function findInstagramProfile(competitor) {
       const foundHandle = searchResult.username;
       console.log(`   Search found @${foundHandle} for ${competitor.name}, fetching profile...`);
       
-      const result = await scrapeInstagramProfile(foundHandle);
+      const result = await readProfile(competitor, foundHandle);
       if (result?.success && result?.data?.length > 0) {
         const profile = result.data[0];
         const posts = profile.latestPosts || profile.posts || [];
@@ -401,8 +432,9 @@ async function findInstagramProfile(competitor) {
           const validation = validateProfileMatch(profile, competitor);
           if (validation.valid) {
             console.log(`  - @${foundHandle} VERIFIED! ${posts.length} posts. Updating DB handle.`);
-            await Competitor.findByIdAndUpdate(competitor._id, {
-              'socialHandles.instagram': foundHandle
+            await db().findByIdAndUpdate(competitor._id, {
+              'socialHandles.instagram': foundHandle,
+              handleStatus: 'verified'
             });
             return { result, handle: foundHandle };
           } else {
@@ -412,6 +444,7 @@ async function findInstagramProfile(competitor) {
       }
     }
   } catch (err) {
+    if (err instanceof ReadRefused) throw err;
     console.log(`  - Instagram search failed for ${competitor.name}: ${err.message}`);
   }
 
@@ -426,7 +459,7 @@ async function findInstagramProfile(competitor) {
   for (const handle of quickVariations.slice(0, 2)) {
     try {
       console.log(`   Trying variation @${handle}...`);
-      const result = await scrapeInstagramProfile(handle);
+      const result = await readProfile(competitor, handle);
       if (result?.success && result?.data?.length > 0) {
         const profile = result.data[0];
         const posts = profile.latestPosts || profile.posts || [];
@@ -434,8 +467,9 @@ async function findInstagramProfile(competitor) {
           const validation = validateProfileMatch(profile, competitor);
           if (validation.valid) {
             console.log(`  - @${handle} VERIFIED! Updating DB handle.`);
-            await Competitor.findByIdAndUpdate(competitor._id, {
-              'socialHandles.instagram': handle
+            await db().findByIdAndUpdate(competitor._id, {
+              'socialHandles.instagram': handle,
+              handleStatus: 'verified'
             });
             return { result, handle };
           } else {
@@ -443,7 +477,7 @@ async function findInstagramProfile(competitor) {
           }
         }
       }
-    } catch (err) { /* skip */ }
+    } catch (err) { if (err instanceof ReadRefused) throw err; /* skip */ }
   }
 
   console.log(`  - No VERIFIED Instagram found for ${competitor.name}`);
@@ -472,11 +506,12 @@ async function fetchPostsForCompetitors(competitors) {
       const posts = processAndSavePosts(latestPosts, competitor, threeMonthsAgo);
       
       if (posts.length > 0) {
-        await Competitor.findByIdAndUpdate(competitor._id, { posts });
+        await db().findByIdAndUpdate(competitor._id, { posts });
         allPosts.push(...posts);
         console.log(`- Saved ${posts.length} REAL posts for ${competitor.name}`);
       }
     } catch (fetchError) {
+      if (fetchError instanceof ReadRefused) { console.warn(`Competitor checks stopped (${fetchError.reason}): ${fetchError.message}`); break; }
       console.error(`Failed for ${competitor.name}:`, fetchError.message);
     }
   }
@@ -605,6 +640,7 @@ router.post('/add-manual', protect, requireFeature('competitors'), async (req, r
       location: '',
       isActive: true,
       isAutoDiscovered: false,
+      handleStatus: instagramHandle ? 'suggested' : undefined, // found by search: confirm it before it is read weekly
       posts: [],
       metrics: { followers: 0, lastFetched: new Date() }
     });
@@ -721,7 +757,7 @@ router.post('/scrape-by-type', protect, requireFeature('competitors'), async (re
     const oneMonthAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
 
     // Find all competitors of this type
-    const allOfType = await Competitor.find({ 
+    const allOfType = await db().find({ 
       userId, 
       isActive: true, 
       isIgnored: { $ne: true },
@@ -766,6 +802,11 @@ router.post('/scrape-by-type', protect, requireFeature('competitors'), async (re
 
     console.log(` Found ${competitors.length} ${competitorType} competitors without posts`);
 
+    // Same guard as the weekly tracker: the switch, the daily ceiling, this account's daily cap and the spend guard.
+    const verdict = await (_deps.guard || sharedGuard()).allow({ userId, at: new Date() });
+    if (!verdict.ok) return res.status(429).json({ success: false, message: verdict.message });
+    let notice = null;
+
     const results = [];
     const threeMonthsAgo = Date.now() - (30 * 24 * 60 * 60 * 1000); // 1 month filter
 
@@ -793,6 +834,7 @@ router.post('/scrape-by-type', protect, requireFeature('competitors'), async (re
           results.push({ name: competitor.name, success: false, error: 'No working Instagram handle found' });
         }
       } catch (err) {
+        if (err instanceof ReadRefused) { notice = err.message; break; }
         results.push({ name: competitor.name, success: false, error: err.message });
         console.error(`- Failed for ${competitor.name}:`, err.message);
       }
@@ -836,6 +878,7 @@ router.post('/scrape-by-type', protect, requireFeature('competitors'), async (re
       scraped: results.filter(r => r.success).length,
       failed: results.filter(r => !r.success).length,
       results,
+      ...(notice ? { notice } : {}),
       message: `Fetched posts for ${results.filter(r => r.success).length} ${competitorType} competitors`
     });
   } catch (error) {
@@ -915,7 +958,8 @@ router.get('/posts', protect, async (req, res) => {
       logo: c.logo,
       competitorType: c.competitorType || 'unknown',
       website: c.website,
-      isActive: c.isActive
+      isActive: c.isActive,
+      handleStatus: handleStatusOf(c)
     }));
 
     res.json({
@@ -957,5 +1001,7 @@ function formatTimeAgo(date) {
 
 module.exports = router;
 module.exports.fetchPostsForCompetitors = fetchPostsForCompetitors;
+module.exports.findInstagramProfile = findInstagramProfile;
+module.exports._deps = _deps;
 
 
