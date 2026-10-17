@@ -22,6 +22,22 @@ export function visibleSteps(steps: TourStep[], hasTarget: (selector: string) =>
   return steps.filter((s) => hasTarget(s.target));
 }
 
+export interface WaitOptions { timeoutMs?: number; intervalMs?: number; sleep?: (ms: number) => Promise<void>; cancelled?: () => boolean }
+
+/** Waits for the page to draw its targets: returns the selectors that are present, as soon as all are, or at the timeout the ones that are. */
+export async function waitForTargets(selectors: string[], hasTarget: (selector: string) => boolean, opts: WaitOptions = {}): Promise<string[]> {
+  const timeoutMs = opts.timeoutMs ?? 2500;
+  const intervalMs = Math.max(1, opts.intervalMs ?? 100);
+  const sleep = opts.sleep || ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  let elapsed = 0;
+  for (;;) {
+    const present = selectors.filter((sel) => hasTarget(sel));
+    if (present.length === selectors.length || elapsed >= timeoutMs || (opts.cancelled && opts.cancelled())) return present;
+    await sleep(intervalMs);
+    elapsed += intervalMs;
+  }
+}
+
 export interface AutoStartInput {
   user: any;
   path: string;

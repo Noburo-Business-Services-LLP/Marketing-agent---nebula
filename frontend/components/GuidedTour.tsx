@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { placeCard, spotlightRect, visibleSteps } from '../utils/tour';
+import { placeCard, spotlightRect, visibleSteps, waitForTargets } from '../utils/tour';
 import type { Rect, TourStep } from '../utils/tour';
 
 export type TourCloseReason = 'finished' | 'skipped' | 'closed';
@@ -48,7 +48,9 @@ const GuidedTour: React.FC<Props> = (props) => (props.open ? <TourRun {...props}
 
 const TourRun: React.FC<Props> = ({ steps, onClose, onNeedsMenu }) => {
   const { pathname } = useLocation();
-  const vis = useMemo(() => visibleSteps(steps, exists), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The list is chosen after the page has had time to draw (up to 2.5 s), not at the instant of opening.
+  const [chosen, setChosen] = useState<TourStep[] | null>(null);
+  const vis = useMemo(() => chosen || [], [chosen]);
   const [index, setIndex] = useState(0);
   const [target, setTarget] = useState<Rect | null>(null);
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -88,8 +90,16 @@ const TourRun: React.FC<Props> = ({ steps, onClose, onNeedsMenu }) => {
     dir.current = 1; setTarget(null); setIndex(i + 1);
   }, [finish]);
 
+  useEffect(() => {
+    let stop = false;
+    waitForTargets(steps.map((s) => s.target), exists, { cancelled: () => stop }).then((present) => {
+      if (!stop) setChosen(visibleSteps(steps, (sel) => present.includes(sel)));
+    });
+    return () => { stop = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Nothing to show: leave quietly.
-  useEffect(() => { if (vis.length === 0) finish('closed'); }, [vis.length, finish]);
+  useEffect(() => { if (chosen && chosen.length === 0) finish('closed'); }, [chosen, finish]);
 
   // Focus goes back to where it was when the tour closes, whatever closed it.
   useEffect(() => {

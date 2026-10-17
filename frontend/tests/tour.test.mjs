@@ -39,3 +39,30 @@ test('the state machine moves, never underflows, and finishes after the last ste
   assert.equal(reduce({ index: 1, open: true, total: 3 }, { type: 'skip' }).skipped, true);
   assert.equal(reduce({ index: 1, open: true, total: 3 }, { type: 'finish' }).finished, true);
 });
+
+import { waitForTargets } from '../utils/tour.ts';
+const fakeClock = () => { const c = { t: 0, sleeps: 0 }; c.sleep = async (ms) => { c.t += ms; c.sleeps += 1; }; return c; };
+test('waitForTargets returns at once when every target is present', async () => {
+  const c = fakeClock();
+  assert.deepEqual(await waitForTargets(['a', 'b'], () => true, { sleep: c.sleep }), ['a', 'b']);
+  assert.equal(c.sleeps, 0);
+});
+test('waitForTargets returns the partial list at the timeout', async () => {
+  const c = fakeClock();
+  const r = await waitForTargets(['a', 'b'], (s) => s === 'a', { sleep: c.sleep, timeoutMs: 2500, intervalMs: 100 });
+  assert.deepEqual(r, ['a']);
+  assert.equal(c.t, 2500);
+});
+test('waitForTargets picks up a target that appears after 300 ms', async () => {
+  const c = fakeClock();
+  const r = await waitForTargets(['a', 'b'], (s) => s === 'a' || c.t >= 300, { sleep: c.sleep, intervalMs: 100 });
+  assert.deepEqual(r, ['a', 'b']);
+  assert.equal(c.t, 300);
+});
+test('waitForTargets stops when cancelled', async () => {
+  const c = fakeClock();
+  let n = 0;
+  const r = await waitForTargets(['a'], () => false, { sleep: c.sleep, cancelled: () => ++n > 2 });
+  assert.deepEqual(r, []);
+  assert.ok(c.t < 2500);
+});
