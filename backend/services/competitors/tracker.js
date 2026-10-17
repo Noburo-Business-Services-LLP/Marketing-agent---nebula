@@ -39,8 +39,9 @@ function defaultDeps() {
       prune: (...a) => lazyStore().prune(...a),
       readsToday: (...a) => lazyStore().readsToday(...a)
     },
-    accounts: (limit = 500) => require('../../models/User').find({
-      isActive: { $ne: false }, onboardingCompleted: true, staffRole: null, isCsm: { $ne: true }, 'plan.tier': { $ne: 'free' }
+    accounts: (limit = 500, ids = null) => require('../../models/User').find({
+      isActive: { $ne: false }, onboardingCompleted: true, staffRole: null, isCsm: { $ne: true }, 'plan.tier': { $ne: 'free' },
+      ...(ids ? { _id: { $in: ids } } : {})
     }).sort({ _id: 1 }).limit(limit).lean(),
     competitorsFor: (user) => Competitor().find({ userId: user._id, isActive: { $ne: false }, isIgnored: { $ne: true } }).sort({ createdAt: -1 }).lean(),
     saveTracking: (c, tracking) => Competitor().updateOne({ _id: c._id }, { $set: { tracking } }),
@@ -118,12 +119,12 @@ async function trackOne({ competitor, user, now, deps } = {}) {
 }
 
 /** Is this competitor due a read now? (cooldown, and nothing already stored for the current week) */
-async function isDue(competitor, at, d) {
+async function isDue(competitor, at, d, force = false) {
   const caps = d.caps || defaultCaps;
   const week = weekStartOf(at);
   const last = await d.store.lastAttempt(competitor._id);
   const changed = last && last.handle && last.handle !== handleOf(competitor);
-  if (last && !changed) {
+  if (last && !changed && !force) {
     if (last.takenAt && at - new Date(last.takenAt) < caps.COOLDOWN_HOURS * HOUR) return false;
     if (last.weekStart === week) return false; // a failed week is retried next week, not every 12 hours
   }
@@ -132,8 +133,12 @@ async function isDue(competitor, at, d) {
   return true;
 }
 
-/** One pass. `limit` is the most accounts that get read in one pass (accounts with nothing due do not count). */
-async function runTrackerOnce({ deps, now, limit = 20 } = {}) {
+/**
+ * One pass. `limit` is the most accounts that get read in one pass (accounts with nothing due do not count).
+ * `accountIds` restricts the pass to those accounts. `force` (staff "check now") skips the 12 hour cooldown and the
+ * failed-week rule; the daily cap, the spend guard, the entitlement gate and the one-good-read-a-week rule still apply.
+ */
+async function runTrackerOnce({ deps, now, limit = 20, accountIds = null, force = false } = {}) {
   if (running) return { checked: 0, skipped: 0 };
   running = true;
   const out = { checked: 0, skipped: 0 };
@@ -146,7 +151,9 @@ async function runTrackerOnce({ deps, now, limit = 20 } = {}) {
     try { blocked = new Set(((await d.gate()) || []).map(String)); }
     catch (e) { console.warn('[competitors] could not read the paused accounts, skipping this pass:', e && e.message); return out; }
 
-    const users = (await d.accounts()) || [];
+    const only = Array.isArray(accountIds) ? new Set(accountIds.map(String)) : null;
+    let users = only ? ((await d.accounts(500, [...only])) || []) : ((await d.accounts()) || []);
+    if (only) users = users.filter((u) => u && only.has(String(u._id)));
     const stored = Number(await d.store.readsToday(at)) || 0;
     let passReads = 0;
     let accountsRead = 0;
@@ -170,7 +177,7 @@ async function runTrackerOnce({ deps, now, limit = 20 } = {}) {
 
       let readHere = false;
       for (const c of chosen) {
-        if (!(await isDue(c, at, d))) { out.skipped++; continue; }
+        if (!(await isDue(c, at, d, force))) { out.skipped++; continue; }
         // Daily cap: the larger of the stored count and what this pass has spent, so it can never undercount.
         const used = Math.max(stored + passReads, Number(await d.store.readsToday(at)) || 0);
         if (used >= caps.READS_PER_DAY_MAX) { stop = true; break; }

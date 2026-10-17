@@ -225,3 +225,25 @@ test('startCompetitorTracker schedules timers and logs once', () => {
   assert.strictEqual(lines.length, 1);
   h.stop();
 });
+
+test('(accountIds) a pass restricted to one account reads only that account', async () => {
+  const w = world({ users: [user('u1'), user('u2')], competitors: [comp('c1', 'u1'), comp('c2', 'u2')] });
+  const r = await runTrackerOnce({ deps: w.deps, now: NOW, accountIds: ['u2'] });
+  assert.deepStrictEqual(r, { checked: 1, skipped: 0 });
+  assert.deepStrictEqual(w.calls.scrape, ['h_c2']);
+  const none = world({ users: [user('u1')], competitors: [comp('c1', 'u1')] });
+  assert.deepStrictEqual(await runTrackerOnce({ deps: none.deps, now: NOW, accountIds: [] }), { checked: 0, skipped: 0 });
+});
+
+test('(force) skips the cooldown and the failed-week rule but still obeys the daily cap and the spend guard', async () => {
+  const recent = (id) => [{ competitorId: id, weekStart: WEEK, ok: false, handle: `h_${id}`, takenAt: new Date(NOW.getTime() - HOUR) }];
+  const plain = world({ users: [user('u1')], competitors: [comp('c1', 'u1')], rows: recent('c1') });
+  assert.deepStrictEqual(await runTrackerOnce({ deps: plain.deps, now: NOW }), { checked: 0, skipped: 1 });
+  const forced = world({ users: [user('u1')], competitors: [comp('c1', 'u1')], rows: recent('c1') });
+  assert.deepStrictEqual(await runTrackerOnce({ deps: forced.deps, now: NOW, force: true }), { checked: 1, skipped: 0 });
+  const capped = world({ users: [user('u1')], competitors: [comp('c1', 'u1')], rows: recent('c1'), readsTodayFn: () => 200 });
+  assert.strictEqual((await runTrackerOnce({ deps: capped.deps, now: NOW, force: true })).checked, 0);
+  const guarded = world({ users: [user('u1')], competitors: [comp('c1', 'u1')], rows: recent('c1'), spendOk: false });
+  assert.strictEqual((await runTrackerOnce({ deps: guarded.deps, now: NOW, force: true })).checked, 0);
+  assert.strictEqual(guarded.calls.scrape.length, 0);
+});

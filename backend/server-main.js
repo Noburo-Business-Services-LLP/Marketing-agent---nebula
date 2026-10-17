@@ -423,6 +423,7 @@ app.use('/api/chat', aiLimiter, chatRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/campaigns', aiLimiter, campaignRoutes);
+app.use('/api/competitors/insights', require('./routes/competitorInsights'));
 app.use('/api/competitors', competitorRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/accounts', accountRoutes);

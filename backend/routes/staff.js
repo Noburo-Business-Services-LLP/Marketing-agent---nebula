@@ -354,6 +354,31 @@ router.post('/clients/:id/plan/refresh', requireStaff('open_client'), async (req
   }
 });
 
+// GET /api/staff/clients/:id/competitors: the competitor insights as the client sees them (same body).
+router.get('/clients/:id/competitors', requireStaff('view_clients'), async (req, res) => {
+  try {
+    const client = await clientFor(req, res);
+    if (!client) return;
+    res.json(await require('./competitorInsights').viewFor(client));
+  } catch (error) {
+    console.error('[staff] client competitors failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not load these competitors. Please try again.' });
+  }
+});
+
+// POST /api/staff/clients/:id/competitors/check: read this client's competitors now. Skips the 12 hour cooldown only;
+// the daily cap and the spend guard still apply. Logged.
+router.post('/clients/:id/competitors/check', requireStaff('open_client'), require('./competitorInsights').checkLimiter, async (req, res) => {
+  try {
+    const client = await clientFor(req, res, 'open_client');
+    if (!client) return;
+    res.json(await require('./competitorInsights').staffCheck({ client, staff: req.staff, record: recordStaffAction }));
+  } catch (error) {
+    console.error('[staff] client competitors check failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not check these competitors. Please try again.' });
+  }
+});
+
 // POST /api/staff/clients/:id/quarks { amount }: Owner only.
 router.post('/clients/:id/quarks', requireStaff('add_quarks'), async (req, res) => {
   try {
