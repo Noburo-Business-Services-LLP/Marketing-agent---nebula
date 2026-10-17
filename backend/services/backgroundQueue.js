@@ -21,6 +21,7 @@ let processing = false;
  * Generate content for a single calendar item
  */
 async function generateSingleCalendarItem(calendar, item, weekNumber) {
+  let draft = null;
   try {
     console.log(`[BackgroundQueue] Generating content for item Day ${item.day} (${item.headline || item._id})`);
 
@@ -34,7 +35,7 @@ async function generateSingleCalendarItem(calendar, item, weekNumber) {
     }
 
     // Pre-create processing draft
-    const draft = new Draft({
+    draft = new Draft({
       userId: calendar.userId,
       title: item.headline || `Weekly Generated Day ${item.day}`,
       status: 'processing',
@@ -179,6 +180,8 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
     return { draft, campaign };
   } catch (error) {
     console.error(`[BackgroundQueue] Error generating item Day ${item.day}:`, error.message);
+    // The draft made at the start must not stay 'processing' forever.
+    if (draft && draft._id) { try { await Draft.updateOne({ _id: draft._id }, { $set: { status: 'failed' } }); } catch (_) { /* best effort */ } }
     throw error;
   }
 }

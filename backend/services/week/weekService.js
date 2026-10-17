@@ -90,6 +90,26 @@ function defaultDeps() {
         ).select('_id').lean();
         return !!r;
       },
+      // Weeks (from `fromWeek` on) in which this account still has posts approved or being made.
+      findOpen: (userId, fromWeek) => model().find({ userId, weekStart: { $gte: fromWeek }, 'items.status': { $in: ['approved', 'making'] } }).lean(),
+      // A final write by the runner that owns the post: only while it is still 'making' with the same makingAt.
+      settleItem: async (q, itemId, token, patch) => {
+        const $set = {};
+        Object.entries(patch).forEach(([k, v]) => { $set[`items.$.${k}`] = v; });
+        const r = await model().findOneAndUpdate(
+          { ...key(q), items: { $elemMatch: { id: itemId, status: 'making', makingAt: token } } }, { $set }
+        ).select('_id').lean();
+        return !!r;
+      },
+      // Flips `charged` from -> to for the owning runner in one conditional update, so only one actor can refund.
+      flipCharged: async (q, itemId, token, from, to, extra = {}) => {
+        const $set = { 'items.$.charged': to };
+        Object.entries(extra).forEach(([k, v]) => { $set[`items.$.${k}`] = v; });
+        const r = await model().findOneAndUpdate(
+          { ...key(q), items: { $elemMatch: { id: itemId, status: 'making', makingAt: token, charged: from } } }, { $set }
+        ).select('_id').lean();
+        return !!r;
+      },
       setItem: async (q, itemId, patch) => {
         const $set = {};
         Object.entries(patch).forEach(([k, v]) => { $set[`items.$[i].${k}`] = v; });
@@ -104,7 +124,15 @@ function defaultDeps() {
     generate: async (calendar, calItem, weekNumber) => {
       const { generateSingleCalendarItem } = require('../backgroundQueue');
       const out = await generateSingleCalendarItem(calendar, calItem, weekNumber);
-      if (calendar && typeof calendar.save === 'function') await calendar.save();
+      // No picture: the post is not what was paid for. Remove what the generator made so Review and approve does not
+      // show it and the calendar row is not left marked as made; the caller refunds and a retry starts clean.
+      if (out && out.draft && !out.draft.imageUrl) {
+        try { await require('../../models/Draft').deleteOne({ _id: out.draft._id }); } catch (e) { console.error('[week] draft cleanup failed:', e && e.message); }
+        try { if (out.campaign) await require('../../models/Campaign').deleteOne({ _id: out.campaign._id }); } catch (e) { console.error('[week] campaign cleanup failed:', e && e.message); }
+        return out;
+      }
+      // A failed save must not turn a made post into a refunded one; the generator's own row update is in memory only.
+      try { if (calendar && typeof calendar.save === 'function') await calendar.save(); } catch (e) { console.error('[week] calendar save failed:', e && e.message); }
       return out;
     },
     // The calendar and row a post is made from. A plan row has no calendar row: it is made from a one-off
@@ -131,6 +159,8 @@ function defaultDeps() {
     markFirstApproval: (userId, at) => require('../../models/User').updateOne(
       { _id: userId, 'setup.firstWeekApprovedAt': { $exists: false } }, { $set: { 'setup.firstWeekApprovedAt': at } }
     ),
+    spendCheck: (action) => require('../spendGuard').check(action),
+    alertOwner: (a) => require('../opsAlerts').notify(a),
     now: () => new Date()
   };
 }
@@ -149,7 +179,8 @@ function createWeekService(given = {}) {
   const base = given.store && given.deduct && given.generate && given.calendarFor ? null : defaultDeps();
   const deps = base ? { ...base, ...given, store: given.store || base.store } : given;
   const nowOf = (now) => now || deps.now();
-  const keyOf = (user, now) => ({ userId: user._id, weekStart: weekStartOf(nowOf(now)) });
+  // The week is the stored proposal's when one is known; the clock is used only to find this week's proposal.
+  const keyOf = (user, now, weekStart) => ({ userId: user._id, weekStart: weekStart || weekStartOf(nowOf(now)) });
 
   async function getOrCreate({ user, now }) {
     const q = keyOf(user, now);
@@ -174,28 +205,83 @@ function createWeekService(given = {}) {
     }
   }
 
-  // Charge, make, and settle one post that this caller has already claimed (status 'approved').
-  async function makePost({ user, item, now }) {
-    const q = keyOf(user, now);
+  const isMade = (row) => !!row && (!!row.generatedDraftId || ['generated', 'scheduled', 'published'].includes(String(row.status || '').toLowerCase()));
+
+  // A refund by the owner, at most once: `charged` flips true -> false first, so only one actor can refund. If the
+  // refund itself fails the flag goes back to true (the customer has paid), the post is failed as 'refund_failed' and
+  // the owner is alerted to refund by hand; such a post is never charged again.
+  async function refundOwned({ q, user, item, token }) {
+    const won = await deps.store.flipCharged(q, item.id, token, true, false);
+    if (!won) return { refunded: false, lost: true };
+    let r;
+    try { r = await deps.refund(String(user._id), 'image_generated', 1, 'Refund: weekly plan post could not be made', item.chargedTo ? { payerId: item.chargedTo } : {}); } catch (e) { r = { success: false }; }
+    if (r && r.success) return { refunded: true };
+    try { await deps.store.flipCharged(q, item.id, token, false, true); } catch (e) { console.error('[week] could not restore charged flag:', e && e.message); }
+    await alertRefund(user, item, q);
+    return { refunded: false, refundFailed: true };
+  }
+
+  async function alertRefund(user, item, q) {
+    console.error(`[week] REFUND FAILED user=${user._id} week=${q.weekStart} item=${item.id}`);
+    try {
+      if (deps.alertOwner) await deps.alertOwner({ key: `week_refund_failed:${user._id}:${item.id}`, cooldownMs: 6 * 3600000, subject: 'Nebulaa alert: a weekly post refund failed', text: `A weekly plan post could not be made and its refund also failed. Account ${user._id}, week ${q.weekStart}, item ${item.id}. The customer has been charged one post and the post is marked failed. Please refund it by hand. It will not be charged again if retried.` });
+    } catch (_) { /* alerting never blocks */ }
+  }
+
+  // Charge, make, and settle one post this runner owns (`token` is the makingAt it set when it took the post).
+  // Every final write is conditional on that token: a runner that lost the post stops without writing or refunding.
+  async function makePost({ user, item: given, token, weekStart, now }) {
+    const q = keyOf(user, now, weekStart || (given && given.weekStart));
     const id = String(user._id);
+    // Read the item fresh: a snapshot taken before the claim may not show a charge another runner has made since.
+    const doc = await deps.store.find(q);
+    const item = (doc && doc.items.find((i) => i.id === given.id)) || given;
     if (item.status === 'made') return { ok: true, ref: item.ref };
-    const fail = async (error) => { await deps.store.setItem(q, item.id, { status: 'failed', error }); return { ok: false, error }; };
+    const own = token === undefined ? item.makingAt : token;
+    const settle = (patch) => deps.store.settleItem(q, item.id, own, patch);
+    const fail = async (error) => { const ok = await settle({ status: 'failed', error }); return ok ? { ok: false, error } : { ok: false, lost: true }; };
 
     const ctx = await deps.calendarFor({ user, item, weekStart: q.weekStart });
     if (!ctx) return fail('no_calendar');
     const calItem = ctx.find(item.calendarItemId, item);
     if (!calItem) return fail('no_calendar');
 
+    // A row already made (by auto-generation or another path): adopt its draft, charge nothing.
+    if (isMade(calItem)) {
+      if (!calItem.generatedDraftId) return fail('already_made');
+      const ok = await settle({ status: 'made', ref: String(calItem.generatedDraftId), error: null, madeAt: nowOf(now) });
+      return ok ? { ok: true, ref: String(calItem.generatedDraftId), adopted: true } : { ok: false, lost: true };
+    }
+
+    // The daily spend ceiling and provider switches: leave the post approved to be picked up later, charge nothing.
+    const gate = deps.spendCheck ? await deps.spendCheck('image_generated') : { ok: true };
+    if (gate && gate.ok === false) {
+      await settle({ status: 'approved', makingAt: null });
+      return { ok: false, reason: 'busy' };
+    }
+
     // Charged once: a post picked up again after a crash already carries charged: true and is not charged again.
     if (!item.charged) {
       let paid;
       try { paid = await deps.deduct(id, 'image_generated', 1, 'Weekly plan post'); } catch (e) { paid = { success: false }; }
       if (!paid || !paid.success) return fail('no_pool');
-      await deps.store.setItem(q, item.id, { charged: true });
+      let stored = false;
+      try { stored = await deps.store.flipCharged(q, item.id, own, false, true, { chargedTo: paid.payerId ? String(paid.payerId) : null }); } catch (e) { stored = false; }
+      if (!stored) {
+        // The charge could not be recorded: give it back at once (to the wallet that paid), and fail the post.
+        let r;
+        try { r = await deps.refund(id, 'image_generated', 1, 'Refund: weekly plan post charge could not be recorded', paid.payerId ? { payerId: paid.payerId } : {}); } catch (e) { r = { success: false }; }
+        if (!(r && r.success)) { await alertRefund(user, item, q); await settle({ status: 'failed', error: 'refund_failed' }); return { ok: false, error: 'refund_failed' }; }
+        return fail('charge_not_recorded');
+      }
+      item.chargedTo = paid.payerId ? String(paid.payerId) : null;
     }
 
-    const refund = async () => {
-      try { await deps.refund(id, 'image_generated', 1, 'Refund: weekly plan post could not be made'); await deps.store.setItem(q, item.id, { charged: false }); } catch (e) { console.error('[week] refund failed:', e && e.message); }
+    const failRefunded = async (error) => {
+      const r = await refundOwned({ q, user, item, token: own });
+      if (r.lost) return { ok: false, lost: true };
+      if (r.refundFailed) { await settle({ status: 'failed', error: 'refund_failed' }); return { ok: false, error: 'refund_failed' }; }
+      return fail(error);
     };
     // A swapped idea is what gets made.
     if (item.topic && calItem.headline !== item.topic && item.source === 'calendar') Object.assign(calItem, { headline: item.topic, creativeConcept: item.topic });
@@ -203,22 +289,21 @@ function createWeekService(given = {}) {
     try {
       out = await deps.generate(ctx.calendar, calItem, ctx.weekNumber);
     } catch (e) {
-      await refund();
-      return fail('generation_failed');
+      return failRefunded('generation_failed');
     }
     const draft = out && out.draft;
     const ref = draft ? draft._id : out && out.draftId;
     // The generator keeps a post whose picture failed; a post without a picture is not what was paid for.
-    if (!ref || (draft && !draft.imageUrl)) { await refund(); return fail('generation_failed'); }
-    await deps.store.setItem(q, item.id, { status: 'made', ref: String(ref), error: null, madeAt: nowOf(now) });
-    return { ok: true, ref: String(ref) };
+    if (!ref || (draft && !draft.imageUrl)) return failRefunded('generation_failed');
+    const ok = await settle({ status: 'made', ref: String(ref), error: null, madeAt: nowOf(now) });
+    return ok ? { ok: true, ref: String(ref) } : { ok: false, lost: true };
   }
 
   // Approve only claims: proposed -> approved, atomically, and returns at once. Posts are made by runApprovedPosts.
-  async function approve({ user, itemIds, now }) {
-    const q = keyOf(user, now);
-    const doc = await deps.store.find(q);
+  async function approve({ user, itemIds, now, weekStart }) {
+    const doc = await deps.store.find(keyOf(user, now, weekStart));
     if (!doc || doc.status === 'skipped') return { proposal: doc || null, started: 0, prefills: [] };
+    const q = keyOf(user, now, doc.weekStart);
     const at = nowOf(now);
     const selected = doc.items.filter((i) => !Array.isArray(itemIds) || itemIds.includes(i.id));
     const prefills = [];
@@ -238,30 +323,40 @@ function createWeekService(given = {}) {
     return { proposal: await deps.store.find(q), started, prefills };
   }
 
-  // Makes every approved post, one at a time (each is a paid image). A post is owned by whoever moves it
-  // approved -> making; a post left 'making' for over ten minutes is taken over, and is not charged a second time.
+  // Makes every approved post, one at a time (each is a paid image), across this account's open weeks of the last
+  // 14 days. A post is owned by whoever moves it approved -> making; one left 'making' for over ten minutes is taken
+  // over (and not charged again). Each post is handled in the week of the proposal it belongs to.
   async function runApprovedPosts({ user, now }) {
-    const q = keyOf(user, now);
     const at = nowOf(now);
-    const doc = await deps.store.find(q);
-    if (!doc) return { made: 0, failed: 0 };
     const before = new Date(at.getTime() - STALE_MS);
-    let made = 0; let failed = 0;
-    for (const it of doc.items) {
-      if (it.kind !== 'post') continue;
-      let mine = false;
-      if (it.status === 'approved') mine = await deps.store.claimItem(q, it.id, 'approved', 'making', { makingAt: at });
-      else if (it.status === 'making' && it.makingAt && new Date(it.makingAt) < before && deps.store.claimStale) mine = await deps.store.claimStale(q, it.id, before, at);
-      if (!mine) continue;
-      let out;
-      try { out = await makePost({ user, item: it, now }); } catch (e) { console.error('[week] makePost crashed:', e && e.message); await deps.store.setItem(q, it.id, { status: 'failed', error: 'generation_failed' }); out = { ok: false }; }
-      if (out.ok) made += 1; else failed += 1;
+    const fromWeek = weekStartOf(new Date(at.getTime() - 14 * 86400000));
+    const docs = await deps.store.findOpen(user._id, fromWeek);
+    let made = 0; let failed = 0; let busy = false;
+    for (const doc of docs || []) {
+      const q = keyOf(user, now, doc.weekStart);
+      for (const it of doc.items) {
+        if (busy) break;
+        if (it.kind !== 'post') continue;
+        let mine = false;
+        if (it.status === 'approved') mine = await deps.store.claimItem(q, it.id, 'approved', 'making', { makingAt: at });
+        else if (it.status === 'making' && it.makingAt && new Date(it.makingAt) < before && deps.store.claimStale) mine = await deps.store.claimStale(q, it.id, before, at);
+        if (!mine) continue;
+        let out;
+        try { out = await makePost({ user, item: it, token: at, weekStart: doc.weekStart, now }); } catch (e) {
+          // The post stays 'making'; a later run takes it over after ten minutes, without a second charge.
+          console.error('[week] makePost crashed:', e && e.message); out = { ok: false, crashed: true };
+        }
+        if (out.reason === 'busy') { busy = true; break; }
+        if (out.ok) made += 1; else if (!out.lost) failed += 1;
+      }
     }
-    return { made, failed, proposal: await deps.store.find(q) };
+    return { made, failed, busy, proposal: await deps.store.find(keyOf(user, now)) };
   }
 
-  async function change({ user, itemId, action, topic, now }) {
-    const q = keyOf(user, now);
+  async function change({ user, itemId, action, topic, now, weekStart }) {
+    const doc = await deps.store.find(keyOf(user, now, weekStart));
+    if (!doc) return { ok: false };
+    const q = keyOf(user, now, doc.weekStart);
     if (action === 'skip') {
       const ok = await deps.store.claimItem(q, itemId, 'proposed', 'skipped');
       return { ok, proposal: ok ? await deps.store.find(q) : undefined };
@@ -269,19 +364,17 @@ function createWeekService(given = {}) {
     if (action === 'swap') {
       const t = String(topic || '').replace(/\s+/g, ' ').trim().slice(0, 200);
       if (!t) return { ok: false, error: 'topic_required' };
-      // A no-op conditional update proves the item is still proposed; the topic is written right after.
-      const ok = await deps.store.claimItem(q, itemId, 'proposed', 'proposed');
-      if (!ok) return { ok: false };
-      await deps.store.setItem(q, itemId, { topic: t });
-      return { ok: true, proposal: await deps.store.find(q) };
+      // One conditional update: the topic is written only if the item is still proposed.
+      const ok = await deps.store.claimItem(q, itemId, 'proposed', 'proposed', { topic: t });
+      return ok ? { ok: true, proposal: await deps.store.find(q) } : { ok: false };
     }
     return { ok: false, error: 'bad_action' };
   }
 
-  async function skipWeek({ user, now }) {
-    const q = keyOf(user, now);
-    const doc = await deps.store.find(q);
+  async function skipWeek({ user, now, weekStart }) {
+    const doc = await deps.store.find(keyOf(user, now, weekStart));
     if (!doc || doc.status !== 'proposed') return { ok: false, proposal: doc || null };
+    const q = keyOf(user, now, doc.weekStart);
     for (const it of doc.items) await deps.store.claimItem(q, it.id, 'proposed', 'skipped');
     await deps.store.setStatus(q, 'skipped');
     return { ok: true, proposal: await deps.store.find(q) };
@@ -290,4 +383,4 @@ function createWeekService(given = {}) {
   return { getOrCreate, approve, runApprovedPosts, change, skipWeek, makePost };
 }
 
-module.exports = { createWeekService, weekCosts, defaultCosts: weekCosts };
+module.exports = { createWeekService, weekCosts, defaultCosts: weekCosts, defaultDeps };

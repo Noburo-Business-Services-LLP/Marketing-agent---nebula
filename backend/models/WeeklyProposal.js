@@ -18,7 +18,9 @@ const itemSchema = new mongoose.Schema({
   approvedAt: { type: Date, default: null },
   makingAt: { type: Date, default: null },
   // True while the post's charge stands, so a post picked up again after a crash is never charged twice.
-  charged: { type: Boolean, default: false }
+  charged: { type: Boolean, default: false },
+  // The wallet that was charged, so a refund goes back to the same one.
+  chargedTo: { type: String, default: null }
 }, { _id: false });
 
 const weeklyProposalSchema = new mongoose.Schema({
