@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { TOUR_STEPS, visibleSteps, shouldAutoStart, reduce } from '../utils/tour.ts';
+
+const user = (o = {}) => ({ onboardingCompleted: true, staffRole: null, isCsm: false, tour: null, ...o });
+
+test('six steps, in order, with plain wording', () => {
+  assert.deepEqual(TOUR_STEPS.map((s) => s.id), ['welcome', 'create', 'review', 'calendar', 'plan', 'help']);
+  for (const s of TOUR_STEPS) assert.doesNotMatch(`${s.title} ${s.body}`, /credit|trial|7 days|quark|agent/i, s.id);
+});
+test('a step whose target is missing is skipped', () => {
+  const has = (sel) => !sel.includes('nav-calendar');
+  assert.deepEqual(visibleSteps(TOUR_STEPS, has).map((s) => s.id), ['welcome', 'create', 'review', 'plan', 'help']);
+  assert.deepEqual(visibleSteps(TOUR_STEPS, () => false), []);
+});
+test('the tour starts by itself once, for ordinary customers on the home screen only', () => {
+  assert.equal(shouldAutoStart({ user: user(), path: '/dashboard', hasCsmPass: false }), true);
+  assert.equal(shouldAutoStart({ user: user(), path: '/', hasCsmPass: false }), true);
+  assert.equal(shouldAutoStart({ user: user({ tour: { completedAt: '2026-10-01' } }), path: '/dashboard', hasCsmPass: false }), false);
+  assert.equal(shouldAutoStart({ user: user({ tour: { skippedAt: '2026-10-01' } }), path: '/dashboard', hasCsmPass: false }), false);
+  assert.equal(shouldAutoStart({ user: user({ onboardingCompleted: false }), path: '/dashboard', hasCsmPass: false }), false);
+  assert.equal(shouldAutoStart({ user: user({ staffRole: 'csm' }), path: '/dashboard', hasCsmPass: false }), false);
+  assert.equal(shouldAutoStart({ user: user({ isCsm: true }), path: '/dashboard', hasCsmPass: false }), false);
+  assert.equal(shouldAutoStart({ user: user({ actingAgency: { name: 'x' } }), path: '/dashboard', hasCsmPass: false }), false);
+  assert.equal(shouldAutoStart({ user: user(), path: '/dashboard', hasCsmPass: true }), false);
+  assert.equal(shouldAutoStart({ user: user(), path: '/campaigns', hasCsmPass: false }), false);
+  assert.equal(shouldAutoStart({ user: null, path: '/dashboard', hasCsmPass: false }), false);
+});
+test('the state machine moves, never underflows, and finishes after the last step', () => {
+  let s = reduce({ index: 0, open: false, total: 3 }, { type: 'start' });
+  assert.deepEqual(s, { index: 0, open: true, total: 3 });
+  s = reduce(s, { type: 'back' });
+  assert.equal(s.index, 0);
+  s = reduce(reduce(s, { type: 'next' }), { type: 'next' });
+  assert.equal(s.index, 2);
+  const done = reduce(s, { type: 'next' });
+  assert.equal(done.open, false);
+  assert.equal(done.finished, true);
+  assert.equal(reduce({ index: 1, open: true, total: 3 }, { type: 'skip' }).skipped, true);
+  assert.equal(reduce({ index: 1, open: true, total: 3 }, { type: 'finish' }).finished, true);
+});

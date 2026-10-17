@@ -53,5 +53,6 @@
   "components/ThisWeekCard.tsx",
   "components/SetupCard.tsx",
   "utils/week.ts",
-  "utils/setup.ts"
+  "utils/setup.ts",
+  "utils/tour.ts"
 ]
