@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import type { CompetitorInsightsResponse } from '../types';
-import { cardState, highlightsFor, statusText, trendLabel } from '../utils/competitorInsights';
+import { cardState, highlightsFor, linkLabel, statusText, trendLabel } from '../utils/competitorInsights';
 
 const CARD = 'mb-6 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 sm:p-6';
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gv-accent)]';
@@ -14,11 +14,13 @@ const TEXT2 = 'text-[var(--gv-text-secondary)]';
 interface Props {
   /** Show the link to the Competitors page. Turned off on that page itself. */
   showLink?: boolean;
+  /** Called once when the account does not have the add-on, so a page can show its own prompt. */
+  onLocked?: () => void;
 }
 
-/** What your competitors did this week, from their public posts. Renders nothing for accounts without the add-on:
- *  the Competitors page already has its own prompt for that. */
-const CompetitorInsights: React.FC<Props> = ({ showLink = true }) => {
+/** What your competitors did this week, from their public posts. Renders nothing for accounts without the add-on;
+ *  the Competitors page shows its own prompt for that (see onLocked). */
+const CompetitorInsights: React.FC<Props> = ({ showLink = true, onLocked }) => {
   const [res, setRes] = useState<CompetitorInsightsResponse | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -30,12 +32,13 @@ const CompetitorInsights: React.FC<Props> = ({ showLink = true }) => {
       const r = await apiService.getCompetitorInsights();
       if (!alive.current) return;
       setRes(r);
+      if (r && r.locked && onLocked) onLocked();
     } catch {
       if (alive.current) { setRes(null); setFailed(true); }
     } finally {
       if (alive.current) setLoaded(true);
     }
-  }, []);
+  }, [onLocked]);
 
   useEffect(() => { alive.current = true; load(); return () => { alive.current = false; }; }, [load]);
 
@@ -53,7 +56,7 @@ const CompetitorInsights: React.FC<Props> = ({ showLink = true }) => {
 
   const highlights = highlightsFor(res);
   const competitors = (res && res.competitors) || [];
-  const link = showLink ? <Link to="/competitors" className={LINK}>Open Competitors to fix handles</Link> : null;
+  const link = showLink ? <Link to="/competitors" className={LINK}>{linkLabel(competitors)}</Link> : null;
 
   return (
     <section aria-labelledby="competitor-insights-title" className={CARD}>

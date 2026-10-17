@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cardState, statusText, trendLabel, highlightsFor } from '../utils/competitorInsights.ts';
+import { cardState, statusText, trendLabel, highlightsFor, linkLabel } from '../utils/competitorInsights.ts';
 
 const comp = (o = {}) => ({ id: 'c1', name: 'Acme', handle: 'acme', status: 'tracking', trend: [], lastCheckedAt: null, ...o });
 
@@ -41,4 +41,13 @@ test('highlightsFor returns at most three sentences', () => {
   assert.deepEqual(highlightsFor(null), []);
   assert.deepEqual(highlightsFor({ locked: true }), []);
   assert.deepEqual(highlightsFor({ success: true, highlights: [{ text: '' }, { text: 'Ok.' }], competitors: [] }), ['Ok.']);
+});
+
+test('linkLabel only talks about fixing handles when some competitor needs it', () => {
+  assert.equal(linkLabel([comp(), comp({ status: 'waiting' })]), 'Open Competitors');
+  assert.equal(linkLabel([comp(), comp({ status: 'failed' })]), 'Open Competitors to fix handles');
+  assert.equal(linkLabel([comp({ status: 'no_handle' })]), 'Open Competitors to fix handles');
+  assert.equal(linkLabel([comp({ status: 'paused' })]), 'Open Competitors to fix handles');
+  assert.equal(linkLabel([]), 'Open Competitors');
+  assert.equal(linkLabel(undefined), 'Open Competitors');
 });

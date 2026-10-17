@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { apiService } from '../services/api';
 import { CompetitorPost } from '../types';
 import { Loader2, Search, RotateCw, ExternalLink, Heart, MessageCircle, Plus, Instagram, Twitter, Linkedin, Facebook, Youtube, Swords, Sparkles, X, Eye, Download, Copy, Save, MessageSquare, FileText, EyeOff, Users, MapPin, Edit3, Zap } from 'lucide-react';
@@ -8,7 +8,7 @@ import { GravityHero, GravityEmphasis } from '../components/gravity';
 import LogoSelector from '../components/LogoSelector';
 import UpgradePrompt from '../components/UpgradePrompt';
 import CompetitorInsights from '../components/CompetitorInsights';
-import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
+import { UpgradeInfo, upgradeInfoOf, upgradeMessage } from '../utils/plans';
 
 const platformIcons: Record<string, React.ReactNode> = {
   instagram: <Instagram className="w-3 h-3" />,
@@ -47,6 +47,7 @@ const Competitors: React.FC = () => {
   const [discovering, setDiscovering] = useState(false);
   const [discoveryMessage, setDiscoveryMessage] = useState('');
   const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
+  const onInsightsLocked = useCallback(() => setUpgrade((u) => u || { reason: 'addon', feature: 'competitors', message: upgradeMessage('addon', 'competitors') }), []);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [location, setLocation] = useState('');
   
@@ -550,7 +551,7 @@ const Competitors: React.FC = () => {
         subcopy="Track market rivals with real-time search."
       />
 
-      <CompetitorInsights showLink={false} />
+      <CompetitorInsights showLink={false} onLocked={onInsightsLocked} />
 
       {upgrade && <UpgradePrompt className="mb-6" reason={upgrade.reason} feature={upgrade.feature} />}
 
@@ -604,10 +605,10 @@ const Competitors: React.FC = () => {
       )}
 
       <div className={`${theme.bgCard} p-6 rounded-xl border ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'} mb-8`}>
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
               <h2 className="font-serif-display text-[20px] text-[#F5F4F1]">Competitor Activity Feed</h2>
-              <div className="flex items-center gap-3">
-                <div className="relative w-64">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative w-full sm:w-64">
                   <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${theme.textMuted}`} />
                   <input 
                       type="text" 

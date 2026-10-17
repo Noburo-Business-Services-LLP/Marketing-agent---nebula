@@ -57,3 +57,9 @@ export function trendLabel(trend?: CompetitorTrendPoint[] | null): string {
   if (!Array.isArray(trend) || trend.length === 0) return '';
   return `Posts a week: ${trend.map((t) => t.postsInWindow).join(', ')}`;
 }
+
+/** The link to the Competitors page says "fix handles" only when a competitor actually needs that. */
+export function linkLabel(competitors?: Pick<CompetitorRow, 'status'>[] | null): string {
+  const needsFix = Array.isArray(competitors) && competitors.some((c) => c && (c.status === 'no_handle' || c.status === 'failed' || c.status === 'paused'));
+  return needsFix ? 'Open Competitors to fix handles' : 'Open Competitors';
+}
