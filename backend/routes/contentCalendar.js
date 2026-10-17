@@ -14,7 +14,7 @@ const {
   calendarMonth,
   generateCalendarCover
 } = require('../services/contentCalendarService');
-const { planGuidanceFor } = require('../services/week/planContext');
+const { planGuidanceFor, withPlanGuidance } = require('../services/week/planContext');
 
 // A calendar row is a reel if its format implies motion.
 const isReelFormat = (value = '') => /reel|video/i.test(String(value || ''));
@@ -28,7 +28,7 @@ router.get('/', protect, async (req, res) => {
     let calendar = await getCurrentCalendar(req.user._id);
     if (!calendar) {
       const user = await User.findById(req.user._id);
-      calendar = await generateMonthlyCalendar(user);
+      calendar = await generateMonthlyCalendar(user, null, await withPlanGuidance(req.user._id));
     }
     res.json({ success: true, calendar });
   } catch (error) {

@@ -1422,7 +1422,9 @@ router.put('/complete-onboarding', protect, async (req, res) => {
 
     try {
       const { generateMonthlyCalendar } = require('../services/contentCalendarService');
-      generateMonthlyCalendar(user).catch((calendarError) => {
+      // No plan exists yet at this point, so this is normally unchanged; a lookup failure never blocks it.
+      const { withPlanGuidance } = require('../services/week/planContext');
+      withPlanGuidance(user._id).then((opts) => generateMonthlyCalendar(user, null, opts)).catch((calendarError) => {
         console.error('Failed to generate Gravity Smart Calendar:', calendarError);
       });
     } catch (calendarError) {

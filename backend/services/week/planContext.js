@@ -55,4 +55,10 @@ async function planGuidanceFor(userId, { now = new Date(), service = null } = {}
   }
 }
 
-module.exports = { planContext, planGuidanceFor };
+// Options for generateMonthlyCalendar with the plan guidance added when a plan exists (nothing added otherwise).
+async function withPlanGuidance(userId, options = {}, deps = {}) {
+  const planGuidance = await planGuidanceFor(userId, deps);
+  return planGuidance ? { ...options, planGuidance } : { ...options };
+}
+
+module.exports = { planContext, planGuidanceFor, withPlanGuidance };

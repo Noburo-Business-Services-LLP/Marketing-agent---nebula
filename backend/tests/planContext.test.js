@@ -44,3 +44,20 @@ test('the calendar prompt is unchanged without guidance and carries it when give
   assert.ok(withPlan.includes('Plan guidance: themes: X'));
   assert.ok(withPlan.indexOf('Plan guidance') < withPlan.indexOf('OUTPUT FORMAT'));
 });
+const { withPlanGuidance } = require('../services/week/planContext');
+const fs = require('node:fs');
+const path = require('node:path');
+test('withPlanGuidance adds guidance only when a plan exists and survives lookup failure', async () => {
+  const has = await withPlanGuidance('u', { focus: 'x' }, { now: new Date('2026-10-05'), service: { currentPlan: async () => plan } });
+  assert.match(has.planGuidance, /Behind the oven/);
+  assert.strictEqual(has.focus, 'x');
+  assert.deepStrictEqual(await withPlanGuidance('u', { focus: 'x' }, { service: { currentPlan: async () => null } }), { focus: 'x' });
+  assert.deepStrictEqual(await withPlanGuidance('u', {}, { service: { currentPlan: async () => { throw new Error('down'); } } }), {});
+});
+test('every calendar entry point passes the plan guidance', () => {
+  const routes = fs.readFileSync(path.join(__dirname, '../routes/contentCalendar.js'), 'utf8');
+  assert.strictEqual((routes.match(/generateMonthlyCalendar\(/g) || []).length, 3);
+  assert.strictEqual((routes.match(/planGuidance: await planGuidanceFor|await withPlanGuidance\(/g) || []).length, 3);
+  const auth = fs.readFileSync(path.join(__dirname, '../routes/auth.js'), 'utf8');
+  assert.match(auth, /withPlanGuidance\(user\._id\)\.then\(\(opts\) => generateMonthlyCalendar\(user, null, opts\)\)/);
+});
