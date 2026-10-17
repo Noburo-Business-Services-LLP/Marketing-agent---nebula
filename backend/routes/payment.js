@@ -273,12 +273,14 @@ function createPaymentRouter(deps = {}) {
       // Zero (or never stored: the model fills in 0 when it reads an older account) matches both a stored 0 and a missing field.
       const same = (v) => (Number(v) > 0 || Number(v) < 0 ? Number(v) : { $in: [0, null] });
       planGuard = { 'credits.planBalance': same(c.planBalance), 'credits.topupHeld': same(c.topupHeld) };
+      // The Agency grant counts the active slots, so a slot bought or ended since we read makes us read again.
+      if (record.key === 'agency') planGuard['agency.extraSlots'] = same(fresh.agency && fresh.agency.extraSlots);
       user = fresh;
     }
     const held = !alreadyApplied && record.kind === 'plan' ? Math.max(0, Number(user.credits?.topupHeld) || 0) : 0;
     const built = bp.buildChargeUpdate(record, {
       paymentId, paidPaise, subscription, heldToRelease: record.kind === 'plan' ? held : 0, firstCycle,
-      topup: { balance: user.credits?.topupBalance, expiresAt: user.credits?.topupExpiresAt }
+      extraSlots: record.kind === 'plan' && record.key === 'agency' ? user.agency?.extraSlots : 0
     });
     if (!built) return { applied: false, reason: 'unknown_item' };
     if (expiring > 0) {

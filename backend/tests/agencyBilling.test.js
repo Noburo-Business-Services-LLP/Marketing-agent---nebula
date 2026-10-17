@@ -69,15 +69,19 @@ test('wording on invoices and plans is plain: no vendor names, no credits, no ex
   for (const t of texts) assert.doesNotMatch(t, /razorpay|zoho|ayrshare|credit|trial|!|—/i, t);
 });
 
-test('a paid slot adds one client and grants its Quarks; a repeat payment of the same cycle grants nothing more', () => {
+test('a paid slot adds one client and grants its Quarks to the monthly allowance; a renewal of the same slot grants nothing', () => {
   const rec = { kind: 'slot', key: 'client', subscriptionId: 'sub_s' };
   const first = bp.buildChargeUpdate(rec, { paymentId: 'pay_s1', paidPaise: bp.slotQuote().chargePaise, firstCycle: true });
   assert.strictEqual(first.update.$inc['agency.extraSlots'], 1);
   assert.strictEqual(first.quarks, AGENCY.slot.quarks);
-  assert.strictEqual(first.update.$inc['credits.topupBalance'], AGENCY.slot.quarks, 'slot Quarks go to the top-up bucket');
+  assert.strictEqual(first.update.$inc['credits.planBalance'], AGENCY.slot.quarks, 'slot Quarks go to the monthly bucket');
+  assert.strictEqual(first.update.$inc['credits.balance'], AGENCY.slot.quarks);
+  assert.strictEqual(first.update.$inc['credits.topupBalance'], undefined);
+  assert.strictEqual(JSON.stringify(first.update.$set || {}).includes('Expires'), false, 'no end date is touched');
   const renewal = bp.buildChargeUpdate(rec, { paymentId: 'pay_s2', paidPaise: bp.slotQuote().chargePaise, firstCycle: false });
-  assert.strictEqual(renewal.update.$inc['agency.extraSlots'], undefined);
-  assert.strictEqual(renewal.quarks, AGENCY.slot.quarks);
+  assert.strictEqual(renewal.quarks, 0, 'the slot Quarks arrive with the Agency plan renewal');
+  assert.strictEqual(renewal.update.$inc, undefined);
+  assert.strictEqual(renewal.update.$push.payments.credits, 0);
   const dflt = bp.buildChargeUpdate(rec, { paymentId: 'pay_s3', paidPaise: 1 });
   assert.strictEqual(dflt.update.$inc['agency.extraSlots'], 1, 'first cycle is the default');
 });
@@ -414,8 +418,9 @@ test('slot webhook: the first payment adds one client and the configured Quarks,
   const u = stored(ctx);
   assert.strictEqual(u.agency.extraSlots, 1);
   assert.strictEqual(u.credits.balance, 100 + AGENCY.slot.quarks);
-  assert.strictEqual(u.credits.topupBalance, AGENCY.slot.quarks);
-  assert.ok(u.credits.topupExpiresAt, 'top-up Quarks carry an expiry');
+  assert.strictEqual(u.credits.planBalance, AGENCY.slot.quarks);
+  assert.ok(!u.credits.topupBalance, 'the top-up bucket is untouched');
+  assert.strictEqual(u.credits.topupExpiresAt, undefined);
   assert.strictEqual(u.plan.subscriptions.find((x) => x.kind === 'slot').active, true);
   assert.strictEqual(u.plan.tier, 'agency', 'the plan is untouched');
   assert.strictEqual(u.payments[0].credits, AGENCY.slot.quarks);
@@ -432,7 +437,7 @@ test('slot webhook: the first payment adds one client and the configured Quarks,
   assert.strictEqual(ctx.invoices.length, 1);
 });
 
-test('slot renewal grants the Quarks again but never another slot', async () => {
+test('slot renewal grants no Quarks and never another slot, but records each payment', async () => {
   const ctx = setup();
   const s = await startSlot(ctx);
   await sendHook(ctx.r, slotCharge(s, 'pay_s1'));
@@ -440,7 +445,8 @@ test('slot renewal grants the Quarks again but never another slot', async () => 
   await sendHook(ctx.r, slotCharge(s, 'pay_s3'));
   const u = stored(ctx);
   assert.strictEqual(u.agency.extraSlots, 1);
-  assert.strictEqual(u.credits.balance, 100 + 3 * AGENCY.slot.quarks);
+  assert.strictEqual(u.credits.balance, 100 + AGENCY.slot.quarks, 'only the first payment grants');
+  assert.deepStrictEqual(u.payments.map((x) => x.credits), [AGENCY.slot.quarks, 0, 0]);
   assert.strictEqual(u.payments.length, 3);
 });
 
@@ -458,7 +464,7 @@ test('double activation: verify and the webhook for the same payment, and two pa
   const s2 = await startSlot(ctx2);
   await Promise.all([sendHook(ctx2.r, slotCharge(s2, 'pay_x')), sendHook(ctx2.r, slotCharge(s2, 'pay_y'))]);
   assert.strictEqual(stored(ctx2).agency.extraSlots, 1);
-  assert.strictEqual(stored(ctx2).credits.balance, 100 + 2 * AGENCY.slot.quarks);
+  assert.strictEqual(stored(ctx2).credits.balance, 100 + AGENCY.slot.quarks);
   assert.strictEqual(stored(ctx2).payments.length, 2);
 });
 
@@ -1073,28 +1079,65 @@ test('A-I3: a renewal replaces what is left of last month, and retries when a sp
   assert.ok(u.credits.history.some((h) => h.action === 'plan_quarks_expired' && h.amount === -30));
 });
 
-test('A-I4: slot Quarks do not lengthen the life of top-up Quarks already held', () => {
-  const now = new Date('2026-10-20T00:00:00Z'); const later = new Date(now.getTime() + 10 * 86400000);
+test('N1: a slot never changes a top-up pack end date, whatever the pack holds', () => {
   const rec = { kind: 'slot', key: 'client', subscriptionId: 'sub_s' };
-  const withTopup = bp.buildChargeUpdate(rec, { paymentId: 'p1', paidPaise: 1, now, firstCycle: false, topup: { balance: 300, expiresAt: later } });
-  assert.strictEqual(withTopup.update.$set['credits.topupExpiresAt'], undefined, 'end date untouched');
-  assert.strictEqual(withTopup.update.$inc['credits.topupBalance'], AGENCY.slot.quarks, 'still added to the top-up bucket');
-  const empty = bp.buildChargeUpdate(rec, { paymentId: 'p2', paidPaise: 1, now, firstCycle: false, topup: { balance: 0, expiresAt: null } });
-  assert.strictEqual(+empty.update.$set['credits.topupExpiresAt'], now.getTime() + 60 * 86400000, 'an empty bucket starts its 60 days');
-  const expired = bp.buildChargeUpdate(rec, { paymentId: 'p3', paidPaise: 1, now, firstCycle: false, topup: { balance: 300, expiresAt: new Date(now.getTime() - 1) } });
-  assert.ok(expired.update.$set['credits.topupExpiresAt'], 'an already ended bucket does not keep an old end date');
-  const pack = bp.buildChargeUpdate({ kind: 'topup', key: 1000, orderId: 'o' }, { paymentId: 'p4', paidPaise: 1, now, topup: { balance: 300, expiresAt: later } });
+  for (const firstCycle of [true, false]) {
+    const u = bp.buildChargeUpdate(rec, { paymentId: 'p1', paidPaise: 1, firstCycle, topup: { balance: 300, expiresAt: new Date(Date.now() + 2 * 86400000) } });
+    const keys = Object.keys({ ...(u.update.$set || {}), ...(u.update.$inc || {}) }).filter((k) => /topup/i.test(k));
+    assert.deepStrictEqual(keys, [], `no top-up field, firstCycle ${firstCycle}`);
+  }
+  const pack = bp.buildChargeUpdate({ kind: 'topup', key: 1000, orderId: 'o' }, { paymentId: 'p4', paidPaise: 1 });
   assert.ok(pack.update.$set['credits.topupExpiresAt'], 'a bought pack still renews the 60 days');
 });
 
-test('A-I4: a slot renewal through the webhook leaves the top-up end date alone', async () => {
-  const end = new Date(Date.now() + 5 * 86400000);
-  const ctx = setup({ user: mkAgency({ credits: { balance: 400, topupBalance: 300, topupExpiresAt: end, totalUsed: 0 } }) });
+test('N1: the Agency renewal grants the plan Quarks plus 500 per active slot (0, 2, 20, clamped) into the monthly bucket', () => {
+  const rec = { kind: 'plan', key: 'agency', subscriptionId: 'sub_a' };
+  const grant = (extraSlots) => bp.buildChargeUpdate(rec, { paymentId: 'p', paidPaise: 1, extraSlots, subscription: { current_end: 1900000000 } });
+  for (const [slots, want] of [[0, 6000], [2, 7000], [20, 16000], [99, 16000], [-3, 6000], [undefined, 6000], ['x', 6000]]) {
+    const g = grant(slots);
+    assert.strictEqual(g.quarks, want, `slots ${slots}`);
+    assert.strictEqual(g.update.$set['credits.planBalance'], want);
+    assert.strictEqual(g.update.$inc['credits.balance'], want);
+    assert.strictEqual(g.update.$push.payments.credits, want);
+  }
+  assert.strictEqual(grant(0).quarks, PLANS.agency.quarks);
+  const other = bp.buildChargeUpdate({ kind: 'plan', key: 'professional', subscriptionId: 's' }, { paymentId: 'p', paidPaise: 1, extraSlots: 5 });
+  assert.strictEqual(other.quarks, PLANS.professional.quarks, 'other plans ignore the slot count');
+});
+
+test('N1: the Agency plan renewal through the webhook brings 500 per slot into the monthly allowance, once', async () => {
+  for (const [slots, want] of [[0, 6000], [2, 7000], [20, 16000]]) {
+    const ctx = setup({ user: mkAgency({ agency: { clientCount: 0, extraSlots: slots }, credits: { balance: 100, planBalance: 0, totalUsed: 0 } }), settle: fakeSettle });
+    const ev = hook('subscription.charged', 'sub_plan', 'plan_agency', 'pay_r', { amount: AGENCY_PAISE });
+    await sendHook(ctx.r, ev); await sendHook(ctx.r, ev);
+    const u = stored(ctx);
+    assert.strictEqual(u.credits.planBalance, want, `slots ${slots}`);
+    assert.strictEqual(u.credits.balance, 100 + want);
+    assert.ok(u.credits.planExpiresAt, 'the month has an end');
+    assert.strictEqual(paidRows(u).length, 1, 'replay records nothing more');
+  }
+});
+
+test('N1: a slot bought while a top-up pack has 2 days left adds 500 to the monthly bucket only', async () => {
+  const end = new Date(Date.now() + 2 * 86400000); const planEnd = new Date(Date.now() + 20 * 86400000);
+  const ctx = setup({ user: mkAgency({ credits: { balance: 1300, planBalance: 1000, planExpiresAt: planEnd, topupBalance: 300, topupExpiresAt: end, totalUsed: 0 } }) });
   const s = await startSlot(ctx);
-  await sendHook(ctx.r, slotCharge(s, 'pay_s1'));
+  const ev = slotCharge(s, 'pay_s1');
+  await sendHook(ctx.r, ev); await sendHook(ctx.r, ev);
   const u = stored(ctx);
-  assert.strictEqual(+u.credits.topupExpiresAt, +end);
-  assert.strictEqual(u.credits.topupBalance, 300 + AGENCY.slot.quarks);
+  assert.strictEqual(u.credits.planBalance, 1500);
+  assert.strictEqual(u.credits.balance, 1800);
+  assert.strictEqual(+u.credits.planExpiresAt, +planEnd, 'the plan month end is unchanged');
+  assert.strictEqual(u.credits.topupBalance, 300);
+  assert.strictEqual(+u.credits.topupExpiresAt, +end, 'the pack end date is unchanged');
+  // a renewal of the slot: nothing granted, still no top-up change
+  await sendHook(ctx.r, slotCharge(s, 'pay_s2'));
+  await sendHook(ctx.r, slotCharge(s, 'pay_s2'));
+  const v = stored(ctx);
+  assert.strictEqual(v.credits.planBalance, 1500); assert.strictEqual(v.credits.balance, 1800);
+  assert.strictEqual(+v.credits.topupExpiresAt, +end); assert.strictEqual(v.credits.topupBalance, 300);
+  assert.strictEqual(v.agency.extraSlots, 1);
+  assert.strictEqual(v.payments.length, 2);
 });
 
 test('A-M3: a charge that arrives after the slot was cancelled does not bring the slot back', async () => {

@@ -178,12 +178,17 @@ const expectedPaiseOf = (record, spec) => priceOfRecord(record, spec).totalPaise
  *   record: our own stored subscription record { subscriptionId, kind, key }
  *   kind 'topup': record = { kind:'topup', key: packInr, orderId }
  */
-function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date(), heldToRelease = 0, firstCycle = true, topup = null }) {
+/** Active extra slots as a whole number from 0 to the most an agency can hold. */
+function slotsIn(n) { const v = Math.floor(Number(n)); return Number.isFinite(v) ? Math.min(Math.max(v, 0), MAX_EXTRA_SLOTS) : 0; }
+
+function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = new Date(), heldToRelease = 0, firstCycle = true, extraSlots = 0 }) {
   let quarks = 0; const $set = {}; const update = {}; let inc = null;
   const spec = priceOfRecord(record, invoiceSpec(record.kind, record.key));
   if (!spec) return null;
   if (record.kind === 'plan') {
     quarks = PLANS[record.key].quarks;
+    // The Agency month also carries the Quarks of every active extra client slot, in the same monthly allowance.
+    if (record.key === 'agency') quarks += AGENCY.slot.quarks * slotsIn(extraSlots);
     $set['plan.tier'] = record.key;
     $set['plan.subscriptionId'] = record.subscriptionId;
     $set['subscription.status'] = 'active';
@@ -202,12 +207,13 @@ function buildChargeUpdate(record, { paymentId, paidPaise, subscription, now = n
   } else if (record.kind === 'addon') {
     update.$addToSet = { 'plan.addons': { $each: expandAddon(record.key) } };
   } else if (record.kind === 'slot') {
-    // Every paid cycle brings the slot's Quarks; only the first payment of the subscription adds the client slot.
-    quarks = AGENCY.slot.quarks;
-    // They never lengthen the life of top-up Quarks already held: the 60 days only start when the bucket is empty.
-    const grant = buckets.topupGrantUpdate(quarks, { now, keepExpiry: buckets.topupIsLive(topup, now) });
-    Object.assign($set, grant.set); inc = { ...grant.inc };
-    if (firstCycle) inc['agency.extraSlots'] = 1;
+    // Only the first payment of the subscription adds the client slot and its Quarks, straight into the monthly
+    // allowance (its life ends with the current plan month; the end date is left as it is). Later payments of the same
+    // slot grant nothing: those Quarks arrive with the Agency plan renewal. The top-up bucket is never touched.
+    if (firstCycle) {
+      quarks = AGENCY.slot.quarks;
+      inc = { 'credits.balance': quarks, 'credits.planBalance': quarks, 'agency.extraSlots': 1 };
+    } else inc = null;
   } else if (record.kind === 'topup') {
     quarks = findTopupPack(Number(record.key)).quarks;
     const grant = buckets.topupGrantUpdate(quarks, { now });
@@ -272,5 +278,5 @@ function buildEndUpdate(user, record, eventName) {
 module.exports = {
   PLAN_IDS, ADDON_IDS, SLOT_KEY, MAX_EXTRA_SLOTS, isPlanId, isAddonId, isSlotKey, planQuote, addonQuote, slotQuote, planCatalogue, findTopupPack,
   expandAddon, canBuyAddon, canBuySlot, invoiceSpec, razorpayPlanBody, envVarFor,
-  verifyWebhookSignature, verifyCheckoutSignature, buildChargeUpdate, buildEndUpdate, endUpdateFor, priceOfRecord, expectedPaiseOf
+  verifyWebhookSignature, verifyCheckoutSignature, slotsIn, buildChargeUpdate, buildEndUpdate, endUpdateFor, priceOfRecord, expectedPaiseOf
 };
