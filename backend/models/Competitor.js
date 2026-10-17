@@ -86,6 +86,12 @@ const competitorSchema = new mongoose.Schema({
     type: String,
     enum: ['local', 'regional', 'national', 'global', 'startup', 'emerging', 'direct', 'indirect', 'market_leader', 'unknown'],
     default: 'unknown'
+  },
+  // Weekly tracking state (see services/competitors/tracker.js)
+  tracking: {
+    failures: { type: Number, default: 0 },
+    pausedAt: Date,
+    lastCheckedAt: Date
   }
 }, {
   timestamps: true

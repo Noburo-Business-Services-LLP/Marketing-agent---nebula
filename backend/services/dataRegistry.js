@@ -32,6 +32,7 @@ const RULES = [
   { model: 'ClientInvoice', field: 'client', action: 'retain', note: 'Invoices we made for a managed client: tax records.' },
   { model: 'Collaboration', field: 'userId', action: D },
   { model: 'Competitor', field: 'userId', action: D },
+  { model: 'CompetitorSnapshot', field: 'userId', action: D },
   { model: 'ContentCalendar', field: 'userId', action: D },
   { model: 'ContentDraft', field: 'userId', action: D },
   { model: 'ContentIdea', field: 'userId', action: D },
