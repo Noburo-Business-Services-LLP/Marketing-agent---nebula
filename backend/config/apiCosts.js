@@ -34,6 +34,12 @@ const PROVIDER_RATES = {
   gpt4o_input_per_mtok: 5.00,
   gpt4o_output_per_mtok: 30.00,
 
+  // Comment scoring (social listening) runs on LISTENING_MODEL, a small cheap model chosen at deploy time. Its own
+  // pricing page was not confirmed at build time (2026-10-17), so these use the conservative writing-model rates above
+  // (dated 2026-10-15). Replace with the real rates once the model is chosen; the action cost follows automatically.
+  listening_input_per_mtok: 5.00,
+  listening_output_per_mtok: 30.00,
+
   // Google Nano Banana Pro (nano-banana-pro-preview) — flat per generated
   // image up to 2K. This is our PRIMARY image model, so it is the one that
   // sets the price; gemini-2.5-flash-image (~$0.039) is only a fallback and
@@ -158,7 +164,8 @@ const TOKENS = {
   chat_turn:         { in: 1200, out: 400 },
   scene_script:      { in: 2000, out: 800 },  // per scene, video pipeline
   story_skeleton:    { in: 3000, out: 1600 }, // once per video: story + shot list
-  blueprint_plan:    { in: 5000, out: 4500 }  // one planner call per Brand Growth Blueprint
+  blueprint_plan:    { in: 5000, out: 4500 }, // one planner call per Brand Growth Blueprint
+  listening_batch:   { in: 3000, out: 700 }   // one batch of up to 40 comments, labels only
 };
 
 const gpt4o = (shape) =>
@@ -166,6 +173,10 @@ const gpt4o = (shape) =>
   (shape.out * PROVIDER_RATES.gpt4o_output_per_mtok / 1e6);
 
 // The older scene-by-scene video pipeline still makes its stills with Nano Banana Pro.
+const listeningCost = (shape) =>
+  (shape.in * PROVIDER_RATES.listening_input_per_mtok / 1e6) +
+  (shape.out * PROVIDER_RATES.listening_output_per_mtok / 1e6);
+
 const image = PROVIDER_RATES.nano_banana_pro_per_image;
 
 // What one finished picture costs on the current path: English starts at low and is remade at medium when the
@@ -272,6 +283,8 @@ const ACTION_USD = {
   event_post: gpt4o(TOKENS.creative_director) + gpt4o(TOKENS.art_director) + image + gpt4o(TOKENS.caption_only) + assetCost(INFRA.mb_per_image),
 
   competitor_scrape: PROVIDER_RATES.apify_profile_read,
+  // One scoring batch of customer comments (a cost to us, never charged: see QUARK_COSTS below).
+  listening_score: listeningCost(TOKENS.listening_batch),
 
   // Brand Growth Blueprint: one planner call. The guided-mode directions call (about $0.02) is absorbed.
   // Page fetches are not metered and no image model is used.
@@ -370,6 +383,8 @@ const QUARK_COSTS = Object.fromEntries(
 // look at the product, it costs a tenth of a cent, and it is the one action
 // where a price tag would cost us more in signups than it earns.
 QUARK_COSTS.competitor_scrape = 0;
+// Comment scoring is a cost to us inside the Inbox add-on and is never charged in Quarks.
+QUARK_COSTS.listening_score = 0;
 
 // What one unit MEANS, so the UI can say "5 per slide" instead of a bare "5"
 // next to the word "Carousel" — the exact ambiguity that made the old price
@@ -394,6 +409,7 @@ const ACTION_UNITS = {
   studio_video: 'per video',
   studio_reference: 'per person or place',
   competitor_scrape: 'free',
+  listening_score: 'per batch of comments',
   blueprint: 'per blueprint',
   blueprint_pdf: 'per designed Blueprint PDF'
 };

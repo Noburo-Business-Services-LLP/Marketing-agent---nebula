@@ -406,6 +406,8 @@ const userSchema = new mongoose.Schema({
   },
   // When the weekly competitor tracker last read this account (oldest first = fair rotation across accounts).
   competitorsReadAt: { type: Date },
+  // When comment scoring (social listening) last ran for this account (oldest first = fair rotation).
+  listeningRunAt: { type: Date },
   // Customer success manager: may open the accounts of clients assigned to them.
   // Nebulaa team role: 'owner' | 'admin' | 'csm' (null for customers). See services/staff/permissions.js.
   staffRole: { type: String, enum: ['owner', 'admin', 'csm', null], default: null, index: true },
