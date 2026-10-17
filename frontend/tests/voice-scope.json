@@ -47,5 +47,7 @@
   "utils/slotPurchase.ts",
   "components/AgencyUsage.tsx",
   "components/ExtraClientDialog.tsx",
-  "components/AgencyDialog.tsx"
+  "components/AgencyDialog.tsx",
+  "pages/MyPlan.tsx",
+  "utils/plan.ts"
 ]

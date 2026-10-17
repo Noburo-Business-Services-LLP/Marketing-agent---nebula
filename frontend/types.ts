@@ -547,3 +547,20 @@ export interface Product {
   createdAt: string;
   updatedAt: string;
 }
+
+/** What GET /api/plan returns (the staff version adds the last run). */
+export interface PlanView {
+  success?: boolean;
+  plan: { id: string; completedAt: string; stale: boolean; result: any } | null;
+  running: boolean;
+  failed: boolean;
+  nextRefreshAt: string | null;
+  eligible: boolean;
+  reason: '' | 'free' | 'profile_incomplete' | 'not_eligible';
+  missing: string[];
+  freeBlueprint: { id: string } | null;
+  lastRunAt?: string | null;
+  lastStatus?: string | null;
+}
+
+export interface PlanRefreshReply { success: boolean; message?: string; nextRefreshAt?: string | null }

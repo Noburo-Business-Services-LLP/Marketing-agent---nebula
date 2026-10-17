@@ -28,6 +28,7 @@ import {
   Plus,
   Lightbulb,
   FileText,
+  ClipboardList,
   Inbox,
   Shield,
   Images
@@ -135,11 +136,14 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   // it was previously under a "More" heading, below Insights, which ranked a
   // headline feature under a junk drawer.
   const staffEntry = staffMenuEntry(user, Boolean(localStorage.getItem('csmReturnToken')));
+  // My plan is for customers, and for a CSM or agency owner while inside a client; staff accounts keep their own menu.
+  const showsMyPlan = isInsideClient(user) || Boolean(localStorage.getItem('csmReturnToken')) || (!!user && !user.staffRole && !user.isCsm && !isAgencyUser(user) && !isLapsedAgency(user));
   const primaryNav = [
     ...(staffEntry?.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
     ...(user?.isCsm && !localStorage.getItem('csmReturnToken') ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),
     ...(isAgencyUser(user) || isLapsedAgency(user) ? [{ path: '/agency/clients', label: 'Clients', icon: Users }] : []),
     { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
+    ...(showsMyPlan ? [{ path: '/plan', label: 'My plan', icon: ClipboardList }] : []),
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
     { path: '/drafts',           label: 'Review and approve', icon: PenTool, badge: 'drafts' as const },
@@ -169,6 +173,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
 
   const resolveTopBarMeta = (pathname: string) => {
     if (pathname.startsWith('/campaigns')) return { title: 'Create content', crumb: 'New campaign' };
+    if (pathname.startsWith('/plan')) return { title: 'My plan', crumb: '' };
     if (pathname.startsWith('/content-calendar')) return { title: 'Calendar', crumb: '' };
     if (pathname.startsWith('/reels')) return { title: 'Videos', crumb: '' };
     if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };

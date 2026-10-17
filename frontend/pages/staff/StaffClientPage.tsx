@@ -8,6 +8,8 @@ import PlatformIcon from '../../components/PlatformIcon';
 import { ACCESS_LABEL, ATTENTION_LABEL, TIER_LABEL, whenLabel } from './staffLabels';
 import { platformLabel } from '../../utils/platforms';
 import { hideConfirm, hideNotice } from '../../utils/staffTools';
+import { BANNER_TEXT, dayMonth, planBanner } from '../../utils/plan';
+import type { PlanView } from '../../types';
 
 const Card: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -45,6 +47,17 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
   // The result of an action is shown at the top of the page; bring it into view when the button was far below.
   useEffect(() => { if (note && noteRef.current) noteRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [note]);
 
+  const [plan, setPlan] = useState<PlanView | null>(null);
+  const [planNote, setPlanNote] = useState('');
+  const loadPlan = () => apiService.getClientPlan(id).then(setPlan).catch(() => setPlan(null));
+  useEffect(() => { loadPlan(); }, [id]);
+  const refreshPlan = async () => {
+    setBusy(true); setPlanNote('');
+    try { const r = await apiService.refreshClientPlan(id); setPlanNote(r.success ? (r.message || 'The plan is being updated.') : (r.message || 'That did not work.')); await loadPlan(); }
+    catch (e) { setPlanNote(customerMessage(e)); }
+    setBusy(false);
+  };
+
   const load = () => apiService.getStaffClient(id).then(setData).catch((e) => setError(customerMessage(e)));
   useEffect(() => { load(); }, [id]);
   useEffect(() => { if (data?.can?.assign_csm) apiService.getStaffCsms().then((r) => setCsms(r.csms || [])).catch(() => undefined); }, [data?.can?.assign_csm]);
@@ -56,11 +69,11 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
     setBusy(false);
   };
 
-  const open = async () => {
+  const open = async (to = '#/dashboard') => {
     setBusy(true); setNote('');
     try {
       const res = await apiService.staffOpenClient(id);
-      if (res.success) { window.location.hash = '#/dashboard'; window.location.reload(); } else setNote(res.message || 'Could not open the account.');
+      if (res.success) { window.location.hash = to; window.location.reload(); } else setNote(res.message || 'Could not open the account.');
     } catch (e) { setNote(customerMessage(e)); }
     setBusy(false);
   };
@@ -82,7 +95,7 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
           <p className="text-sm text-slate-500">{c.email}{c.mobile ? ` · ${c.mobile}` : ''}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {can.open_client && c.status !== 'disabled' && <button disabled={busy} onClick={open} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black font-bold text-sm disabled:opacity-50">Open account</button>}
+          {can.open_client && c.status !== 'disabled' && <button disabled={busy} onClick={() => open()} className="px-4 py-2 rounded-lg bg-[#F5A623] text-black font-bold text-sm disabled:opacity-50">Open account</button>}
           {can.toggle_client && (
             <button disabled={busy} onClick={() => { if (window.confirm(c.status === 'disabled' ? 'Switch this account on again?' : 'Switch this account off? The client will not be able to sign in.')) run(() => apiService.staffToggleClient(id, c.status === 'disabled'), c.status === 'disabled' ? 'Account switched on.' : 'Account switched off.'); }} className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 disabled:opacity-50">
               {c.status === 'disabled' ? 'Switch on' : 'Switch off'}
@@ -112,6 +125,29 @@ const StaffClientPage: React.FC<{ id: string }> = ({ id }) => {
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
+        <Card title="Plan">
+          {!plan ? <p className="text-sm text-slate-500">The plan could not be loaded.</p> : (() => {
+            const st = planBanner(plan);
+            const STATUS: Record<string, string> = { building: 'Being made', failed: 'Could not be made', stale: 'Out of date', ready: 'Up to date', profile_incomplete: 'Business profile incomplete', free: 'Free account, no plan', none: 'Not made yet' };
+            const p = plan.plan?.result?.plan || {};
+            const channels: string[] = (p.channels || []).slice(0, 3).map((ch: any) => String(ch.channel));
+            return (
+              <>
+                <Row label="Status" value={STATUS[st]} />
+                <Row label="Made on" value={plan.plan?.completedAt ? dayMonth(plan.plan.completedAt) : ''} />
+                {st === 'profile_incomplete' && plan.missing.length > 0 && <Row label="Missing" value={plan.missing.join(', ')} />}
+                {st === 'free' && <p className="pt-2 text-sm text-slate-600">{BANNER_TEXT.free}</p>}
+                {p.promise?.text && <Row label="Promise" value={p.promise.text} />}
+                {channels.length > 0 && <Row label="Top channels" value={channels.join(', ')} />}
+                <div className="flex flex-wrap gap-2 pt-3">
+                  {plan.eligible && !plan.running && <button disabled={busy} onClick={refreshPlan} className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 disabled:opacity-50">Refresh plan</button>}
+                  {can.open_client && c.status !== 'disabled' && plan.plan && <button disabled={busy} onClick={() => open('#/plan')} className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 disabled:opacity-50">Open the full plan</button>}
+                </div>
+                {planNote && <p role="status" className="pt-2 text-sm font-semibold text-slate-800">{planNote}</p>}
+              </>
+            );
+          })()}
+        </Card>
         <Card title="Summary">
           <Row label="Status" value={statusText} />
           {c.hidden && <Row label="Numbers" value="Left out of the numbers" />}

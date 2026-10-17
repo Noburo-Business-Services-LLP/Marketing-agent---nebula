@@ -13,6 +13,7 @@ import CreateVideo from './pages/CreateVideo';
 import NeedPlanModal from './components/NeedPlanModal';
 import Dashboard from './pages/Dashboard';
 import GravityHome from './pages/GravityHome';
+import MyPlan from './pages/MyPlan';
 import GravityCreate from './pages/GravityCreate';
 import GravityApprove from './pages/GravityApprove';
 import Library from './pages/Library';
@@ -282,6 +283,7 @@ const App: React.FC = () => {
                 <Layout user={user} onLogout={handleLogout} needsPlan={needsPlan}>
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome user={user} />} />
+                    <Route path="/plan" element={<MyPlan />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
                     {/* Two tabs on one page: Plan (AI month strategy, the PDF-able
                         view) and Schedule (real month grid, thumbnails on the day

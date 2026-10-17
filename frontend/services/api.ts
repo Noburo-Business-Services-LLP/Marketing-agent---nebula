@@ -1,4 +1,4 @@
-import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft } from '../types';
+import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply } from '../types';
 import { apiErrorFrom } from '../utils/plans';
 import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
@@ -1430,6 +1430,10 @@ export const apiService = {
   staffAddTeamMember: async (body: { email: string; firstName: string; lastName?: string; role: string }): Promise<any> => apiCall('/staff/team', { method: 'POST', body: JSON.stringify(body) }, true),
   staffChangeRole: async (id: string, role: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'PATCH', body: JSON.stringify({ role }) }, true),
   staffRemoveTeamMember: async (id: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'DELETE' }, true),
+  getPlan: async (): Promise<PlanView> => apiCall('/plan', { method: 'GET' }, true),
+  refreshPlan: async (): Promise<PlanRefreshReply> => apiCall('/plan/refresh', { method: 'POST' }, true),
+  getClientPlan: async (id: string): Promise<PlanView> => apiCall(`/staff/clients/${id}/plan`, { method: 'GET' }, true),
+  refreshClientPlan: async (id: string): Promise<PlanRefreshReply> => apiCall(`/staff/clients/${id}/plan/refresh`, { method: 'POST' }, true),
   getStaffClient: async (id: string): Promise<any> => apiCall(`/staff/clients/${id}`, { method: 'GET' }, true),
   getStaffCsms: async (): Promise<{ success: boolean; csms: Array<{ id: string; name: string }> }> => apiCall('/staff/csms', { method: 'GET' }, true),
   staffAddQuarks: async (id: string, amount: number): Promise<any> => apiCall(`/staff/clients/${id}/quarks`, { method: 'POST', body: JSON.stringify({ amount }) }, true),
@@ -4215,45 +4219,6 @@ export const heroVideoAPI = {
 
   list: async (): Promise<{ success: boolean; jobs: HeroJobSummary[] }> => {
     return apiCall('/hero-video/jobs', { method: 'GET' }, true);
-  }
-};
-
-// ============================================
-// ICP & CHANNEL STRATEGY API
-// ============================================
-export const icpStrategyService = {
-  // Fetch ICP from DB (auto-generates if not exists)
-  fetch: async (): Promise<any> => {
-    try {
-      return await apiCall<any>('/campaigns/icp-strategy', { method: 'GET' }, true);
-    } catch (error) {
-      console.error('ICP fetch error:', error);
-      return { success: false, icp: null, channelStrategy: [], businessName: '' };
-    }
-  },
-
-  // Force regenerate via AI
-  regenerate: async (): Promise<any> => {
-    try {
-      return await apiCall<any>('/campaigns/icp-strategy?regenerate=true', { method: 'GET' }, true);
-    } catch (error) {
-      console.error('ICP regenerate error:', error);
-      return { success: false, icp: null, channelStrategy: [], businessName: '' };
-    }
-  },
-
-  // Save user edits to DB
-  save: async (icp: any, channelStrategy?: any): Promise<any> => {
-    try {
-      return await apiCall<any>(
-        '/campaigns/icp-strategy',
-        { method: 'PUT', body: JSON.stringify({ icp, channelStrategy }) },
-        true
-      );
-    } catch (error) {
-      console.error('ICP save error:', error);
-      return { success: false };
-    }
   }
 };
 
