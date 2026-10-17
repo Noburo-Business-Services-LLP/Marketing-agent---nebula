@@ -481,6 +481,7 @@ app.use('/api/blueprint', blueprintRoutes);
 app.use('/api/plan', require('./routes/plan'));
 app.use('/api/week', require('./routes/week'));
 app.use('/api/setup', require('./routes/week').setupRouter);
+app.use('/api/tour', require('./routes/tour'));
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);

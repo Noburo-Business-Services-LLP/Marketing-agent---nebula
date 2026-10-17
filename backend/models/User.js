@@ -219,6 +219,13 @@ const userSchema = new mongoose.Schema({
     planOpenedAt: { type: Date },
     firstWeekApprovedAt: { type: Date }
   },
+  // Guided tour progress: finished or skipped once (never overwritten), the last step seen, and how often it was replayed.
+  tour: {
+    completedAt: { type: Date },
+    skippedAt: { type: Date },
+    step: { type: String },
+    replays: { type: Number }
+  },
   // Optional invoice details the customer adds: a GSTIN for a tax invoice in the business name, and the state
   // the supply is made to (Zoho's two letter code). Read when an invoice is made; never required to pay.
   billingDetails: {
@@ -482,6 +489,8 @@ userSchema.methods.toPublicJSON = function () {
     },
     // Setup progress the app reads from /me: when the plan was first opened and the first week approved.
     setup: { planOpenedAt: this.setup && this.setup.planOpenedAt, firstWeekApprovedAt: this.setup && this.setup.firstWeekApprovedAt },
+    // Tour progress the app reads from /me; the step and replay count stay on the server.
+    tour: { completedAt: this.tour && this.tour.completedAt, skippedAt: this.tour && this.tour.skippedAt },
     credits: this.credits ? {
       balance: this.credits.balance,
       totalUsed: this.credits.totalUsed
