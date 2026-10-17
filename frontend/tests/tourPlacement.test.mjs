@@ -34,3 +34,13 @@ test('the spotlight is padded and stays on screen', () => {
   const edge = spotlightRect({ top: 0, left: 0, width: 50, height: 40 }, { w: 1280, h: 800 });
   assert.ok(edge.top >= 0 && edge.left >= 0);
 });
+
+test('a measured card taller than the estimate still ends inside the viewport', () => {
+  for (const vp of [{ w: 375, h: 812 }, { w: 1280, h: 720 }, { w: 800, h: 400 }]) {
+    for (const h of [200, 223, 300, vp.h - 16]) {
+      const r = placeCard({ target: { top: 300, left: 40, width: 200, height: 60 }, viewport: vp, card: { w: Math.min(360, vp.w - 16), h } });
+      assert.ok(r.top >= 8, `top ${r.top}`);
+      assert.ok(r.top + h <= vp.h - 8, `bottom ${r.top + h} in ${vp.h}`);
+    }
+  }
+});

@@ -169,8 +169,16 @@ const TourRun: React.FC<Props> = ({ steps, onClose, onNeedsMenu }) => {
   useLayoutEffect(() => {
     const c = cardRef.current;
     if (!c) return;
-    const w = c.offsetWidth; const h = c.offsetHeight;
-    setCardSize((s) => (s.w === w && s.h === h ? s : { w, h }));
+    const measure = () => {
+      const w = c.offsetWidth; const h = c.offsetHeight;
+      setCardSize((s) => (s.w === w && s.h === h ? s : { w, h }));
+    };
+    measure();
+    // The text can wrap differently once fonts load or the window changes: keep the size current.
+    let ro: ResizeObserver | undefined;
+    try { if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(c); } } catch { /* the window listener below still applies */ }
+    window.addEventListener('resize', measure);
+    return () => { ro?.disconnect(); window.removeEventListener('resize', measure); };
   }, [index, !!target, viewport.w, viewport.h]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus moves into the card at each step.
@@ -232,7 +240,7 @@ const TourRun: React.FC<Props> = ({ steps, onClose, onNeedsMenu }) => {
         aria-labelledby={TITLE_ID}
         aria-describedby={BODY_ID}
         className="fixed rounded-2xl border border-[var(--gv-border-default)] p-5 shadow-2xl"
-        style={{ top: place.top, left: place.left, width: cardW, maxWidth: viewport.w - 16, background: '#fffdf8', color: '#1d1a14', pointerEvents: 'auto', transition: move }}
+        style={{ ...(place.placement === 'bottom-sheet' ? { left: 8, right: 8, bottom: 'calc(8px + env(safe-area-inset-bottom))' } : { top: place.top, left: place.left, width: cardW }), maxWidth: viewport.w - 16, maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto', background: '#fffdf8', color: '#1d1a14', pointerEvents: 'auto', transition: move }}
       >
         <p className="text-[12px] font-medium text-[#5b5547]" aria-live="polite">{index + 1} of {vis.length}</p>
         <h2 id={TITLE_ID} ref={headingRef} tabIndex={-1} className="mt-1 text-[18px] font-semibold leading-snug text-[#1d1a14] outline-none">{step.title}</h2>
