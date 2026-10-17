@@ -91,7 +91,8 @@ const competitorSchema = new mongoose.Schema({
   tracking: {
     failures: { type: Number, default: 0 },
     pausedAt: Date,
-    lastCheckedAt: Date
+    lastCheckedAt: Date,
+    lastHandle: String // the Instagram handle last read; a different handle resets the failure count
   }
 }, {
   timestamps: true

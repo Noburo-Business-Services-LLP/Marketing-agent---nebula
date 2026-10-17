@@ -844,6 +844,13 @@ const startServer = async () => {
       console.warn('Plan run cleanup failed to start:', reapError.message);
     }
 
+    // Weekly competitor snapshots: capped scraper reads (off with ENABLE_COMPETITOR_TRACKER=off)
+    try {
+      require('./services/competitors/tracker').startCompetitorTracker();
+    } catch (schedulerError) {
+      console.warn('Competitor tracker failed to start:', schedulerError.message);
+    }
+
     // The plan each paying account gets from its profile: monthly refresh, retries for a failed first plan
     try {
       require('./services/plan/planScheduler').startPlanScheduler();
