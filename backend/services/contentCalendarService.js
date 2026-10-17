@@ -334,7 +334,8 @@ function replacePromptVariable(prompt, key, value) {
 function calendarPrompt(userProfile = {}, month = null, languageOverride = '', {
   brandMemoryBlock = '',
   recentIdeasBlock = '',
-  focus = ''
+  focus = '',
+  planGuidance = ''
 } = {}) {
   const profile = getBusinessProfile(userProfile);
   const language = languageOverride || normalizeLanguage(profile.language || profile.contentLanguage);
@@ -358,6 +359,9 @@ function calendarPrompt(userProfile = {}, month = null, languageOverride = '', {
   const monthlyFocusSection = focus
     ? `THIS MONTH'S SPECIFIC FOCUS (from the user — prioritize this over generic ideas):\n${focus}`
     : '';
+  // The plan block rides with the focus section, so with no plan the prompt is exactly what it was.
+  const planSection = String(planGuidance || '').trim();
+  const focusAndPlanSection = [monthlyFocusSection, planSection].filter(Boolean).join('\n\n');
 
   return [
     ['BUSINESS_NAME', businessName],
@@ -374,7 +378,7 @@ function calendarPrompt(userProfile = {}, month = null, languageOverride = '', {
     ['PLAN_MONTH', monthLabel(month)],
     ['BRAND_MEMORY', brandMemorySection],
     ['RECENT_IDEAS', recentIdeasSection],
-    ['MONTHLY_FOCUS', monthlyFocusSection]
+    ['MONTHLY_FOCUS', focusAndPlanSection]
   ].reduce((prompt, [key, value]) => replacePromptVariable(prompt, key, value), CONTENT_CALENDAR_PROMPT);
 }
 
@@ -667,7 +671,7 @@ async function generateCalendarCover(calendar, userProfile = {}) {
   }
 }
 
-async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { language: languageOverride = '', focus = '' } = {}) {
+async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { language: languageOverride = '', focus = '', planGuidance = '' } = {}) {
   const profile = getBusinessProfile(userProfile);
   const userId = userProfile._id || userProfile.userId || profile.userId;
   if (!userId) throw new Error('userId is required to generate a content calendar');
@@ -698,7 +702,7 @@ async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { l
 
   let aiCalendar = null;
   try {
-    const prompt = calendarPrompt(userProfile, month, language, { brandMemoryBlock, recentIdeasBlock, focus });
+    const prompt = calendarPrompt(userProfile, month, language, { brandMemoryBlock, recentIdeasBlock, focus, planGuidance });
     const response = await llmRouter(prompt);
     aiCalendar = parseGeminiJSON(response);
   } catch (error) {
@@ -874,6 +878,7 @@ function startContentCalendarScheduler({ intervalMs = 60_000, logger = console }
 }
 
 module.exports = {
+  calendarPrompt,
   generateMonthlyCalendar,
   generateCalendarCover,
   monthLabel,

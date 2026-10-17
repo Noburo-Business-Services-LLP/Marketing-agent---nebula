@@ -14,6 +14,7 @@ const {
   calendarMonth,
   generateCalendarCover
 } = require('../services/contentCalendarService');
+const { planGuidanceFor } = require('../services/week/planContext');
 
 // A calendar row is a reel if its format implies motion.
 const isReelFormat = (value = '') => /reel|video/i.test(String(value || ''));
@@ -61,7 +62,7 @@ router.post('/generate-next', protect, async (req, res) => {
       nextMonthStr = `${year}-${String(month).padStart(2, '0')}`;
     }
     const user = await User.findById(req.user._id);
-    const calendar = await generateMonthlyCalendar(user, nextMonthStr, { language: req.body?.language, focus: req.body?.focus });
+    const calendar = await generateMonthlyCalendar(user, nextMonthStr, { language: req.body?.language, focus: req.body?.focus, planGuidance: await planGuidanceFor(req.user._id) });
     res.json({ success: true, calendar });
   } catch (error) {
     console.error('Content calendar generate next error:', error);
@@ -73,7 +74,7 @@ router.post('/regenerate', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     const targetMonth = req.body.month || calendarMonth();
-    const calendar = await generateMonthlyCalendar(user, targetMonth, { language: req.body?.language, focus: req.body?.focus });
+    const calendar = await generateMonthlyCalendar(user, targetMonth, { language: req.body?.language, focus: req.body?.focus, planGuidance: await planGuidanceFor(req.user._id) });
     res.json({ success: true, calendar });
   } catch (error) {
     console.error('Content calendar regenerate error:', error);
