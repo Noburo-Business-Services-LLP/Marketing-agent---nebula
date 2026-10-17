@@ -205,7 +205,7 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
       {isAgencyUser(user) && <AgencyUsage />}
 
       {showSetup && <SetupCard />}
-      {showWeek && <ThisWeekCard />}
+      {showWeek && <ThisWeekCard language={user?.businessProfile?.contentLanguage} />}
 
       {/* HERO */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center mb-14">

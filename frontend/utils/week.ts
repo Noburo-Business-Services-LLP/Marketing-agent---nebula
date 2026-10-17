@@ -67,11 +67,28 @@ export function scaledNote(proposal: Partial<WeekProposal> | null | undefined): 
   if (num(r.posts)) parts.push(noun(num(r.posts), 'post', 'posts'));
   if (num(r.carousels)) parts.push(noun(num(r.carousels), 'carousel', 'carousels'));
   if (num(r.videos)) parts.push(noun(num(r.videos), 'video', 'videos'));
-  if (!parts.length) return 'Your pool covers most of the week, so we scaled this week down. Top up to add the rest back.';
-  return `Your pool covers most of the week, so we left out ${join(parts)}. Top up to add ${parts.length === 1 && /^1 /.test(parts[0]) ? 'it' : 'them'} back.`;
+  if (!parts.length) return 'Your balance covers most of the week, so we scaled this week down. Top up to add the rest back.';
+  return `Your balance covers most of the week, so we left out ${join(parts)}. Top up to add ${parts.length === 1 && /^1 /.test(parts[0]) ? 'it' : 'them'} back.`;
 }
 
 /** Whether any post is still being made, so the card keeps checking. */
 export function isWorking(proposal: Partial<WeekProposal> | null | undefined): boolean {
   return Boolean(proposal && (proposal.items || []).some((i) => i && (i.status === 'approved' || i.status === 'making') && i.kind === 'post'));
+}
+
+/** The hand-over for a carousel or video entry, rebuilt from the item itself (used when the server's prefill is not in this session). */
+export function buildPrefill(item: Partial<WeekItem>, language?: string | null):
+  { target: 'carousel'; prefill: { mode: 'carousel'; topic: string; platform: string; language: string } }
+  | { target: 'video'; prefill: { idea: string; language: string } } {
+  const lang = (language && String(language).trim()) || 'English';
+  const topic = String(item.topic || '');
+  if (item.kind === 'video') return { target: 'video', prefill: { idea: topic, language: lang } };
+  return { target: 'carousel', prefill: { mode: 'carousel', topic, platform: (item.channel && String(item.channel)) || 'instagram', language: lang } };
+}
+
+export const COLLAPSE_AFTER = 5;
+export const COLLAPSED_ROWS = 4;
+/** How many rows to show: all of them up to five, otherwise the first four until the customer asks for the rest. */
+export function visibleCount(total: number, expanded: boolean): number {
+  return total > COLLAPSE_AFTER && !expanded ? COLLAPSED_ROWS : total;
 }
