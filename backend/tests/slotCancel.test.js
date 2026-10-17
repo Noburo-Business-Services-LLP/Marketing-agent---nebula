@@ -11,9 +11,24 @@ const User = require('../models/User');
 const ENV = { RAZORPAY_KEY_ID: 'rzp_test_fake', RAZORPAY_KEY_SECRET: 'test_key_secret', RAZORPAY_WEBHOOK_SECRET: 'test_webhook_secret' };
 const hmac = (secret, data) => crypto.createHmac('sha256', secret).update(data).digest('hex');
 
+// Just enough of Mongo's $expr for the limit checks.
+function evalExpr(doc, e) {
+  if (typeof e === 'string' && e.startsWith('$')) return getAt(doc, e.slice(1));
+  if (!e || typeof e !== 'object') return e;
+  const [op, args] = Object.entries(e)[0];
+  const a = Array.isArray(args) ? args.map((x) => evalExpr(doc, x)) : [evalExpr(doc, args)];
+  switch (op) {
+    case '$ifNull': return a[0] == null ? a[1] : a[0];
+    case '$min': return Math.min(...a); case '$max': return Math.max(...a);
+    case '$add': return a.reduce((x, y) => x + y, 0); case '$subtract': return a[0] - a[1];
+    case '$lt': return a[0] < a[1]; case '$lte': return a[0] <= a[1];
+    default: throw new Error(`fake does not support ${op}`);
+  }
+}
 function matchFilter(doc, filter) {
   return Object.entries(filter).every(([k, v]) => {
     if (k === '$or') return v.some((f) => matchFilter(doc, f));
+    if (k === '$expr') return !!evalExpr(doc, v);
     if (k === '_id') return String(doc._id) === String(v);
     let vals = [doc];
     for (const p of k.split('.')) vals = vals.flatMap((x) => (x == null ? [] : Array.isArray(x[p]) ? x[p] : [x[p]]));
@@ -155,7 +170,7 @@ const agencyWith = (slots, { clients = 0, extra = slots.filter((s) => s.active &
   mkAgency({
     plan: { tier: 'agency', addons: [], subscriptionId: 'sub_plan', subscriptions: [{ subscriptionId: 'sub_plan', kind: 'plan', key: 'agency', razorpayPlanId: 'plan_agency', active: true }, ...slots] },
     subscription: { status: 'active', razorpaySubscriptionId: 'sub_plan', currentPeriodEnd: new Date('2026-11-20T00:00:00Z') },
-    agency: { clientCount: clients, extraSlots: extra }
+    agency: { clientCount: clients, extraSlots: extra, slotsEnding: slots.filter((s) => s.active && !s.ended && s.cancelAtPeriodEnd).length }
   });
 const slotOf = (ctx, id) => stored(ctx).plan.subscriptions.find((s) => s.subscriptionId === id);
 
@@ -249,7 +264,8 @@ test('any other Razorpay failure is a plain error and nothing is recorded', asyn
   const res = await call(ctx.r, 'post', '/cancel-slot', {});
   assert.strictEqual(res.code, 502);
   assert.doesNotMatch(res.body.message, /razorpay/i);
-  assert.strictEqual(slotOf(ctx, 's1').cancelAtPeriodEnd, undefined);
+  assert.ok(!slotOf(ctx, 's1').cancelAtPeriodEnd, 'the claim is rolled back');
+  assert.ok(!stored(ctx).agency.slotsEnding, 'and so is the counter');
 });
 
 test('refused for non-agency accounts, client workspaces and inside a client pass', async () => {
@@ -279,4 +295,43 @@ test('the public profile carries extraSlots and slotsEnding in the agency block,
     plan: { tier: 'agency', subscriptions: [mkSlot('a', 1, { cancelAtPeriodEnd: true }), mkSlot('b', 2)] } });
   const a = u.toPublicJSON().agency;
   assert.deepStrictEqual([a.clientCount, a.workspaceName, a.extraSlots, a.slotsEnding], [3, 'W', 2, 1]);
+});
+
+test('success raises the ending counter by one, and the flag and counter agree', async () => {
+  const ctx = setup({ user: agencyWith([mkSlot('s1', 1), mkSlot('s2', 2)], { clients: 1 }) });
+  await call(ctx.r, 'post', '/cancel-slot', {});
+  assert.strictEqual(stored(ctx).agency.slotsEnding, 1);
+  assert.strictEqual(ag.slotsEndingOf(stored(ctx)), 1);
+});
+
+test('a rapid double press (both requests in flight) cancels exactly one place', async () => {
+  const ctx = setup({ user: agencyWith([mkSlot('s1', 1), mkSlot('s2', 2)], { clients: 1 }) });
+  const [a, b] = await Promise.all([call(ctx.r, 'post', '/cancel-slot', {}), call(ctx.r, 'post', '/cancel-slot', {})]);
+  assert.deepStrictEqual([a.code, b.code], [200, 200]);
+  assert.strictEqual(ctx.razorpay.calls.cancels.length, 1);
+  assert.strictEqual(stored(ctx).agency.slotsEnding, 1);
+  assert.strictEqual(ag.slotsEndingOf(stored(ctx)), 1);
+});
+
+test('the claim is atomic against clients filling the places: no cancel when it would not fit', async () => {
+  const ctx = setup({ user: agencyWith([mkSlot('s1', 1)], { clients: 6 }) });
+  const res = await call(ctx.r, 'post', '/cancel-slot', {});
+  assert.strictEqual(res.code, 400);
+  assert.ok(!stored(ctx).agency.slotsEnding);
+});
+
+test('when the place actually ends the counter drops once, never below zero, and the limit drops', async () => {
+  const ctx = setup({ user: agencyWith([mkSlot('s1', 1)], { clients: 1 }) });
+  await call(ctx.r, 'post', '/cancel-slot', {});
+  const raw = Buffer.from(JSON.stringify({ event: 'subscription.cancelled', payload: { subscription: { entity: { id: 's1', plan_id: 'plan_slot', notes: { userId: 'user1' } } } } }));
+  const send = () => call(ctx.r, 'post', '/webhook', { headers: { 'x-razorpay-signature': hmac(ENV.RAZORPAY_WEBHOOK_SECRET, raw) }, body: raw });
+  await send(); await send();
+  assert.strictEqual(stored(ctx).agency.extraSlots, 0);
+  assert.strictEqual(stored(ctx).agency.slotsEnding, 0);
+  assert.strictEqual(ag.slotsEndingOf(stored(ctx)), 0);
+  // an inconsistent counter is clamped
+  const bad = setup({ user: agencyWith([mkSlot('s1', 1, { cancelAtPeriodEnd: true })], { clients: 0 }) });
+  bad.User.users[0].agency.slotsEnding = 0;
+  await call(bad.r, 'post', '/webhook', { headers: { 'x-razorpay-signature': hmac(ENV.RAZORPAY_WEBHOOK_SECRET, raw) }, body: raw });
+  assert.strictEqual(stored(bad).agency.slotsEnding, 0);
 });

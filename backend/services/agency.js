@@ -26,6 +26,23 @@ function slotsEndingOf(owner) {
   return subs.filter((s) => s && s.kind === 'slot' && s.active && !s.ended && s.cancelAtPeriodEnd).length;
 }
 
+/** The counter of extra places set to end (a whole number, never below 0). */
+const endingCounterOf = (owner) => slotsOf(owner && owner.agency && owner.agency.slotsEnding);
+
+/** The limit for adding a client: the client limit less the places already set to end, never below the included clients. */
+function effectiveClientLimitOf(owner) {
+  if (!isAgency(owner)) return 0;
+  return Math.max(AGENCY.includedClients, clientLimitOf(owner) - endingCounterOf(owner));
+}
+
+/** The same limit as a MongoDB expression, so adding a client and cancelling a place are checked in one atomic update. */
+const EFFECTIVE_LIMIT_EXPR = Object.freeze({
+  $max: [AGENCY.includedClients, { $subtract: [
+    { $min: [AGENCY.maxClients, { $add: [AGENCY.includedClients, { $ifNull: ['$agency.extraSlots', 0] }] }] },
+    { $max: [0, { $ifNull: ['$agency.slotsEnding', 0] }] }
+  ] }]
+});
+
 /** The earliest date at which a place set to end actually ends, as an ISO string, or null when none is known. */
 function slotsEndAtOf(owner) {
   const subs = (owner && owner.plan && Array.isArray(owner.plan.subscriptions)) ? owner.plan.subscriptions : [];
@@ -101,4 +118,4 @@ async function publicCredits(user, { User = require('../models/User') } = {}) {
 /** The free first campaign batch is for a person's own first run. A client's work is paid from the agency's shared pool. */
 const freeFirstBatch = (u) => !isWorkspace(u) && !(u && u.initialCampaignsGenerated);
 
-module.exports = { slotsEndingOf, slotsEndAtOf, slotsOf, NOT_A_WORKSPACE, publicCredits, freeFirstBatch, isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };
+module.exports = { endingCounterOf, effectiveClientLimitOf, EFFECTIVE_LIMIT_EXPR, slotsEndingOf, slotsEndAtOf, slotsOf, NOT_A_WORKSPACE, publicCredits, freeFirstBatch, isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };

@@ -19,3 +19,10 @@ backend/tests/slotCancel.test.js (13), frontend/tests/agencyPlan.test.mjs (5 add
 
 ## Not done
 Not tried with real Razorpay (checklist updated). Not looked at in the running app. Clients page shows no ending note.
+
+## Follow-up: adding a client respects places that are ending
+- Counter `agency.slotsEnding` on the agency (schema, default 0). `cancel-slot` raises it in the same conditional update that flags the subscription; the ended-subscription handler lowers it (and clears the flag) only for a place that was flagged; it is clamped at 0 next to the existing `extraSlots` clamp. Flag and counter agree; `slotsEndingOf` (flags) feeds the public profile, the counter feeds the atomic checks.
+- Effective limit for adding a client = client limit less places ending, never below the included clients (`EFFECTIVE_LIMIT_EXPR` in `services/agency.js`), used inside `claimSlot`'s atomic filter. Refusal: "One extra client place ends this month, so you can have up to X clients. Remove a client or keep the place." (plural form for several).
+- `cancel-slot` now claims the place first with one conditional update (matches only while that place is unflagged AND the clients still fit, same expression), then calls Razorpay. A second press in flight matches nothing and returns success without a second cancel. A Razorpay failure (not "already cancelled") undoes the claim and counter and answers 502.
+- Tests: 4 new backend cancel tests, 3 new add-client tests; backend 1248 pass, frontend 308 pass, audits 0, tsc only Influencers.tsx.
+- Limits: the test fakes evaluate `$expr` with small hand-written evaluators, so the real Mongo expression is untested against a database. A place cancelled before this change has no counter (none exist, never released). A second press AFTER the first completes, with another open place, is a genuine second cancel.

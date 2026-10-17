@@ -9,7 +9,7 @@ function fakeUsers(seed = []) {
   const docs = seed.map((d) => ({ ...d }));
   const get = (o, p) => p.split('.').reduce((x, k) => (x == null ? undefined : x[k]), o);
   const set = (o, p, v) => { const ks = p.split('.'); let c = o; ks.slice(0, -1).forEach((k) => { c[k] = c[k] || {}; c = c[k]; }); c[ks.at(-1)] = v; };
-  const limitOf = (d) => Math.min(AGENCY.maxClients, AGENCY.includedClients + (get(d, 'agency.extraSlots') || 0));
+  const limitOf = (d) => Math.max(AGENCY.includedClients, Math.min(AGENCY.maxClients, AGENCY.includedClients + (get(d, 'agency.extraSlots') || 0)) - (get(d, 'agency.slotsEnding') || 0));
   const User = {
     docs,
     findOneAndUpdate: async (f, u) => {
@@ -75,4 +75,31 @@ test('after a downgrade, clients beyond the limit are frozen, oldest first kept,
   const frozen = User.docs.filter((d) => d.agency && d.agency.frozen).map((d) => d._id);
   assert.deepStrictEqual(frozen, ['w6', 'w7']);
   assert.strictEqual(User.docs.length, 8);
+});
+
+test('adding a client is refused at the lowered limit while a place is set to end', async () => {
+  const User = fakeUsers([agency({ agency: { clientCount: 5, extraSlots: 1, slotsEnding: 1 } })]);
+  const r = await w.createWorkspace({ owner: User.docs[0], name: 'Sixth', models: { User }, randomId: () => 'x' });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.message, 'One extra client place ends this month, so you can have up to 5 clients. Remove a client or keep the place.');
+  assert.strictEqual(User.docs[0].agency.clientCount, 5);
+  const two = fakeUsers([agency({ agency: { clientCount: 6, extraSlots: 3, slotsEnding: 2 } })]);
+  const r2 = await w.createWorkspace({ owner: two.docs[0], name: 'Seventh', models: { User: two }, randomId: () => 'y' });
+  assert.match(r2.message, /^2 extra client places end this month, so you can have up to 6 clients\./);
+});
+
+test('the lowered limit never goes below the included clients, and a place not ending still counts', async () => {
+  const User = fakeUsers([agency({ agency: { clientCount: 5, extraSlots: 2, slotsEnding: 1 } })]);
+  assert.strictEqual((await w.createWorkspace({ owner: User.docs[0], name: 'Sixth', models: { User }, randomId: () => 'a' })).ok, true, 'limit 7 less 1 ending is 6');
+  const odd = fakeUsers([agency({ agency: { clientCount: 4, extraSlots: 0, slotsEnding: 3 } })]);
+  assert.strictEqual((await w.createWorkspace({ owner: odd.docs[0], name: 'Fifth', models: { User: odd }, randomId: () => 'b' })).ok, true, 'the floor is the included five');
+});
+
+test('two simultaneous adds at the lowered boundary: exactly one wins', async () => {
+  const User = fakeUsers([agency({ agency: { clientCount: 4, extraSlots: 1, slotsEnding: 1 } })]);
+  let n = 0;
+  const go = () => w.createWorkspace({ owner: User.docs[0], name: 'Last', models: { User }, randomId: () => `r${n++}` });
+  const [a, b] = await Promise.all([go(), go()]);
+  assert.strictEqual([a, b].filter((r) => r.ok).length, 1);
+  assert.strictEqual(User.docs[0].agency.clientCount, 5);
 });

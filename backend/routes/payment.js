@@ -135,12 +135,18 @@ function createPaymentRouter(deps = {}) {
     }
   }
 
+  // Neither slot counter can ever be below zero, whatever the stored data says.
+  async function clampSlotCounters(userId) {
+    await User.updateOne({ _id: userId, 'agency.extraSlots': { $lt: 0 } }, { $set: { 'agency.extraSlots': 0 } });
+    await User.updateOne({ _id: userId, 'agency.slotsEnding': { $lt: 0 } }, { $set: { 'agency.slotsEnding': 0 } });
+  }
+
   // Ends one slot subscription: lowers the limit by one, once, and only if it was active.
   async function endSlot(userId, record) {
     const built = bp.buildEndUpdate(null, record, 'subscription.cancelled');
     const doc = await User.findOneAndUpdate({ _id: userId, ...built.filter }, built.update, { new: true, arrayFilters: built.arrayFilters });
     // The limit can never go below zero extra slots, whatever the stored data says.
-    await User.updateOne({ _id: userId, 'agency.extraSlots': { $lt: 0 } }, { $set: { 'agency.extraSlots': 0 } });
+    await clampSlotCounters(userId);
     return doc;
   }
 
@@ -666,7 +672,7 @@ function createPaymentRouter(deps = {}) {
         const built = bp.buildEndUpdate(user, record, eventName);
         await User.findOneAndUpdate({ _id: user._id, ...(built.filter || {}) }, built.update, { new: true, arrayFilters: built.arrayFilters });
         if (built.endsPlan) await cancelAddonSubscriptions(user);
-        if (built.endsSlot) await User.updateOne({ _id: user._id, 'agency.extraSlots': { $lt: 0 } }, { $set: { 'agency.extraSlots': 0 } });
+        if (built.endsSlot) await clampSlotCounters(user._id);
         // The plan or a slot ended: the client limit changed, so clients above it are frozen (never deleted).
         if (touchesAgency(record) && (built.endsSlot || built.endsPlan)) await syncAgency(user._id);
       }
@@ -913,11 +919,25 @@ function createPaymentRouter(deps = {}) {
       const target = open.slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0];
 
       // The clients must still fit once every place that is ending, and this one, has ended. Nothing is frozen or removed here.
-      const endingAlready = slots.length - open.length;
-      const futureLimit = agencyRules.clientLimitOf(user) - endingAlready - 1;
-      const inUse = Number((user.agency && user.agency.clientCount) || 0);
-      if (inUse > futureLimit) {
-        return res.status(400).json({ success: false, message: 'You are using all your client places. Remove a client first, then cancel an extra place.' });
+      const NO_FIT = 'You are using all your client places. Remove a client first, then cancel an extra place.';
+      if (Number((user.agency && user.agency.clientCount) || 0) >= agencyRules.effectiveClientLimitOf(user)) {
+        return res.status(400).json({ success: false, message: NO_FIT });
+      }
+
+      // Claim the place in ONE conditional update. It matches only while this place is not yet marked and the clients
+      // still fit, so a second press in flight, or a client being added at the same moment, can never get both.
+      const subFilter = { subscriptionId: target.subscriptionId, active: true, cancelAtPeriodEnd: { $ne: true } };
+      const arrayFilters = [{ 'sub.subscriptionId': target.subscriptionId }];
+      const claim = await User.updateOne(
+        { _id: user._id, 'plan.subscriptions': { $elemMatch: subFilter }, $expr: { $lt: [{ $ifNull: ['$agency.clientCount', 0] }, agencyRules.EFFECTIVE_LIMIT_EXPR] } },
+        { $set: { 'plan.subscriptions.$[sub].cancelAtPeriodEnd': true, 'plan.subscriptions.$[sub].cancelRequestedAt': new Date() }, $inc: { 'agency.slotsEnding': 1 } },
+        { arrayFilters }
+      );
+      if (!claim || !claim.matchedCount) {
+        const now = await User.findById(user._id);
+        const mine = now && storedSubscriptions(now).find((s) => s.subscriptionId === target.subscriptionId);
+        if (mine && mine.cancelAtPeriodEnd) return res.json({ success: true, alreadyCancelling: true, endsAt: mine.cancelEndsAt || null, message: 'This extra client place is already set to end. You can keep using it until the end of the month you paid for.' });
+        return res.status(400).json({ success: false, message: NO_FIT });
       }
 
       let endsAt = (user.subscription && (user.subscription.currentPeriodEnd || user.subscription.nextBillingAt)) || null;
@@ -926,17 +946,18 @@ function createPaymentRouter(deps = {}) {
         if (result && Number(result.current_end) > 0) endsAt = new Date(Number(result.current_end) * 1000);
       } catch (e) {
         if (!alreadyCancelled(e)) {
+          // Undo the claim so the place is not shown as ending when Razorpay still bills it.
+          await User.updateOne(
+            { _id: user._id, 'plan.subscriptions': { $elemMatch: { subscriptionId: target.subscriptionId, cancelAtPeriodEnd: true } } },
+            { $set: { 'plan.subscriptions.$[sub].cancelAtPeriodEnd': false }, $inc: { 'agency.slotsEnding': -1 } }, { arrayFilters }
+          );
+          await clampSlotCounters(user._id);
           console.error(`Could not cancel slot subscription ${target.subscriptionId}:`, e && e.message);
           alert('payment', `could not cancel extra client subscription ${target.subscriptionId} at the customer's request`);
           return res.status(502).json({ success: false, message: 'We could not cancel this extra client just now. Please try again in a few minutes, or write to us and we will do it for you.' });
         }
       }
-      const $set = { 'plan.subscriptions.$[sub].cancelAtPeriodEnd': true, 'plan.subscriptions.$[sub].cancelRequestedAt': new Date() };
-      if (endsAt) $set['plan.subscriptions.$[sub].cancelEndsAt'] = new Date(endsAt);
-      await User.updateOne(
-        { _id: user._id, 'plan.subscriptions': { $elemMatch: { subscriptionId: target.subscriptionId, active: true, cancelAtPeriodEnd: { $ne: true } } } },
-        { $set }, { arrayFilters: [{ 'sub.subscriptionId': target.subscriptionId }] }
-      );
+      if (endsAt) await User.updateOne({ _id: user._id }, { $set: { 'plan.subscriptions.$[sub].cancelEndsAt': new Date(endsAt) } }, { arrayFilters });
       res.json({ success: true, endsAt, message: 'This extra client place will end at the end of the month you paid for. You can keep using it until then, and you will not be charged again.' });
     } catch (error) {
       console.error('Cancel slot error:', error);

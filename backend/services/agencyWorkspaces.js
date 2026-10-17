@@ -10,13 +10,13 @@ const { normalisePath } = require('./requestPath');
 const MAX_NAME = 80;
 const cleanName = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME);
 
-/** One atomic step: take a slot only while the agency is below its limit. Returns the updated agency or null. */
+/** One atomic step: take a slot only while the agency is below its limit (less the extra places already set to end). Returns the updated agency or null. */
 function claimSlot(User, ownerId) {
   return User.findOneAndUpdate(
     {
       _id: ownerId,
       'plan.tier': 'agency',
-      $expr: { $lt: [{ $ifNull: ['$agency.clientCount', 0] }, { $min: [AGENCY.maxClients, { $add: [AGENCY.includedClients, { $ifNull: ['$agency.extraSlots', 0] }] }] }] }
+      $expr: { $lt: [{ $ifNull: ['$agency.clientCount', 0] }, ag.EFFECTIVE_LIMIT_EXPR] }
     },
     { $inc: { 'agency.clientCount': 1 } },
     { new: true }
@@ -32,7 +32,12 @@ async function createWorkspace({ owner, name, industry = '', website = '', model
   if (clean.length < 2) return { ok: false, message: 'Please enter the client\'s business name.' };
   const claimed = await claimSlot(User, owner._id);
   if (!claimed) {
-    const limit = ag.clientLimitOf(owner);
+    const ending = ag.endingCounterOf(owner);
+    const limit = ag.effectiveClientLimitOf(owner);
+    if (ending > 0 && limit < ag.clientLimitOf(owner)) {
+      const lead = ending === 1 ? 'One extra client place ends this month' : `${ending} extra client places end this month`;
+      return { ok: false, message: `${lead}, so you can have up to ${limit} clients. Remove a client or keep the place${ending === 1 ? '' : 's'}.` };
+    }
     return { ok: false, message: `Your plan includes ${limit} clients and all of them are in use. Add a client slot to add more.` };
   }
   try {

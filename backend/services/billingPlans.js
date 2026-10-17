@@ -244,7 +244,10 @@ function endUpdateFor(record, eventName) {
   // A cancelled or completed slot is over for good: a charge that arrives later must not bring it back.
   // A halted one can be resumed by the customer, so it is not marked.
   if (eventName !== 'subscription.halted') $set['plan.subscriptions.$[sub].ended'] = true;
-  return { $inc: { 'agency.extraSlots': -1 }, $set };
+  const $inc = { 'agency.extraSlots': -1 };
+  // A place that was set to end is now over: it leaves the ending counter too (the flag is cleared so the two agree).
+  if (record.cancelAtPeriodEnd) { $inc['agency.slotsEnding'] = -1; $set['plan.subscriptions.$[sub].cancelAtPeriodEnd'] = false; }
+  return { $inc, $set };
 }
 
 function buildEndUpdate(user, record, eventName) {
