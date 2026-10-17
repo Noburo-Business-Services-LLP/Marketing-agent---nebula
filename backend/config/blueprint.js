@@ -53,4 +53,8 @@ const WARNING_MESSAGES = {
 };
 const LIMITED_NOTE = 'Based on limited information';
 
-module.exports = { TAGS, TAG_LABEL, GOALS, FORMATS, CHANNELS, MODES, STATUS, PAGES, PHASES, LIMITS, NEBULAA, STOP_MESSAGES, WARNING_MESSAGES, LIMITED_NOTE };
+// The only things Nebulaa may be said to do for a customer in a plan. The planner drops anything else.
+const PLAN_NEBULAA_CAN = ['posts', 'carousels', 'videos', 'captions and hashtags', 'scheduling and publishing', 'inbox replies', 'competitor tracking'];
+const PLAN_REFRESH_DAYS = 7; // one manual plan refresh per account in this many days
+
+module.exports = { PLAN_NEBULAA_CAN, PLAN_REFRESH_DAYS, TAGS, TAG_LABEL, GOALS, FORMATS, CHANNELS, MODES, STATUS, PAGES, PHASES, LIMITS, NEBULAA, STOP_MESSAGES, WARNING_MESSAGES, LIMITED_NOTE };

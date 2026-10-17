@@ -29,7 +29,8 @@ module.exports = {
       territory: 'The strategic territory the visitor chose, or an instruction to propose one',
       competitors: 'What the named competitors own pages say',
       formats: 'The post formats that may be used',
-      channels: 'The channels that may be used'
+      channels: 'The channels that may be used',
+      nebulaaCan: 'The only things the Nebulaa product may be said to do'
     },
     template: `You are the strategist for a Brand Growth Blueprint. You are creative about ideas and strict about facts.
 
@@ -57,6 +58,8 @@ RULES
 6. The territory must work for the whole business, not one product, one festival, one season or one city.
 7. Allowed formats: {{formats}}. Allowed channels: {{channels}}. Use between three and five pillars. Every calendar item names one of your pillars. The calendar must hold one item for every day from 1 to 30, so thirty items in total, each with its own day number; one item is not enough. The example below shows the shape of a single item only.
 8. If the information basis is limited, say less, not more.
+9. Describe the ideal customer in "icp": who they are, what bothers them, where they spend time, and what makes them buy now. Short claims, each with a tag and factIds like the other claims. Never invent a fact about the customers.
+10. "effort" has one row for every channel in "channels". "organicPct" and "paidPct" are whole numbers that add up to 100. They are a recommendation, never a measurement, and are written only in those two fields, never in a sentence. "nebulaaDoes" lists what Nebulaa does for the owner on that channel, chosen ONLY from: {{nebulaaCan}}. "youDo" lists what the owner does themselves, offline or on the platform, for example following up on WhatsApp, asking for Google reviews, or local events. Every item in "youDo" has the tag "proposed".
 
 Return ONLY JSON in exactly this shape:
 {
@@ -73,6 +76,8 @@ Return ONLY JSON in exactly this shape:
   "offers": [{ "factId": "F5", "hook": { "text": "", "tag": "proposed" }, "cta": { "text": "", "tag": "proposed" } }],
   "channels": [{ "channel": "Instagram", "priority": 1, "role": { "text": "", "tag": "proposed" } }],
   "roadmap": [{ "phase": "foundation", "focus": { "text": "", "tag": "proposed" }, "actions": [{ "text": "", "tag": "proposed" }], "measure": [{ "text": "", "tag": "proposed" }] }],
+  "icp": { "who": [{ "text": "", "tag": "inference", "factIds": ["F1"] }], "pains": [{ "text": "", "tag": "proposed" }], "where": [{ "text": "", "tag": "proposed" }], "triggers": [{ "text": "", "tag": "proposed" }] },
+  "effort": [{ "channel": "Instagram", "organicPct": 80, "paidPct": 20, "nebulaaDoes": ["posts"], "youDo": [{ "text": "", "tag": "proposed" }] }],
   "firstSteps": [{ "text": "", "tag": "proposed" }]
 }`
   },

@@ -2,7 +2,7 @@
 // Module C and D (model side): build the locked prompt, call the model, and turn what it returns into claims the
 // document may carry. The model can never mint Verified: anything it calls verified is downgraded, and anything
 // the QA scanner rejects is removed and counted.
-const { FORMATS, CHANNELS, PHASES, LIMITS } = require('../../config/blueprint');
+const { FORMATS, CHANNELS, PHASES, LIMITS, PLAN_NEBULAA_CAN } = require('../../config/blueprint');
 const { getPrompt, renderTemplate } = require('../promptRegistry');
 const { scanClaimText, allowedNumbersOf } = require('./qa');
 
@@ -65,7 +65,8 @@ function buildPlanVars(sheet, input, direction) {
     territory: direction && direction.name ? `${direction.name} (chosen by the visitor; do not replace it)` : 'Not chosen. Propose one territory.',
     competitors: comp || 'None given.',
     formats: FORMATS.join(', '),
-    channels: CHANNELS.join(', ')
+    channels: CHANNELS.join(', '),
+    nebulaaCan: PLAN_NEBULAA_CAN.join(', ')
   };
 }
 
@@ -130,6 +131,27 @@ function normalisePlan(parsed, sheet) {
   channels.sort((a, b) => a.priority - b.priority);
   channels.splice(5);
 
+  const icpRaw = isObj(parsed.icp) ? parsed.icp : null;
+  const icpBlock = icpRaw ? {
+    who: claims(icpRaw.who, 4, ctx),
+    pains: claims(icpRaw.pains, 4, ctx),
+    where: claims(icpRaw.where, 4, ctx),
+    triggers: claims(icpRaw.triggers, 4, ctx)
+  } : null;
+  const icp = icpBlock && (icpBlock.who.length || icpBlock.pains.length || icpBlock.where.length || icpBlock.triggers.length) ? icpBlock : null;
+
+  const channelNames = new Set(channels.map((c) => c.channel));
+  const effort = [];
+  for (const e of arr(parsed.effort, RAW_CAP)) {
+    if (!isObj(e) || !channelNames.has(e.channel) || effort.some((x) => x.channel === e.channel)) continue;
+    const organic = Math.round(Number(e.organicPct));
+    let paid = Math.round(Number(e.paidPct));
+    if (!Number.isFinite(organic) || organic < 0 || organic > 100) continue;
+    if (!Number.isFinite(paid) || paid < 0 || paid > 100 || organic + paid !== 100) paid = 100 - organic; // repaired: organic leads
+    const does = arr(e.nebulaaDoes, RAW_CAP).map((a) => str(a, 40).toLowerCase()).filter((a) => PLAN_NEBULAA_CAN.includes(a));
+    effort.push({ channel: e.channel, organicPct: organic, paidPct: paid, nebulaaDoes: [...new Set(does)], youDo: claims(e.youDo, 4, ctx, true) });
+  }
+
   const roadmap = [];
   // The three phases come back in order. A newer model sometimes names a phase in its own words ("content system"
   // for "storytelling"), so when exactly three phases arrive and an id does not match, they are taken by position.
@@ -155,6 +177,8 @@ function normalisePlan(parsed, sheet) {
       calendar,
       offers,
       channels,
+      icp,
+      effort,
       roadmap,
       firstSteps: claims(parsed.firstSteps, 5, ctx, true)
     },
@@ -212,4 +236,4 @@ async function runDirections({ sheet, input, callLLM, parseJSON }) {
   return normaliseDirections(parsed, sheet);
 }
 
-module.exports = { buildPlanVars, buildDirectionVars, normalisePlan, normaliseDirections, runPlan, runDirections, toClaim };
+module.exports = { ctxOf, buildPlanVars, buildDirectionVars, normalisePlan, normaliseDirections, runPlan, runDirections, toClaim };

@@ -53,7 +53,7 @@ test('template placeholders and declared variables match exactly', () => {
     const p = PROMPTS[id];
     assert.deepEqual(varsIn(p.template).sort(), Object.keys(p.variables).sort(), id);
   }
-  assert.deepEqual(Object.keys(PROMPTS['blueprint.plan'].variables).sort(), ['basis', 'channels', 'competitors', 'facts', 'formats', 'goal', 'territory', 'unverified']);
+  assert.deepEqual(Object.keys(PROMPTS['blueprint.plan'].variables).sort(), ['basis', 'channels', 'competitors', 'facts', 'formats', 'goal', 'nebulaaCan', 'territory', 'unverified']);
   assert.deepEqual(Object.keys(PROMPTS['blueprint.directions'].variables).sort(), ['facts', 'goal', 'unverified']);
 });
 
