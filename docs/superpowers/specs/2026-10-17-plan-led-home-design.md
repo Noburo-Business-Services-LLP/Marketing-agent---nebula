@@ -40,7 +40,7 @@ When it runs:
 - Automatically, once, when a paying account's business profile becomes complete (a pure `profileComplete(user)` helper decides; the same helper drives the setup path).
 - Automatically each month, on the first day the account's plan month starts (a small scheduler).
 - By hand with "Refresh my plan", at most once a week per account; the button says when it will next be available.
-- Never for staff accounts or managed clients unless staff trigger it from the client page (managed clients have their strategy done by their manager; the plan page appears for them only after a first run).
+- **Managed clients get the plan too (owner decision 2026-10-17).** Their plan is built and refreshed exactly like a paying customer's, so the team that works on their profile has the strategy in front of them. At rollout a one-time backfill script (run by the owner, throttled, a few accounts per minute, with a dry run and a hard cap) builds the first plan for existing managed clients; after that the same triggers apply. The cost is ours, as for everyone. Staff also see the plan on the staff client page (a read-only summary with a link to the full plan and a "Refresh plan" button that ignores the weekly limit for staff), and when a CSM works inside a client's account the My plan page and the weekly proposal show for that client like for any customer. Never for staff accounts themselves.
 
 A run that fails leaves the previous plan in place and shows "We could not refresh your plan just now, your last plan is still here." A first run that fails retries twice with backoff, then raises an owner alert and shows the customer a plain message with a Try again button.
 
@@ -92,6 +92,24 @@ For an account that is set up, the home screen opens on a "This week" card (befo
 - A step whose target is missing on the current screen is skipped, never blocks.
 - Not shown to staff or to a CSM working inside a client, nor inside an agency client workspace (the agency owner sees it on their own account).
 
+## Later stages (not in the first three build plans)
+
+### Stage 4: competitor tracking and insights (recommended next)
+What exists: the Competitors feature (`models/Competitor.js`, `routes/competitors.js`) already finds or lets the customer add competitors and fetches their public posts with likes, comments, post frequency and a SWOT; the plan run already reads competitor pages (`competitor_page` facts). Today a fetch happens only when the customer presses a button, and nothing is kept as history.
+Proposal: a weekly (or every two weeks, owner's choice per plan) background check for each account that has competitors: re-fetch each competitor's recent public posts through the existing fetchers (and Apify where the existing code uses it), store a small snapshot per competitor per run (post count, posting frequency, average engagement, top post, topics), and compare to the last snapshot. The customer sees a short "What your competitors did" card on My plan and the Competitors page (for example "Sweet Co posted 5 times this week, up from 2; their top post was a reel about Diwali boxes with 3x your average likes") and the plan's competitor read uses the latest snapshot on refresh. Cost: the same per-lookup fetch cost as today times (competitors up to 3 per account) times 4 to 2 runs a month; an estimate of a few rupees per account per month, to be measured with real runs before it ships. It stays inside the existing Competitor insights add-on for paying customers; managed clients get it automatically.
+Stage 4 gets its own short spec and plan when Stages 1 to 3 are built.
+
+### Stage 5: social listening (research done, build only if the owner decides)
+What it would show: what people say about the business online, as a simple positive / neutral / negative split with the few most useful quotes and a plain trend ("more negative mentions this week, mostly about delivery times"). For a very small or new business there is often nothing to show, and the page must say so honestly instead of inventing a score.
+Sources, checked 2026-10-17 (prices are from third-party summaries and must be confirmed on each vendor's own page before budgeting):
+- The customer's OWN accounts: comments and messages on their own posts are already read through the connected account and the Social Inbox, at no extra data cost. This is the most reliable and most useful source and can be scored at once.
+- X (Twitter) official API, pay per use: about USD 0.005 per post read (about Rs 0.44). A brand with 200 mentions a week costs about USD 4 a month (about Rs 350). Official API, no terms-of-service risk.
+- Instagram and Facebook public comments or mentions of OTHER people's posts: only through scraping services (Apify actors list roughly USD 0.5 to 2.3 per 1,000 comments, some include a sentiment label). Meta's terms restrict scraping, so this carries legal and reliability risk and I do not recommend building a product on it.
+- Reddit: commercial use of the API is hard to get and priced for large buyers; skip.
+- Google reviews for the customer's own business: a good source but needs the business's own Google Business Profile connection; not researched here.
+- Scoring text as positive, neutral or negative: one cheap language-model call per batch (a few paise per hundred short texts).
+Proposal when the time comes: Phase A scores the customer's own comments and messages (no new data cost, ships quickly); Phase B adds X mentions through the official API for businesses that have enough volume (a threshold of mentions decides whether the card is shown at all); never scrape Meta. A "Listening" card appears on My plan only when there is enough data (for example at least 20 items in the period), otherwise it says "Not enough mentions yet to show a score." It would be a part of the Competitor insights add-on or a new add-on, an owner pricing decision. Estimated data cost for a mid-size business: a few hundred rupees a month at most, so it needs its own price rather than being free.
+
 ## Cost and limits
 
 - The plan run costs us a few rupees of model use per run, never charged to a customer. With the monthly refresh and one manual refresh a week the worst case is five runs a month per account. A global cap and the existing daily AI spend ceiling apply (the plan run records its spend like every other model call, as the action `blueprint_plan`).
@@ -118,12 +136,12 @@ For an account that is set up, the home screen opens on a "This week" card (befo
 
 ## Staging
 
-One spec, three plans, each shipped and checked before the next: Stage 1 My plan (planner additions, plan runs, `/plan` page, retire old ICP page); Stage 2 content follows the plan, setup path, home screen This week card, weekly proposal and Approve; Stage 3 guided tour. Stage 1 is useful on its own.
+One spec, three plans, each shipped and checked before the next: Stage 1 My plan (planner additions, plan runs, `/plan` page, retire old ICP page); Stage 2 content follows the plan, setup path, home screen This week card, weekly proposal and Approve; Stage 3 guided tour. Stage 1 is useful on its own. Stages 4 (competitor tracking) and 5 (social listening) follow as separate specs.
 
 ## Open items and risks
 
 1. Whether the first plan should wait until the business profile has a website or Instagram link (the Blueprint relies on public facts and falls back to proposals with little evidence). The proposal here: run anyway with the profile alone, mark thin evidence honestly, and invite the customer to add a website to improve it.
 2. The effort split (organic vs paid percentages) is a recommendation, not a measurement; the page says so in plain words and tags it as a proposal.
-3. Managed clients: a plan page appears for them only after staff run the first plan, so existing customers see no change until the owner decides.
+3. Managed clients get plans through the one-time backfill above (cost ours, a few rupees per client). Existing managed clients see a new My plan page and, if they log in themselves, the This week card and the tour; the owner may want to tell them before the backfill runs.
 4. The weekly proposal depends on a calendar existing; accounts that never generated one get the plan-based fallback until they do.
 5. Owner to decide later whether a weekly proposal should repeat automatically when the customer does nothing (the first version only proposes and waits).
