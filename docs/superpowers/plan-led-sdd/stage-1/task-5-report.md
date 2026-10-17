@@ -1,0 +1,4 @@
+# Task 5 report
+Status: done. Full backend suite 1294 pass, 0 fail (planRoutes 16 tests; creditAccessGuard and dataRegistry pass).
+Changes: routes/plan.js (createPlanRouter, viewFor, staffView, staffRefresh), mounted at /api/plan in server-main.js; staff GET /clients/:id/plan (view_clients) and POST /clients/:id/plan/refresh (open_client, logged as refresh_plan) in routes/staff.js; ICP GET/PUT in routes/campaigns.js now 410; generateICPAndStrategy deleted from services/geminiAI.js (nothing else imported it).
+Concerns: no dedicated "manage_client" permission exists, so staff refresh uses open_client (all roles, CSM only for assigned clients). The staff route wiring is tested by source assertions plus the pure handlers, not through express. failed = no plan, nothing running, firstPlanFailedAt set. A free account with an incomplete profile reports reason 'free'. Frontend callers of the old ICP endpoints (if any) were not touched; this repo's backend only.
