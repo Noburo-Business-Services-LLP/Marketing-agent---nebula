@@ -58,9 +58,10 @@ const withDefaults = (deps) => ({ ...defaultDeps(), ...(deps || {}) });
 async function applyHandleChange(competitor, d) {
   const t = competitor.tracking || (competitor.tracking = {});
   const handle = handleOf(competitor);
-  if (t.lastHandle && handle && t.lastHandle !== handle && (t.failures || t.pausedAt)) {
+  if (t.lastHandle && handle && t.lastHandle !== handle) {
     t.failures = 0;
     t.pausedAt = null;
+    t.lastCheckedAt = null; // a fixed handle is read again straight away
     t.lastHandle = handle;
     try { await d.saveTracking(competitor, { ...t }); } catch (_) { /* in-memory state is enough for this pass */ }
   }
@@ -100,6 +101,7 @@ async function trackOne({ competitor, user, now, deps } = {}) {
       await d.store.save(snapshotFields ? { ...base, ...snapshotFields, weekStart: week, ok: true } : { ...base, ok: false, error });
       if (snapshotFields) await d.store.prune(competitor._id, caps.KEEP_WEEKS).catch(() => {});
     } catch (e) {
+      console.error('[competitors] could not save a check:', e && e.message);
       error = error || 'Could not save this check';
       snapshotFields = null;
     }
@@ -122,6 +124,13 @@ async function trackOne({ competitor, user, now, deps } = {}) {
 async function isDue(competitor, at, d, force = false) {
   const caps = d.caps || defaultCaps;
   const week = weekStartOf(at);
+  const t = competitor.tracking || {};
+  if (t.lastCheckedAt) {
+    // Covers a check whose row could not be saved: it still waits out the cooldown and the rest of the week.
+    const checked = new Date(t.lastCheckedAt);
+    if (at - checked < caps.COOLDOWN_HOURS * HOUR) return false;
+    if (weekStartOf(checked) === week) return false;
+  }
   const last = await d.store.lastAttempt(competitor._id);
   const changed = last && last.handle && last.handle !== handleOf(competitor);
   if (last && !changed && !force) {

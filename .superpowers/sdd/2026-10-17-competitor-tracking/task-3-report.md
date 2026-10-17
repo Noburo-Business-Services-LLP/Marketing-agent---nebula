@@ -16,3 +16,8 @@ Behaviour notes:
 - apiCosts: new PROVIDER_RATES.apify_profile_read = 0.0023; ACTION_USD.competitor_scrape now uses it (was the Serper rate 0.001, too low). Quark price stays 0.
 - StaffAiSpend.tsx: description line for apify_scrape (list is label-driven from the API, only the WHAT text map needed an entry).
 - Tests: spendGuard.test.js updated (providerOf) and a new test (switch, AI_KILLED, daily total, staff status). Backend 1469 pass; frontend 355 pass; brand-audit and voice-audit 0 violations.
+
+## Fix: a failed save is logged and not retried until the next cooldown
+- trackOne logs `[competitors] could not save a check:` with the message only; the failure still counts toward the pause rule and tracking state is still saved.
+- isDue now also honours `tracking.lastCheckedAt`: skip within COOLDOWN_HOURS, and skip while it falls in the current week (failed save or failed read retries next week). A changed handle clears lastCheckedAt (and failures/pause) so it reads again; `runTrackerOnce({ force: true })` bypasses the due check (caps still apply).
+- Test (k): a save that always throws gives one read across four passes, logs, reads again next week and on a new handle. Backend 1487 pass, 0 fail.

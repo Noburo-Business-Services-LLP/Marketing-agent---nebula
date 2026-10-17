@@ -247,3 +247,35 @@ test('(force) skips the cooldown and the failed-week rule but still obeys the da
   assert.strictEqual((await runTrackerOnce({ deps: guarded.deps, now: NOW, force: true })).checked, 0);
   assert.strictEqual(guarded.calls.scrape.length, 0);
 });
+
+test('(k) a store whose save always throws is read once per week across passes, logs, and a new handle reads again', async () => {
+  const w = world({ users: [user('u1')], competitors: [] });
+  w.store.save = async () => { throw new Error('E11000 duplicate key'); };
+  const c = comp('c1', 'u1');
+  w.deps.competitorsFor = async () => [c];
+  const errors = [];
+  const orig = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  try {
+    let reads = 0;
+    for (const hours of [0, 6, 12, 13]) {
+      const r = await runTrackerOnce({ deps: w.deps, now: new Date(NOW.getTime() + hours * HOUR) });
+      reads += r.checked;
+    }
+    assert.strictEqual(reads, 1);
+    assert.strictEqual(w.calls.scrape.length, 1);
+    assert.ok(errors.some((e) => e.includes('[competitors] could not save a check:') && e.includes('E11000')));
+    assert.strictEqual(c.tracking.failures, 1, 'a failed save counts as a failure');
+    assert.ok(w.calls.tracking.length >= 1, 'tracking state still saved');
+
+    // Next week it is read again.
+    const next = await runTrackerOnce({ deps: w.deps, now: new Date(NOW.getTime() + 7 * 864e5) });
+    assert.strictEqual(next.checked, 1);
+
+    // A changed handle bypasses the wait.
+    c.socialHandles.instagram = 'fixed';
+    const fixed = await runTrackerOnce({ deps: w.deps, now: new Date(NOW.getTime() + 7 * 864e5 + HOUR) });
+    assert.strictEqual(fixed.checked, 1);
+    assert.strictEqual(w.calls.scrape[w.calls.scrape.length - 1], 'fixed');
+  } finally { console.error = orig; }
+});
