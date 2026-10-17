@@ -510,3 +510,15 @@ test('(busy) the pass reports busy when a pass is already running in this proces
   release();
   await first;
 });
+
+test('(k) a long pass renews its lease from the current time, not from when the pass started', async () => {
+  const renewed = [];
+  const lease = fakeLease();
+  lease.renew = async (t, at) => { renewed.push(at); return t; };
+  const started = new Date(Date.now() - 3 * HOUR);
+  const w = world({ users: [user('u1')], competitors: [comp('c1', 'u1')], lease });
+  await runTrackerOnce({ deps: w.deps, now: started });
+  assert.ok(renewed.length >= 1);
+  // The pass "started" three hours ago: a renewal stamped with that time would already be expired.
+  for (const at of renewed) assert.ok(new Date(at).getTime() >= Date.now() - 60 * 1000, 'renewal must use the current time');
+});

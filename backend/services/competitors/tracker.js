@@ -224,7 +224,7 @@ async function runTrackerOnce({ deps, now, limit, accountIds = null, force = fal
       try { allowed = !!(d.canUse(user, 'competitors') || {}).allowed; } catch (_) { allowed = false; }
       if (!allowed) continue;
 
-      token = (await d.lease.renew(token, at)) || token;
+      token = (await d.lease.renew(token, new Date(Math.max(at.getTime(), Date.now())))) || token; // from the current time: a pass longer than the lease must not lose it
       const list = (await d.competitorsFor(user)) || [];
       for (const c of list) await applyHandleChange(c, d);
       // The same list the insights route shows; of those, only confirmed or verified, valid, unpaused handles are read.
