@@ -163,7 +163,11 @@ function percentages(counts) {
   return { positive: base[0], neutral: base[1], negative: base[2] };
 }
 
-/** Windows are India calendar days ending today: period = last 28 days, recent = last 7, baseline = the 28 days before recent. */
+/**
+ * Windows are India calendar days ending on the day of `now` (the caller passes the LAST SCORING time, not today, because
+ * scoring is weekly): period = the 28 days to that day, recent = the last 7 of them, baseline = the 28 days before recent.
+ * `baselineFrom` is the first day any window needs, so a caller loads 35 days of scores, not 28.
+ */
 function aggregate(rows, now) {
   const n = nowOf(now);
   const to = istDay(n);
@@ -189,8 +193,12 @@ function aggregate(rows, now) {
     else if (day >= baseFrom && day <= baseTo) { baseline.total += 1; if (neg) baseline.negative += 1; }
   }
   period.pct = percentages(period);
-  return { period, recent, baseline, enough: period.total >= cfg.MIN_ITEMS, reasons };
+  return { period, recent, baseline, baselineFrom: baseFrom, enough: period.total >= cfg.MIN_ITEMS, reasons };
 }
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/** '17 October' from 'YYYY-MM-DD'. */
+const dayText = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}` : ''; };
 
 const REASON_WORD = { delivery: 'delivery', price: 'price', quality: 'quality', service: 'service', product: 'the product', question: 'questions' };
 
@@ -203,8 +211,8 @@ function reasonTail(agg) {
     const v = Number(reasons[k]) || 0;
     if (v > 0 && (!best || v > best.v)) best = { k, v };
   }
-  if (!best || !REASON_WORD[best.k] || best.v * 2 < negatives) return '';
-  return ` Most are about ${REASON_WORD[best.k]}.`;
+  if (!best || !REASON_WORD[best.k] || best.v * 2 <= negatives) return ''; // "most" means more than half
+  return ` Most negative comments are about ${REASON_WORD[best.k]}.`;
 }
 
 /** Built from numbers only. Null unless there is enough data in the period, the last week and the weeks before it. */
@@ -216,9 +224,10 @@ function trendSentence(agg) {
     const recentPct = Math.round((recent.negative / recent.total) * 100);
     const basePct = Math.round((baseline.negative / baseline.total) * 100);
     const tail = reasonTail(agg);
-    if (recentPct - basePct >= cfg.TREND_MIN_MOVE_PCT) return `More negative comments than usual this week: ${recent.negative} of ${recent.total}, against ${basePct}% over the four weeks before.${tail}`;
-    if (basePct - recentPct >= cfg.TREND_MIN_MOVE_PCT) return `Fewer negative comments than usual this week: ${recent.negative} of ${recent.total}, against ${basePct}% over the four weeks before.${tail}`;
-    return `About the same as the four weeks before.${tail}`;
+    const upTo = `in the week to ${dayText(agg.period.to)}`;
+    if (recentPct - basePct >= cfg.TREND_MIN_MOVE_PCT) return `More negative comments than usual ${upTo}: ${recent.negative} of ${recent.total}, against ${basePct}% in the four weeks before.${tail}`;
+    if (basePct - recentPct >= cfg.TREND_MIN_MOVE_PCT) return `Fewer negative comments than usual ${upTo}: ${recent.negative} of ${recent.total}, against ${basePct}% in the four weeks before.${tail}`;
+    return `${upTo.charAt(0).toUpperCase()}${upTo.slice(1)}, about the same as the four weeks before.${tail}`;
   } catch (_) { return null; }
 }
 
@@ -229,6 +238,11 @@ const BOUND_L = '(?<![\\p{L}\\p{M}\\p{N}])';
 const BOUND_R = '(?![\\p{L}\\p{M}\\p{N}])';
 let abuseRegexes;
 
+// Word forms: a stem may carry one of these endings ("bitches", "fuckin", "fucking", "shitty"). Conservative on purpose.
+const SUFFIX = '(?:s|es|ing|in|ed|er|y)?';
+const SEP_LONG = '[.,\\-_/|;:\\s]?';
+const SEP_SHORT = '[.,\\-_/|;:]?';
+
 function abuseRegexList() {
   if (abuseRegexes) return abuseRegexes;
   const list = [];
@@ -236,39 +250,87 @@ function abuseRegexList() {
     const w = String(raw).normalize('NFKC').toLowerCase().trim();
     if (!w) continue;
     if (!/^[a-z]+$/.test(w)) { list.push(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u')); continue; }
-    const sep = w.length >= 4 ? '[.\\-_\\s]?' : '[.\\-_]?';
-    const letters = [...w].map((ch, idx) => {
+    const sep = w.length >= 4 ? SEP_LONG : SEP_SHORT;
+    const letterOf = (ch, idx) => {
       const set = new Set([ch, ...(LEET[ch] || '')]);
       if (idx > 0) set.add('*');
       return `[${[...set].map(classEsc).join('')}]+`;
-    });
-    list.push(new RegExp(`${BOUND_L}${letters.join(sep)}s?${BOUND_R}`, 'u'));
+    };
+    const letters = [...w].map(letterOf);
+    list.push(new RegExp(`${BOUND_L}${letters.join(sep)}${SUFFIX}${BOUND_R}`, 'u'));
+    // "rape" also reads as "raping", "raped", "raper": the same stem without its final e plus an ending.
+    if (w.length >= 4 && w.endsWith('e')) {
+      list.push(new RegExp(`${BOUND_L}${letters.slice(0, -1).join(sep)}${sep}(?:ing|in|ed|er|d|r|s)${BOUND_R}`, 'u'));
+    }
   }
   abuseRegexes = list;
   return abuseRegexes;
 }
 
-const DIGIT_RUN = /[\p{Nd}+][\p{Nd}\s\-.()]*/gu;
 const STREET = '(?:road|rd|street|st|nagar|colony|lane|ln|avenue|ave|sector|flat|floor|apartment|apt|layout|salai|marg|gali|chowk|puram|palayam)';
 const ADDRESS = new RegExp(`(?<![\\p{L}\\p{N}])\\p{Nd}+[a-z]?[\\s,\\-/]+(?:[\\p{L}.]+[\\s,]+){0,2}${STREET}(?![\\p{L}])`, 'iu');
 const URL_LIKE = /(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|in|net|org|co|io|me|ly|app|xyz|shop|store|info|biz|link|page|gl|be)\b)/i;
 const EMAIL_LIKE = /[^\s@]+[@＠][^\s@]+|[[(]\s*(?:at|dot)\s*[\])]|\bat\s+\S+\s+dot\s+(?:com|in|net|org|co)\b|\bdot\s+(?:com|in|net|org|co)\b/i;
+const DIGIT_WORDS = new Set(['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']);
+const PHONE_GAP = /^[\s,/.\-()[\]+]*$/;
+const SAFE_INPUT_MAX = 2000; // code units: anything longer is cut before any rule runs (and is far over the 160 limit anyway)
 
-/** Whitespace-collapsed text if it is safe to show as a quote, otherwise null. Over-long text is rejected, never edited. */
+// Look-alike letters from other scripts, mapped to the Latin letter they imitate (lower case).
+const LOOKALIKE = {};
+for (const [from, to] of Object.entries({
+  'а': 'a', 'в': 'b', 'е': 'e', 'ё': 'e', 'к': 'k', 'м': 'm', 'н': 'h', 'о': 'o', 'р': 'p', 'с': 'c', 'т': 't', 'у': 'y', 'х': 'x',
+  'і': 'i', 'ј': 'j', 'ѕ': 's', 'ԁ': 'd', 'ԛ': 'q', 'ԝ': 'w', 'һ': 'h', 'ӏ': 'l', 'ү': 'y',
+  'α': 'a', 'β': 'b', 'γ': 'y', 'ε': 'e', 'η': 'n', 'ι': 'i', 'κ': 'k', 'μ': 'u', 'ν': 'v', 'ο': 'o', 'ρ': 'p', 'τ': 't', 'υ': 'u', 'χ': 'x', 'ω': 'w', 'ς': 's'
+})) LOOKALIKE[from] = to;
+
+/** NFKC, invisible and format characters removed, look-alike letters mapped to Latin, accents dropped from Latin letters, lower case. */
+function foldText(str) {
+  let t = String(str).normalize('NFKC').replace(/\p{Cf}/gu, '').toLowerCase();
+  t = t.replace(/[Ͱ-ϿЀ-ӿ]/g, (ch) => LOOKALIKE[ch] || ch);
+  t = t.replace(/[À-ɏḀ-ỿ]+/g, (run) => run.normalize('NFD').replace(/[̀-ͯ]/g, ''));
+  return t;
+}
+/** For contact details: folded, and a link written with spaced or bracketed dots is joined up. */
+function contactForm(str) {
+  return foldText(str)
+    .replace(/\s*[[({]\s*(?:\.|dot)\s*[\])}]\s*/g, '.')
+    .replace(/\s*\.\s*(?=(?:com|net|org|io|xyz|biz)\b)/g, '.');
+}
+/** For abuse words: folded, pictures removed, and a run of separators becomes one. */
+function abuseForm(str) {
+  return foldText(str).replace(/\p{Extended_Pictographic}/gu, '').replace(/[\s.,\-_/|;:]{2,}/g, '.');
+}
+
+/** 7 or more digits in a row once separators (spaces, commas, slashes, dots, dashes, brackets) are ignored, counting spelled-out digits too. */
+function longNumber(str) {
+  let run = 0;
+  let prevEnd = 0;
+  for (const m of str.matchAll(/\p{Nd}+|\p{L}+/gu)) {
+    if (!PHONE_GAP.test(str.slice(prevEnd, m.index))) run = 0;
+    prevEnd = m.index + m[0].length;
+    if (/^\p{Nd}/u.test(m[0])) run += Array.from(m[0]).length;
+    else if (DIGIT_WORDS.has(m[0])) run += 1;
+    else run = 0;
+    if (run >= 7) return true;
+  }
+  return false;
+}
+const contactUnsafe = (v) => /[@＠]/.test(v) || EMAIL_LIKE.test(v) || URL_LIKE.test(v) || /\p{Nd}{6,}/u.test(v) || longNumber(v.toLowerCase()) || ADDRESS.test(v);
+const abuseUnsafe = (v) => { for (const re of abuseRegexList()) if (re.test(v)) return true; return false; };
+
+/**
+ * Whitespace-collapsed text if it is safe to show as a quote, otherwise null. Every rule runs on the text as written AND on a
+ * normalised form (invisible characters, look-alike letters, accents, split separators), so simple tricks do not get through.
+ * Over-long text is cut before any rule runs and is rejected by the length rule, never edited.
+ */
 function safeQuoteText(text) {
   if (typeof text !== 'string') return null;
-  if (text.length > cfg.QUOTE_MAX * 12) return null;
-  const t = collapse(text);
+  const t = collapse(text.length > SAFE_INPUT_MAX ? text.slice(0, SAFE_INPUT_MAX) : text);
   const len = codePoints(t);
   if (len < cfg.QUOTE_MIN || len > cfg.QUOTE_MAX) return null;
   const n = t.normalize('NFKC');
-  if (/[@＠]/.test(n) || EMAIL_LIKE.test(n)) return null;
-  if (URL_LIKE.test(n)) return null;
-  if (/\p{Nd}{6,}/u.test(n)) return null;
-  for (const m of n.match(DIGIT_RUN) || []) if ((m.match(/\p{Nd}/gu) || []).length >= 7) return null;
-  if (ADDRESS.test(n)) return null;
-  const lower = n.toLowerCase();
-  for (const re of abuseRegexList()) if (re.test(lower)) return null;
+  for (const v of new Set([n, contactForm(n)])) if (contactUnsafe(v)) return null;
+  for (const v of new Set([n.toLowerCase(), abuseForm(n)])) if (abuseUnsafe(v)) return null;
   return t;
 }
 

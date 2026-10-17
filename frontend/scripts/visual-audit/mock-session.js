@@ -66,9 +66,10 @@
   // puterr / put403 / put429 = saving a handle is refused.
   if (params.get('compstate')) sessionStorage.setItem('audit-comp-state', params.get('compstate'));
   var CSTATE = sessionStorage.getItem('audit-comp-state') || 'all';
-  // ?listenstate= ready | notenough | off | error | locked | empty | waiting picks the "What people say about you" card variant (kept for the tab):
-  // ready = scored with a trend, quotes and recent negative; notenough = under the minimum; off = weekly check switched off, older score shown;
-  // error = fails to load; locked = no Inbox add-on (403); empty = nothing scored yet and the switch is off; waiting = connected, next weekly check pending.
+  // ?listenstate= ready | stale | notenough | off | error | locked | empty | waiting picks the "What people say about you" card variant (kept for the tab):
+  // ready = scored with a trend, quotes and recent negative; stale = ready, but last checked more than 10 days ago ("Last checked on ..." line);
+  // notenough = scored before, under the minimum; off = scoring not running or never scored: the card shows NOTHING (empty is the same);
+  // error = fails to load; locked = no Inbox add-on (403); waiting = scored before, next weekly check pending.
   if (params.get('listenstate')) sessionStorage.setItem('audit-listen-state', params.get('listenstate'));
   var LSTATE = sessionStorage.getItem('audit-listen-state') || 'ready';
   var INSIDE = false;
@@ -552,13 +553,15 @@
       if (LSTATE === 'error') return { __status: 500, body: { success: false, message: 'Something went wrong.' } };
       var base = { enabled: true, period: { from: '2026-09-20', to: '2026-10-17' }, asOf: '2026-10-17', total: 0, counts: { positive: 0, neutral: 0, negative: 0 }, percentages: { positive: 0, neutral: 0, negative: 0 }, trend: null, topReason: null, quotes: [], recentNegative: [], lastScoredAt: null, lastScoredOn: null };
       if (LSTATE === 'notenough') return ok(Object.assign(base, { state: 'not_enough', message: 'Not enough comments yet to show a score.' }));
-      if (LSTATE === 'empty') return ok(Object.assign(base, { enabled: false, state: 'not_enough', message: 'Nothing is scored yet.' }));
-      if (LSTATE === 'waiting') return ok(Object.assign(base, { state: 'waiting', message: 'Your comments are waiting for the next weekly check.' }));
+      if (LSTATE === 'empty' || LSTATE === 'off') return ok(Object.assign(base, { enabled: false, state: 'off', message: null, stale: false }));
+      if (LSTATE === 'waiting') return ok(Object.assign(base, { state: 'waiting', message: 'Your comments are waiting for the next weekly check.', lastScoredAt: '2026-10-10T04:00:00.000Z', lastScoredOn: '2026-10-10' }));
+      var STALE = LSTATE === 'stale';
       return ok(Object.assign(base, {
-        enabled: LSTATE !== 'off', state: 'ready', message: null, total: 86,
+        enabled: true, state: 'ready', message: null, total: 86, stale: STALE,
+        period: STALE ? { from: '2026-09-08', to: '2026-10-05' } : base.period, asOf: STALE ? '2026-10-05' : base.asOf,
         counts: { positive: 53, neutral: 21, negative: 12 }, percentages: { positive: 62, neutral: 24, negative: 14 },
-        trend: 'More negative comments than usual this week: 6 of 22, against 12% over the four weeks before. Most are about delivery.',
-        lastScoredAt: '2026-10-17T04:00:00.000Z', lastScoredOn: '2026-10-17',
+        trend: STALE ? 'More negative comments than usual in the week to 5 October: 6 of 22, against 12% in the four weeks before. Most negative comments are about delivery.' : 'More negative comments than usual in the week to 17 October: 6 of 22, against 12% in the four weeks before. Most negative comments are about delivery.',
+        lastScoredAt: STALE ? '2026-10-05T04:00:00.000Z' : '2026-10-17T04:00:00.000Z', lastScoredOn: STALE ? '2026-10-05' : '2026-10-17',
         quotes: [
           { id: 'q1', label: 'positive', platform: 'instagram', date: '2026-10-14', text: 'The cake was fresh and the packing was lovely. Will order again for the next birthday.' },
           { id: 'q2', label: 'negative', platform: 'facebook', date: '2026-10-12', text: 'My order reached two days late and nobody replied when I asked where it was.' },

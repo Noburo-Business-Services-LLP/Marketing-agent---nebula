@@ -23,7 +23,7 @@ const DAY = 864e5;
 const PAUSE_MS = 1000;
 const PAGE = 500;
 const TYPES = ['comment', 'mention', 'dm', 'message'];
-const STOP_PASS = new Set(['batch_cap', 'spend', 'no_model']);
+const STOP_PASS = new Set(['batch_cap', 'spend', 'no_model', 'ledger']);
 const SOURCE_LEASE_KEY = 'listening_scorer_lease';
 
 let running = false;
@@ -50,6 +50,10 @@ function defaultDeps({ User: UserModel } = {}) {
     erase: { sweepOrphans: (...a) => require('./erase').sweepOrphans(...a) },
     alert: ({ key, subject, text }) => require('../opsAlerts').notify({ key, subject, text, cooldownMs: DAY }),
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    clock: () => new Date(),
+    // The most output tokens one call can be billed for, so the worst case for a batch can be priced.
+    maxOutputTokens: (model, maxTokens) => require('../openAI').maxOutputTokens(model, maxTokens),
+    costOf: ({ inputTokens, outputTokens }) => require('../../config/apiCosts').listeningCost({ in: inputTokens, out: outputTokens }),
     // Every non-free account, read in pages by _id so none is cut off; entitlement is applied later by eligibleAccount.
     accounts: async ({ ids = null, pageSize } = {}) => {
       const size = Number(pageSize) > 0 ? Number(pageSize) : PAGE;
@@ -140,21 +144,30 @@ async function scoreAccount({ user, now, deps, force = false } = {}) {
       try { verdict = await d.spend.check('listening_score'); } catch (_) { verdict = { ok: false }; }
       if (!verdict || verdict.ok === false) { stopped = 'spend'; break; }
 
-      // The attempt is written BEFORE the call, so a failed save, a restart or a full database cannot cause a repeat.
-      try { await d.ledger.record({ userId, itemIds: batch.map((it) => String(it._id)), at, source: force ? 'staff' : 'scorer' }); }
-      catch (e) { console.error('[listening] could not record a batch, stopping:', errTag(e)); stopped = 'ledger'; break; }
+      // The attempt is written to the DATABASE before the call. If that write fails the call is not made at all and the pass
+      // stops (fail closed): process memory alone is never enough, because a restart would forget it and pay again.
+      let durable = false;
+      try { durable = (await d.ledger.record({ userId, itemIds: batch.map((it) => String(it._id)), at, source: force ? 'staff' : 'scorer' })) !== false; }
+      catch (_) { durable = false; }
+      if (!durable) { console.error('[listening] could not store the batch record, so scoring stops for now (no model call was made)'); stopped = 'ledger'; break; }
       out.batches++;
       out.attempted += batch.length;
+      if (d.heartbeat) { try { await d.heartbeat(); } catch (_) { /* a failed renewal never stops the batch */ } }
 
+      const prompt = buildPrompt(batch);
+      const callOpts = { jsonMode: true, maxTokens: 1500, temperature: 0, model, timeout: 60000, noFallback: true };
+      let reported = null;
+      callOpts.onUsage = (u) => { reported = u; };
       let reply;
-      try {
-        reply = await d.callText(buildPrompt(batch), { jsonMode: true, maxTokens: 1500, temperature: 0, model, timeout: 60000, noFallback: true });
-      } catch (e) {
-        console.warn(`[listening] a batch of ${batch.length} failed (${errTag(e)}); it is not retried`);
+      let callError = null;
+      try { reply = await d.callText(prompt, callOpts); } catch (e) { callError = e; }
+      // Every billed attempt is recorded, whatever came back: a timeout, a server error and an empty reply are usually billed.
+      await recordSpend(d, prompt, model, callOpts.maxTokens, reported);
+      if (callError) {
+        console.warn(`[listening] a batch of ${batch.length} failed (${errTag(callError)}); it is not retried`);
         failed++;
         continue;
       }
-      try { await d.spend.record('listening_score', 1); } catch (e) { console.error('[listening] could not record spend:', errTag(e)); }
 
       const parsed = parseReply(reply, batch.length);
       if (!parsed.size) { console.warn(`[listening] a batch of ${batch.length} came back unusable; its items stay unscored`); failed++; continue; }
@@ -184,6 +197,21 @@ async function scoreAccount({ user, now, deps, force = false } = {}) {
     console.error('[listening] scoring an account failed:', errTag(e));
     return { ...out, skipped: 'error' };
   }
+}
+
+// What one batch is recorded as costing. The provider's reported usage when the reply carried it; otherwise a figure that
+// is never below the real worst case: one input token per byte of the prompt (a token is at least a byte) and the output
+// at the most the call may produce (the limit sent to the provider, thinking included).
+async function recordSpend(d, prompt, model, maxTokens, reported) {
+  try {
+    const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+    const worstIn = Buffer.byteLength(prompt, 'utf8');
+    const worstOut = Number(d.maxOutputTokens(model, maxTokens)) || maxTokens * 3;
+    const rIn = reported ? num(reported.prompt_tokens) : null;
+    const rOut = reported ? num(reported.completion_tokens) : null;
+    const usd = d.costOf({ inputTokens: rIn === null ? worstIn : rIn, outputTokens: rOut === null ? worstOut : rOut });
+    await d.spend.record('listening_score', 1, { usd });
+  } catch (e) { console.error('[listening] could not record spend:', errTag(e)); }
 }
 
 async function alertOnce(d, userId, failures, at) {
@@ -227,13 +255,15 @@ async function runScorerOnce({ deps, now, accountIds = null, force = false, limi
     const ranAt = (u) => (u && u.listeningRunAt ? new Date(u.listeningRunAt).getTime() : 0);
     users = [...users].sort((a, b) => ranAt(a) - ranAt(b) || (String(a && a._id) < String(b && b._id) ? -1 : 1));
 
+    // The lease is pushed out from the CURRENT time (not from the start of the pass), so a long pass keeps it.
+    const renewLease = async () => { token = (await d.lease.renew(token, asDate(d.clock()))) || token; };
     const maxAccounts = limit || caps.ACCOUNTS_PER_PASS || 60;
     for (const user of users) {
       if (out.accounts >= maxAccounts) break;
       if (!user || !eligibleAccount(user, { blocked })) continue;
       if (!force && user.listeningRunAt && at - new Date(user.listeningRunAt) < caps.RUN_EVERY_DAYS * DAY) continue;
-      token = (await d.lease.renew(token, at)) || token;
-      const r = await scoreAccount({ user, now: at, deps: d, force });
+      await renewLease();
+      const r = await scoreAccount({ user, now: at, deps: { ...d, heartbeat: renewLease }, force });
       if (r.batches > 0) {
         out.accounts++;
         out.scored += r.scored;
@@ -260,7 +290,7 @@ const FIRST_MS = 25 * 60 * 1000;    // first tick 25 minutes after startup, afte
  * this process (the lease covers other servers). Failures log only the error name, never a message that could echo text.
  */
 function startListeningScorer({ env = process.env, intervalMs = EVERY_MS, firstDelayMs = FIRST_MS, logger = console, deps, run, timers } = {}) {
-  if (String((env && env.ENABLE_LISTENING) || '') !== 'on' || (env && env.NODE_ENV) === 'test') return null;
+  if (String((env && env.ENABLE_LISTENING) || '').trim() !== 'on' || (env && env.NODE_ENV) === 'test') return null;
   const t = timers || { setTimeout, setInterval, clearTimeout, clearInterval };
   const pass = run || (() => runScorerOnce({ deps }));
   let busy = false;

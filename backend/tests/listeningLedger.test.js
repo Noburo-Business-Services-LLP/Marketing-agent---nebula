@@ -21,3 +21,11 @@ test('a database that throws never throws out of the ledger and memory still cou
   await l.record({ userId: 'u1', itemIds: ['a'], at: NOW });
   assert.strictEqual(await l.countBatchesToday(NOW), 1); assert.ok((await l.attempted('u1', ['a'], NOW)).has('a'));
 });
+test('record says whether the database row was stored: true when it was, false when the write failed, memory still counts', async () => {
+  const good = createBatchLedger({ Model: { create: async () => ({}) } });
+  assert.strictEqual(await good.record({ userId: 'u1', itemIds: ['a'], at: NOW }), true);
+  assert.strictEqual(await createBatchLedger({ Model: null }).record({ userId: 'u1', itemIds: ['a'], at: NOW }), true, 'memory only by choice');
+  const bad = createBatchLedger({ Model: { create: async () => { throw new Error('validation failed'); }, countDocuments: async () => 0, find: () => { throw new Error('x'); } } });
+  assert.strictEqual(await bad.record({ userId: 'u1', itemIds: ['a'], at: NOW }), false);
+  assert.strictEqual(await bad.countBatchesToday(NOW), 1);
+});

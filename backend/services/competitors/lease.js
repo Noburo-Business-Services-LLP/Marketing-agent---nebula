@@ -38,7 +38,7 @@ function createLease({ key = KEY, store = opsStateStore(undefined, key), ttlMs =
         const value = valueAt(at);
         return (await store.claim(value, at.toISOString())) ? { value } : null;
       } catch (e) {
-        console.warn('[competitors] could not claim the tracker lease:', e && e.message);
+        console.warn('[lease] could not claim a background-job lease:', e && e.message);
         return null;
       }
     },

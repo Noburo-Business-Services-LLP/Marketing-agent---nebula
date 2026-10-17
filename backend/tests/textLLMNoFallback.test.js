@@ -37,3 +37,24 @@ test('noFallback does not change a successful call', () => withFakes({ openAiOk:
   assert.strictEqual(calls.openai, 1);
   assert.strictEqual(calls.gemini, 0);
 }));
+
+test('onUsage receives the provider usage on a good reply and on an empty reply (which still throws)', async () => {
+  const realFetch = global.fetch;
+  try {
+    let body;
+    global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ usage: { prompt_tokens: 11, completion_tokens: 22 }, choices: [{ message: { content: body } }] }) });
+    const seen = [];
+    body = 'fine';
+    assert.strictEqual(await callTextLLM('hi', { model: 'small-model', noFallback: true, onUsage: (u) => seen.push(u) }), 'fine');
+    body = '';
+    await assert.rejects(() => callTextLLM('hi', { model: 'small-model', noFallback: true, onUsage: (u) => seen.push(u) }), /empty content/);
+    assert.deepStrictEqual(seen, [{ prompt_tokens: 11, completion_tokens: 22 }, { prompt_tokens: 11, completion_tokens: 22 }]);
+  } finally { global.fetch = realFetch; }
+});
+
+test('maxOutputTokens is the limit actually sent: three times the answer budget, at least 4,000, for a thinking model', () => {
+  const { maxOutputTokens } = require('../services/openAI');
+  assert.strictEqual(maxOutputTokens('small-model', 1500), 4500);
+  assert.strictEqual(maxOutputTokens('small-model', 100), 4000);
+  assert.strictEqual(maxOutputTokens('gpt-4o', 1500), 1500);
+});

@@ -37,6 +37,12 @@ function listeningStore({ Score, Weekly } = {}) {
       const rows = await S().find({ userId, inboxItemId: { $in: ids } }).select('inboxItemId').lean();
       return new Set(rows.map((r) => String(r.inboxItemId)));
     },
+    /** When this account was last scored (the newest scoredAt), or null when it never was. */
+    async lastScoredAt(userId) {
+      const row = await S().findOne({ userId }).sort({ scoredAt: -1 }).select('scoredAt').lean();
+      const d = row && row.scoredAt ? new Date(row.scoredAt) : null;
+      return d && !Number.isNaN(d.getTime()) ? d : null;
+    },
     scoresSince(userId, since) {
       return S().find({ userId, itemAt: { $gte: since } }).lean();
     },

@@ -25,7 +25,7 @@ const POS = 'Delivery was quick and the packaging was lovely, thank you';
 const NEG = 'The fabric quality is poor and it tore after one wash';
 
 // One inbox item plus its score. `label` pos|neu|neg, `reason` a code.
-function pair(userId, { label = 'neu', reason = 'other', type = 'comment', body, days = 1, author, conv, spam = 0, scoredAt = ago(0, 2) } = {}) {
+function pair(userId, { label = 'neu', reason = 'other', type = 'comment', body, days = 1, author, conv, spam = 0, scoredAt = NOW } = {}) {
   const id = `i${++seq}`;
   const createdAt = ago(days, seq % 5);
   return {
@@ -35,12 +35,15 @@ function pair(userId, { label = 'neu', reason = 'other', type = 'comment', body,
 }
 
 function world({ pairs = [], env = ON } = {}) {
-  const asked = { inbox: [], scores: [] };
+  const asked = { inbox: [], scores: [], since: [] };
   const msgs = new Map(pairs.map((p) => [p.msg._id, p.msg]));
   const scores = pairs.map((p) => p.score);
   const deps = {
     env,
-    store: { async scoresSince(userId, since) { asked.scores.push(String(userId)); return scores.filter((s) => String(s.userId) === String(userId) && s.itemAt >= since); } },
+    store: {
+      async scoresSince(userId, since) { asked.scores.push(String(userId)); asked.since.push(since); return scores.filter((s) => String(s.userId) === String(userId) && s.itemAt >= since); },
+      async lastScoredAt(userId) { const mine = scores.filter((s) => String(s.userId) === String(userId)).map((s) => s.scoredAt).filter(Boolean); return mine.length ? new Date(Math.max(...mine.map((x) => +x))) : null; }
+    },
     // Like the real query: answers only for the user it is given.
     async inboxByIds(userId, ids) { asked.inbox.push({ userId, ids }); return ids.map((i) => msgs.get(i)).filter((m) => m && String(m.userId) === String(userId)); },
     async eligibleInbox(userId) { return [...msgs.values()].filter((m) => String(m.userId) === String(userId)); },
@@ -136,7 +139,7 @@ test('the trend sentence appears only above the thresholds', async () => {
     ...Array.from({ length: 24 }, (_, i) => pair('u1', { label: i < 2 ? 'neg' : 'pos', reason: 'delivery', days: 9 + (i % 18) }))
   ];
   const res = await call({ deps: world({ pairs: lots }).deps, user: owner() });
-  assert.match(res.body.trend, /^More negative comments than usual this week: 10 of 10, against 8% over the four weeks before\./);
+  assert.match(res.body.trend, /^More negative comments than usual in the week to 17 October: 10 of 10, against 8% in the four weeks before\. Most negative comments are about delivery\.$/);
   assert.strictEqual(res.body.topReason, 'delivery');
 });
 
@@ -255,22 +258,75 @@ test('the response never exposes the model, vendor names or raw reason codes', a
   assert.ok(!/quark|credit|trial|7 days/i.test(text));
 });
 
-test('the switch off: enabled is false, and with nothing scored the message says so plainly', async () => {
-  const res = await call({ deps: world({ env: {} }).deps, user: owner() });
-  assert.strictEqual(res.body.enabled, false);
-  assert.strictEqual(res.body.state, 'not_enough');
-  assert.strictEqual(res.body.message, 'Nothing is scored yet.');
-  assert.strictEqual(res.body.lastScoredAt, null);
-  assert.strictEqual(res.body.lastScoredOn, null);
-  assert.strictEqual(res.body.total, 0);
-  const old = await call({ deps: world({ env: {}, pairs: spread('u1', 20) }).deps, user: owner() });
-  assert.strictEqual(old.body.enabled, false);
-  assert.strictEqual(old.body.state, 'ready');
-  assert.ok(old.body.lastScoredOn, 'the date of the last scoring is shown so the numbers are not read as live');
+test('the switch off: state off, nothing about weekly checks, whether or not old scores exist', async () => {
+  for (const pairs of [[], spread('u1', 20)]) {
+    const res = await call({ deps: world({ env: {}, pairs }).deps, user: owner() });
+    assert.strictEqual(res.body.enabled, false);
+    assert.strictEqual(res.body.state, 'off');
+    assert.strictEqual(res.body.message, null);
+    assert.strictEqual(res.body.total, 0);
+    assert.strictEqual(res.body.trend, null);
+    assert.deepStrictEqual(res.body.quotes, []);
+    assert.deepStrictEqual(res.body.recentNegative, []);
+    assert.ok(!/week|check|waiting|scored yet/i.test(JSON.stringify(res.body)), JSON.stringify(res.body));
+  }
 });
 
-test('waiting: enough comments in the inbox but nothing scored yet', async () => {
-  const w = world();
+test('switched on but this account has never been scored: also state off, with no message', async () => {
+  const w = world({ pairs: [] });
+  const items = Array.from({ length: 25 }, (_, i) => ({ _id: `e${i}`, userId: 'u1', direction: 'inbound', senderType: 'customer', messageType: 'comment', spamScore: 0, body: `a fine comment ${i} about stuff`, createdAt: ago(2) }));
+  w.deps.eligibleInbox = async () => items;
+  const res = await call({ deps: w.deps, user: owner() });
+  assert.strictEqual(res.body.state, 'off');
+  assert.strictEqual(res.body.message, null);
+  assert.ok(!/week|check|waiting/i.test(JSON.stringify(res.body)));
+});
+
+test('the card loads 35 days of scores so the trend compares with the FULL previous four weeks', async () => {
+  // Baseline data sits only on days 29 to 34, outside the 28-day period: a 28-day load cannot see it and shows no trend.
+  const recentNeg = Array.from({ length: 10 }, () => pair('u1', { label: 'neg', reason: 'delivery', days: 1 }));
+  const recentPos = Array.from({ length: 6 }, (_, i) => pair('u1', { label: 'pos', days: 2 + (i % 4) }));
+  const middle = Array.from({ length: 6 }, (_, i) => pair('u1', { label: 'pos', days: 10 + i }));
+  const old = Array.from({ length: 24 }, (_, i) => pair('u1', { label: i < 2 ? 'neg' : 'pos', days: 29 + (i % 6) }));
+  const w = world({ pairs: [...recentNeg, ...recentPos, ...middle, ...old] });
+  const res = await call({ deps: w.deps, user: owner() });
+  assert.strictEqual(res.body.total, 22, 'the period itself is still 28 days');
+  assert.match(res.body.trend, /^More negative comments than usual in the week to 17 October: 10 of 16, against 7% in the four weeks before\./);
+  const since = w.asked.since[0];
+  assert.strictEqual(since.toISOString(), '2026-09-12T18:30:00.000Z', '2026-09-13 00:00 India time, 34 days before the last scoring day');
+  assert.ok(NOW - since >= 34 * DAY, 'at least 34 full days are loaded');
+});
+
+test('windows end on the day of the last scoring, not today, and the card says how old it is', async () => {
+  const scoredAt = ago(3); // scored on 14 October
+  const pairs = spread('u1', 24, undefined, () => ({ scoredAt })).map((p) => p).filter(Boolean);
+  const res = await call({ deps: world({ pairs: pairs.map((p) => ({ ...p, msg: { ...p.msg, createdAt: new Date(p.score.itemAt.getTime() - 3 * DAY) }, score: { ...p.score, itemAt: new Date(p.score.itemAt.getTime() - 3 * DAY) } })) }).deps, user: owner() });
+  assert.strictEqual(res.body.state, 'ready');
+  assert.deepStrictEqual(res.body.period, { from: '2026-09-17', to: '2026-10-14' });
+  assert.strictEqual(res.body.asOf, '2026-10-14');
+  assert.strictEqual(res.body.lastScoredOn, '2026-10-14');
+  assert.strictEqual(res.body.stale, false);
+});
+
+test('a last scoring more than 10 days old is flagged stale, and its window still ends on that day', async () => {
+  const scoredAt = ago(12); // scored on 5 October
+  const shift = (p) => ({ msg: { ...p.msg, createdAt: new Date(p.score.itemAt.getTime() - 12 * DAY) }, score: { ...p.score, scoredAt, itemAt: new Date(p.score.itemAt.getTime() - 12 * DAY) } });
+  const res = await call({ deps: world({ pairs: spread('u1', 22).map(shift) }).deps, user: owner() });
+  assert.strictEqual(res.body.state, 'ready');
+  assert.strictEqual(res.body.stale, true);
+  assert.strictEqual(res.body.lastScoredOn, '2026-10-05');
+  assert.deepStrictEqual(res.body.period, { from: '2026-09-08', to: '2026-10-05' });
+  assert.strictEqual(res.body.asOf, '2026-10-05');
+  assert.match(res.body.trend === null ? 'x' : res.body.trend, /x|week to 5 October/);
+  // exactly 10 days old is not yet stale
+  const ten = await call({ deps: world({ pairs: spread('u1', 22).map((p) => ({ msg: p.msg, score: { ...p.score, scoredAt: ago(10) } })) }).deps, user: owner() });
+  assert.strictEqual(ten.body.stale, false);
+  const eleven = await call({ deps: world({ pairs: spread('u1', 22).map((p) => ({ msg: p.msg, score: { ...p.score, scoredAt: ago(11) } })) }).deps, user: owner() });
+  assert.strictEqual(eleven.body.stale, true);
+});
+
+test('waiting: scored before, but no scored comment in the window, and enough comments in the inbox', async () => {
+  const w = world({ pairs: [pair('u1', { label: 'neu', days: 33 })] });
   const items = Array.from({ length: 25 }, (_, i) => ({ _id: `e${i}`, userId: 'u1', direction: 'inbound', senderType: 'customer', messageType: 'comment', spamScore: 0, body: `a fine comment ${i} about stuff`, createdAt: ago(2) }));
   w.deps.eligibleInbox = async () => items;
   const res = await call({ deps: w.deps, user: owner() });

@@ -9,7 +9,8 @@ export interface ListeningResponse {
   locked?: boolean;
   error?: boolean;
   enabled?: boolean;
-  state?: 'ready' | 'not_enough' | 'waiting';
+  /** `off`: scoring is not running (or this account was never scored): the card shows nothing. */
+  state?: 'ready' | 'not_enough' | 'waiting' | 'off';
   message?: string | null;
   period?: { from: string; to: string };
   asOf?: string;
@@ -20,8 +21,10 @@ export interface ListeningResponse {
   quotes?: ListeningQuote[];
   recentNegative?: ListeningRecent[];
   lastScoredOn?: string | null;
+  /** True when the last scoring is more than 10 days old. */
+  stale?: boolean;
 }
-export type ListeningCardState = 'locked' | 'not_enough' | 'waiting' | 'ready' | 'error';
+export type ListeningCardState = 'locked' | 'off' | 'not_enough' | 'waiting' | 'ready' | 'error';
 export interface BarRow { key: ListeningLabel; label: string; count: number; percent: number; width: number; text: string }
 
 export const TITLE = 'What people say about you';
@@ -41,6 +44,7 @@ const countsOf = (c?: Partial<ListeningCounts> | null): ListeningCounts => ({ po
 export function cardState(res?: ListeningResponse | null): ListeningCardState {
   if (res && res.locked) return 'locked';
   if (!res || res.error || res.success === false) return 'error';
+  if (res.state === 'off' || res.enabled === false) return 'off';
   if (res.state === 'not_enough') return 'not_enough';
   if (res.state === 'waiting') return 'waiting';
   if (res.state === 'ready') {
@@ -118,12 +122,13 @@ export function dateRange(period?: { from?: string; to?: string } | null): strin
   return `${a.d} ${MONTHS[a.m - 1]}${cross ? ` ${a.y}` : ''} to ${b.d} ${MONTHS[b.m - 1]}${cross ? ` ${b.y}` : ''}`;
 }
 
+/** 'Based on 86 comments from 20 September to 17 October.' Always shown with the card, so the window is never a guess. */
 export function basedOn(res?: ListeningResponse | null): string {
   const c = countsOf(res && res.counts);
   const total = num(res && res.total) || c.positive + c.neutral + c.negative;
-  const what = total === 1 ? '1 comment or message' : `${total} comments and messages`;
+  const what = total === 1 ? '1 comment' : `${total} comments`;
   const range = dateRange(res && res.period);
-  return range ? `Based on ${what}, ${range}.` : `Based on ${what}.`;
+  return range ? `Based on ${what} from ${range}.` : `Based on ${what}.`;
 }
 
 export const notEnoughText = (): string => 'Not enough comments yet to show a score.';
@@ -132,18 +137,33 @@ export const waitingText = (): string => 'Your comments are waiting for the next
 /** Headline and plain note for the not enough state. Never any numbers. */
 export function notEnoughLines(res?: ListeningResponse | null): { headline: string; note: string } {
   const msg = res && typeof res.message === 'string' ? res.message.trim() : '';
-  const headline = msg || notEnoughText();
-  const note = headline === notEnoughText()
-    ? 'A score shows here once enough of your recent comments and messages have been checked.'
-    : 'Comments are checked once a week. A score shows here when there are enough of them.';
-  return { headline, note };
+  return { headline: msg || notEnoughText(), note: 'A score shows here once enough of your recent comments and messages have been checked.' };
 }
 
-/** 'As of 17 October.' when the weekly check is switched off but an older score is shown. */
-export function asOfLine(res?: ListeningResponse | null): string {
-  if (!res || res.enabled !== false) return '';
+/** Said only in the ready and waiting states, where scoring has really run for this account. */
+export const weeklyNote = (): string => 'Comments are checked once a week.';
+
+/** 'Last checked on 5 October.' when the last scoring is more than 10 days old, so an old score is never read as current. */
+export function lastCheckedLine(res?: ListeningResponse | null): string {
+  if (!res || res.stale !== true) return '';
   const d = dayText(res.lastScoredOn);
-  return d ? `As of ${d}.` : '';
+  return d ? `Last checked on ${d}.` : '';
+}
+
+/** The id in `?conversation=<id>` (the links on the comment card), or '' when there is none. */
+export function conversationIdFromSearch(search?: string | null): string {
+  try {
+    const v = new URLSearchParams(String(search || '')).get('conversation');
+    return v && v.length <= 200 ? v.trim() : '';
+  } catch { return ''; }
+}
+
+/** Which conversation to show: the linked one when it is in the loaded list, else the current one if still listed, else the first. */
+export function pickSelectedId(list: ReadonlyArray<{ id: string }>, current: string, wanted: string): string {
+  const has = (id: string) => !!id && list.some((c) => c.id === id);
+  if (has(wanted)) return wanted;
+  if (has(current)) return current;
+  return list[0] ? list[0].id : '';
 }
 
 export function platformName(p?: string | null): string {

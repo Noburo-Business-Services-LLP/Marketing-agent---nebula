@@ -14,7 +14,6 @@ const { aggregate, trendSentence, pickQuotes, eligibleItem, kindOf } = require('
 const DAY = 864e5;
 const IST_OFFSET_MS = 5.5 * 3600 * 1000;
 const NOT_ENOUGH = 'Not enough comments yet to show a score.';
-const NOTHING_SCORED = 'Nothing is scored yet.';
 const WAITING = 'Your comments are waiting for the next weekly check.';
 const GENERIC_ERROR = 'We could not complete that request. Please try again.';
 const TOO_MANY = 'You have sent too many requests. Please try again in a few minutes.';
@@ -39,7 +38,7 @@ function defaultDeps() {
   const Inbox = () => require('../models/SocialInboxMessage');
   return {
     env: process.env,
-    store: { scoresSince: (...a) => lazyStore().scoresSince(...a) },
+    store: { scoresSince: (...a) => lazyStore().scoresSince(...a), lastScoredAt: (...a) => lazyStore().lastScoredAt(...a) },
     // Only this account's own inbox items, whatever ids are asked for.
     inboxByIds: (userId, ids) => Inbox().find({ _id: { $in: ids }, userId })
       .select('_id userId conversationId platform messageType direction senderType spamScore body authorId createdAt').lean(),
@@ -60,30 +59,29 @@ function topReasonOf(agg) {
     const v = Number(agg.reasons[k]) || 0;
     if (v > 0 && REASON_WORD[k] && (!best || v > best.v)) best = { k, v };
   }
-  return best && best.v * 2 >= negatives ? REASON_WORD[best.k] : null;
+  return best && best.v * 2 > negatives ? REASON_WORD[best.k] : null;
 }
 
-// The body for one account.
+const STALE_AFTER_DAYS = 10; // an older last scoring is shown to the customer as "Last checked on ..."
+const dayNumber = (iso) => Math.floor(new Date(`${iso}T00:00:00Z`).getTime() / DAY);
+
+// The body for one account. Scoring is weekly, so every window ends on the day of the LAST scoring (never "today"), and a
+// scoring older than STALE_AFTER_DAYS is flagged so the card can say when it was last checked. While the feature is off, or
+// before this account has ever been scored, the state is `off` and the card shows nothing at all.
 async function viewFor(user, { deps, now = new Date() } = {}) {
   const d = withDefaults(deps);
   const userId = toUserId(user);
   const enabled = String((d.env && d.env.ENABLE_LISTENING) || '').trim() === 'on';
-  const base = aggregate([], now);
-  const periodStart = new Date(`${base.period.from}T00:00:00+05:30`);
-
-  const all = (await d.store.scoresSince(userId, periodStart)) || [];
-  // Only this account's own rows, and only labelled ones, even if a store hands back more.
-  const rows = all.filter((r) => r && (r.userId === undefined || r.userId === null || String(r.userId) === userId));
-  const agg = aggregate(rows, now);
-  const lastScored = rows.map((r) => r.scoredAt).filter(Boolean).map((x) => new Date(x)).filter((x) => !Number.isNaN(x.getTime())).sort((a, b) => b - a)[0] || null;
-
-  const out = {
+  const lastScored = enabled ? await d.store.lastScoredAt(userId) : null;
+  const end = lastScored || now;
+  const windows = aggregate([], end);
+  const empty = () => ({
     success: true,
     enabled,
-    state: 'not_enough',
-    message: NOT_ENOUGH,
-    period: { from: agg.period.from, to: agg.period.to },
-    asOf: agg.period.to,
+    state: 'off',
+    message: null,
+    period: { from: windows.period.from, to: windows.period.to },
+    asOf: windows.period.to,
     total: 0,
     counts: { positive: 0, neutral: 0, negative: 0 },
     percentages: { positive: 0, neutral: 0, negative: 0 },
@@ -91,16 +89,34 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
     topReason: null,
     quotes: [],
     recentNegative: [],
-    lastScoredAt: lastScored ? lastScored.toISOString() : null,
-    lastScoredOn: lastScored ? istDay(lastScored) : null
-  };
+    lastScoredAt: null,
+    lastScoredOn: null,
+    stale: false
+  });
+  if (!enabled || !lastScored) return empty();
+
+  // 35 days of scores: the last 28 for the card and, before the newest 7 of them, the 28 days the trend is compared with.
+  const loadFrom = new Date(`${windows.baselineFrom}T00:00:00+05:30`);
+  const all = (await d.store.scoresSince(userId, loadFrom)) || [];
+  // Only this account's own rows, and only labelled ones, even if a store hands back more.
+  const rows = all.filter((r) => r && (r.userId === undefined || r.userId === null || String(r.userId) === userId));
+  const agg = aggregate(rows, end);
+  const periodStart = new Date(`${agg.period.from}T00:00:00+05:30`);
+
+  const out = empty();
+  out.state = 'not_enough';
+  out.message = NOT_ENOUGH;
+  out.period = { from: agg.period.from, to: agg.period.to };
+  out.asOf = agg.period.to;
+  out.lastScoredAt = lastScored.toISOString();
+  out.lastScoredOn = istDay(lastScored);
+  out.stale = dayNumber(istDay(now)) - dayNumber(out.lastScoredOn) > STALE_AFTER_DAYS;
 
   if (!agg.enough) {
     // Never invent a score: no numbers at all below the minimum.
     if (agg.period.total === 0) {
       const eligible = ((await d.eligibleInbox(userId, periodStart)) || []).filter((it) => eligibleItem(it, now, { userId }));
       if (eligible.length >= cfg.MIN_ITEMS) { out.state = 'waiting'; out.message = WAITING; }
-      else if (!enabled) out.message = NOTHING_SCORED;
     }
     return out;
   }
@@ -113,7 +129,7 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
   out.trend = trendSentence(agg);
   out.topReason = topReasonOf(agg);
 
-  const inPeriod = rows.filter((r) => r && BUCKET[r.label] && r.itemAt && istDay(r.itemAt) >= agg.period.from && new Date(r.itemAt) <= now)
+  const inPeriod = rows.filter((r) => r && BUCKET[r.label] && r.itemAt && istDay(r.itemAt) >= agg.period.from && new Date(r.itemAt) <= end)
     .sort((a, b) => new Date(b.itemAt) - new Date(a.itemAt));
   const quotable = inPeriod.filter((r) => r.kind === 'public' && (r.label === 'pos' || r.label === 'neg')).slice(0, SCORE_ROWS_MAX);
   const negatives = inPeriod.filter((r) => r.label === 'neg' && r.kind !== 'private').slice(0, SCORE_ROWS_MAX);
@@ -139,7 +155,7 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
       label: r.label, reason: r.reason, platform: m.platform || r.platform, spamScore: m.spamScore, itemAt: m.createdAt || r.itemAt, text: m.body
     });
   }
-  out.quotes = pickQuotes(candidates, now).map((q) => ({
+  out.quotes = pickQuotes(candidates, end).map((q) => ({
     id: String(q.id), label: BUCKET[q.label], platform: q.platform, date: istDay(q.itemAt), text: q.text
   }));
 

@@ -273,7 +273,7 @@ test('aggregate includes percentages that sum to 100', () => {
 });
 
 // ---------- trendSentence ----------
-const agg = (recent, baseline, extra = {}) => ({ enough: true, period: { total: 60, negative: 10 }, recent, baseline, reasons: {}, ...extra });
+const agg = (recent, baseline, extra = {}) => ({ enough: true, period: { to: '2026-10-17', total: 60, negative: 10 }, recent, baseline, reasons: {}, ...extra });
 test('trendSentence is null below the thresholds', () => {
   assert.strictEqual(H.trendSentence(agg({ total: 7, negative: 7 }, { total: 50, negative: 5 })), null);
   assert.strictEqual(H.trendSentence(agg({ total: 20, negative: 10 }, { total: 19, negative: 1 })), null);
@@ -285,33 +285,35 @@ test('trendSentence is null below the thresholds', () => {
 });
 test('trendSentence: more negative', () => {
   assert.strictEqual(H.trendSentence(agg({ total: 21, negative: 9 }, { total: 100, negative: 14 })),
-    'More negative comments than usual this week: 9 of 21, against 14% over the four weeks before.');
+    'More negative comments than usual in the week to 17 October: 9 of 21, against 14% in the four weeks before.');
 });
 test('trendSentence: fewer negative', () => {
   assert.strictEqual(H.trendSentence(agg({ total: 10, negative: 1 }, { total: 40, negative: 12 })),
-    'Fewer negative comments than usual this week: 1 of 10, against 30% over the four weeks before.');
+    'Fewer negative comments than usual in the week to 17 October: 1 of 10, against 30% in the four weeks before.');
 });
 test('trendSentence: about the same, and the 15 point threshold is exact', () => {
-  assert.strictEqual(H.trendSentence(agg({ total: 20, negative: 6 }, { total: 100, negative: 20 })), 'About the same as the four weeks before.');
+  assert.strictEqual(H.trendSentence(agg({ total: 20, negative: 6 }, { total: 100, negative: 20 })), 'In the week to 17 October, about the same as the four weeks before.');
   // 35% vs 20%: a move of exactly 15 points counts as a move
   assert.ok(H.trendSentence(agg({ total: 20, negative: 7 }, { total: 100, negative: 20 })).startsWith('More negative'));
   // 34% vs 20%: 14 points, not a move
-  assert.strictEqual(H.trendSentence(agg({ total: 50, negative: 17 }, { total: 100, negative: 20 })), 'About the same as the four weeks before.');
+  assert.strictEqual(H.trendSentence(agg({ total: 50, negative: 17 }, { total: 100, negative: 20 })), 'In the week to 17 October, about the same as the four weeks before.');
   assert.ok(H.trendSentence(agg({ total: 20, negative: 2 }, { total: 100, negative: 25 })).startsWith('Fewer negative'));
 });
 test('trendSentence: no division by zero when the baseline has no negatives', () => {
   assert.strictEqual(H.trendSentence(agg({ total: 10, negative: 2 }, { total: 30, negative: 0 })),
-    'More negative comments than usual this week: 2 of 10, against 0% over the four weeks before.');
-  assert.strictEqual(H.trendSentence(agg({ total: 10, negative: 0 }, { total: 30, negative: 0 })), 'About the same as the four weeks before.');
+    'More negative comments than usual in the week to 17 October: 2 of 10, against 0% in the four weeks before.');
+  assert.strictEqual(H.trendSentence(agg({ total: 10, negative: 0 }, { total: 30, negative: 0 })), 'In the week to 17 October, about the same as the four weeks before.');
 });
-test('trendSentence: reason tail only when the leading reason covers half the negatives and is not other', () => {
+test('trendSentence: reason tail only when the leading reason covers more than half the negatives and is not other', () => {
   const base = { total: 21, negative: 9 }; const bl = { total: 100, negative: 14 };
-  assert.ok(H.trendSentence(agg(base, bl, { period: { total: 60, negative: 10 }, reasons: { delivery: 5, price: 3, other: 2 } })).endsWith(' Most are about delivery.'));
-  assert.ok(!H.trendSentence(agg(base, bl, { period: { total: 60, negative: 10 }, reasons: { delivery: 4, price: 4, other: 2 } })).includes('Most are'));
-  assert.ok(!H.trendSentence(agg(base, bl, { period: { total: 60, negative: 10 }, reasons: { other: 8, price: 2 } })).includes('Most are'));
-  assert.ok(!H.trendSentence(agg(base, bl, { period: { total: 60, negative: 0 }, reasons: {} })).includes('Most are'));
-  assert.ok(H.trendSentence(agg(base, bl, { period: { total: 60, negative: 10 }, reasons: { product: 6 } })).endsWith(' Most are about the product.'));
-  assert.ok(H.trendSentence(agg(base, bl, { period: { total: 60, negative: 10 }, reasons: { price: 9 } })).endsWith(' Most are about price.'));
+  assert.ok(H.trendSentence(agg(base, bl, { period: { to: '2026-10-17', total: 60, negative: 10 }, reasons: { delivery: 6, price: 2, other: 2 } })).endsWith(' Most negative comments are about delivery.'));
+  // exactly half is not "most"
+  assert.ok(!H.trendSentence(agg(base, bl, { period: { to: '2026-10-17', total: 60, negative: 10 }, reasons: { delivery: 5, price: 3, other: 2 } })).includes('Most'));
+  assert.ok(!H.trendSentence(agg(base, bl, { period: { to: '2026-10-17', total: 60, negative: 10 }, reasons: { delivery: 4, price: 4, other: 2 } })).includes('Most'));
+  assert.ok(!H.trendSentence(agg(base, bl, { period: { to: '2026-10-17', total: 60, negative: 10 }, reasons: { other: 8, price: 2 } })).includes('Most'));
+  assert.ok(!H.trendSentence(agg(base, bl, { period: { to: '2026-10-17', total: 60, negative: 0 }, reasons: {} })).includes('Most'));
+  assert.ok(H.trendSentence(agg(base, bl, { period: { to: '2026-10-17', total: 60, negative: 10 }, reasons: { product: 6 } })).endsWith(' Most negative comments are about the product.'));
+  assert.ok(H.trendSentence(agg(base, bl, { period: { to: '2026-10-17', total: 60, negative: 10 }, reasons: { price: 9 } })).endsWith(' Most negative comments are about price.'));
 });
 test('trendSentence wording follows the voice rules', () => {
   for (const a of [agg({ total: 21, negative: 9 }, { total: 100, negative: 14 }, { reasons: { delivery: 9 } }), agg({ total: 10, negative: 1 }, { total: 40, negative: 12 }), agg({ total: 20, negative: 6 }, { total: 100, negative: 20 })]) {
@@ -328,7 +330,7 @@ test('trendSentence from a real aggregate matches its own numbers', () => {
   const a = H.aggregate(rows, NOW);
   assert.strictEqual(a.recent.total, 21); assert.strictEqual(a.recent.negative, 9);
   assert.strictEqual(a.baseline.total, 86); assert.strictEqual(a.baseline.negative, 12);
-  assert.strictEqual(H.trendSentence(a), 'More negative comments than usual this week: 9 of 21, against 14% over the four weeks before. Most are about delivery.');
+  assert.strictEqual(H.trendSentence(a), 'More negative comments than usual in the week to 17 October: 9 of 21, against 14% in the four weeks before. Most negative comments are about delivery.');
 });
 
 // ---------- safeQuoteText ----------

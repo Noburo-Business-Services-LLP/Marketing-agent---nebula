@@ -27,6 +27,8 @@ function textModelFor(language, purpose = '') {
 // gpt-4 and older take max_tokens and a temperature; the newer families take max_completion_tokens, a fixed
 // temperature, and spend part of that budget thinking.
 const isLegacyChatModel = (model) => /^(gpt-3|gpt-4|chatgpt-4o)/.test(String(model || ''));
+/** The most output tokens one call can be billed for (thinking tokens included): what is sent as the limit to the provider. */
+const maxOutputTokens = (model, maxTokens) => (isLegacyChatModel(model) ? maxTokens : Math.max(maxTokens * 3, 4000));
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
 function fetchWithTimeout(url, opts = {}, timeoutMs = 90000) {
@@ -55,7 +57,8 @@ async function callOpenAI(prompt, options = {}) {
     timeout = 90000,
     model = OPENAI_MODEL,
     jsonMode = false,
-    systemMessage = null
+    systemMessage = null,
+    onUsage = null
   } = options;
 
   const messages = [];
@@ -75,7 +78,7 @@ async function callOpenAI(prompt, options = {}) {
     body.max_tokens = maxTokens;
   } else {
     // Thinking tokens count against this budget, so it is larger than the visible answer needs.
-    body.max_completion_tokens = Math.max(maxTokens * 3, 4000);
+    body.max_completion_tokens = maxOutputTokens(model, maxTokens);
     if (process.env.TEXT_REASONING_EFFORT !== 'off') body.reasoning_effort = process.env.TEXT_REASONING_EFFORT || 'low';
   }
   if (jsonMode) {
@@ -109,6 +112,8 @@ async function callOpenAI(prompt, options = {}) {
   }
 
   const data = await res.json();
+  // Report what the provider says it billed, even when the reply is empty (a reasoning model can spend its whole budget thinking).
+  if (typeof onUsage === 'function' && data && data.usage) { try { onUsage(data.usage); } catch (_) { /* a reporting callback never breaks the call */ } }
   const content = data?.choices?.[0]?.message?.content;
   if (!content) {
     throw new Error('OpenAI returned empty content');
@@ -136,10 +141,10 @@ async function callOpenAI(prompt, options = {}) {
  * `noFallback: true` pins the call to `model`: if it fails the error is thrown and Gemini is NOT tried (default false,
  * so every other caller keeps the fallback).
  */
-async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false, language = '', model = '', purpose = '', noFallback = false } = {}) {
+async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false, language = '', model = '', purpose = '', noFallback = false, onUsage = null } = {}) {
   const chosen = model || textModelFor(language, purpose);
   try {
-    return await callOpenAI(prompt, { model: chosen, temperature, maxTokens, timeout, jsonMode });
+    return await callOpenAI(prompt, { model: chosen, temperature, maxTokens, timeout, jsonMode, onUsage });
   } catch (openAiErr) {
     // noFallback: the caller pinned this model on purpose (a priced background job); a failure is its to handle, never a second paid call.
     if (noFallback) throw openAiErr;
@@ -156,6 +161,7 @@ async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, tempera
 }
 
 module.exports = {
+  maxOutputTokens,
   callOpenAI,
   callTextLLM,
   textModelFor,

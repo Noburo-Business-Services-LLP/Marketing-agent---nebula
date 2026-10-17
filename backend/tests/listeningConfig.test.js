@@ -21,3 +21,15 @@ test('the schemas have the unique indexes and no schema key named type', () => {
   assert.ok(has(S, { userId: 1, inboxItemId: 1 })); assert.ok(has(W, { userId: 1, weekStart: 1 }));
   for (const M of [S, W, require('../models/ListeningBatchLog')]) assert.ok(!M.schema.path('type'));
 });
+
+test('spend guard: record uses an exact dollar figure when given, and the per-unit estimate otherwise', async () => {
+  const { createSpendGuard } = require('../services/spendGuard');
+  const { ACTION_USD } = require('../config/apiCosts');
+  const incs = [];
+  const Spend = () => ({ findOne: () => ({ lean: async () => null }), findOneAndUpdate: async (f, u) => { incs.push(u.$inc.totalUsd); return { totalUsd: 1, alerted100: true, alerted70: true }; } });
+  const g = createSpendGuard({ Spend, Switch: () => ({ find: () => ({ lean: async () => [] }) }), alert: async () => {}, env: {}, now: () => new Date('2026-10-17T00:00:00Z') });
+  await g.record('listening_score', 1, { usd: 0.25 });
+  await g.record('listening_score', 2);
+  assert.strictEqual(incs[0], 0.25);
+  assert.ok(Math.abs(incs[1] - ACTION_USD.listening_score * 2) < 1e-12);
+});

@@ -73,12 +73,13 @@ function createSpendGuard({
   }
 
   /** Adds what one finished charge cost us. Warns at 70 percent and at the ceiling, once each per day. */
-  async function record(action, units = 1) {
+  async function record(action, units = 1, { usd: exactUsd } = {}) {
     try {
       const provider = providerOf(action);
       const unit = Number(ACTION_USD[action]);
       if (!provider || !Number.isFinite(unit)) return null;
-      const usd = unit * (Number(units) > 0 ? Number(units) : 1);
+      // An exact dollar figure (computed from tokens) replaces the per-unit estimate when the caller has one.
+      const usd = Number.isFinite(exactUsd) && exactUsd > 0 ? exactUsd : unit * (Number(units) > 0 ? Number(units) : 1);
       const day = dayOf(now());
       const doc = await Spend().findOneAndUpdate({ day }, { $inc: { totalUsd: usd, [`byProvider.${provider}`]: usd } }, { upsert: true, new: true });
       cache.total = doc.totalUsd; cache.day = day;

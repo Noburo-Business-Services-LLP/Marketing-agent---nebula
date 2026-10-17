@@ -424,3 +424,144 @@ test('(v) accountIds restricts a pass; force runs even a not-due account but nev
   assert.strictEqual(r.accounts, 1);
   assert.deepStrictEqual(w.calls.marks.map((m) => m[0]), ['b']);
 });
+
+// ---------- fix round: I1 spend, I2 durable ledger, I8 lease ----------
+const { createSpendGuard } = require('../services/spendGuard');
+const { listeningCost } = require('../config/apiCosts');
+const { buildPrompt } = require('../services/listening/helpers');
+const RATE_IN = 5.0; const RATE_OUT = 30.0; // the placeholder rates, per million tokens
+const worstUsd = (prompt) => (Buffer.byteLength(prompt, 'utf8') * RATE_IN + 4500 * RATE_OUT) / 1e6; // 1500 x 3 = 4,500 output tokens
+
+test('(I1) a throwing model call is still recorded with the spend guard, at the worst case for the batch', async () => {
+  const u = user('u1');
+  const w = world({ users: [u], items: many('u1', 25), model: async () => { throw new Error('timed out'); } });
+  const usd = [];
+  w.deps.spend.record = async (a, n, o) => { usd.push(o && o.usd); };
+  await scoreAccount({ user: u, now: NOW, deps: w.deps });
+  assert.strictEqual(usd.length, 1, 'the failed call is recorded');
+  const prompt = buildPrompt(w.items.slice().sort((a, b) => b.createdAt - a.createdAt));
+  assert.ok(usd[0] >= worstUsd(prompt) - 1e-9, `recorded ${usd[0]}, worst case ${worstUsd(prompt)}`);
+  assert.ok(usd[0] >= (4500 * RATE_OUT) / 1e6, 'never below the output worst case');
+});
+
+test('(I1) an empty reply and a garbage reply are recorded too', async () => {
+  for (const reply of ['', 'not json at all']) {
+    const u = user('u1');
+    const w = world({ users: [u], items: many('u1', 25), model: async () => reply });
+    const usd = [];
+    w.deps.spend.record = async (a, n, o) => { usd.push(o && o.usd); };
+    await scoreAccount({ user: u, now: NOW, deps: w.deps });
+    assert.strictEqual(usd.length, 1, JSON.stringify(reply));
+    assert.ok(usd[0] >= (4500 * RATE_OUT) / 1e6);
+  }
+});
+
+test('(I1) when the provider reports token usage the recorded cost follows it, even for an empty reply', async () => {
+  const u = user('u1');
+  const w = world({ users: [u], items: many('u1', 25), model: async (prompt, opts) => { opts.onUsage({ prompt_tokens: 2000, completion_tokens: 1000 }); throw new Error('OpenAI returned empty content'); } });
+  const usd = [];
+  w.deps.spend.record = async (a, n, o) => { usd.push(o && o.usd); };
+  await scoreAccount({ user: u, now: NOW, deps: w.deps });
+  assert.strictEqual(usd.length, 1);
+  assert.ok(Math.abs(usd[0] - (2000 * RATE_IN + 1000 * RATE_OUT) / 1e6) < 1e-9, `recorded ${usd[0]}`);
+  assert.ok(Math.abs(usd[0] - listeningCost({ in: 2000, out: 1000 })) < 1e-9);
+});
+
+test('(I1) the daily ceiling trips at the real worst case: failing calls stop the pass once the ceiling is reached', async () => {
+  const u = user('u1');
+  const items = many('u1', 100); // 3 batches
+  const w = world({ users: [u], items, model: async () => { w.n = (w.n || 0) + 1; throw new Error('timed out'); } });
+  const first = buildPrompt(items.slice().sort((a, b) => b.createdAt - a.createdAt).slice(0, 40));
+  const oneBatch = worstUsd(first);
+  let total = 0;
+  const Spend = { findOne: () => ({ lean: async () => ({ totalUsd: total }) }), findOneAndUpdate: async (f, upd) => { total += (upd.$inc && upd.$inc.totalUsd) || 0; return { totalUsd: total, alerted100: true, alerted70: true }; } };
+  const Switch = { find: () => ({ lean: async () => [] }) };
+  const guard = createSpendGuard({ Spend: () => Spend, Switch: () => Switch, alert: async () => {}, env: { AI_DAILY_SPEND_CAP_USD: String(oneBatch * 1.5) }, now: () => NOW, cacheMs: 0 });
+  w.deps.spend = { check: (a) => guard.check(a), record: (a, n, o) => guard.record(a, n, o) };
+  const r = await scoreAccount({ user: u, now: NOW, deps: w.deps });
+  assert.strictEqual(w.n, 2, 'two worst-case calls reach 1.5 batches of ceiling; a third must not start');
+  assert.strictEqual(r.stopped, 'spend');
+  assert.ok(total >= oneBatch * 1.9, `recorded ${total}`);
+});
+
+test('(I2) a ledger write that fails means NO model call, the pass for that account stops, and one plain log line', async () => {
+  const u = user('u1');
+  const Model = { create: async () => { throw new Error('validation failed with COMMENTTEXT'); }, countDocuments: async () => 0, find: () => ({ select: () => ({ lean: async () => [] }) }), findOne: () => ({ sort: () => ({ lean: async () => null }) }) };
+  const w = world({ users: [u], items: many('u1', 95) });
+  w.deps.ledger = createBatchLedger({ Model });
+  const lines = [];
+  const orig = { warn: console.warn, error: console.error, log: console.log };
+  console.warn = console.error = console.log = (...a) => lines.push(a.map(String).join(' '));
+  let r;
+  try { r = await scoreAccount({ user: u, now: NOW, deps: w.deps }); } finally { Object.assign(console, orig); }
+  assert.strictEqual(w.calls.prompts.length, 0, 'no paid call without a durable ledger row');
+  assert.strictEqual(r.skipped, 'ledger');
+  assert.strictEqual(r.scored, 0);
+  assert.strictEqual(lines.filter((l) => /ledger|batch record/i.test(l)).length, 1, lines.join('\n'));
+  assert.ok(!lines.join('\n').includes('COMMENTTEXT') && !lines.join('\n').includes('lovely thing'));
+  assert.deepStrictEqual(w.calls.recorded, [], 'nothing was spent, so nothing is recorded');
+});
+
+test('(I2) after a restart (fresh memory) with the ledger still failing, still zero model calls; the whole pass stops at the first account', async () => {
+  const Model = { create: async () => { throw new Error('down'); }, countDocuments: async () => 0, find: () => ({ select: () => ({ lean: async () => [] }) }), findOne: () => ({ sort: () => ({ lean: async () => null }) }) };
+  const users = [user('u1'), user('u2')];
+  const w = world({ users, items: [...many('u1', 25), ...many('u2', 25)] });
+  for (let restart = 0; restart < 3; restart++) {
+    w.deps.ledger = createBatchLedger({ Model });
+    w.deps.memory = new Map();
+    const quietRun = console.error; console.error = () => {}; console.warn = () => {};
+    try { await runScorerOnce({ deps: w.deps, now: new Date(NOW.getTime() + restart * 60000), force: true }); } finally { console.error = quietRun; console.warn = quietRun; }
+  }
+  assert.strictEqual(w.calls.prompts.length, 0);
+  assert.strictEqual(w.calls.checked.length, 3, 'only the first account is tried in each pass');
+});
+
+test('(I8) the lease is renewed from the CURRENT time on every account and every batch, not from the pass start', async () => {
+  const renews = [];
+  let t = NOW.getTime();
+  const lease = { async claim() { return { value: 'x' }; }, async renew(tok, at) { renews.push(at.getTime()); return tok; }, async release() {} };
+  const users = [user('a'), user('b')];
+  const w = world({ users, items: [...many('a', 45), ...many('b', 25)], lease });
+  w.deps.clock = () => new Date(t);
+  const m = w.deps.callText;
+  w.deps.callText = async (...a) => { t += 20 * 60000; return m(...a); };
+  await runScorerOnce({ deps: w.deps, now: NOW });
+  assert.ok(renews.length >= 4, `renewed ${renews.length} times`);
+  assert.ok(renews.every((x, i) => i === 0 || x >= renews[i - 1]));
+  assert.strictEqual(renews[renews.length - 1], NOW.getTime() + 40 * 60000, 'the last renewal (before the third call) uses the clock, 40 minutes in, not the pass start');
+  assert.ok(new Set(renews).size >= 3, 'each renewal uses the time it happens');
+});
+
+test('(I8) a pass longer than 45 minutes keeps the lease (a second claimant gets nothing); an expired lease can still be taken', async () => {
+  const rows = new Map();
+  const Model = {
+    async findOneAndUpdate(filter, update) {
+      const row = rows.get(filter.key);
+      if (row && !(row.value < filter.value.$lt)) { const e = new Error('dup'); e.code = 11000; throw e; }
+      rows.set(filter.key, { value: update.$set.value });
+      return rows.get(filter.key);
+    },
+    async updateOne(filter, update) { const row = rows.get(filter.key); if (row && row.value === filter.value) { row.value = update.$set.value; return { modifiedCount: 1 }; } return { modifiedCount: 0 }; }
+  };
+  const mk = () => createLease({ store: opsStateStore(Model, { key: 'listening_scorer_lease' }), ttlMs: 45 * 60000 });
+  const lease = mk(); const other = mk();
+  const u = user('u1');
+  const w = world({ users: [u], items: many('u1', 120), lease }); // 3 batches
+  let t = NOW.getTime();
+  w.deps.clock = () => new Date(t);
+  const m = w.deps.callText;
+  const secondClaims = [];
+  w.deps.callText = async (...a) => {
+    t += 20 * 60000; // each call takes 20 minutes
+    secondClaims.push(await other.claim(new Date(t))); // someone else tries at the current time
+    return m(...a);
+  };
+  await runScorerOnce({ deps: w.deps, now: NOW });
+  assert.strictEqual(w.calls.prompts.length, 3);
+  assert.deepStrictEqual(secondClaims, [null, null, null], 'a long pass never loses the lease');
+  // the pass has ended and released; and an abandoned (never released) lease expires and can be taken
+  const abandoned = mk();
+  await abandoned.claim(new Date(NOW.getTime()));
+  assert.strictEqual(await other.claim(new Date(NOW.getTime() + 44 * 60000)), null);
+  assert.ok(await other.claim(new Date(NOW.getTime() + 46 * 60000)));
+});

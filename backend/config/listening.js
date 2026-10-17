@@ -46,15 +46,19 @@ module.exports = {
     'scam', 'scammer', 'fraud', 'cheat', 'cheater', 'thief', 'thieves', 'liar', 'liars', 'sucks',
     // English: slurs, violence and adult content
     'retard', 'retarded', 'nigger', 'nigga', 'faggot', 'fag', 'dyke', 'tranny', 'paki', 'chink', 'spic', 'kike',
+    'suck', 'pussy', 'cock', 'twat', 'wanker', 'prick', 'kys',
     'kill', 'killed', 'die', 'rape', 'rapist', 'suicide', 'terrorist', 'sex', 'porn', 'nude', 'nudes',
     // Hindi, Marathi, Bengali and others (Latin spelling, common variants)
     'chutiya', 'chutiye', 'chut', 'madarchod', 'maderchod', 'behenchod', 'bhenchod', 'bhosdi', 'bhosdike', 'bhosadike', 'gandu', 'gaandu',
     'harami', 'haramkhor', 'haramzada', 'kamina', 'kamine', 'kutta', 'kutti', 'saala', 'saale', 'randi', 'lund', 'lauda', 'loda', 'bhadwa', 'bhadwe',
     'chakka', 'zavadya', 'khanki',
+    'bc', 'mc', 'bsdk', 'bkl', 'chod', 'chodu', 'lodu', 'lavde', 'lawde', 'gaand', 'tatti', 'kutte', 'kuttiya', 'saali',
     // Tamil, Telugu, Malayalam, Kannada (Latin spelling, common variants)
     'otha', 'ootha', 'thevidiya', 'thevdiya', 'punda', 'pundai', 'koothi', 'kuthi', 'mayiru', 'mairu', 'poolu', 'naaye', 'pottai', 'oombu',
     'lanja', 'lanjakodaka', 'dengey', 'thendi', 'bevarsi',
+    'sunni', 'thevudiya', 'dengu', 'modda', 'puku', 'myre', 'thayoli', 'kunna', 'poori', 'sule', 'tunne',
     // Native script (matched anywhere in the text)
-    'चूतिया', 'मादरचोद', 'बहनचोद', 'भोसड़ी', 'गांडू', 'हरामी', 'कमीना', 'रंडी', 'कुत्ता', 'கூதி', 'புண்டை', 'ஒத்தா', 'தேவடியா', 'பொட்டை', 'ஓழ்'
+    'चूतिया', 'मादरचोद', 'बहनचोद', 'भोसड़ी', 'गांडू', 'हरामी', 'कमीना', 'रंडी', 'कुत्ता', 'கூதி', 'புண்டை', 'ஒத்தா', 'தேவடியா', 'பொட்டை', 'ஓழ்',
+    'चोद', 'गांड', 'लौड़ा', 'भड़वा'
   ]
 };

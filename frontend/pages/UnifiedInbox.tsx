@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import {
   AlertTriangle,
   Bot,
@@ -21,6 +21,7 @@ import { AutoReplySettings, inboxAPI, InboxConversation, InboxMessage } from '..
 import { useTheme } from '../context/ThemeContext';
 import UpgradePrompt from '../components/UpgradePrompt';
 import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
+import { conversationIdFromSearch, pickSelectedId } from '../utils/listening';
 
 type Platform = 'instagram' | 'facebook' | 'linkedin' | 'x' | 'youtube';
 
@@ -49,9 +50,12 @@ function timeAgo(value?: string) {
 const UnifiedInbox: React.FC = () => {
   const { isDarkMode } = useTheme();
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
-  // /inbox?conversation=<id> (the links on the comment card) opens that conversation when it is in the list.
-  const [linkParams] = useSearchParams();
-  const [selectedId, setSelectedId] = useState(() => linkParams.get('conversation') || '');
+  // /inbox?conversation=<id> (the links on the comment card) opens that conversation once it is in the loaded list. It is read
+  // again on every navigation (the key changes even for the same link), so a click while already on this page works too.
+  const location = useLocation();
+  const linkedId = conversationIdFromSearch(location.search);
+  const wantedId = useRef(linkedId);
+  const [selectedId, setSelectedId] = useState('');
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [status, setStatus] = useState('all');
@@ -103,7 +107,9 @@ const UnifiedInbox: React.FC = () => {
       });
       const list = result.conversations || [];
       setConversations(list);
-      setSelectedId(current => list.some(item => item.id === current) ? current : list[0]?.id || '');
+      const wanted = wantedId.current;
+      if (wanted && list.some(item => item.id === wanted)) wantedId.current = '';
+      setSelectedId(current => pickSelectedId(list, current, wanted));
       setError('');
       setUpgrade(null);
     } catch (err: any) {
@@ -120,6 +126,20 @@ const UnifiedInbox: React.FC = () => {
   useEffect(() => {
     loadConversations();
   }, [status, platform, priority, assignedUserId]);
+
+  // A new link to a conversation: show it when it is already loaded, otherwise clear the filters so it can be found.
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  useEffect(() => {
+    if (!linkedId) return;
+    wantedId.current = linkedId;
+    if (conversationsRef.current.some(item => item.id === linkedId)) {
+      wantedId.current = '';
+      setSelectedId(linkedId);
+    } else if (status !== 'all' || platform !== 'all' || priority !== 'all' || assignedUserId || search) {
+      setStatus('all'); setPlatform('all'); setPriority('all'); setAssignedUserId(''); setSearch('');
+    }
+  }, [location.key, linkedId]);
 
   useEffect(() => {
     const loadAutoReplySettings = async () => {

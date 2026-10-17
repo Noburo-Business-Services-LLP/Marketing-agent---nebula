@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import type { ListeningResponse } from '../types';
-import { LOAD_ERROR, LOCKED_NOTE, TITLE, asOfLine, barRows, barSummary, basedOn, cardState, dayText, notEnoughLines, platformName, quoteLabel, quoteText, quotesFor, recentLinkLabel, recentNegativeRows, waitingText } from '../utils/listening';
+import { LOAD_ERROR, LOCKED_NOTE, TITLE, barRows, barSummary, basedOn, cardState, dayText, lastCheckedLine, notEnoughLines, platformName, quoteLabel, quoteText, quotesFor, recentLinkLabel, recentNegativeRows, waitingText, weeklyNote } from '../utils/listening';
 import type { ListeningLabel } from '../utils/listening';
 
 const CARD = 'mb-6 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 sm:p-6';
@@ -58,6 +58,8 @@ const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false
   }
 
   const state = failed ? 'error' : cardState(res);
+  // Scoring is not running (or this account was never scored): say nothing about weekly checks, show nothing.
+  if (state === 'off') return null;
   if (state === 'locked') {
     if (!lockedNote) return null;
     return (
@@ -72,7 +74,7 @@ const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false
   const rows = state === 'ready' ? barRows(res) : [];
   const quotes = state === 'ready' ? quotesFor(res) : [];
   const recent = state === 'ready' && showRecent ? recentNegativeRows(res) : [];
-  const asOf = state === 'ready' ? asOfLine(res) : '';
+  const lastChecked = state === 'ready' ? lastCheckedLine(res) : '';
   const lines = state === 'not_enough' ? notEnoughLines(res) : null;
 
   return (
@@ -99,7 +101,8 @@ const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false
 
       {state === 'ready' && res && (
         <>
-          <p className={`mt-1 text-[14px] ${TEXT2}`}>{basedOn(res)}{asOf ? ` ${asOf}` : ''}</p>
+          <p className={`mt-1 text-[14px] ${TEXT2}`}>{basedOn(res)}</p>
+          {lastChecked && <p className={`text-[14px] ${TEXT2}`}>{lastChecked}</p>}
 
           <div role="img" aria-label={barSummary(res)} className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
             {rows.filter((r) => r.width > 0).map((r) => (
@@ -109,7 +112,7 @@ const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false
 
           <table className="mt-3 w-full text-left text-[14px]">
             <caption className="sr-only">Comments and messages by how they read</caption>
-            <thead className="text-[12.5px] font-medium text-[var(--gv-text-secondary)]"><tr><th scope="col" className="pb-1 pr-2 font-medium">Kind</th><th scope="col" className="pb-1 pr-2 text-right font-medium">Comments</th><th scope="col" className="pb-1 text-right font-medium">Share</th></tr></thead>
+            <thead className="text-[12.5px] font-medium text-[var(--gv-text-secondary)]"><tr><th scope="col" className="pb-1 pr-2 font-medium">Kind</th><th scope="col" className="pb-1 pr-2 text-right font-medium">Comments and messages</th><th scope="col" className="pb-1 text-right font-medium">Share</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.key} className="border-t border-[var(--gv-border-subtle)] first:border-t-0">
@@ -125,6 +128,7 @@ const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false
           </table>
 
           {res.trend && <p className="mt-3 break-words text-[14px] leading-relaxed text-[var(--gv-text-primary)]">{res.trend}</p>}
+          <p className={`mt-3 text-[12.5px] ${TEXT2}`}>{weeklyNote()}</p>
 
           {quotes.length > 0 && (
             <ul className="mt-4 space-y-3" aria-label="What some people wrote">

@@ -24,8 +24,9 @@ function createBatchLedger({ Model = undefined } = {}) {
   };
 
   return {
-    /** Never throws. Memory first, then the database. */
-    async record({ userId, itemIds = [], at = new Date(), source = 'tracker' } = {}) {
+    /** Never throws. Memory first, then the database. Returns true when the database row was stored (or when this ledger is
+     *  memory only, as in tests), false when the database write failed: the caller must then NOT make the paid call. */
+    async record({ userId, itemIds = [], at = new Date(), source = 'scorer' } = {}) {
       const date = at instanceof Date ? at : new Date(at);
       const day = dayOf(date);
       forget(day, date);
@@ -42,8 +43,9 @@ function createBatchLedger({ Model = undefined } = {}) {
       try {
         const M = lazy();
         if (M) await M.create({ userId, day, at: date, itemIds, source });
-      } catch (e) {
-        console.error('[listening] could not store a batch record (counting in memory):', e && e.message);
+        return true;
+      } catch (_) {
+        return false; // the caller logs once; no error text is kept here
       }
     },
     async countBatchesToday(at = new Date()) {

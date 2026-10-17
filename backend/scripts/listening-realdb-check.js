@@ -168,7 +168,8 @@ async function runChecks(logs) {
     const keep = model.mode === 'half' ? bodies.slice(0, Math.floor(bodies.length / 2)) : bodies;
     return JSON.stringify({ r: keep.map((b, i) => { const l = labelOf(b); return { i: i + 1, l, c: reasonOf(b, l), extra: 'dropped' }; }) });
   };
-  const fakeSpend = { check: async () => ({ ok: true }), record: async () => {} };
+  const spendLog = [];
+  const fakeSpend = { check: async () => ({ ok: true }), record: async (a, n, o) => { spendLog.push({ a, n, usd: o && o.usd }); } };
   const alerts = [];
 
   const stamp = Date.now();
@@ -270,7 +271,7 @@ async function runChecks(logs) {
     const lean = await Score.findOne({ userId: u._id, inboxItemId: iid }).lean();
     assert.strictEqual(lean.label, 'neg');
   });
-  await check('indexes exist as designed: unique (userId, inboxItemId), unique (userId, weekStart), itemAt, batch-log TTL 14 days', async () => {
+  await check('indexes exist as designed: unique (userId, inboxItemId), unique (userId, weekStart), itemAt, batch-log TTL 14 days, scoredAt, score TTL 90 days', async () => {
     await Promise.all([Score.init(), Weekly.init(), BatchLog.init()]);
     const sIdx = await Score.collection.listIndexes().toArray();
     const wIdx = await Weekly.collection.listIndexes().toArray();
@@ -281,6 +282,8 @@ async function runChecks(logs) {
     const has = (idx, key, f = () => true) => idx.some((i) => JSON.stringify(i.key) === JSON.stringify(key) && f(i));
     assert.ok(has(sIdx, { userId: 1, inboxItemId: 1 }, (i) => i.unique), 'no unique (userId, inboxItemId) on listening_scores');
     assert.ok(has(sIdx, { userId: 1, itemAt: -1 }), 'no (userId, itemAt) on listening_scores');
+    assert.ok(has(sIdx, { userId: 1, scoredAt: -1 }), 'no (userId, scoredAt) on listening_scores');
+    assert.ok(has(sIdx, { itemAt: 1 }, (i) => i.expireAfterSeconds === 90 * 24 * 3600), 'no 90-day TTL on listening_scores.itemAt');
     assert.ok(has(wIdx, { userId: 1, weekStart: 1 }, (i) => i.unique), 'no unique (userId, weekStart) on listening_weekly');
     assert.ok(has(bIdx, { at: 1 }, (i) => i.expireAfterSeconds === 14 * 24 * 3600), 'no 14-day TTL on listening_batch_log.at');
     assert.ok(has(bIdx, { day: 1, userId: 1 }), 'missing (day, userId) on the batch log');
@@ -490,8 +493,8 @@ async function runChecks(logs) {
     const [mb] = await seedItems(b, [{ text: 'Foreign item that must not come back' }]);
     const spyUsers = [];
     const listeningRoute = require('../routes/listening');
-    const view = await listeningRoute.viewFor({ _id: a._id }, { deps: { store: { scoresSince: async () => [], }, inboxByIds: undefined } });
-    assert.strictEqual(view.state, 'not_enough');
+    const view = await listeningRoute.viewFor({ _id: a._id }, { deps: { env: { ENABLE_LISTENING: 'on' }, store: { scoresSince: async () => [], lastScoredAt: async () => null }, inboxByIds: undefined } });
+    assert.strictEqual(view.state, 'off', 'an account that was never scored must show nothing');
     const rows = await Inbox.find({ _id: { $in: [ma._id, mb._id] }, userId: a._id }).select('_id userId conversationId platform messageType direction senderType spamScore body authorId createdAt').lean();
     assert.deepStrictEqual(rows.map((r) => String(r._id)), [String(ma._id)]);
     void spyUsers;
@@ -717,6 +720,8 @@ async function runChecks(logs) {
   app.use('/api/staff', staffRoutes);
   app.use('/api/listening', listeningRoutes);
   const server = http.createServer(app);
+  const envBefore = process.env.ENABLE_LISTENING;
+  process.env.ENABLE_LISTENING = 'on'; // the card route reads the switch from the process environment
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   const call = async (method, p, token, body) => {
@@ -758,7 +763,7 @@ async function runChecks(logs) {
       const p = j.percentages;
       assert.ok([p.positive, p.neutral, p.negative].every(Number.isInteger));
       assert.strictEqual(p.positive + p.neutral + p.negative, 100);
-      assert.ok(typeof j.trend === 'string' && /^(More|Fewer|About)/.test(j.trend), `trend: ${j.trend}`);
+      assert.ok(typeof j.trend === 'string' && /^(More|Fewer|In the week to)/.test(j.trend), `trend: ${j.trend}`);
       assert.ok(Array.isArray(j.quotes) && j.quotes.length >= 1 && j.quotes.length <= 3, `quotes: ${j.quotes.length}`);
       for (const q of j.quotes) { assert.ok(['positive', 'negative'].includes(q.label)); assert.ok(q.text.includes('ALPHA')); assert.ok(/^\d{4}-\d\d-\d\d$/.test(q.date)); }
       assert.ok(j.recentNegative.length >= 1 && j.recentNegative.length <= caps0.RECENT_NEGATIVE_MAX);
@@ -806,13 +811,18 @@ async function runChecks(logs) {
       assert.strictEqual(r2.json.state, 'ready'); assert.strictEqual(r2.json.total, 20);
       const s = r2.json.percentages; assert.strictEqual(s.positive + s.neutral + s.negative, 100);
     });
-    await check('states: waiting (20+ unscored eligible items), not_enough (nothing), and 401 without a token', async () => {
+    await check('states: waiting (scored before, 20+ eligible items), off (never scored: nothing to show), and 401 without a token', async () => {
       const D = await mkUser('http-wait'); await seedItems(D, mixed(25), nowD);
+      const old = await seedItems(D, [{ text: 'An old one that was scored a while ago, lovely', ageMin: 33 * 24 * 60 }], nowD);
+      await store.saveScores(D._id, scoreRows(old, nowD));
       const E = await mkUser('http-empty');
       const w = await call('GET', '/api/listening', generateToken(D._id));
       assert.strictEqual(w.json.state, 'waiting', w.text);
       const e = await call('GET', '/api/listening', generateToken(E._id));
-      assert.strictEqual(e.json.state, 'not_enough');
+      assert.strictEqual(e.json.state, 'off', e.text); assert.strictEqual(e.json.message, null);
+      const never = await mkUser('http-never'); await seedItems(never, mixed(25), nowD);
+      const n = await call('GET', '/api/listening', generateToken(never._id));
+      assert.strictEqual(n.json.state, 'off', 'never scored but 25 comments: must show nothing'); assert.ok(!/week|waiting|check/i.test(n.text));
       assert.strictEqual((await call('GET', '/api/listening', null)).status, 401);
     });
     await check('a non-entitled account gets 403 with the standard add-on body and no data', async () => {
@@ -898,6 +908,7 @@ async function runChecks(logs) {
     });
   } finally {
     scorer.runScorerOnce = origRun;
+    if (envBefore === undefined) delete process.env.ENABLE_LISTENING; else process.env.ENABLE_LISTENING = envBefore;
     await new Promise((r) => server.close(r));
   }
 
@@ -1040,6 +1051,147 @@ async function runChecks(logs) {
     const row = await OpsState.findOne({ key: leaseKey('sched') }).lean();
     assert.strictEqual(row.value, '', 'the lease was left held');
     return `${claimsAtStop} tick(s) before stop`;
+  });
+
+  // ===================================================================================================================
+  section = '(7) fix round (I1 to I8):';
+  const { createSpendGuard } = require('../services/spendGuard');
+  const { buildPrompt } = require('../services/listening/helpers');
+  const AiSpendDay = require('../models/AiSpendDay');
+  const view = (u, o = {}) => listeningRoutes.viewFor({ _id: u._id }, { deps: { env: o.env || { ENABLE_LISTENING: 'on' } }, now: o.now || new Date() });
+  const scoredAs = (items, at) => scoreRows(items, at);
+  const failingBatchModel = { create: async () => { throw new Error('simulated write failure with SECRET-COMMENT-TEXT'); }, countDocuments: (...a) => BatchLog.countDocuments(...a), find: (...a) => BatchLog.find(...a), findOne: (...a) => BatchLog.findOne(...a) };
+
+  await check('I3: the card loads 35 days: a baseline that sits only on days 29 to 34 makes the trend appear (a 28-day load shows none)', async () => {
+    const u = await mkUser('i3');
+    const now = new Date();
+    const day = 24 * 60;
+    const specs = [
+      ...Array.from({ length: 10 }, (_, i) => ({ text: `I3 ${textFor(i, 'neg')}`, ageMin: 6 * 60 + i * 10 })),
+      ...Array.from({ length: 6 }, (_, i) => ({ text: `I3 ${textFor(i, 'pos')}`, ageMin: (2 + (i % 4)) * day })),
+      ...Array.from({ length: 6 }, (_, i) => ({ text: `I3 ${textFor(i + 1, 'pos')}`, ageMin: (10 + i) * day })),
+      ...Array.from({ length: 24 }, (_, i) => ({ text: `I3 ${textFor(i, i < 2 ? 'neg' : 'pos')}`, ageMin: (29 + (i % 6)) * day + 90 }))
+    ];
+    const items = await seedItems(u, specs, now);
+    await store.saveScores(u._id, scoredAs(items, now));
+    const v = await view(u, { now });
+    assert.strictEqual(v.state, 'ready'); assert.strictEqual(v.total, 22, `period total ${v.total}`);
+    assert.match(v.trend || 'none', /^More negative comments than usual in the week to \d+ \w+: 10 of 16, against 7% in the four weeks before\./);
+    return v.trend;
+  });
+  await check('I4: the windows end on the day of the LAST scoring; "stale" only after 10 days; the date range is always there', async () => {
+    const u = await mkUser('i4');
+    const now = new Date();
+    const scoredAt = new Date(now.getTime() - 12 * DAY);
+    const items = await seedItems(u, mixed(24, 400).map((m, i) => ({ text: `I4 ${m.text}`, ageMin: 12 * 24 * 60 + 60 + i * 400 })), now);
+    await store.saveScores(u._id, scoredAs(items, scoredAt));
+    const v = await view(u, { now });
+    const istDay = (d) => new Date(d.getTime() + 5.5 * HOUR).toISOString().slice(0, 10);
+    assert.strictEqual(v.state, 'ready'); assert.strictEqual(v.stale, true);
+    assert.strictEqual(v.lastScoredOn, istDay(scoredAt)); assert.strictEqual(v.period.to, istDay(scoredAt)); assert.strictEqual(v.asOf, istDay(scoredAt));
+    assert.notStrictEqual(v.period.to, istDay(now));
+    const fresh = await view(u, { now: new Date(scoredAt.getTime() + 3 * DAY) });
+    assert.strictEqual(fresh.stale, false); assert.strictEqual(fresh.period.to, istDay(scoredAt));
+    const ten = await view(u, { now: new Date(scoredAt.getTime() + 10 * DAY) });
+    const eleven = await view(u, { now: new Date(scoredAt.getTime() + 11 * DAY) });
+    assert.strictEqual(ten.stale, false); assert.strictEqual(eleven.stale, true);
+  });
+  await check('I5: while the switch is off, or before an account was ever scored, the state is off with no message at all', async () => {
+    const u = await mkUser('i5');
+    const items = await seedItems(u, mixed(25, 500), new Date());
+    const never = await view(u);
+    assert.strictEqual(never.state, 'off'); assert.strictEqual(never.message, null); assert.strictEqual(never.total, 0);
+    await store.saveScores(u._id, scoredAs(items, new Date()));
+    assert.strictEqual((await view(u)).state, 'ready');
+    for (const env of [{}, { ENABLE_LISTENING: 'off' }, { ENABLE_LISTENING: 'ON' }]) {
+      const off = await view(u, { env });
+      assert.strictEqual(off.state, 'off', JSON.stringify(env)); assert.strictEqual(off.message, null); assert.deepStrictEqual(off.quotes, []);
+      assert.ok(!/week|waiting|checked/i.test(JSON.stringify(off)));
+    }
+  });
+  await check('I2: the batch-log write fails in the REAL database path: zero model calls, nothing stored, one plain log line; same after a restart; a healthy ledger then works', async () => {
+    resetModel();
+    const u = await mkUser('i2');
+    await seedItems(u, mixed(30, 600), new Date(), '[I2] ');
+    const logsBefore = logs.length;
+    for (let restart = 0; restart < 2; restart++) {
+      const out = await pass({ accountIds: [u._id], force: true, ledger: createBatchLedger({ Model: failingBatchModel }), memory: new Map(), leaseName: `i2-${restart}` });
+      assert.strictEqual(model.calls, 0, `a model call was made with a failing ledger (restart ${restart})`);
+      assert.strictEqual(out.scored, 0);
+    }
+    assert.strictEqual(await Score.countDocuments({ userId: u._id }), 0); assert.strictEqual(await BatchLog.countDocuments({ userId: u._id }), 0);
+    const mine = logs.slice(logsBefore).filter((l) => /batch record/.test(l));
+    assert.strictEqual(mine.length, 2, `expected one log line per pass, got ${mine.length}`);
+    assert.ok(!logs.slice(logsBefore).some((l) => /SECRET-COMMENT-TEXT|\[I2\]/.test(l)), 'a log line carried text');
+    const ok = await pass({ accountIds: [u._id], force: true, leaseName: 'i2-ok' });
+    assert.strictEqual(model.calls, 1); assert.strictEqual(ok.scored, 30);
+  });
+  await check('I1: a failing call, an empty reply and a good call are ALL recorded with the spend guard; reported usage is used; the estimate is never below the worst case', async () => {
+    const u = await mkUser('i1');
+    const items = await seedItems(u, mixed(30, 700), new Date(), '[I1] ');
+    const firstPrompt = buildPrompt([...items].sort((a, b) => b.createdAt - a.createdAt).slice(0, 40));
+    const worst = (Buffer.byteLength(firstPrompt, 'utf8') * 5 + 4500 * 30) / 1e6;
+    resetModel(); spendLog.length = 0; model.mode = 'throw';
+    await pass({ accountIds: [u._id], force: true, leaseName: 'i1a' });
+    assert.strictEqual(spendLog.length, 1, 'a failed call was not recorded');
+    assert.ok(spendLog[0].usd >= worst - 1e-9, `recorded ${spendLog[0].usd}, worst case ${worst}`);
+    // The failed attempt is in the ledger, so use a second account for the other outcomes.
+    for (const [label, mode] of [['empty', 'empty'], ['garbage', 'garbage']]) {
+      const w = await mkUser(`i1-${label}`);
+      const wi = await seedItems(w, mixed(25, 800), new Date(), '[I1] ');
+      void wi; resetModel(); spendLog.length = 0; model.mode = mode === 'empty' ? 'ok' : mode;
+      model.onCall = mode === 'empty' ? async () => { throw new Error('OpenAI returned empty content'); } : null;
+      await pass({ accountIds: [w._id], force: true, leaseName: `i1-${label}` });
+      assert.strictEqual(spendLog.length, 1, `${label}: not recorded`); assert.ok(spendLog[0].usd >= 4500 * 30 / 1e6 - 1e-9);
+    }
+    const g = await mkUser('i1-usage');
+    await seedItems(g, mixed(25, 900), new Date(), '[I1] ');
+    resetModel(); spendLog.length = 0;
+    model.onCall = async (prompt, opts) => { opts.onUsage({ prompt_tokens: 2000, completion_tokens: 1000 }); };
+    await pass({ accountIds: [g._id], force: true, leaseName: 'i1-usage' });
+    assert.strictEqual(spendLog.length, 1); assert.ok(Math.abs(spendLog[0].usd - (2000 * 5 + 1000 * 30) / 1e6) < 1e-9, `usd ${spendLog[0].usd}`);
+  });
+  await check('I1: the real spend guard (own throwaway day row) trips at the worst case: with a ceiling of 1.5 batches only two failing calls are made', async () => {
+    const u = await mkUser('i1-cap');
+    const items = await seedItems(u, mixed(100, 1000), new Date(), '[I1C] ');
+    const first = buildPrompt([...items].sort((a, b) => b.createdAt - a.createdAt).slice(0, 40));
+    const worst = (Buffer.byteLength(first, 'utf8') * 5 + 4500 * 30) / 1e6;
+    const simDay = new Date(Date.UTC(2031, 8, 14, 10, 0, 0)); // a throwaway day in 2031, so no real spend row is touched
+    await AiSpendDay.deleteMany({ day: '2031-09-14' });
+    try {
+      const guard = createSpendGuard({ now: () => simDay, env: { AI_DAILY_SPEND_CAP_USD: String(worst * 1.5) }, alert: async () => {}, cacheMs: 0 });
+      resetModel(); model.mode = 'throw';
+      const out = await pass({ accountIds: [u._id], force: true, leaseName: 'i1-cap', deps: { spend: { check: (a) => guard.check(a), record: (a, n, o) => guard.record(a, n, o) } } });
+      assert.strictEqual(model.calls, 2, `${model.calls} calls (out ${JSON.stringify(out)})`);
+      const row = await AiSpendDay.findOne({ day: '2031-09-14' }).lean();
+      assert.ok(row && row.totalUsd >= worst * 1.9, `recorded ${row && row.totalUsd}`);
+    } finally { await AiSpendDay.deleteMany({ day: '2031-09-14' }); }
+  });
+  await check('I8: the REAL lease row is extended from the current time: a pass of 60 simulated minutes keeps it, a second claimant gets nothing; an expired one is taken', async () => {
+    const key = leaseKey('i8');
+    const ttl = 45 * 60000;
+    const T0 = Date.now();
+    const a = createLease({ key, holder: 'a', ttlMs: ttl }); const b = createLease({ key, holder: 'b', ttlMs: ttl });
+    const tok = await a.claim(new Date(T0));
+    assert.ok(tok); assert.strictEqual(await b.claim(new Date(T0 + 10 * 60000)), null);
+    const tok2 = await a.renew(tok, new Date(T0 + 40 * 60000));
+    assert.notStrictEqual(tok2.value, tok.value, 'the renewal did not change the expiry');
+    assert.strictEqual(await b.claim(new Date(T0 + 50 * 60000)), null, 'a second claimant took a lease that was renewed at minute 40');
+    assert.ok(await b.claim(new Date(T0 + 86 * 60000)), 'an expired lease could not be taken');
+    // and through a whole pass: each model call takes 20 simulated minutes, a rival tries after each one
+    resetModel();
+    const u = await mkUser('i8');
+    await seedItems(u, mixed(120, 1100), new Date(), '[I8] ');
+    const lease = createLease({ key: leaseKey('i8-pass'), holder: 'runner', ttlMs: ttl });
+    const rival = createLease({ key: leaseKey('i8-pass'), holder: 'rival', ttlMs: ttl });
+    let t = Date.now();
+    const rivals = [];
+    model.onCall = async () => { t += 20 * 60000; rivals.push(await rival.claim(new Date(t))); };
+    const out = await pass({ accountIds: [u._id], force: true, deps: { lease, clock: () => new Date(t) } });
+    assert.strictEqual(model.calls, 3, JSON.stringify(out));
+    assert.deepStrictEqual(rivals, [null, null, null], 'a rival got the lease during a long pass');
+    const row = await OpsState.findOne({ key: leaseKey('i8-pass') }).lean();
+    assert.strictEqual(row.value, '', 'the lease was not released');
   });
 
   // ===================================================================================================================

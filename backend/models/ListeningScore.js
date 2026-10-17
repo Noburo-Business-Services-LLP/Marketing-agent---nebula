@@ -16,5 +16,7 @@ const scoreSchema = new mongoose.Schema({
 
 scoreSchema.index({ userId: 1, inboxItemId: 1 }, { unique: true });
 scoreSchema.index({ userId: 1, itemAt: -1 });
+scoreSchema.index({ userId: 1, scoredAt: -1 }); // the card asks for the newest scoring date
+scoreSchema.index({ itemAt: 1 }, { expireAfterSeconds: 90 * 24 * 3600 }); // the card needs 35 days; a label is kept for about 90
 
 module.exports = mongoose.models.ListeningScore || mongoose.model('ListeningScore', scoreSchema);
