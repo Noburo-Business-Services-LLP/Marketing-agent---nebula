@@ -1438,6 +1438,9 @@ export const apiService = {
       throw e;
     }
   },
+  /** Confirm or fix a competitor's Instagram handle. A leading @ is not sent: the form rejects it first. */
+  setCompetitorHandle: async (id: string, handle: string): Promise<{ success: boolean; competitor?: { id: string; name: string; handle: string; handleStatus: string }; message?: string }> =>
+    apiCall(`/competitors/${encodeURIComponent(id)}/handle`, { method: 'PUT', body: JSON.stringify({ handle }) }, true),
   getWeek: async (): Promise<WeekResponse> => apiCall('/week', { method: 'GET' }, true),
   approveWeek: async (itemIds?: string[]): Promise<WeekWriteResponse> => {
     try { return await apiCall('/week/approve', { method: 'POST', body: JSON.stringify(itemIds ? { itemIds } : {}) }, true); }

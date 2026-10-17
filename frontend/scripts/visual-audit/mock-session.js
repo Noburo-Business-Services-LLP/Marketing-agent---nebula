@@ -61,6 +61,11 @@
   var AGENCY = MODE === 'agency' || MODE === 'agency-client';
   if (params.get('agencystate')) sessionStorage.setItem('audit-agency-state', params.get('agencystate'));
   var ASTATE = sessionStorage.getItem('audit-agency-state') || '';
+  // ?compstate= all | locked | empty | error | puterr | put403 | put429 picks the competitor tracking variant (kept for the tab):
+  // all = every handle state on one account, locked = no add-on (403), empty = no competitors, error = the card fails to load,
+  // puterr / put403 / put429 = saving a handle is refused.
+  if (params.get('compstate')) sessionStorage.setItem('audit-comp-state', params.get('compstate'));
+  var CSTATE = sessionStorage.getItem('audit-comp-state') || 'all';
   var INSIDE = false;
   if (AGENCY) {
     try {
@@ -237,6 +242,27 @@
   try { if (params.get('agencystate')) sessionStorage.removeItem('audit-extra-bought'); BOUGHT = Number(sessionStorage.getItem('audit-extra-bought')) || 0; } catch (e) { /* ignore */ }
   var CLIENT_LIMIT = (ASTATE === 'cap' ? 25 : ASTATE === 'slots2' || ASTATE === 'usage-paging' ? 7 : 5) + BOUGHT;
   var ok = function (extra) { var o = { success: true }; for (var k in extra) o[k] = extra[k]; return o; };
+
+  // One competitor in each state the card and the list can show. insight() builds the GET /competitors/insights row.
+  var COMP_ROWS = [
+    ['cmp-1', 'Sweet Co Bakery', 'sweetco', 'verified', 'current'],
+    ['cmp-2', 'Green Leaf Cafe', 'greenleafcafe', 'confirmed', 'stale'],
+    ['cmp-3', 'Harbour Dental Care', 'harbourdental', 'suggested', 'unconfirmed'],
+    ['cmp-4', 'Meera Jewellers With A Very Long Business Name That Has To Wrap', '', undefined, 'no_handle'],
+    ['cmp-5', 'Studio Nine Salon', 'studionine', 'confirmed', 'paused'],
+    ['cmp-6', 'Crumb and Co', 'crumbandco', 'confirmed', 'failed']
+  ].map(function (a) {
+    var o = { id: a[0], name: a[1], handle: a[2], handleStatus: a[3], state: a[4] };
+    o.insight = function () {
+      var st = o.state === 'current' || o.state === 'stale' ? 'tracking' : o.state;
+      var base = { id: o.id, name: o.name, handle: o.handle || undefined, handleStatus: o.handleStatus, status: st, trend: [], lastCheckedAt: null, weekOf: null, isCurrentWeek: false, previousWeekOf: null, lastCheckedOn: null };
+      if (o.state === 'current') { base.trend = [{ weekStart: '2026-09-28', postsInWindow: 2, avgLikes: 30 }, { weekStart: '2026-10-05', postsInWindow: 2, avgLikes: 41 }, { weekStart: '2026-10-12', postsInWindow: 5, avgLikes: 52 }]; base.weekOf = '2026-10-12'; base.isCurrentWeek = true; base.previousWeekOf = '2026-10-05'; base.lastCheckedOn = '2026-10-13'; base.lastCheckedAt = '2026-10-13T04:00:00.000Z'; }
+      if (o.state === 'stale') { base.trend = [{ weekStart: '2026-09-07', postsInWindow: 5, avgLikes: 20 }, { weekStart: '2026-09-14', postsInWindow: 3, avgLikes: 18 }]; base.weekOf = '2026-09-14'; base.previousWeekOf = '2026-09-07'; base.lastCheckedOn = '2026-09-15'; base.lastCheckedAt = '2026-09-15T04:00:00.000Z'; }
+      if (o.state === 'paused' || o.state === 'failed') { base.trend = [{ weekStart: '2026-09-14', postsInWindow: 3, avgLikes: 18 }]; base.weekOf = '2026-09-14'; base.lastCheckedOn = '2026-09-22'; }
+      return base;
+    };
+    return o;
+  });
 
   // [method or '*', RegExp on pathname after /api, response object or function(ctx) -> object|{__status,body}]
   var ROUTES = [
@@ -504,7 +530,38 @@
     ['GET', /^\/hero-video\/jobs/, ok({ jobs: [] })],
     ['GET', /^\/video-generation\/drafts/, ok({ drafts: [] })],
     ['GET', /^\/video-generation\//, ok({ items: [], images: [] })],
-    ['GET', /^\/competitors\/posts/, ok({ posts: [] })],
+    // ---- Competitor tracking (Stage 4): the "What your competitors did" card, the list, and saving a handle ----
+    ['GET', /^\/competitors\/insights/, function () {
+      if (CSTATE === 'locked') return { __status: 403, body: { success: false, upgradeRequired: true, reason: 'addon', feature: 'competitors', message: 'Competitor insights is an add-on.' } };
+      if (CSTATE === 'error') return { __status: 500, body: { success: false, message: 'Something went wrong.' } };
+      if (CSTATE === 'empty') return ok({ weekStart: '2026-10-12', highlights: [], competitors: [] });
+      var rows = COMP_ROWS.map(function (r) { return r.insight(); });
+      return ok({ weekStart: '2026-10-12', highlights: [
+        { competitorId: 'cmp-1', name: 'Sweet Co Bakery', text: 'Sweet Co Bakery posted 5 times this week, up from 2.', weight: 1.5 },
+        { competitorId: 'cmp-1', name: 'Sweet Co Bakery', text: "Sweet Co Bakery's best post this week was a reel with 120 likes.", weight: 0.9 }
+      ], competitors: rows });
+    }],
+    ['PUT', /^\/competitors\/[^/]+\/handle$/, function (c) {
+      if (CSTATE === 'put403') return { __status: 403, body: { success: false, upgradeRequired: true, reason: 'addon', feature: 'competitors', message: 'Competitor insights is an add-on.' } };
+      if (CSTATE === 'put429') return { __status: 429, body: { success: false, message: 'Too many changes. Please try again in a little while.' } };
+      if (CSTATE === 'puterr') return { __status: 400, body: { success: false, message: 'That handle does not look right. Use letters, numbers, dots and underscores only.' } };
+      var id = c.path.split('/')[2];
+      var h = ''; try { h = String(JSON.parse(c.body || '{}').handle || ''); } catch (e) { /* ignore */ }
+      var row = COMP_ROWS.filter(function (r) { return r.id === id; })[0];
+      if (!row) return { __status: 404, body: { success: false, message: 'We could not find that competitor.' } };
+      row.handle = h; row.handleStatus = 'confirmed'; row.state = 'waiting';
+      return ok({ competitor: { id: id, name: row.name, handle: h, handleStatus: 'confirmed' } });
+    }],
+    // My plan with a finished plan, so the competitor card shows there too (the card follows ?compstate=).
+    ['GET', /^\/plan$/, ok({ plan: { id: 'audit-plan-1', completedAt: iso(-2), stale: false, result: {} }, running: false, failed: false, stopped: null, nextRefreshAt: iso(5), eligible: true, reason: '', missing: [], freeBlueprint: null, lastRunAt: iso(-2), lastStatus: 'completed' })],
+    ['POST', /^\/competitors\/(add-manual|auto-discover)$/, function () {
+      if (CSTATE === 'locked') return { __status: 403, body: { success: false, upgradeRequired: true, reason: 'addon', feature: 'competitors', message: 'Competitor insights is an add-on.' } };
+      return { __status: 200, body: { success: false, message: 'Audit stub: nothing was sent.' } };
+    }],
+    ['GET', /^\/competitors\/posts/, function () {
+      if (CSTATE === 'empty') return ok({ posts: [], competitors: [] });
+      return ok({ posts: [], competitors: COMP_ROWS.map(function (r) { return { _id: r.id, name: r.name, industry: 'bakery', socialHandles: r.handle ? { instagram: r.handle } : {}, handleStatus: r.handle ? r.handleStatus : undefined, competitorType: 'direct' }; }) });
+    }],
     ['GET', /^\/competitors/, ok({ competitors: [{ _id: 'audit-comp-1', name: 'Daily Bread Co', handle: 'dailybread', platform: 'instagram', followers: 5400, posts: [] }], ignored: [] })],
     ['GET', /^\/ad-campaigns\/summary/, ok({ summary: { totalAdCampaigns: 0, activeAdCampaigns: 0, metrics: { clicks: 0, impressions: 0, ctr: 0, spend: 0 } } })],
     ['GET', /^\/ad-campaigns/, ok({ campaigns: [], adCampaigns: [] })],
@@ -547,7 +604,7 @@
 
   var isApiPath = function (p) { return /^\/(api|audio|generated-media)(\/|$)/.test(p); };
 
-  function route(method, urlStr) {
+  function route(method, urlStr, reqBody) {
     var u;
     try { u = new URL(urlStr, location.href); } catch (e) { return { kind: 'block', reason: 'bad url' }; }
     var sameOrigin = u.origin === location.origin;
@@ -557,7 +614,7 @@
       for (var i = 0; i < ROUTES.length; i++) {
         var r = ROUTES[i];
         if ((r[0] === '*' || r[0] === m) && r[1].test(p)) {
-          var out = typeof r[2] === 'function' ? r[2]({ method: m, path: p, url: u }) : r[2];
+          var out = typeof r[2] === 'function' ? r[2]({ method: m, path: p, url: u, body: reqBody }) : r[2];
           var res = out && out.__status ? out : { __status: 200, body: out };
           AUDIT.log.push({ method: m, url: u.href, route: String(r[1]), status: res.__status });
           return { kind: 'mock', status: res.__status, body: res.body, delay: res.__delay || 0 };
@@ -581,7 +638,7 @@
   window.fetch = function (input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || String(input);
     var method = (init && init.method) || (input && input.method) || 'GET';
-    var r = route(method, url);
+    var r = route(method, url, init && init.body);
     if (r.kind === 'pass') return realFetch(input, init);
     if (r.kind === 'mock' && r.delay) return new Promise(function (ok2) { setTimeout(function () { ok2(jsonResponse(r.status, r.body)); }, r.delay); });
     if (r.kind === 'mock') return Promise.resolve(jsonResponse(r.status, r.body));
@@ -615,9 +672,9 @@
     this.response = this.responseType === 'json' ? (function () { try { return JSON.parse(text); } catch (e) { return null; } })() : text;
     this.readyState = 4; this._fire('readystatechange'); this._fire(status >= 400 && status !== 401 && status !== 403 ? 'error' : 'load'); this._fire('loadend');
   };
-  FakeXHR.prototype.send = function () {
+  FakeXHR.prototype.send = function (body) {
     var self = this;
-    var r = route(this._method, this._url);
+    var r = route(this._method, this._url, body);
     if (r.kind === 'mock') { setTimeout(function () { self._finish(r.status, JSON.stringify(r.body)); }, 0); return; }
     if (r.kind === 'pass') {
       realFetch(this._url, { method: this._method }).then(function (res) { return res.text().then(function (t) { self._finish(res.status, t); }); },

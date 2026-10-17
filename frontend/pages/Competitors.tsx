@@ -8,7 +8,11 @@ import { GravityHero, GravityEmphasis } from '../components/gravity';
 import LogoSelector from '../components/LogoSelector';
 import UpgradePrompt from '../components/UpgradePrompt';
 import CompetitorInsights from '../components/CompetitorInsights';
-import { UpgradeInfo, upgradeInfoOf, upgradeMessage } from '../utils/plans';
+import HandleEditor, { SavedHandle } from '../components/HandleEditor';
+import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
+import { LOCKED_NOTE, competitorsUpgradeCopy, handleSavedNote, listHandleAction } from '../utils/competitorInsights';
+import { customerMessage } from '../utils/errors';
+import { Link } from 'react-router-dom';
 
 const platformIcons: Record<string, React.ReactNode> = {
   instagram: <Instagram className="w-3 h-3" />,
@@ -25,6 +29,7 @@ interface Competitor {
   location?: string;
   socialHandles?: { instagram?: string; twitter?: string };
   isIgnored?: boolean;
+  handleStatus?: 'suggested' | 'verified' | 'confirmed';
   isAutoDiscovered?: boolean;
   competitorType?: 'local' | 'regional' | 'national' | 'global' | 'startup' | 'emerging' | 'direct' | 'indirect' | 'market_leader' | 'unknown';
 }
@@ -47,7 +52,16 @@ const Competitors: React.FC = () => {
   const [discovering, setDiscovering] = useState(false);
   const [discoveryMessage, setDiscoveryMessage] = useState('');
   const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
-  const onInsightsLocked = useCallback(() => setUpgrade((u) => u || { reason: 'addon', feature: 'competitors', message: upgradeMessage('addon', 'competitors') }), []);
+  // No add-on: a calm note on the page, not a prompt. The prompt below appears only after pressing Add or Find.
+  const [insightsLocked, setInsightsLocked] = useState(false);
+  const onInsightsLocked = useCallback(() => setInsightsLocked(true), []);
+  const [handleNotes, setHandleNotes] = useState<Record<string, string>>({});
+  const onHandleSaved = useCallback((saved: SavedHandle) => {
+    setCompetitors((prev) => prev.map((c) => (c._id === saved.id
+      ? { ...c, socialHandles: { ...(c.socialHandles || {}), instagram: saved.handle }, handleStatus: 'confirmed' as const }
+      : c)));
+    setHandleNotes((n) => ({ ...n, [saved.id]: handleSavedNote(saved) }));
+  }, []);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [location, setLocation] = useState('');
   
@@ -473,6 +487,7 @@ const Competitors: React.FC = () => {
     setFetchingType(type);
     try {
       const res = await apiService.scrapeCompetitorsByType(type);
+      if (res && res.notice) { setDiscoveryMessage(customerMessage(res.notice, '')); setTimeout(() => setDiscoveryMessage(''), 5000); }
       if (res.success && res.posts && res.posts.length > 0) {
         // Merge new posts into existing posts (avoid duplicates)
         setPosts(prev => {
@@ -483,6 +498,7 @@ const Competitors: React.FC = () => {
       }
     } catch (error) {
       setUpgrade(upgradeInfoOf(error));
+      if ((error as any)?.status === 429) { setDiscoveryMessage(customerMessage(error, '')); setTimeout(() => setDiscoveryMessage(''), 5000); }
       console.error('Failed to fetch posts for type:', type, error);
     } finally {
       setFetchingType(null);
@@ -553,7 +569,15 @@ const Competitors: React.FC = () => {
 
       <CompetitorInsights showLink={false} onLocked={onInsightsLocked} />
 
-      {upgrade && <UpgradePrompt className="mb-6" reason={upgrade.reason} feature={upgrade.feature} />}
+      {insightsLocked && !upgrade && (
+        <p className="mb-6 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-4 py-3 text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">
+          {LOCKED_NOTE.before}
+          <Link to="/trial-expired" className="rounded-md font-semibold text-[var(--gv-text-primary)] underline underline-offset-2 hover:text-[var(--gv-accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gv-accent)]">{LOCKED_NOTE.link}</Link>
+          {LOCKED_NOTE.after}
+        </p>
+      )}
+
+      {upgrade && <UpgradePrompt className="mb-6" reason={upgrade.reason} feature={upgrade.feature} {...competitorsUpgradeCopy(upgrade.reason)} />}
 
       {/* Discovery Message */}
       {discoveryMessage && (
@@ -790,30 +814,42 @@ const Competitors: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {competitors.map(comp => (
-              <div 
-                key={comp._id} 
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${isDarkMode ? 'bg-[#070A12] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}
+            {competitors.map(comp => {
+              const handle = comp.socialHandles?.instagram || '';
+              const action = listHandleAction({ handle, handleStatus: comp.handleStatus });
+              return (
+              <div
+                key={comp._id}
+                className={`flex w-full flex-col gap-1 rounded-lg border px-4 py-3 sm:w-auto sm:min-w-[300px] ${isDarkMode ? 'bg-[#070A12] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${isDarkMode ? 'bg-[#F5A623]/20 text-[#F5A623]' : 'bg-[#F5A623]/20 text-amber-700'}`}>
-                  {comp.name.charAt(0)}
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-sm font-bold ${isDarkMode ? 'bg-[#F5A623]/20 text-[#F5A623]' : 'bg-[#F5A623]/20 text-amber-700'}`}>
+                    {comp.name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className={`text-sm font-bold break-words ${theme.text}`}>{comp.name}</h3>
+                    <p className={`text-xs flex items-center gap-1 ${theme.textMuted}`}>
+                      {handle ? <><Instagram className="w-3 h-3" /> {handle}</> : <span>No Instagram handle yet</span>}
+                      {comp.location && <><MapPin className="w-3 h-3 ml-2" /> {comp.location}</>}
+                    </p>
+                    {handle && comp.handleStatus === 'suggested' && <p className={`text-xs ${theme.textMuted}`}>We found this handle. Confirm it so we can track them.</p>}
+                  </div>
+                  <button
+                    onClick={() => handleIgnoreCompetitor(comp._id, comp.name)}
+                    className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-900/30 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
+                    title="Ignore this competitor"
+                    aria-label={`Ignore ${comp.name}`}
+                  >
+                    <EyeOff className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className={`text-sm font-bold truncate ${theme.text}`}>{comp.name}</h3>
-                  <p className={`text-xs flex items-center gap-1 ${theme.textMuted}`}>
-                    {comp.socialHandles?.instagram && <><Instagram className="w-3 h-3" /> {comp.socialHandles.instagram}</>}
-                    {comp.location && <><MapPin className="w-3 h-3 ml-2" /> {comp.location}</>}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleIgnoreCompetitor(comp._id, comp.name)}
-                  className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-900/30 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
-                  title="Ignore this competitor"
-                >
-                  <EyeOff className="w-4 h-4" />
-                </button>
+                {handleNotes[comp._id] && <p role="status" className={`text-[13px] ${theme.text}`}>{handleNotes[comp._id]}</p>}
+                {!insightsLocked && (
+                  <HandleEditor competitorId={comp._id} competitorName={comp.name} handle={handle} action={action} onSaved={onHandleSaved} onLocked={onInsightsLocked} />
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiService } from '../services/api';
 import type { CompetitorInsightsResponse } from '../types';
-import { cardState, highlightsFor, linkLabel, statusText, trendLabel } from '../utils/competitorInsights';
+import HandleEditor, { SavedHandle } from './HandleEditor';
+import { cardState, handleAction, handleSavedNote, highlightsFor, lastCheckedLine, linkLabel, statusText, trendLabel } from '../utils/competitorInsights';
 
 const CARD = 'mb-6 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 sm:p-6';
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gv-accent)]';
@@ -24,6 +25,7 @@ const CompetitorInsights: React.FC<Props> = ({ showLink = true, onLocked }) => {
   const [res, setRes] = useState<CompetitorInsightsResponse | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const alive = useRef(true);
 
   const load = useCallback(async () => {
@@ -39,6 +41,17 @@ const CompetitorInsights: React.FC<Props> = ({ showLink = true, onLocked }) => {
       if (alive.current) setLoaded(true);
     }
   }, [onLocked]);
+
+  // The handle was saved: the row waits for the next weekly check, and says so.
+  const onSaved = useCallback((saved: SavedHandle) => {
+    setRes((r) => (r ? {
+      ...r,
+      competitors: (r.competitors || []).map((c) => (c.id === saved.id
+        ? { ...c, handle: saved.handle, handleStatus: 'confirmed' as const, status: 'waiting' as const }
+        : c)),
+    } : r));
+    setNotes((n) => ({ ...n, [saved.id]: handleSavedNote(saved) }));
+  }, []);
 
   useEffect(() => { alive.current = true; load(); return () => { alive.current = false; }; }, [load]);
 
@@ -96,13 +109,23 @@ const CompetitorInsights: React.FC<Props> = ({ showLink = true, onLocked }) => {
         <ul className="mt-4 divide-y divide-[var(--gv-border-subtle)] rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)]" aria-label="Competitors we look at">
           {competitors.map((c) => {
             const trend = trendLabel(c.trend);
+            const action = handleAction(c);
+            const status = statusText(c);
+            const checked = lastCheckedLine(c);
             return (
               <li key={c.id} className="px-3 py-2">
                 <div className="break-words text-[14px] font-medium leading-snug text-[var(--gv-text-primary)]">
                   {c.name}{c.handle ? <span className="font-normal text-[var(--gv-text-tertiary)]"> @{c.handle}</span> : null}
                 </div>
-                <div className={`text-[12.5px] ${TEXT2}`}>{statusText(c)}</div>
+                <div className={`text-[12.5px] ${TEXT2}`}>{status}</div>
+                {checked && checked !== status && <div className="text-[12.5px] text-[var(--gv-text-tertiary)]">{checked}</div>}
                 {trend && <div className="text-[12.5px] text-[var(--gv-text-tertiary)]">{trend}</div>}
+                {notes[c.id] && <p role="status" className="mt-1 text-[13px] text-[var(--gv-text-primary)]">{notes[c.id]}</p>}
+                {action && (
+                  <div className="mt-1">
+                    <HandleEditor competitorId={c.id} competitorName={c.name} handle={c.handle} action={action} onSaved={onSaved} onLocked={onLocked} />
+                  </div>
+                )}
               </li>
             );
           })}
