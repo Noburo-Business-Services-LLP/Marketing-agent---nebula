@@ -136,8 +136,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   // it was previously under a "More" heading, below Insights, which ranked a
   // headline feature under a junk drawer.
   const staffEntry = staffMenuEntry(user, Boolean(localStorage.getItem('csmReturnToken')));
-  // My plan is for customers, and for a CSM or agency owner while inside a client; staff accounts keep their own menu.
-  const showsMyPlan = isInsideClient(user) || Boolean(localStorage.getItem('csmReturnToken')) || (!!user && !user.staffRole && !user.isCsm && !isAgencyUser(user) && !isLapsedAgency(user));
+  // My plan is for customers and agency owners (who get a plan like any account), and for a CSM while inside a client; staff accounts keep their own menu.
+  const showsMyPlan = isInsideClient(user) || Boolean(localStorage.getItem('csmReturnToken')) || (!!user && !user.staffRole && !user.isCsm && !isLapsedAgency(user));
   const primaryNav = [
     ...(staffEntry?.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
     ...(user?.isCsm && !localStorage.getItem('csmReturnToken') ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),

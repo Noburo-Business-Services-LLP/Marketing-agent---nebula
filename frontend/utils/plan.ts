@@ -1,7 +1,7 @@
 /** Pure helpers for the My plan page: which sections to show, plain-word tags, the effort split and the refresh wording. */
 
 export type PlanSectionId = 'today' | 'customer' | 'channels' | 'roadmap' | 'mix' | 'first';
-export type PlanBannerState = 'building' | 'failed' | 'stale' | 'ready' | 'profile_incomplete' | 'free' | 'none';
+export type PlanBannerState = 'building' | 'failed' | 'stopped' | 'can_build' | 'stale' | 'ready' | 'profile_incomplete' | 'free' | 'none';
 
 export interface PlanClaim { text?: string | null; tag?: string }
 export interface PlanSection { id: PlanSectionId; title: string; kind: string }
@@ -79,15 +79,30 @@ export function planBanner(state: any): PlanBannerState {
   if (s.eligible === false && s.reason === 'free') return 'free';
   if (s.eligible === false && s.reason === 'profile_incomplete') return 'profile_incomplete';
   if (s.failed && !s.plan) return 'failed';
+  if (s.eligible && s.stopped && !s.plan) return 'stopped';
   if (s.plan && s.plan.stale) return 'stale';
   if (s.plan) return 'ready';
+  if (s.eligible === true) return 'can_build';
   return 'none';
+}
+
+/** The plain-words reason the last run stopped, or '' when there is none to show. */
+export function stoppedMessage(state: any): string {
+  const s = state || {};
+  return s.eligible && !s.running && s.stopped && typeof s.stopped.message === 'string' ? s.stopped.message : '';
+}
+
+/** Keep looking again while a plan is being built. One failed look does not end it. */
+export function shouldPoll(state: any): boolean {
+  return Boolean(state && state.running);
 }
 
 /** The words shown for each state. */
 export const BANNER_TEXT: Record<PlanBannerState, string> = {
   building: 'We are building your plan. This takes about a minute.',
   failed: 'We could not build your plan just now. Try again.',
+  stopped: 'We could not build your plan yet.',
+  can_build: 'This takes about a minute. It is free.',
   stale: 'This plan is a few weeks old. Refresh it to match your business as it is now.',
   ready: '',
   profile_incomplete: 'Your plan is made from your business profile. A few details are still missing.',

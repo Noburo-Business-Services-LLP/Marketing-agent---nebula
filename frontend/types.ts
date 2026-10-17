@@ -554,6 +554,7 @@ export interface PlanView {
   plan: { id: string; completedAt: string; stale: boolean; result: any } | null;
   running: boolean;
   failed: boolean;
+  stopped?: { message: string } | null;
   nextRefreshAt: string | null;
   eligible: boolean;
   reason: '' | 'free' | 'profile_incomplete' | 'not_eligible';

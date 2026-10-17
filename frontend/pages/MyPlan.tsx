@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { apiService } from '../services/api';
 import type { PlanView } from '../types';
-import { BANNER_TEXT, PHASE_TITLES, dayMonth, effortRows, planBanner, refreshLabel, sectionsOf, tagLabel } from '../utils/plan';
+import { BANNER_TEXT, PHASE_TITLES, dayMonth, effortRows, planBanner, refreshLabel, sectionsOf, shouldPoll, stoppedMessage, tagLabel } from '../utils/plan';
 
 const CARD = 'rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-4 sm:p-5';
 const BTN_MAIN = 'inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--gv-accent)] px-4 min-h-[40px] text-[13px] font-semibold text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)] disabled:opacity-50';
@@ -172,20 +172,23 @@ const MyPlan: React.FC = () => {
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [looked, setLooked] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     try { const r = await apiService.getPlan(); setView(r); setLoadError(''); return r; }
     catch { setLoadError(LOAD_ERROR); return null; }
+    finally { setLooked((n) => n + 1); }
   }, []);
 
   useEffect(() => { load(); return () => { if (timer.current) clearTimeout(timer.current); }; }, [load]);
-  // While the plan is being built, look again every few seconds.
+  // While the plan is being built, look again every few seconds. A failed look still counts as one, so polling goes on
+  // until the plan is ready, it fails for good, or the page is left.
   useEffect(() => {
-    if (!view?.running) return undefined;
+    if (!shouldPoll(view)) return undefined;
     timer.current = setTimeout(load, 5000);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [view, load]);
+  }, [view, looked, load]);
 
   const refresh = async () => {
     setBusy(true); setActionError('');
@@ -240,6 +243,25 @@ const MyPlan: React.FC = () => {
         </div>
       )}
 
+      {state === 'can_build' && (
+        <div className={CARD}>
+          <h2 className="text-[18px] font-semibold" style={INK}>Build my plan</h2>
+          <p className="mt-1 text-[14px]" style={QUIET}>{BANNER_TEXT.can_build}</p>
+          <button type="button" className={`${BTN_MAIN} mt-4`} onClick={refresh} disabled={busy}>{busy ? 'Starting…' : 'Build my plan'}</button>
+        </div>
+      )}
+
+      {stoppedMessage(view) && (
+        <div className={CARD}>
+          <p role="alert" className="flex items-start gap-2 text-[14px]" style={INK}><AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-[var(--gv-coral-text)]" aria-hidden />{stoppedMessage(view)}</p>
+          <p className="mt-2 text-[13.5px]" style={QUIET}>Add or fix your details, then come back and build it again.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className={BTN_MAIN} onClick={() => navigate('/settings?tab=business')}>Go to Business profile</button>
+            {!view.plan && <button type="button" className={BTN} onClick={refresh} disabled={busy}>{busy ? 'Starting…' : 'Build again'}</button>}
+          </div>
+        </div>
+      )}
+
       {state === 'profile_incomplete' && (
         <div className={CARD}>
           <p className="text-[14px]" style={INK}>{BANNER_TEXT.profile_incomplete}</p>
@@ -262,7 +284,7 @@ const MyPlan: React.FC = () => {
         </div>
       )}
 
-      {state === 'none' && !view.running && <div className={CARD}><p className="text-[14px]" style={QUIET}>{BANNER_TEXT.none}</p></div>}
+      {state === 'none' && !view.running && !stoppedMessage(view) && <div className={CARD}><p className="text-[14px]" style={QUIET}>{BANNER_TEXT.none}</p></div>}
 
       {state === 'stale' && (
         <div className={`${CARD} flex flex-wrap items-center justify-between gap-3`} style={{ background: 'var(--gv-accent-fill)' }}>
