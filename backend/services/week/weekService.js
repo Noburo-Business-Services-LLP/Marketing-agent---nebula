@@ -53,6 +53,18 @@ function defaultDeps() {
       }
       return out.sort((a, b) => a.day - b.day);
     },
+    // How many calendar rows exist for the week's days, whatever their status: the plan stands in only when this is 0.
+    calendarRowCountForWeek: async ({ user, weekStart }) => {
+      const days = weekDays(weekStart);
+      const months = [...new Set(days.map((d) => d.slice(0, 7)))];
+      const calendars = await Calendar().find({ userId: user._id, month: { $in: months } }).lean();
+      let n = 0;
+      for (const cal of calendars) {
+        const wanted = new Set(days.filter((d) => d.slice(0, 7) === cal.month).map(dayOfMonth));
+        for (const week of cal.weeks || []) for (const it of week.items || []) if (wanted.has(Number(it.day))) n += 1;
+      }
+      return n;
+    },
     // The plan's thirty days, repeated from the day the plan was made: the entries for this week's seven days.
     planCalendarForWeek: async ({ user, weekStart }) => {
       plans = plans || require('../plan/planService').createPlanService();
@@ -89,6 +101,14 @@ function defaultDeps() {
           { $set: { 'items.$.makingAt': at } }
         ).select('_id').lean();
         return !!r;
+      },
+      // Accounts with a post approved or being made since before `before` (a crash or a stuck run left it).
+      findStaleAccounts: async (before, fromWeek, limit) => {
+        const docs = await model().find({
+          weekStart: { $gte: fromWeek },
+          items: { $elemMatch: { $or: [{ status: 'approved', approvedAt: { $lt: before } }, { status: 'making', makingAt: { $lt: before } }] } }
+        }).select('userId').limit(limit * 3).lean();
+        return [...new Set(docs.map((d) => String(d.userId)))].slice(0, limit);
       },
       // Weeks (from `fromWeek` on) in which this account still has posts approved or being made.
       findOpen: (userId, fromWeek) => model().find({ userId, weekStart: { $gte: fromWeek }, 'items.status': { $in: ['approved', 'making'] } }).lean(),
@@ -159,20 +179,30 @@ function defaultDeps() {
     markFirstApproval: (userId, at) => require('../../models/User').updateOne(
       { _id: userId, 'setup.firstWeekApprovedAt': { $exists: false } }, { $set: { 'setup.firstWeekApprovedAt': at } }
     ),
+    loadUser: (id) => require('../../models/User').findById(id).lean(),
+    blockedAccounts: () => require('../backgroundGate').blockedAccountIds(),
     spendCheck: (action) => require('../spendGuard').check(action),
     alertOwner: (a) => require('../opsAlerts').notify(a),
     now: () => new Date()
   };
 }
 
-const languageOf = (user) => (user && user.businessProfile && user.businessProfile.language) || 'English';
-const POST_DONE = ['made', 'skipped'];
+// The display name of the account's content language (the same source the home screen uses), English when unset.
+function languageOf(user) {
+  const raw = user && user.businessProfile && user.businessProfile.contentLanguage;
+  if (!raw) return 'English';
+  try { return require('../contentCalendarService').normalizeLanguage(raw) || 'English'; } catch (e) { return 'English'; }
+}
+const MAX_ATTEMPTS = 3;
+const GAVE_UP_MESSAGE = 'We could not make this post. Please try again later or contact support.';
 
-function prefillFor(user, item) {
+// weekItemId and weekId let the create screen report back (markMade) which proposal item it made.
+function prefillFor(user, item, weekStart) {
+  const ids = { weekItemId: item.id, weekId: weekStart };
   if (item.kind === 'carousel') {
-    return { itemId: item.id, target: 'carousel', route: '/campaigns', prefill: { mode: 'carousel', topic: item.topic, platform: item.channel || 'instagram', language: languageOf(user) } };
+    return { itemId: item.id, target: 'carousel', route: '/campaigns', prefill: { mode: 'carousel', topic: item.topic, platform: item.channel || 'instagram', language: languageOf(user), ...ids } };
   }
-  return { itemId: item.id, target: 'video', route: '/reels', prefill: { idea: item.topic, language: languageOf(user) } };
+  return { itemId: item.id, target: 'video', route: '/reels', prefill: { idea: item.topic, language: languageOf(user), ...ids } };
 }
 
 function createWeekService(given = {}) {
@@ -188,10 +218,20 @@ function createWeekService(given = {}) {
     const existing = await deps.store.find(q);
     if (existing) return { proposal: existing, eligible: true, reason: '' };
 
-    const [pool, cadence, calendarItems, planCalendar] = await Promise.all([
-      deps.pool(user._id), deps.cadence(user), deps.calendarItemsForWeek({ user, weekStart: q.weekStart }), deps.planCalendarForWeek({ user, weekStart: q.weekStart })
+    const [pool, cadence, calendarItems] = await Promise.all([
+      deps.pool(user._id), deps.cadence(user), deps.calendarItemsForWeek({ user, weekStart: q.weekStart })
     ]);
-    if (!(calendarItems && calendarItems.length) && !(planCalendar && planCalendar.length)) return { proposal: null, eligible: false, reason: 'no_plan' };
+    // The plan stands in only when the account has no calendar rows at all for these days. Rows that exist but are
+    // all made, rejected or generated mean the week is done: nothing is proposed and nothing is charged.
+    let planCalendar = [];
+    if (!(calendarItems && calendarItems.length)) {
+      const rows = deps.calendarRowCountForWeek ? await deps.calendarRowCountForWeek({ user, weekStart: q.weekStart }) : 0;
+      if (rows > 0) {
+        return { proposal: { ...q, status: 'proposed', items: [], scaledDown: false, removed: { videos: 0, carousels: 0, posts: 0 }, createdAt: nowOf(now) }, eligible: true, reason: 'nothing_left' };
+      }
+      planCalendar = await deps.planCalendarForWeek({ user, weekStart: q.weekStart });
+      if (!(planCalendar && planCalendar.length)) return { proposal: null, eligible: false, reason: 'no_plan' };
+    }
 
     const built = weekProposal({ planCalendar, calendarItems, cadence, pool, costs: deps.costs, weekStart: q.weekStart, language: languageOf(user) });
     const shell = { ...q, status: 'proposed', items: built.items.map((i) => ({ ...i, status: 'proposed', ref: null, error: null, madeAt: null })), scaledDown: built.scaledDown, removed: built.removed, createdAt: nowOf(now) };
@@ -239,7 +279,13 @@ function createWeekService(given = {}) {
     if (item.status === 'made') return { ok: true, ref: item.ref };
     const own = token === undefined ? item.makingAt : token;
     const settle = (patch) => deps.store.settleItem(q, item.id, own, patch);
-    const fail = async (error) => { const ok = await settle({ status: 'failed', error }); return ok ? { ok: false, error } : { ok: false, lost: true }; };
+    // After MAX_ATTEMPTS failed attempts the post shows 'gave_up' and no longer takes "Try again". A shortage of
+    // Quarks ('no_pool') and a failed refund keep their own reasons: the first points to top-up, the second to staff.
+    const fail = async (error) => {
+      const shown = (item.attempts || 0) >= MAX_ATTEMPTS && error !== 'no_pool' && error !== 'refund_failed' ? 'gave_up' : error;
+      const ok = await settle({ status: 'failed', error: shown });
+      return ok ? { ok: false, error: shown } : { ok: false, lost: true };
+    };
 
     const ctx = await deps.calendarFor({ user, item, weekStart: q.weekStart });
     if (!ctx) return fail('no_calendar');
@@ -300,27 +346,30 @@ function createWeekService(given = {}) {
   }
 
   // Approve only claims: proposed -> approved, atomically, and returns at once. Posts are made by runApprovedPosts.
-  async function approve({ user, itemIds, now, weekStart }) {
+  async function approve({ user, itemIds, now, weekStart, stampFirst = true }) {
     const doc = await deps.store.find(keyOf(user, now, weekStart));
-    if (!doc || doc.status === 'skipped') return { proposal: doc || null, started: 0, prefills: [] };
+    if (!doc || doc.status === 'skipped') return { proposal: doc || null, started: 0, prefills: [], gaveUp: [] };
     const q = keyOf(user, now, doc.weekStart);
     const at = nowOf(now);
     const selected = doc.items.filter((i) => !Array.isArray(itemIds) || itemIds.includes(i.id));
     const prefills = [];
     let started = 0;
     let claimed = 0;
+    const gaveUp = [];
     for (const it of selected) {
+      if (it.status === 'failed' && it.error === 'gave_up') { gaveUp.push(it.id); continue; }
       // Failed posts are retried; everything else must still be proposed. One conditional update decides who owns it.
       const froms = it.kind === 'post' ? ['proposed', 'failed'] : ['proposed'];
       let won = false;
       for (const from of froms) { if (await deps.store.claimItem(q, it.id, from, 'approved', { approvedAt: at })) { won = true; break; } }
       if (!won) continue;
       claimed += 1;
-      if (it.kind === 'post') started += 1; else prefills.push(prefillFor(user, it));
+      if (it.kind === 'post') started += 1; else prefills.push(prefillFor(user, it, q.weekStart));
     }
     if (doc.status === 'proposed') await deps.store.setStatus(q, 'approved');
-    if (claimed > 0 && deps.markFirstApproval) await deps.markFirstApproval(user._id, at);
-    return { proposal: await deps.store.find(q), started, prefills };
+    // Only the customer's own approval counts for setup: a CSM or agency pass passes stampFirst: false.
+    if (claimed > 0 && stampFirst && deps.markFirstApproval) await deps.markFirstApproval(user._id, at);
+    return { proposal: await deps.store.find(q), started, prefills, gaveUp, message: gaveUp.length && !claimed ? GAVE_UP_MESSAGE : undefined };
   }
 
   // Makes every approved post, one at a time (each is a paid image), across this account's open weeks of the last
@@ -341,6 +390,9 @@ function createWeekService(given = {}) {
         if (it.status === 'approved') mine = await deps.store.claimItem(q, it.id, 'approved', 'making', { makingAt: at });
         else if (it.status === 'making' && it.makingAt && new Date(it.makingAt) < before && deps.store.claimStale) mine = await deps.store.claimStale(q, it.id, before, at);
         if (!mine) continue;
+        // One more attempt has started (counted on the post, written only while this runner owns it).
+        it.attempts = (it.attempts || 0) + 1;
+        try { await deps.store.settleItem(q, it.id, at, { attempts: it.attempts }); } catch (e) { console.error('[week] could not count the attempt:', e && e.message); }
         let out;
         try { out = await makePost({ user, item: it, token: at, weekStart: doc.weekStart, now }); } catch (e) {
           // The post stays 'making'; a later run takes it over after ten minutes, without a second charge.
@@ -380,7 +432,50 @@ function createWeekService(given = {}) {
     return { ok: true, proposal: await deps.store.find(q) };
   }
 
-  return { getOrCreate, approve, runApprovedPosts, change, skipWeek, makePost };
+  // The create screen reports back a carousel or video it made: approved -> made, once, with the id it made.
+  async function markMade({ user, itemId, ref, now, weekStart }) {
+    const id = String(itemId || '');
+    const made = String(ref === undefined || ref === null ? '' : ref).trim().slice(0, 100);
+    if (!id || !made) return { ok: false, error: 'bad_request' };
+    const doc = await deps.store.find(keyOf(user, now, weekStart));
+    const it = doc && doc.items.find((i) => i.id === id);
+    if (!it || it.kind === 'post') return { ok: false, error: 'not_found' };
+    if (it.status === 'made') return { ok: true, proposal: doc }; // already recorded: nothing changes
+    if (it.status !== 'approved') return { ok: false, error: 'not_approved' };
+    const q = keyOf(user, now, doc.weekStart);
+    const ok = await deps.store.claimItem(q, id, 'approved', 'made', { ref: made, madeAt: nowOf(now), error: null });
+    if (!ok) {
+      const again = await deps.store.find(q);
+      const now2 = again && again.items.find((i) => i.id === id);
+      return now2 && now2.status === 'made' ? { ok: true, proposal: again } : { ok: false, error: 'not_approved' };
+    }
+    return { ok: true, proposal: await deps.store.find(q) };
+  }
+
+  // Crash recovery without anyone opening Home: accounts with posts approved or being made for over ten minutes get
+  // their run, one account at a time. Gated accounts and accounts that no longer qualify are left alone.
+  async function recoverOpenWeeks({ limit = 50, now } = {}) {
+    const at = nowOf(now);
+    const before = new Date(at.getTime() - STALE_MS);
+    const fromWeek = weekStartOf(new Date(at.getTime() - 14 * DAY_MS));
+    const ids = (await deps.store.findStaleAccounts(before, fromWeek, limit)) || [];
+    let blocked = [];
+    try { blocked = deps.blockedAccounts ? await deps.blockedAccounts() : []; } catch (e) { return { ran: 0, skipped: ids.length }; }
+    let ran = 0; let skipped = 0;
+    for (const id of ids) {
+      if (blocked.some((b) => String(b) === String(id))) { skipped += 1; continue; }
+      try {
+        const user = await deps.loadUser(id);
+        if (!user || !shouldHavePlan(user)) { skipped += 1; continue; }
+        const out = await runApprovedPosts({ user, now: at });
+        ran += 1;
+        if (out.busy) break;
+      } catch (e) { console.error('[week] recovery failed for one account:', e && e.message); skipped += 1; }
+    }
+    return { ran, skipped };
+  }
+
+  return { getOrCreate, approve, runApprovedPosts, change, skipWeek, makePost, markMade, recoverOpenWeeks };
 }
 
 module.exports = { createWeekService, weekCosts, defaultCosts: weekCosts, defaultDeps };

@@ -60,10 +60,11 @@ test('GET /api/week returns the proposal for an eligible account and an explanat
   assert.strictEqual(res.body.reason, 'empty');
 });
 
-test('GET /api/week runs approved posts in the background only when some are approved or making, and never waits', async () => {
-  for (const st of ['approved', 'making']) {
+test('GET /api/week runs approved posts in the background only when some are approved or stuck making, and never waits', async () => {
+  const old = new Date(Date.now() - 11 * 60000);
+  for (const it of [item('approved'), item('making', { makingAt: old })]) {
     const week = fakeWeek({
-      getOrCreate: async () => ({ proposal: proposal('approved', [item(st)]), eligible: true, reason: '' }),
+      getOrCreate: async () => ({ proposal: proposal('approved', [it]), eligible: true, reason: '' }),
       runApprovedPosts: async (a) => { week.calls.run.push(a); return new Promise(() => {}); }
     });
     const res = await call(mk({ week }), 'get', '/', { user: paying() });
@@ -301,4 +302,45 @@ test('the public user JSON carries setup dates for the frontend', () => {
   const j = u.toPublicJSON();
   assert.deepStrictEqual(j.setup, { planOpenedAt: d, firstWeekApprovedAt: undefined });
   assert.deepStrictEqual(new User({ email: 'a@b.co' }).toPublicJSON().setup, { planOpenedAt: undefined, firstWeekApprovedAt: undefined });
+});
+
+test('GET /api/week does not start another runner for a post that is merely being made', async () => {
+  const fresh = fakeWeek({ getOrCreate: async () => ({ proposal: proposal('approved', [item('making', { makingAt: new Date(Date.now() - 2 * 60000) })]), eligible: true, reason: '' }) });
+  const res = await call(mk({ week: fresh }), 'get', '/', { user: paying() });
+  assert.strictEqual(res.code, 200);
+  assert.strictEqual(fresh.calls.run.length, 0);
+});
+
+test('GET /api/week still answers 200 when the background gate cannot be read, and skips the run', async () => {
+  const w = fakeWeek({ getOrCreate: async () => ({ proposal: proposal('approved', [item('approved')]), eligible: true, reason: '' }) });
+  const res = await quiet(() => call(mk({ week: w, gate: async () => { throw new Error('db'); } }), 'get', '/', { user: paying() }));
+  assert.strictEqual(res.code, 200);
+  assert.strictEqual(w.calls.run.length, 0);
+});
+
+test('approve stamps the first week only for the customer own session', async () => {
+  for (const [req, expected] of [[{ user: paying() }, true], [{ user: paying(), actingCsm: true }, false], [{ user: paying(), actingAgency: true }, false]]) {
+    const w = fakeWeek();
+    await call(mk({ week: w }), 'post', '/approve', { ...req, body: {} });
+    assert.strictEqual(w.calls.approve[0].stampFirst, expected);
+  }
+});
+
+test('approve says plainly when every selected post was given up on', async () => {
+  const w = fakeWeek({ approve: async () => ({ proposal: proposal('approved', [item('failed', { error: 'gave_up' })]), started: 0, prefills: [], gaveUp: ['x'], message: 'We could not make this post. Please try again later or contact support.' }) });
+  const res = await call(mk({ week: w }), 'post', '/approve', { user: paying(), body: {} });
+  assert.strictEqual(res.code, 409);
+  assert.match(res.body.message, /contact support/);
+});
+
+test('POST /api/week/items/:id/made validates the body and maps the answer; staff are refused', async () => {
+  const calls = [];
+  const w = fakeWeek({ markMade: async (a) => { calls.push(a); return a.itemId === 'ok' ? { ok: true, proposal: proposal('approved') } : { ok: false, error: 'not_approved' }; } });
+  const r = mk({ week: w });
+  assert.strictEqual((await call(r, 'post', '/items/:id/made', { user: paying(), params: { id: 'ok' }, body: {} })).code, 400);
+  assert.strictEqual((await call(r, 'post', '/items/:id/made', { user: paying(), params: { id: 'ok' }, body: { ref: 'x'.repeat(101) } })).code, 400);
+  assert.strictEqual((await call(r, 'post', '/items/:id/made', { user: paying(), params: { id: 'ok' }, body: { ref: 'job1', weekId: '2026-10-12' } })).code, 200);
+  assert.deepStrictEqual([calls[0].itemId, calls[0].ref, calls[0].weekStart], ['ok', 'job1', '2026-10-12']);
+  assert.strictEqual((await call(r, 'post', '/items/:id/made', { user: paying(), params: { id: 'no' }, body: { ref: 'job1' } })).code, 409);
+  assert.strictEqual((await call(r, 'post', '/items/:id/made', { user: paying({ staffRole: 'admin' }), params: { id: 'ok' }, body: { ref: 'job1' } })).code, 403);
 });

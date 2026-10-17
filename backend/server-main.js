@@ -781,6 +781,13 @@ const startServer = async () => {
       console.warn('Content calendar scheduler failed to start:', schedulerError.message);
     }
 
+    // Pick up weekly posts a restart left half-made (off with ENABLE_WEEK_RECOVERY=off)
+    try {
+      require('./services/week/weekRecovery').startWeekRecovery();
+    } catch (schedulerError) {
+      console.warn('Weekly post recovery failed to start:', schedulerError.message);
+    }
+
     // Start automatic performance-tracking scheduler (24h/3d/7d/2w/1m checks)
     try {
       startPerformanceTrackerScheduler();

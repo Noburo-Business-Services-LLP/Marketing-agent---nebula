@@ -20,6 +20,7 @@ function world({ pool = 2000, genFails = false, deductOk = true, refundOk = true
       create: async (doc) => { store.set(`${doc.userId}:${doc.weekStart}`, doc); return doc; },
       claimItem: async (q, itemId, from, to, extra = {}) => { const d = store.get(`${q.userId}:${q.weekStart}`); const it = d.items.find((i) => i.id === itemId); if (!it || it.status !== from) return false; it.status = to; Object.assign(it, extra); return true; },
       claimStale: async (q, itemId, before, at) => { const d = store.get(`${q.userId}:${q.weekStart}`); const it = d.items.find((i) => i.id === itemId); if (!it || it.status !== 'making' || !(new Date(it.makingAt) < before)) return false; it.makingAt = at; return true; },
+      findStaleAccounts: async (before, fromWeek, limit) => [...new Set([...store.values()].filter((d) => d.weekStart >= fromWeek && d.items.some((i) => (i.status === 'approved' && new Date(i.approvedAt) < before) || (i.status === 'making' && new Date(i.makingAt) < before))).map((d) => String(d.userId)))].slice(0, limit),
       findOpen: async (userId, fromWeek) => [...store.values()].filter((d) => String(d.userId) === String(userId) && d.weekStart >= fromWeek && d.items.some((i) => ['approved', 'making'].includes(i.status))),
       settleItem: async (q, itemId, token, patch) => { const d = store.get(`${q.userId}:${q.weekStart}`); const it = d && d.items.find((i) => i.id === itemId); if (!it || it.status !== 'making' || new Date(it.makingAt).getTime() !== new Date(token).getTime()) return false; Object.assign(it, patch); return true; },
       flipCharged: async (q, itemId, token, from, to, extra = {}) => { if (log.flipFails && to === true && from === false) throw new Error('db down'); const d = store.get(`${q.userId}:${q.weekStart}`); const it = d && d.items.find((i) => i.id === itemId); if (!it || it.status !== 'making' || new Date(it.makingAt).getTime() !== new Date(token).getTime() || !!it.charged !== from) return false; it.charged = to; Object.assign(it, extra); return true; },
@@ -199,8 +200,8 @@ test('the carousel and video prefills carry the idea', async () => {
   const out = await ar(svc);
   const car = out.prefills.find((p) => p.target === 'carousel');
   const vid = out.prefills.find((p) => p.target === 'video');
-  assert.deepStrictEqual(car, { itemId: car.itemId, target: 'carousel', route: '/campaigns', prefill: { mode: 'carousel', topic: 'Five cakes', platform: 'instagram', language: 'English' } });
-  assert.deepStrictEqual(vid.prefill, { idea: 'Behind the oven', language: 'English' });
+  assert.deepStrictEqual(car, { itemId: car.itemId, target: 'carousel', route: '/campaigns', prefill: { mode: 'carousel', topic: 'Five cakes', platform: 'instagram', language: 'English', weekItemId: car.itemId, weekId: '2026-10-12' } });
+  assert.deepStrictEqual(vid.prefill, { idea: 'Behind the oven', language: 'English', weekItemId: vid.itemId, weekId: '2026-10-12' });
   assert.strictEqual(vid.route, '/reels');
 });
 
@@ -360,4 +361,113 @@ test('M1: swap writes the topic and checks proposed in one step', async () => {
   await w.svc.approve({ user: user(), now: NOW, itemIds: [id] });
   assert.strictEqual((await w.svc.change({ user: user(), itemId: id, action: 'swap', topic: 'Late', now: NOW })).ok, false);
   assert.notStrictEqual(posts(w)[0].topic, 'Late');
+});
+
+test('I1: rows that exist but are all made or rejected mean the week is done, not a plan fallback', async () => {
+  const w = world();
+  const svc = createWeekService({ ...w.deps, calendarItemsForWeek: async () => [], calendarRowCountForWeek: async () => 5, planCalendarForWeek: async () => [{ day: 1, pillar: 'P', format: 'image post', hook: { text: 'plan idea' } }] });
+  const r = await svc.getOrCreate({ user: user(), now: NOW });
+  assert.strictEqual(r.reason, 'nothing_left');
+  assert.strictEqual(r.eligible, true);
+  assert.strictEqual(r.proposal.items.length, 0);
+  assert.strictEqual(w.store.size, 0);
+});
+
+test('I1: with no calendar rows at all the plan still stands in', async () => {
+  const w = world();
+  const svc = createWeekService({ ...w.deps, calendarItemsForWeek: async () => [], calendarRowCountForWeek: async () => 0, planCalendarForWeek: async () => [{ day: 1, pillar: 'P', format: 'image post', hook: { text: 'plan idea' } }] });
+  const r = await svc.getOrCreate({ user: user(), now: NOW });
+  assert.strictEqual(r.proposal.items[0].source, 'plan');
+});
+
+const carousel = (w) => [...w.store.values()][0].items.find((i) => i.kind === 'carousel');
+
+test('I2: markMade moves an approved carousel to made once, keeps the first ref, and stores nothing else', async () => {
+  const w = world();
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  await w.svc.approve({ user: user(), now: NOW });
+  const c = carousel(w);
+  const before = { ...c };
+  const r = await w.svc.markMade({ user: user(), itemId: c.id, ref: 'job9', now: NOW });
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual([c.status, c.ref], ['made', 'job9']);
+  assert.strictEqual(c.topic, before.topic);
+  const again = await w.svc.markMade({ user: user(), itemId: c.id, ref: 'other', now: NOW });
+  assert.strictEqual(again.ok, true);
+  assert.strictEqual(c.ref, 'job9', 'idempotent: the first ref stands');
+});
+
+test('I2: markMade refuses a proposed or skipped item, a post, an unknown item and another account', async () => {
+  const w = world();
+  const { proposal } = await w.svc.getOrCreate({ user: user(), now: NOW });
+  const c = carousel(w);
+  assert.strictEqual((await w.svc.markMade({ user: user(), itemId: c.id, ref: 'j', now: NOW })).ok, false, 'proposed');
+  await w.svc.change({ user: user(), itemId: c.id, action: 'skip', now: NOW });
+  assert.strictEqual((await w.svc.markMade({ user: user(), itemId: c.id, ref: 'j', now: NOW })).ok, false, 'skipped');
+  assert.strictEqual((await w.svc.markMade({ user: user(), itemId: proposal.items[0].id, ref: 'j', now: NOW })).ok, false, 'a post is made by the runner');
+  assert.strictEqual((await w.svc.markMade({ user: user(), itemId: 'nope', ref: 'j', now: NOW })).ok, false);
+  assert.strictEqual((await w.svc.markMade({ user: user(), itemId: c.id, ref: '', now: NOW })).ok, false);
+  await w.svc.approve({ user: user(), now: NOW });
+  assert.strictEqual((await w.svc.markMade({ user: { ...user(), _id: 'other' }, itemId: c.id, ref: 'j', now: NOW })).ok, false, 'another account has no such item');
+});
+
+test('M5: a post that failed three times shows gave_up and approve refuses it with a plain message', async () => {
+  const w = world({ genFails: true });
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  for (let n = 0; n < 3; n += 1) await ar(w.svc);
+  const ps = posts(w);
+  assert.ok(ps.every((i) => i.error === 'gave_up' && i.attempts === 3));
+  const gen = w.log.generate.length;
+  const out = await w.svc.approve({ user: user(), now: NOW, itemIds: ps.map((i) => i.id) });
+  assert.strictEqual(out.started, 0);
+  assert.match(out.message, /contact support/);
+  assert.strictEqual(w.log.generate.length, gen);
+});
+
+test('M5: a shortage of Quarks keeps its own reason, however many times', async () => {
+  const w = world({ deductOk: false });
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  for (let n = 0; n < 4; n += 1) await ar(w.svc);
+  assert.ok(posts(w).every((i) => i.error === 'no_pool'));
+});
+
+test('M4: the first-approval stamp can be turned off for a CSM or agency pass', async () => {
+  const w = world();
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  await w.svc.approve({ user: user(), now: NOW, stampFirst: false });
+  assert.strictEqual(w.log.firstApprovalCalls, undefined);
+});
+
+test('M7: recovery runs the accounts that have posts stuck for over ten minutes, one at a time, and skips gated ones', async () => {
+  const w = world();
+  const loaded = [];
+  const svc = createWeekService({ ...w.deps, loadUser: async (id) => { loaded.push(id); return user(); }, blockedAccounts: async () => [] });
+  await svc.getOrCreate({ user: user(), now: NOW });
+  await svc.approve({ user: user(), now: NOW });
+  const later = new Date(NOW.getTime() + 11 * 60000);
+  const r = await svc.recoverOpenWeeks({ now: later });
+  assert.strictEqual(r.ran, 1);
+  assert.ok(posts(w).every((i) => i.status === 'made'));
+  // nothing stale: nobody is run
+  const w2 = world();
+  const svc2 = createWeekService({ ...w2.deps, loadUser: async () => user(), blockedAccounts: async () => [] });
+  await svc2.getOrCreate({ user: user(), now: NOW });
+  await svc2.approve({ user: user(), now: NOW });
+  assert.strictEqual((await svc2.recoverOpenWeeks({ now: new Date(NOW.getTime() + 2 * 60000) })).ran, 0);
+  // gated
+  const w3 = world();
+  const svc3 = createWeekService({ ...w3.deps, loadUser: async () => user(), blockedAccounts: async () => ['u1'] });
+  await svc3.getOrCreate({ user: user(), now: NOW });
+  await svc3.approve({ user: user(), now: NOW });
+  const g = await svc3.recoverOpenWeeks({ now: later });
+  assert.deepStrictEqual([g.ran, g.skipped], [0, 1]);
+  assert.strictEqual(w3.log.generate.length, 0);
+});
+
+test('M13: prefills use the account content language by its display name', async () => {
+  const w = world();
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  const u = user({ businessProfile: { ...user().businessProfile, contentLanguage: 'tamil_english_mix' } });
+  const out = await w.svc.approve({ user: u, now: NOW });
+  assert.strictEqual(out.prefills[0].prefill.language, 'Tamil + English Mix');
 });

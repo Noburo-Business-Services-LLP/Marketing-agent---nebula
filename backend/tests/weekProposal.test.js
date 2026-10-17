@@ -49,3 +49,9 @@ test('nothing at all (no calendar, no plan) is an empty week, not an error', () 
   assert.strictEqual(p.empty, true);
   assert.deepStrictEqual(p.counts, { posts: 0, carousels: 0, videos: 0 });
 });
+
+test('a plan entry with no hook gets its pillar name as the topic, never a blank', () => {
+  const planCalendar = [{ day: 1, pillar: 'Behind the oven', format: 'image post', hook: null }, { day: 2, pillar: 'Seasonal', format: 'image post', hook: { text: '' } }];
+  const p = weekProposal({ planCalendar, calendarItems: [], cadence: { reelsPerWeek: 1 }, pool: 5000, costs, weekStart: '2026-10-12' });
+  assert.deepStrictEqual(p.items.map((i) => i.topic), ['Behind the oven', 'Seasonal']);
+});

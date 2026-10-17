@@ -12,7 +12,7 @@ const fromCalendar = (items) => items.map((c) => ({
 }));
 
 const fromPlan = (entries) => entries.map((e) => ({
-  kind: kindOf(e.format), topic: (e.hook && e.hook.text) || '', channel: null, pillar: e.pillar || null, source: 'plan',
+  kind: kindOf(e.format), topic: (e.hook && e.hook.text) || e.pillar || '', channel: null, pillar: e.pillar || null, source: 'plan',
 }));
 
 const PLURAL = { post: 'posts', carousel: 'carousels', video: 'videos' };

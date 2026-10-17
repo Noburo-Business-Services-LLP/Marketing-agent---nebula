@@ -20,7 +20,13 @@ const readLimiter = makeLimiter(600, 'You have sent too many requests. Please tr
 // Unset or anything but "off" means on.
 const weekIsOff = () => String(process.env.ENABLE_WEEKLY_PROPOSAL || '').trim().toLowerCase() === 'off';
 const isStaff = (user) => Boolean(user && (user.staffRole || user.isCsm));
-const hasOpenPosts = (proposal) => Boolean(proposal && Array.isArray(proposal.items) && proposal.items.some((i) => i && (i.status === 'approved' || i.status === 'making')));
+const STALE_MS = 10 * 60 * 1000;
+// A page load starts a run only when there is something to make: an approved post, or one left 'making' for over ten
+// minutes. A post that is merely being made right now must not start a parallel runner on every poll.
+const needsRun = (proposal, now = Date.now()) => Boolean(proposal && Array.isArray(proposal.items) && proposal.items.some((i) => i && i.kind === 'post'
+  && (i.status === 'approved' || (i.status === 'making' && i.makingAt && now - new Date(i.makingAt).getTime() > STALE_MS))));
+// Only the customer's own session counts for setup steps, not a CSM, agency or staff pass.
+const isOwnSession = (req) => !req.actingCsm && !req.actingAgency && !req.user.staffRole && !req.user.isCsm;
 
 function createWeekRouter(impl = {}) {
   const router = express.Router();
@@ -58,7 +64,12 @@ function createWeekRouter(impl = {}) {
     const out = await svc.getOrCreate({ user: req.user });
     const proposal = out.proposal || null;
     // A crash in the middle of a run is picked up again here.
-    if (out.eligible && hasOpenPosts(proposal) && !(await blocked(userId))) run(svc, req.user);
+    if (out.eligible && needsRun(proposal)) {
+      // If the gate cannot be read the run is skipped (a later load tries again); the page itself still loads.
+      let skip = true;
+      try { skip = await blocked(userId); } catch (e) { console.error('[week] background gate unreadable, run skipped:', e && e.message); }
+      if (!skip) run(svc, req.user);
+    }
     return { status: 200, json: { success: true, eligible: Boolean(out.eligible), reason: out.reason || '', proposal, topUp: out.reason === 'empty' } };
   }));
 
@@ -67,8 +78,9 @@ function createWeekRouter(impl = {}) {
     if (await blocked(userId)) return { status: 403, json: { success: false, message: 'This account is paused, so posts cannot be made right now.' } };
     const ids = req.body && req.body.itemIds;
     const itemIds = Array.isArray(ids) ? ids.filter((x) => typeof x === 'string').slice(0, 50) : undefined;
-    const out = await svc.approve({ user: req.user, itemIds });
-    if ((out.started > 0) || hasOpenPosts(out.proposal)) run(svc, req.user);
+    const out = await svc.approve({ user: req.user, itemIds, stampFirst: isOwnSession(req) });
+    if (out.message && !out.started && !(out.prefills && out.prefills.length)) return { status: 409, json: { success: false, message: out.message, proposal: out.proposal || null } };
+    if ((out.started > 0) || needsRun(out.proposal)) run(svc, req.user);
     return { status: 200, json: { success: true, proposal: out.proposal || null, prefills: out.prefills || [] } };
   }, { write: true }));
 
@@ -80,6 +92,16 @@ function createWeekRouter(impl = {}) {
     if (out && out.ok) return { status: 200, json: { success: true, proposal: out.proposal || null } };
     if (out && out.error === 'topic_required') return { status: 400, json: { success: false, message: 'Write the topic you want instead.' } };
     return { status: 409, json: { success: false, message: 'That post can no longer be changed.' } };
+  }, { write: true }));
+
+  // The create screen reports back a carousel or video it made, so the card stops offering it again.
+  router.post('/items/:id/made', protect, writeLimiter, handle(async (svc, req) => {
+    const ref = req.body && req.body.ref;
+    if (typeof ref !== 'string' || !ref.trim() || ref.length > 100) return { status: 400, json: { success: false, message: 'Tell us which one was made.' } };
+    const weekStart = req.body && typeof req.body.weekId === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.body.weekId) ? req.body.weekId : undefined;
+    const out = await svc.markMade({ user: req.user, itemId: req.params.id, ref: ref.trim(), weekStart });
+    if (out && out.ok) return { status: 200, json: { success: true, proposal: out.proposal || null } };
+    return { status: 409, json: { success: false, message: 'That item cannot be marked as made.' } };
   }, { write: true }));
 
   router.post('/skip', protect, writeLimiter, handle(async (svc, req) => {
