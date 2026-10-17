@@ -51,6 +51,8 @@
   "pages/MyPlan.tsx",
   "utils/plan.ts",
   "components/ThisWeekCard.tsx",
+  "components/CompetitorInsights.tsx",
+  "utils/competitorInsights.ts",
   "components/SetupCard.tsx",
   "utils/week.ts",
   "utils/setup.ts",

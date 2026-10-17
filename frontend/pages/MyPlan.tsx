@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { apiService } from '../services/api';
+import CompetitorInsights from '../components/CompetitorInsights';
 import type { PlanView } from '../types';
 import { BANNER_TEXT, PHASE_TITLES, dayMonth, effortRows, planBanner, refreshLabel, sectionsOf, shouldPoll, stoppedMessage, tagLabel } from '../utils/plan';
 
@@ -59,14 +60,16 @@ const Split: React.FC<{ organic: number; paid: number }> = ({ organic, paid }) =
 );
 
 /** The finished plan, section by section. Shared by the page and nothing else. */
-const PlanBody: React.FC<{ view: PlanView }> = ({ view }) => {
+const PlanBody: React.FC<{ view: PlanView; showCompetitors?: boolean }> = ({ view, showCompetitors }) => {
   const p = view.plan?.result?.plan || {};
   const rows = effortRows(view.plan);
   const roleOf = (name: string) => (p.channels || []).find((c: any) => c.channel === name)?.role;
   const channelNames: string[] = Array.from(new Set<string>([...(p.channels || []).map((c: any) => String(c.channel)), ...rows.map((r) => r.channel)]));
+  const sections = sectionsOf(view.plan);
+  const hasRoadmap = sections.some((x) => x.id === 'roadmap');
   return (
     <>
-      {sectionsOf(view.plan).map((s) => {
+      {sections.map((s) => {
         if (s.id === 'today') return (
           <Section key={s.id} id={s.id} title={s.title}>
             <Line c={p.promise} big />
@@ -121,7 +124,8 @@ const PlanBody: React.FC<{ view: PlanView }> = ({ view }) => {
           </Section>
         );
         if (s.id === 'roadmap') return (
-          <Section key={s.id} id={s.id} title={s.title}>
+          <React.Fragment key={s.id}>
+          <Section id={s.id} title={s.title}>
             <div className="grid gap-3 md:grid-cols-3">
               {(p.roadmap || []).map((r: any, i: number) => (
                 <div key={i} className="rounded-lg border border-[var(--gv-border-subtle)] p-3 sm:p-4 space-y-3 min-w-0">
@@ -133,6 +137,8 @@ const PlanBody: React.FC<{ view: PlanView }> = ({ view }) => {
               ))}
             </div>
           </Section>
+          {showCompetitors && <CompetitorInsights />}
+          </React.Fragment>
         );
         if (s.id === 'mix') {
           const counts = new Map<string, number>();
@@ -162,6 +168,7 @@ const PlanBody: React.FC<{ view: PlanView }> = ({ view }) => {
           </Section>
         );
       })}
+      {showCompetitors && !hasRoadmap && <CompetitorInsights />}
     </>
   );
 };
@@ -292,7 +299,7 @@ const MyPlan: React.FC = () => {
         </div>
       )}
 
-      {view.plan && <PlanBody view={view} />}
+      {view.plan && <PlanBody view={view} showCompetitors={state === 'ready'} />}
     </div>
   );
 };

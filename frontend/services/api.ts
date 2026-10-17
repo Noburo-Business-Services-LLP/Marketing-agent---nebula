@@ -1,4 +1,4 @@
-import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply, WeekResponse, WeekWriteResponse, SetupResponse } from '../types';
+import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply, WeekResponse, WeekWriteResponse, CompetitorInsightsResponse, SetupResponse } from '../types';
 import { apiErrorFrom } from '../utils/plans';
 import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
@@ -1430,6 +1430,14 @@ export const apiService = {
   staffAddTeamMember: async (body: { email: string; firstName: string; lastName?: string; role: string }): Promise<any> => apiCall('/staff/team', { method: 'POST', body: JSON.stringify(body) }, true),
   staffChangeRole: async (id: string, role: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'PATCH', body: JSON.stringify({ role }) }, true),
   staffRemoveTeamMember: async (id: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'DELETE' }, true),
+  /** What the weekly tracker found for the account's competitors. A 403 (no add-on) comes back as `{ locked: true }`, not an error. */
+  getCompetitorInsights: async (): Promise<CompetitorInsightsResponse> => {
+    try { return await apiCall<CompetitorInsightsResponse>('/competitors/insights', { method: 'GET' }, true); }
+    catch (e: any) {
+      if (e && e.status === 403) return { success: false, locked: true, message: e.message };
+      throw e;
+    }
+  },
   getWeek: async (): Promise<WeekResponse> => apiCall('/week', { method: 'GET' }, true),
   approveWeek: async (itemIds?: string[]): Promise<WeekWriteResponse> => {
     try { return await apiCall('/week/approve', { method: 'POST', body: JSON.stringify(itemIds ? { itemIds } : {}) }, true); }

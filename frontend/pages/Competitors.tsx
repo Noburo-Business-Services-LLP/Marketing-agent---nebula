@@ -7,6 +7,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import LogoSelector from '../components/LogoSelector';
 import UpgradePrompt from '../components/UpgradePrompt';
+import CompetitorInsights from '../components/CompetitorInsights';
 import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 
 const platformIcons: Record<string, React.ReactNode> = {
@@ -548,6 +549,8 @@ const Competitors: React.FC = () => {
         headline={<>Who else is in the <GravityEmphasis>room</GravityEmphasis>?</>}
         subcopy="Track market rivals with real-time search."
       />
+
+      <CompetitorInsights showLink={false} />
 
       {upgrade && <UpgradePrompt className="mb-6" reason={upgrade.reason} feature={upgrade.feature} />}
 
