@@ -66,6 +66,11 @@
   // puterr / put403 / put429 = saving a handle is refused.
   if (params.get('compstate')) sessionStorage.setItem('audit-comp-state', params.get('compstate'));
   var CSTATE = sessionStorage.getItem('audit-comp-state') || 'all';
+  // ?listenstate= ready | notenough | off | error | locked | empty | waiting picks the "What people say about you" card variant (kept for the tab):
+  // ready = scored with a trend, quotes and recent negative; notenough = under the minimum; off = weekly check switched off, older score shown;
+  // error = fails to load; locked = no Inbox add-on (403); empty = nothing scored yet and the switch is off; waiting = connected, next weekly check pending.
+  if (params.get('listenstate')) sessionStorage.setItem('audit-listen-state', params.get('listenstate'));
+  var LSTATE = sessionStorage.getItem('audit-listen-state') || 'ready';
   var INSIDE = false;
   if (AGENCY) {
     try {
@@ -480,7 +485,7 @@
     ] })],
     ['GET', /^\/social\/(status|api-status)/, ok({ connections: socialConnections, platforms: socialConnections, connected: ['instagram'] })],
     ['GET', /^\/social\/ayrshare\/profile/, ok({ profiles: [] })],
-    ['GET', /^\/social\/inbox\/summary/, ok({ summary: { unread: 0, total: 0 }, accounts: [] })],
+    ['GET', /^\/social\/inbox\/summary/, ok({ summary: { unread: 3, total: 12 }, accounts: [], connectedPlatformCount: 2, unreadMessageCount: 3 })],
     ['GET', /^\/social\/inbox/, ok({ accounts: [], conversations: [], messages: [] })],
     ['GET', /^\/social\/?$/, ok({ connections: socialConnections })],
     ['GET', /^\/socials?\b/, ok({ connections: socialConnections })],
@@ -540,6 +545,31 @@
         { competitorId: 'cmp-1', name: 'Sweet Co Bakery', text: 'Sweet Co Bakery posted 5 times this week, up from 2.', weight: 1.5 },
         { competitorId: 'cmp-1', name: 'Sweet Co Bakery', text: "Sweet Co Bakery's best post this week was a reel with 120 likes.", weight: 0.9 }
       ], competitors: rows });
+    }],
+    // ---- Social listening (Stage 5): the "What people say about you" card on My plan and the Inbox page ----
+    ['GET', /^\/listening$/, function () {
+      if (LSTATE === 'locked') return { __status: 403, body: { success: false, upgradeRequired: true, reason: 'addon', feature: 'inbox', message: 'Inbox is an add-on.' } };
+      if (LSTATE === 'error') return { __status: 500, body: { success: false, message: 'Something went wrong.' } };
+      var base = { enabled: true, period: { from: '2026-09-20', to: '2026-10-17' }, asOf: '2026-10-17', total: 0, counts: { positive: 0, neutral: 0, negative: 0 }, percentages: { positive: 0, neutral: 0, negative: 0 }, trend: null, topReason: null, quotes: [], recentNegative: [], lastScoredAt: null, lastScoredOn: null };
+      if (LSTATE === 'notenough') return ok(Object.assign(base, { state: 'not_enough', message: 'Not enough comments yet to show a score.' }));
+      if (LSTATE === 'empty') return ok(Object.assign(base, { enabled: false, state: 'not_enough', message: 'Nothing is scored yet.' }));
+      if (LSTATE === 'waiting') return ok(Object.assign(base, { state: 'waiting', message: 'Your comments are waiting for the next weekly check.' }));
+      return ok(Object.assign(base, {
+        enabled: LSTATE !== 'off', state: 'ready', message: null, total: 86,
+        counts: { positive: 53, neutral: 21, negative: 12 }, percentages: { positive: 62, neutral: 24, negative: 14 },
+        trend: 'More negative comments than usual this week: 6 of 22, against 12% over the four weeks before. Most are about delivery.',
+        lastScoredAt: '2026-10-17T04:00:00.000Z', lastScoredOn: '2026-10-17',
+        quotes: [
+          { id: 'q1', label: 'positive', platform: 'instagram', date: '2026-10-14', text: 'The cake was fresh and the packing was lovely. Will order again for the next birthday.' },
+          { id: 'q2', label: 'negative', platform: 'facebook', date: '2026-10-12', text: 'My order reached two days late and nobody replied when I asked where it was.' },
+          { id: 'q3', label: 'positive', platform: 'linkedin', date: '2026-10-09', text: 'Thoughtful team, quick replies, and the quality was better than we expected from a local bakery.' }
+        ],
+        recentNegative: [
+          { id: 'n1', conversationId: 'conv-1', platform: 'facebook', date: '2026-10-16', preview: 'My order reached two days late and nobody replied when I asked where it was.' },
+          { id: 'n2', conversationId: 'conv-2', platform: 'instagram', date: '2026-10-15', preview: 'The box was dented.' },
+          { id: 'n3', conversationId: 'conv-3', platform: 'instagram', date: '2026-10-13', preview: 'Price went up again, a very long comment with no spaces will test wrapping: Supercalifragilisticexpialidocious_Supercalifragilisticexpialidocious' }
+        ]
+      }));
     }],
     ['PUT', /^\/competitors\/[^/]+\/handle$/, function (c) {
       if (CSTATE === 'put403') return { __status: 403, body: { success: false, upgradeRequired: true, reason: 'addon', feature: 'competitors', message: 'Competitor insights is an add-on.' } };

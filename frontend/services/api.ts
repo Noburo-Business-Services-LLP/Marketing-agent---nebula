@@ -1,4 +1,4 @@
-import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply, WeekResponse, WeekWriteResponse, CompetitorInsightsResponse, SetupResponse } from '../types';
+import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply, WeekResponse, WeekWriteResponse, CompetitorInsightsResponse, ListeningResponse, SetupResponse } from '../types';
 import { apiErrorFrom } from '../utils/plans';
 import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
@@ -1433,6 +1433,14 @@ export const apiService = {
   /** What the weekly tracker found for the account's competitors. A 403 (no add-on) comes back as `{ locked: true }`, not an error. */
   getCompetitorInsights: async (): Promise<CompetitorInsightsResponse> => {
     try { return await apiCall<CompetitorInsightsResponse>('/competitors/insights', { method: 'GET' }, true); }
+    catch (e: any) {
+      if (e && e.status === 403) return { success: false, locked: true, message: e.message };
+      throw e;
+    }
+  },
+  /** What people say about the account: scored comments and messages. A 403 (no Inbox add-on) comes back as `{ locked: true }`, not an error. */
+  getListening: async (): Promise<ListeningResponse> => {
+    try { return await apiCall<ListeningResponse>('/listening', { method: 'GET' }, true); }
     catch (e: any) {
       if (e && e.status === 403) return { success: false, locked: true, message: e.message };
       throw e;

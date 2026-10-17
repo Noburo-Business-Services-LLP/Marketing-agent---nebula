@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Bot,
@@ -48,7 +49,9 @@ function timeAgo(value?: string) {
 const UnifiedInbox: React.FC = () => {
   const { isDarkMode } = useTheme();
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
-  const [selectedId, setSelectedId] = useState('');
+  // /inbox?conversation=<id> (the links on the comment card) opens that conversation when it is in the list.
+  const [linkParams] = useSearchParams();
+  const [selectedId, setSelectedId] = useState(() => linkParams.get('conversation') || '');
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [status, setStatus] = useState('all');

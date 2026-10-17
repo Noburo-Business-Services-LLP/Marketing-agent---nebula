@@ -18,6 +18,8 @@
     { "label": "reels-hero", "path": "/reels/hero", "mode": "normal", "group": "shell" },
     { "label": "upload", "path": "/upload", "mode": "normal", "group": "shell", "nav": "Upload & Schedule" },
     { "label": "ad-campaigns", "path": "/ad-campaigns", "mode": "normal", "group": "shell" },
+    { "label": "inbox", "path": "/inbox", "mode": "normal", "group": "shell", "note": "The \"What people say about you\" card sits above the conversation list. States (load /?audit=normal&listenstate=<state> first): ready (default), notenough, off (older score, as of a date), error, locked (no Inbox add-on: nothing shown), empty, waiting. Mock: GET /listening in mock-session.js." },
+    { "label": "my-plan-listening", "path": "/plan", "mode": "normal", "group": "shell", "note": "My plan with a finished plan, so the \"What people say about you\" card shows under the competitor card. Same listenstate variants as inbox; locked shows one calm line with See plans; recent negative comments show on the Inbox only." },
     { "label": "competitors", "path": "/competitors", "mode": "normal", "group": "shell", "note": "Default state: every competitor handle state on one account. Variants (load /?audit=normal&compstate=<state> first): locked (no add-on: a calm note and See plans, no card), empty, error, puterr / put403 / put429 (saving a handle is refused). Mock: COMP_ROWS in mock-session.js." },
     { "label": "connect-socials", "path": "/connect-socials", "mode": "normal", "group": "shell", "nav": "Connect Socials" },
     { "label": "connect-socials-permissions", "path": "/connect-socials?tab=permissions", "mode": "normal", "group": "shell" },

@@ -53,6 +53,8 @@
   "components/ThisWeekCard.tsx",
   "components/CompetitorInsights.tsx",
   "utils/competitorInsights.ts",
+  "components/ListeningCard.tsx",
+  "utils/listening.ts",
   "components/SetupCard.tsx",
   "utils/week.ts",
   "utils/setup.ts",

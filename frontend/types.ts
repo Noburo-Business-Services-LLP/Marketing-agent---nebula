@@ -578,6 +578,7 @@ export interface WeekProposal {
   scaledDown?: boolean; removed?: WeekCounts; empty?: boolean;
 }
 export type { CompetitorInsightsResponse, CompetitorRow, CompetitorTrendPoint, CompetitorHighlight, CompetitorStatus } from './utils/competitorInsights';
+export type { ListeningResponse, ListeningCounts, ListeningQuote, ListeningRecent } from './utils/listening';
 export interface WeekResponse { success?: boolean; eligible: boolean; reason?: string; proposal?: WeekProposal | null; topUp?: boolean }
 export interface WeekPrefill { itemId: string; target: 'carousel' | 'video'; route: string; prefill: Record<string, unknown> }
 export interface WeekWriteResponse { success: boolean; message?: string; proposal?: WeekProposal | null; prefills?: WeekPrefill[] }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { apiService } from '../services/api';
 import CompetitorInsights from '../components/CompetitorInsights';
+import ListeningCard from '../components/ListeningCard';
 import type { PlanView } from '../types';
 import { BANNER_TEXT, PHASE_TITLES, dayMonth, effortRows, planBanner, refreshLabel, sectionsOf, shouldPoll, stoppedMessage, tagLabel } from '../utils/plan';
 
@@ -60,7 +61,7 @@ const Split: React.FC<{ organic: number; paid: number }> = ({ organic, paid }) =
 );
 
 /** The finished plan, section by section. Shared by the page and nothing else. */
-const PlanBody: React.FC<{ view: PlanView; showCompetitors?: boolean }> = ({ view, showCompetitors }) => {
+const PlanBody: React.FC<{ view: PlanView; showCompetitors?: boolean; showListening?: boolean }> = ({ view, showCompetitors, showListening }) => {
   const p = view.plan?.result?.plan || {};
   const rows = effortRows(view.plan);
   const roleOf = (name: string) => (p.channels || []).find((c: any) => c.channel === name)?.role;
@@ -138,6 +139,7 @@ const PlanBody: React.FC<{ view: PlanView; showCompetitors?: boolean }> = ({ vie
             </div>
           </Section>
           {showCompetitors && <CompetitorInsights />}
+          {showListening && <ListeningCard lockedNote />}
           </React.Fragment>
         );
         if (s.id === 'mix') {
@@ -169,6 +171,7 @@ const PlanBody: React.FC<{ view: PlanView; showCompetitors?: boolean }> = ({ vie
         );
       })}
       {showCompetitors && !hasRoadmap && <CompetitorInsights />}
+      {showListening && !hasRoadmap && <ListeningCard lockedNote />}
     </>
   );
 };
@@ -299,7 +302,7 @@ const MyPlan: React.FC = () => {
         </div>
       )}
 
-      {view.plan && <PlanBody view={view} showCompetitors={state === 'ready'} />}
+      {view.plan && <PlanBody view={view} showCompetitors={state === 'ready'} showListening={state === 'ready'} />}
     </div>
   );
 };

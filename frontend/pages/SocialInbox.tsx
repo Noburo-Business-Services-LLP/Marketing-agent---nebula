@@ -6,6 +6,7 @@ import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import UnifiedInbox from './UnifiedInbox';
 import AutoReplySettingsPage from './AutoReplySettingsPage';
 import ReviewsPanel from '../components/ReviewsPanel';
+import ListeningCard from '../components/ListeningCard';
 
 const TABS = [
   { id: 'messages', label: 'Messages and comments', icon: Inbox },
@@ -69,7 +70,7 @@ const SocialInbox: React.FC = () => {
           {unread > 0 ? ` ${unread} ${unread === 1 ? 'is' : 'are'} waiting for a reply.` : ''}
         </p>
       </div>
-      <div className="flex gap-2 border-b border-slate-200/60">
+      <div className="flex gap-2 overflow-x-auto border-b border-slate-200/60">
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -84,6 +85,7 @@ const SocialInbox: React.FC = () => {
           );
         })}
       </div>
+      {tab === 'messages' && <ListeningCard showRecent />}
       {tab === 'messages' ? <UnifiedInbox /> : tab === 'reviews' ? <ReviewsPanel /> : <AutoReplySettingsPage />}
     </div>
   );
