@@ -11,10 +11,14 @@ const itemSchema = new mongoose.Schema({
   pillar: { type: String, default: null },
   source: { type: String, enum: ['calendar', 'plan'], default: 'plan' },
   calendarItemId: { type: mongoose.Schema.Types.ObjectId, default: null },
-  status: { type: String, enum: ['proposed', 'approved', 'made', 'skipped', 'failed'], default: 'proposed' },
+  status: { type: String, enum: ['proposed', 'approved', 'making', 'made', 'skipped', 'failed'], default: 'proposed' },
   ref: { type: String, default: null },
   error: { type: String, default: null },
-  madeAt: { type: Date, default: null }
+  madeAt: { type: Date, default: null },
+  approvedAt: { type: Date, default: null },
+  makingAt: { type: Date, default: null },
+  // True while the post's charge stands, so a post picked up again after a crash is never charged twice.
+  charged: { type: Boolean, default: false }
 }, { _id: false });
 
 const weeklyProposalSchema = new mongoose.Schema({

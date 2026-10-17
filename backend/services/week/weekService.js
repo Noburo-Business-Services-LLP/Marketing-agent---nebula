@@ -9,17 +9,17 @@ const { weekProposal } = require('./weekProposal');
 const { weekStartOf, weekDays, dayOfMonth } = require('./weekMath');
 
 const DAY_MS = 86400000;
-const SLIDES = 5;   // slides in a carousel, as the carousel screen makes by default
-const SCENES = 5;   // scenes in a video, as the calendar's own reel build uses
+const SLIDES = 5;   // the carousel screen's default slide count (also the route's default)
+const STALE_MS = 10 * 60 * 1000; // a post 'making' for longer than this was left by a crash
 
-// Quarks per unit for the proposal, from the price list. A post is one image; a carousel is its slides; a video is
-// the base plus its scenes (the same sum the video route charges).
-function defaultCosts() {
+// Quarks per unit for the proposal, built only from the price list: a post is one image; a carousel is its slides
+// at the per-slide price (as the carousel route charges); a video is the single Videos flow's price.
+function weekCosts() {
   const { QUARK_COSTS } = require('../../config/apiCosts');
   return {
     post: QUARK_COSTS.image_generated,
     carousel: SLIDES * QUARK_COSTS.carousel_generated,
-    video: QUARK_COSTS.video_base + SCENES * QUARK_COSTS.video_generated
+    video: QUARK_COSTS.studio_video
   };
 }
 
@@ -32,7 +32,7 @@ function defaultDeps() {
   const key = (q) => ({ userId: q.userId, weekStart: q.weekStart });
   let plans = null;
   return {
-    get costs() { return defaultCosts(); },
+    get costs() { return weekCosts(); },
     pool: (userId) => require('../agency').walletBalance(userId),
     cadence: async (user) => require('../contentCalendarService').getContentCadence(user),
     // This week's rows from the account's own calendar(s), leaving out rows already made or rejected.
@@ -73,10 +73,20 @@ function defaultDeps() {
       find: (q) => model().findOne(key(q)).lean(),
       create: async (doc) => { const d = await model().create(doc); return d.toObject(); },
       // One conditional update: only the caller that finds the item in `from` moves it to `to`.
-      claimItem: async (q, itemId, from, to) => {
+      claimItem: async (q, itemId, from, to, extra = {}) => {
+        const $set = { 'items.$.status': to };
+        Object.entries(extra).forEach(([k, v]) => { $set[`items.$.${k}`] = v; });
         const r = await model().findOneAndUpdate(
           { ...key(q), items: { $elemMatch: { id: itemId, status: from } } },
-          { $set: { 'items.$.status': to } }
+          { $set }
+        ).select('_id').lean();
+        return !!r;
+      },
+      // Takes over a post left 'making' since before `before`: one conditional update, so one runner wins.
+      claimStale: async (q, itemId, before, at) => {
+        const r = await model().findOneAndUpdate(
+          { ...key(q), items: { $elemMatch: { id: itemId, status: 'making', makingAt: { $lt: before } } } },
+          { $set: { 'items.$.makingAt': at } }
         ).select('_id').lean();
         return !!r;
       },
@@ -117,6 +127,10 @@ function defaultDeps() {
       const row = { day, headline: item.topic, creativeConcept: item.topic, format: 'image post', cta: '', objective: 'awareness' };
       return { calendar, find: () => row, weekNumber: 1 };
     },
+    // First approved week: stamped once, never overwritten.
+    markFirstApproval: (userId, at) => require('../../models/User').updateOne(
+      { _id: userId, 'setup.firstWeekApprovedAt': { $exists: false } }, { $set: { 'setup.firstWeekApprovedAt': at } }
+    ),
     now: () => new Date()
   };
 }
@@ -172,11 +186,17 @@ function createWeekService(given = {}) {
     const calItem = ctx.find(item.calendarItemId, item);
     if (!calItem) return fail('no_calendar');
 
-    let paid;
-    try { paid = await deps.deduct(id, 'image_generated', 1, 'Weekly plan post'); } catch (e) { paid = { success: false }; }
-    if (!paid || !paid.success) return fail('no_pool');
+    // Charged once: a post picked up again after a crash already carries charged: true and is not charged again.
+    if (!item.charged) {
+      let paid;
+      try { paid = await deps.deduct(id, 'image_generated', 1, 'Weekly plan post'); } catch (e) { paid = { success: false }; }
+      if (!paid || !paid.success) return fail('no_pool');
+      await deps.store.setItem(q, item.id, { charged: true });
+    }
 
-    const refund = async () => { try { await deps.refund(id, 'image_generated', 1, 'Refund: weekly plan post could not be made'); } catch (e) { console.error('[week] refund failed:', e && e.message); } };
+    const refund = async () => {
+      try { await deps.refund(id, 'image_generated', 1, 'Refund: weekly plan post could not be made'); await deps.store.setItem(q, item.id, { charged: false }); } catch (e) { console.error('[week] refund failed:', e && e.message); }
+    };
     // A swapped idea is what gets made.
     if (item.topic && calItem.headline !== item.topic && item.source === 'calendar') Object.assign(calItem, { headline: item.topic, creativeConcept: item.topic });
     let out;
@@ -194,27 +214,50 @@ function createWeekService(given = {}) {
     return { ok: true, ref: String(ref) };
   }
 
+  // Approve only claims: proposed -> approved, atomically, and returns at once. Posts are made by runApprovedPosts.
   async function approve({ user, itemIds, now }) {
     const q = keyOf(user, now);
     const doc = await deps.store.find(q);
     if (!doc || doc.status === 'skipped') return { proposal: doc || null, started: 0, prefills: [] };
+    const at = nowOf(now);
     const selected = doc.items.filter((i) => !Array.isArray(itemIds) || itemIds.includes(i.id));
     const prefills = [];
-    const toMake = [];
+    let started = 0;
+    let claimed = 0;
     for (const it of selected) {
       // Failed posts are retried; everything else must still be proposed. One conditional update decides who owns it.
       const froms = it.kind === 'post' ? ['proposed', 'failed'] : ['proposed'];
       let won = false;
-      for (const from of froms) { if (await deps.store.claimItem(q, it.id, from, 'approved')) { won = true; break; } }
+      for (const from of froms) { if (await deps.store.claimItem(q, it.id, from, 'approved', { approvedAt: at })) { won = true; break; } }
       if (!won) continue;
-      if (it.kind === 'post') toMake.push(it); else prefills.push(prefillFor(user, it));
+      claimed += 1;
+      if (it.kind === 'post') started += 1; else prefills.push(prefillFor(user, it));
     }
     if (doc.status === 'proposed') await deps.store.setStatus(q, 'approved');
-    // One at a time: each is a paid image, and a failure of one must not stop the rest.
-    for (const it of toMake) {
-      try { await makePost({ user, item: it, now }); } catch (e) { console.error('[week] makePost crashed:', e && e.message); await deps.store.setItem(q, it.id, { status: 'failed', error: 'generation_failed' }); }
+    if (claimed > 0 && deps.markFirstApproval) await deps.markFirstApproval(user._id, at);
+    return { proposal: await deps.store.find(q), started, prefills };
+  }
+
+  // Makes every approved post, one at a time (each is a paid image). A post is owned by whoever moves it
+  // approved -> making; a post left 'making' for over ten minutes is taken over, and is not charged a second time.
+  async function runApprovedPosts({ user, now }) {
+    const q = keyOf(user, now);
+    const at = nowOf(now);
+    const doc = await deps.store.find(q);
+    if (!doc) return { made: 0, failed: 0 };
+    const before = new Date(at.getTime() - STALE_MS);
+    let made = 0; let failed = 0;
+    for (const it of doc.items) {
+      if (it.kind !== 'post') continue;
+      let mine = false;
+      if (it.status === 'approved') mine = await deps.store.claimItem(q, it.id, 'approved', 'making', { makingAt: at });
+      else if (it.status === 'making' && it.makingAt && new Date(it.makingAt) < before && deps.store.claimStale) mine = await deps.store.claimStale(q, it.id, before, at);
+      if (!mine) continue;
+      let out;
+      try { out = await makePost({ user, item: it, now }); } catch (e) { console.error('[week] makePost crashed:', e && e.message); await deps.store.setItem(q, it.id, { status: 'failed', error: 'generation_failed' }); out = { ok: false }; }
+      if (out.ok) made += 1; else failed += 1;
     }
-    return { proposal: await deps.store.find(q), started: toMake.length, prefills };
+    return { made, failed, proposal: await deps.store.find(q) };
   }
 
   async function change({ user, itemId, action, topic, now }) {
@@ -244,7 +287,7 @@ function createWeekService(given = {}) {
     return { ok: true, proposal: await deps.store.find(q) };
   }
 
-  return { getOrCreate, approve, change, skipWeek, makePost };
+  return { getOrCreate, approve, runApprovedPosts, change, skipWeek, makePost };
 }
 
-module.exports = { createWeekService, defaultCosts };
+module.exports = { createWeekService, weekCosts, defaultCosts: weekCosts };
