@@ -42,3 +42,12 @@ Commits `684c764` to the Stage 2 review fixes (see `git log`), records in `docs/
 - Real run: one real post on `nebulaa_dev` (owner's OK): approve answered in 0.85 s, made in 154 s, balance 3000 to 2989 (exactly 11), one ledger row, draft with image and caption, second approve changed nothing, calendar row generated. Throwaway data removed (the generated image remains in dev Cloudinary).
 - OWNER DECISION OPEN: calendar auto-generation and "generate this week" are free for paying accounts (pre-existing; now bounded, see checklist).
 - Not proven: plan-sourced posts with a real generation; the carousel/video "made" report with a real Generate (tests only); the recovery sweep against a real crash.
+
+## Stage 3 (guided tour): BUILT, reviewed, fixed, verified in the real browser (2026-10-17)
+Commits `954cb91` to the Stage 3 review fix (`0e2eb99`), records in `docs/superpowers/plan-led-sdd/stage-3/`, owner notes appended to `docs/superpowers/ops/plan-launch-checklist.md`.
+- `frontend/utils/tour.ts` (pure: steps, start rule, state machine, card placement, key handling, waiting for targets), `components/GuidedTour.tsx` (our own spotlight and card, no library), `components/HelpMenu.tsx` ("?" button: replay, setup steps, support), backend `PUT /api/tour` + `User.tour {completedAt, skippedAt, step, replays}` (once-only stamps; refused for staff, CSM and agency passes).
+- Real-browser checks by the controller (desktop and 375 px, throwaway users, deleted): auto start, six steps, Done saved, no restart on reload, replay from the dashboard and from another page, Escape, focus return, phone menu opens for the nav steps, card always fits. Found and fixed while checking: phone card ran off the bottom, a step dropped on auto start, replay from another page did nothing, keys swallowed while waiting.
+- Not tested: a real screen reader; a real staff/CSM/agency session (covered by the start-rule tests).
+- Deploy order: backend first.
+## All three stages
+Stage 1 My plan, Stage 2 This week and setup, Stage 3 tour: all built and pushed. Stage 4 (competitor tracking) and Stage 5 (social listening) are specified in the spec but not planned or built. Open owner decisions: calendar auto-generation charging (see week-launch-checklist), OpenAI credit in production, backfill for managed clients, lawyer/accountant items from handovers 5 to 7.

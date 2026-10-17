@@ -21,3 +21,11 @@ My plan (Stage 1 of the plan-led work) builds each customer's strategy automatic
 - No "Download as PDF" for the plan yet (the designed Blueprint PDF is per Blueprint and priced separately).
 - The plan lists no offers (they are stored as fact ids; a later change can show them).
 - The competitor tracking and social listening stages are specified (see the spec) but not built.
+
+## Guided tour (Stage 3)
+- A short six-step tour starts once for each customer after onboarding, on the home screen only. Skip, Escape or Done is saved on the account and it never restarts by itself; the "?" help button replays it any time (replaying never changes the saved completion).
+- It is never shown to staff, to a CSM or staff working inside a customer's account, or to agency client workspaces.
+- **Deploy order: ship the backend before (or together with) the frontend.** If the page ships first, the tour cannot save its progress and would start on every page load.
+- The six steps and their wording live in `frontend/utils/tour.ts` (`TOUR_STEPS`). To switch the tour off for everyone, make `shouldAutoStart` return false and redeploy.
+- Customers without a plan yet (or on a free account) see five steps, because the "This week" card is not shown to them yet.
+- On a phone the sidebar menu opens by itself for the menu steps and the card sits at the bottom of the screen.
