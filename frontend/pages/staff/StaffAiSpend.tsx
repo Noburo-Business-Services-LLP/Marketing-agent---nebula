@@ -12,7 +12,8 @@ const WHAT: Record<string, string> = {
   openai_image: 'Posts, campaign posts, carousel slides, edits, AI people and places',
   openai_text: 'Captions, chat and the Blueprint writing',
   google_video: 'The Videos flow',
-  fal_video: 'The older step-by-step video maker and Hero video'
+  fal_video: 'The older step-by-step video maker and Hero video',
+  apify_scrape: 'The weekly competitor checks (public profile reads)'
 };
 
 /** Owner only: what the AI providers have cost today against the daily ceiling, and an on/off switch for each. */

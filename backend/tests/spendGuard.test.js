@@ -30,7 +30,7 @@ test('actions map to the provider that bills for them', () => {
   assert.strictEqual(providerOf('image_generated'), 'openai_image');
   assert.strictEqual(providerOf('studio_video'), 'google_video');
   assert.strictEqual(providerOf('blueprint'), 'openai_text');
-  assert.strictEqual(providerOf('competitor_scrape'), null);
+  assert.strictEqual(providerOf('competitor_scrape'), 'apify_scrape');
 });
 
 test('work is allowed until the daily ceiling, then refused, with a warning at 70 percent and at the ceiling', async () => {
@@ -85,4 +85,23 @@ test('if the checks themselves fail, work is allowed rather than blocked', async
   const broken = () => ({ find: () => { throw new Error('db down'); }, findOne: () => { throw new Error('db down'); } });
   const g = createSpendGuard({ Spend: broken, Switch: broken, alert: async () => {}, env: {}, cacheMs: 0 });
   assert.strictEqual((await g.check('studio_video')).ok, true);
+});
+
+test('scraper reads have an off switch, count toward the daily total and are listed for staff', async () => {
+  const { PROVIDERS, LABELS } = require('../services/spendGuard');
+  const { ACTION_USD, PROVIDER_RATES } = require('../config/apiCosts');
+  assert.ok(PROVIDERS.includes('apify_scrape'));
+  assert.strictEqual(LABELS.apify_scrape, 'Competitor checks');
+  assert.strictEqual(PROVIDER_RATES.apify_profile_read, 0.0023);
+  assert.strictEqual(ACTION_USD.competitor_scrape, PROVIDER_RATES.apify_profile_read);
+  const f = fakes();
+  const g = createSpendGuard({ Spend: f.Spend, Switch: f.Switch, alert: async () => {}, env: { AI_DAILY_SPEND_CAP_USD: '10', AI_KILLED: 'apify_scrape' }, cacheMs: 0 });
+  assert.strictEqual((await g.check('competitor_scrape')).ok, false);
+  assert.strictEqual((await g.check('image_generated')).ok, true);
+  const g2 = createSpendGuard({ Spend: f.Spend, Switch: f.Switch, alert: async () => {}, env: { AI_DAILY_SPEND_CAP_USD: '10' }, cacheMs: 0 });
+  assert.strictEqual((await g2.check('competitor_scrape')).ok, true);
+  await g2.record('competitor_scrape', 100);
+  const st = await g2.status();
+  assert.ok(Math.abs(st.totalUsd - 0.23) < 1e-6);
+  assert.ok(st.providers.some((p) => p.provider === 'apify_scrape' && p.label === 'Competitor checks'));
 });

@@ -17,9 +17,10 @@ const PROVIDER_OF = {
   campaign_text: 'openai_text', chat_message: 'openai_text', blueprint: 'openai_text',
   studio_video: 'google_video',
   hero_video_clip: 'fal_video', video_base: 'fal_video', video_generated: 'fal_video', video_scene_image: 'fal_video',
-  video_scene_clip: 'fal_video', video_character_portrait: 'fal_video'
+  video_scene_clip: 'fal_video', video_character_portrait: 'fal_video',
+  competitor_scrape: 'apify_scrape'
 };
-const LABELS = { openai_image: 'Pictures', openai_text: 'Writing', google_video: 'Videos', fal_video: 'Older video maker' };
+const LABELS = { openai_image: 'Pictures', openai_text: 'Writing', google_video: 'Videos', fal_video: 'Older video maker', apify_scrape: 'Competitor checks' };
 const PROVIDERS = Object.keys(LABELS);
 const BUSY = 'Making things is very busy right now. Please try again in a little while. Nothing was charged.';
 

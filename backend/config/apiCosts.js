@@ -65,6 +65,9 @@ const PROVIDER_RATES = {
   // Serper / scraping for competitor intel — per lookup.
   serper_per_search: 0.001,
 
+  // Apify instagram-profile-scraper: one profile read (competitor tracker). About USD 0.0023 per profile.
+  apify_profile_read: 0.0023,
+
   // fal.ai bytedance/seedance-2.0 (text-to-video and reference-to-video) —
   // billed per output second at 720p, so a clip's cost scales with its
   // length. LIST PRICE: verify against the first fal.ai invoice, because
@@ -268,7 +271,7 @@ const ACTION_USD = {
   strategic_post: gpt4o(TOKENS.creative_director) + gpt4o(TOKENS.art_director) + image + gpt4o(TOKENS.caption_only) + assetCost(INFRA.mb_per_image),
   event_post: gpt4o(TOKENS.creative_director) + gpt4o(TOKENS.art_director) + image + gpt4o(TOKENS.caption_only) + assetCost(INFRA.mb_per_image),
 
-  competitor_scrape: PROVIDER_RATES.serper_per_search,
+  competitor_scrape: PROVIDER_RATES.apify_profile_read,
 
   // Brand Growth Blueprint: one planner call. The guided-mode directions call (about $0.02) is absorbed.
   // Page fetches are not metered and no image model is used.
