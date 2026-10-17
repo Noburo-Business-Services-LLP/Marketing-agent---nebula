@@ -49,5 +49,9 @@
   "components/ExtraClientDialog.tsx",
   "components/AgencyDialog.tsx",
   "pages/MyPlan.tsx",
-  "utils/plan.ts"
+  "utils/plan.ts",
+  "components/ThisWeekCard.tsx",
+  "components/SetupCard.tsx",
+  "utils/week.ts",
+  "utils/setup.ts"
 ]

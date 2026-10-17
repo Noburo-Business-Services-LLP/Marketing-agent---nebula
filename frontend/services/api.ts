@@ -1,4 +1,4 @@
-import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply } from '../types';
+import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply, WeekResponse, WeekWriteResponse, SetupResponse } from '../types';
 import { apiErrorFrom } from '../utils/plans';
 import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
@@ -1430,6 +1430,20 @@ export const apiService = {
   staffAddTeamMember: async (body: { email: string; firstName: string; lastName?: string; role: string }): Promise<any> => apiCall('/staff/team', { method: 'POST', body: JSON.stringify(body) }, true),
   staffChangeRole: async (id: string, role: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'PATCH', body: JSON.stringify({ role }) }, true),
   staffRemoveTeamMember: async (id: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'DELETE' }, true),
+  getWeek: async (): Promise<WeekResponse> => apiCall('/week', { method: 'GET' }, true),
+  approveWeek: async (itemIds?: string[]): Promise<WeekWriteResponse> => {
+    try { return await apiCall('/week/approve', { method: 'POST', body: JSON.stringify(itemIds ? { itemIds } : {}) }, true); }
+    catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not start your posts. Please try again.') }; }
+  },
+  changeWeekItem: async (id: string, action: 'skip' | 'swap', topic?: string): Promise<WeekWriteResponse> => {
+    try { return await apiCall(`/week/items/${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify(topic ? { action, topic } : { action }) }, true); }
+    catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not change that post. Please try again.') }; }
+  },
+  skipWeek: async (): Promise<WeekWriteResponse> => {
+    try { return await apiCall('/week/skip', { method: 'POST' }, true); }
+    catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not skip this week. Please try again.') }; }
+  },
+  getSetup: async (): Promise<SetupResponse> => apiCall('/setup', { method: 'GET' }, true),
   getPlan: async (): Promise<PlanView> => apiCall('/plan', { method: 'GET' }, true),
   refreshPlan: async (): Promise<PlanRefreshReply> => apiCall('/plan/refresh', { method: 'POST' }, true),
   getClientPlan: async (id: string): Promise<PlanView> => apiCall(`/staff/clients/${id}/plan`, { method: 'GET' }, true),

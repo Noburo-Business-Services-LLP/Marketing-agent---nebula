@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ArrowRight, Sparkles } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import { apiService, draftsAPI } from '../services/api';
 import { Draft, Campaign, User } from '../types';
 import AgencyUsage from '../components/AgencyUsage';
+import SetupCard from '../components/SetupCard';
+import ThisWeekCard from '../components/ThisWeekCard';
 import { isAgencyUser } from '../utils/agency';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 
@@ -192,25 +194,18 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
     });
   }, [drafts, campaigns, loading]);
 
+  // A CSM pass shows the client's account: the This week card shows, the Setup card does not. Staff see neither.
+  const csmPass = (() => { try { return Boolean(localStorage.getItem('csmReturnToken')); } catch { return false; } })();
+  const isStaffSelf = Boolean(user && (user.staffRole || user.isCsm)) && !csmPass;
+  const showWeek = Boolean(user) && !isStaffSelf;
+  const showSetup = showWeek && !csmPass && !user?.actingAgency;
+
   return (
     <div className="max-w-[1240px] mx-auto pb-16">
       {isAgencyUser(user) && <AgencyUsage />}
 
-      {/* Setup notice — only shows when there's actual setup to do */}
-      {drafts.length === 0 && campaigns.length === 0 && !loading && (
-        <div className="mb-8 flex items-center gap-3 px-5 py-4 rounded-xl bg-[var(--gv-surface-1)] border border-[rgb(var(--gv-accent-rgb)/0.25)] relative overflow-hidden">
-          <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--gv-accent)]" />
-          <span className="w-2 h-2 rounded-full bg-[var(--gv-accent)]" />
-          <div className="flex-1 min-w-0">
-            <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)]">Finish setting up Nebulaa</div>
-            <div className="text-[12px] text-[var(--gv-text-tertiary)] leading-snug">Connect your social media accounts and confirm your brand voice. This takes about two minutes.</div>
-          </div>
-          <Link to="/connect-socials" className="flex items-center gap-2 text-[12px] font-semibold text-[var(--gv-accent-text)] hover:text-[var(--gv-accent-hover)]">
-            <span>Go to setup</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      )}
+      {showSetup && <SetupCard />}
+      {showWeek && <ThisWeekCard />}
 
       {/* HERO */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-center mb-14">

@@ -565,3 +565,18 @@ export interface PlanView {
 }
 
 export interface PlanRefreshReply { success: boolean; message?: string; nextRefreshAt?: string | null }
+
+// The weekly proposal and the setup path (/api/week, /api/setup)
+export type WeekItemKind = 'post' | 'carousel' | 'video';
+export type WeekItemStatus = 'proposed' | 'approved' | 'making' | 'made' | 'skipped' | 'failed';
+export interface WeekItem { id: string; kind: WeekItemKind; topic: string; channel?: string | null; pillar?: string | null; source?: string | null; status: WeekItemStatus; ref?: string | null; error?: string | null }
+export interface WeekCounts { posts: number; carousels: number; videos: number }
+export interface WeekProposal {
+  weekStart?: string; status: 'proposed' | 'approved' | 'skipped' | 'expired'; items: WeekItem[]; counts?: WeekCounts;
+  scaledDown?: boolean; removed?: WeekCounts; empty?: boolean;
+}
+export interface WeekResponse { success?: boolean; eligible: boolean; reason?: string; proposal?: WeekProposal | null; topUp?: boolean }
+export interface WeekPrefill { itemId: string; target: 'carousel' | 'video'; route: string; prefill: Record<string, unknown> }
+export interface WeekWriteResponse { success: boolean; message?: string; proposal?: WeekProposal | null; prefills?: WeekPrefill[] }
+export interface SetupStep { id: string; title: string; done: boolean; reason: string; minutes: number }
+export interface SetupResponse { success?: boolean; steps: SetupStep[]; next: string | null; allDone: boolean }
