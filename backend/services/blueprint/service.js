@@ -2,7 +2,7 @@
 // Brand Growth Blueprint service: start (limits, free slot, one charge), the background run, polling with
 // stale-job reconcile, guided checkpoints, and refund-once. Mirrors the Hero money path (heroVideoFlow.js) without
 // importing it: the charge is taken before work starts and refunded at most once, claimed atomically.
-const { LIMITS } = require('../../config/blueprint');
+const { LIMITS, PLAN_RUNS_PER_DAY_MAX } = require('../../config/blueprint');
 const { QUARK_COSTS } = require('../../config/apiCosts');
 const { normaliseInput, emailKey, businessKeysOf } = require('./input');
 const { resolveTier } = require('../../config/entitlements');
@@ -25,7 +25,8 @@ const MSG = {
   qa: 'We could not check this Blueprint well enough to share it. Please try again.',
   failed: 'We could not finish your Blueprint. Please try again.',
   notStarted: 'We could not start your Blueprint. Your Quarks were returned.',
-  stale: 'This Blueprint took too long, so we stopped it. Please try again.'
+  stale: 'This Blueprint took too long, so we stopped it. Please try again.',
+  busy: 'We are busy right now, please try again later.'
 };
 
 const idOf = (user) => (!user ? '' : user._id ? String(user._id) : user.id ? String(user.id) : '');
@@ -53,6 +54,8 @@ function defaultDeps() {
     },
     enqueue: (...a) => require('./runner').enqueue(...a),
     recordSpend: (...a) => require('../spendGuard').record(...a),
+    spendCheck: (...a) => require('../spendGuard').check(...a),
+    alertOwner: (a) => require('../opsAlerts').notify(a),
     now: () => Date.now(),
     uuid: () => crypto.randomUUID(),
     hashIp: (ip) => crypto.createHash('sha256').update(`${process.env.JWT_SECRET || 'blueprint'}:${ip}`).digest('hex')
@@ -109,6 +112,7 @@ function createBlueprintService(depsIn) {
   const at = () => new Date(deps.now());
   let designedSvc = null;
   const designedService = () => (designedSvc = designedSvc || (deps.designed || require('./designedService').createDesignedService(deps.designedDeps)));
+  let capAlertDay = '';
   const noteFlag = (rule, detail) => ({ level: 'note', rule, where: 'run', detail });
 
   async function findExisting(key, keys) {
@@ -172,8 +176,8 @@ function createBlueprintService(depsIn) {
     const ipHash = deps.hashIp(ip);
     const since = new Date(deps.now() - DAY_MS);
     const ipCap = tier === 'free' ? LIMITS.FREE_PER_IP_PER_DAY : LIMITS.PAID_PER_IP_PER_DAY;
-    if ((await Blueprint.countDocuments({ ipHash, createdAt: { $gte: since } })) >= ipCap) return reply(429, { success: false, message: MSG.limit });
-    if (tier !== 'free' && (await Blueprint.countDocuments({ userId, createdAt: { $gte: since } })) >= LIMITS.PAID_PER_ACCOUNT_PER_DAY) {
+    if ((await Blueprint.countDocuments({ ipHash, kind: { $ne: 'plan' }, createdAt: { $gte: since } })) >= ipCap) return reply(429, { success: false, message: MSG.limit });
+    if (tier !== 'free' && (await Blueprint.countDocuments({ userId, kind: { $ne: 'plan' }, createdAt: { $gte: since } })) >= LIMITS.PAID_PER_ACCOUNT_PER_DAY) {
       return reply(429, { success: false, message: MSG.limit });
     }
 
@@ -235,12 +239,26 @@ function createBlueprintService(depsIn) {
     return reply(202, { success: true, id: blueprintId, status: 'queued' });
   }
 
-  // A run the system starts for an account (its plan): no Quarks, no free slot, no per-account daily cap. The model
-  // call still counts against the daily spend ceiling, which is otherwise recorded only when Quarks are charged.
+  // A run the system starts for an account (its plan): no Quarks, no free slot, no per-account daily cap. It still
+  // obeys the provider switches and the daily spend ceiling, and a global cap on how many plan runs one day can hold.
+  // Spend is recorded when the planner is actually called (see run), so a run that stops early costs nothing.
   async function startSystem({ user, input, kind = 'plan' }) {
     const userId = idOf(user);
+    const g = await (deps.spendCheck ? deps.spendCheck(ACTION) : { ok: true });
+    if (g && g.ok === false) return { ok: false, reason: 'busy', message: g.message };
     const n = normaliseInput(input, { allowGuided: true });
-    if (!n.ok) return { ok: false, errors: n.errors, message: MSG.fields };
+    if (!n.ok) return { ok: false, reason: 'invalid_input', errors: n.errors, message: MSG.fields };
+    if (kind === 'plan') {
+      const since = new Date(deps.now() - DAY_MS);
+      if ((await Blueprint.countDocuments({ kind: 'plan', createdAt: { $gte: since } })) >= PLAN_RUNS_PER_DAY_MAX) {
+        const day = new Date(deps.now()).toISOString().slice(0, 10);
+        if (capAlertDay !== day) {
+          capAlertDay = day;
+          try { if (deps.alertOwner) await deps.alertOwner({ key: 'plan_runs_cap', cooldownMs: 6 * 3600000, subject: 'Nebulaa alert: the daily limit on plan runs was reached', text: `The system has started ${PLAN_RUNS_PER_DAY_MAX} plan runs in the last 24 hours, which is the safety limit. No more plans will be started until older runs fall out of the window. If this is not expected, check the plan scheduler and the backfill script for a loop.` }); } catch (_) { /* alerting never stops the refusal */ }
+        }
+        return { ok: false, reason: 'daily_cap', message: MSG.busy };
+      }
+    }
     const blueprintId = deps.uuid();
     const now = at();
     await Blueprint.create({
@@ -248,8 +266,7 @@ function createBlueprintService(depsIn) {
       checkpoint: null, heartbeatAt: now, input: n.input, businessKeys: businessKeysOf(n.input), freeSlot: false, ipHash: '', approvals: [], qaFlags: [],
       kind, charge: { state: 'none', quarks: 0 }, createdAt: now
     });
-    try { if (deps.recordSpend) await deps.recordSpend(ACTION, 1); } catch (_) { /* cost tracking is best effort */ }
-    deps.enqueue(() => run(blueprintId));
+    deps.enqueue(() => run(blueprintId), undefined, kind === 'plan' ? 'plan' : undefined);
     return { ok: true, id: blueprintId };
   }
 
@@ -306,6 +323,8 @@ function createBlueprintService(depsIn) {
       }
 
       if (!(await step({ step: 'planning', progress: 60 }))) return;
+      // A plan run is not charged to anyone, so the model call is counted against the daily ceiling here, when it is made.
+      if (doc.kind === 'plan') { try { if (deps.recordSpend) await deps.recordSpend(ACTION, 1); } catch (_) { /* cost tracking is best effort */ } }
       const built = await deps.plan.build({ input: doc.input, sheet, direction, mode: doc.mode, now: at(), sources: sources || [] });
       const qa = (built && built.qa) || { passed: false, flags: [] };
       const qaFlags = [...(qa.flags || []), ...flags];
@@ -327,7 +346,7 @@ function createBlueprintService(depsIn) {
     const uid = String(userId);
     const key = String(id);
     let doc = await Blueprint.findOne({ blueprintId: key, userId: uid });
-    if (!doc) return reply(404, { success: false, message: MSG.notFound });
+    if (!doc || doc.kind === 'plan') return reply(404, { success: false, message: MSG.notFound });
     if (ACTIVE.includes(doc.status) && deps.now() - new Date(doc.heartbeatAt).getTime() > LIMITS.STALE_MS) {
       await failAndRefund(doc, MSG.stale);
       doc = (await Blueprint.findOne({ blueprintId: key, userId: uid })) || doc;
@@ -352,7 +371,7 @@ function createBlueprintService(depsIn) {
   async function continueRun({ userId, id, body }) {
     const key = String(id);
     const doc = await Blueprint.findOne({ blueprintId: key, userId: String(userId) });
-    if (!doc) return reply(404, { success: false, message: MSG.notFound });
+    if (!doc || doc.kind === 'plan') return reply(404, { success: false, message: MSG.notFound });
     if (doc.status !== 'awaiting_approval') return reply(409, { success: false, message: MSG.notWaiting });
     const checkpoint = doc.checkpoint;
     let choice = null;
@@ -371,7 +390,11 @@ function createBlueprintService(depsIn) {
     return reply(202, { success: true, id: key, status: 'queued' });
   }
 
-  const startDesigned = (args) => designedService().start(args);
+  const startDesigned = async (args) => {
+    const doc = await Blueprint.findOne({ blueprintId: String(args.id), userId: String(args.userId) });
+    if (doc && doc.kind === 'plan') return reply(404, { success: false, message: MSG.notFound });
+    return designedService().start(args);
+  };
 
   return { start, startSystem, run, get, list, continueRun, refundOnce, startDesigned };
 }

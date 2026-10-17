@@ -588,6 +588,7 @@ test('startSystem: spend is recorded for the daily ceiling, and invalid input st
   assert.strictEqual(bad.ok, false);
   assert.strictEqual(deps.Blueprint.docs.length, 0);
   await svc.startSystem({ user: { _id: 'u1', email: 'o@example.com' }, input: form(), kind: 'plan' });
+  await deps.drain(); // recorded when the planner is called
   assert.deepStrictEqual(spent, [['blueprint', 1]]);
 });
 

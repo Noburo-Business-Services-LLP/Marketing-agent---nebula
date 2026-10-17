@@ -131,12 +131,15 @@ function normalisePlan(parsed, sheet) {
   channels.sort((a, b) => a.priority - b.priority);
   channels.splice(5);
 
+  // The customer and effort blocks are newer than the shared Blueprint: what is dropped from them is counted apart,
+  // so it can never make a customer-paid Blueprint fail the removed-items limit.
+  const xctx = { ...ctx, dropped: [] };
   const icpRaw = isObj(parsed.icp) ? parsed.icp : null;
   const icpBlock = icpRaw ? {
-    who: claims(icpRaw.who, 4, ctx),
-    pains: claims(icpRaw.pains, 4, ctx),
-    where: claims(icpRaw.where, 4, ctx),
-    triggers: claims(icpRaw.triggers, 4, ctx)
+    who: claims(icpRaw.who, 4, xctx),
+    pains: claims(icpRaw.pains, 4, xctx),
+    where: claims(icpRaw.where, 4, xctx),
+    triggers: claims(icpRaw.triggers, 4, xctx)
   } : null;
   const icp = icpBlock && (icpBlock.who.length || icpBlock.pains.length || icpBlock.where.length || icpBlock.triggers.length) ? icpBlock : null;
 
@@ -149,7 +152,7 @@ function normalisePlan(parsed, sheet) {
     if (!Number.isFinite(organic) || organic < 0 || organic > 100) continue;
     if (!Number.isFinite(paid) || paid < 0 || paid > 100 || organic + paid !== 100) paid = 100 - organic; // repaired: organic leads
     const does = arr(e.nebulaaDoes, RAW_CAP).map((a) => str(a, 40).toLowerCase()).filter((a) => PLAN_NEBULAA_CAN.includes(a));
-    effort.push({ channel: e.channel, organicPct: organic, paidPct: paid, nebulaaDoes: [...new Set(does)], youDo: claims(e.youDo, 4, ctx, true) });
+    effort.push({ channel: e.channel, organicPct: organic, paidPct: paid, nebulaaDoes: [...new Set(does)], youDo: claims(e.youDo, 4, xctx, true) });
   }
 
   const roadmap = [];
@@ -182,7 +185,8 @@ function normalisePlan(parsed, sheet) {
       roadmap,
       firstSteps: claims(parsed.firstSteps, 5, ctx, true)
     },
-    dropped: ctx.dropped
+    dropped: ctx.dropped,
+    droppedExtra: xctx.dropped
   };
 }
 

@@ -18,6 +18,8 @@ function matches(doc, filter) {
         if (op === '$in') return (Array.isArray(v) ? v : [v]).some((e) => x.includes(e));
         if (op === '$ne') return Array.isArray(v) ? !v.includes(x) : v !== x;
         if (op === '$gte') return v != null && new Date(v).valueOf() >= new Date(x).valueOf();
+        if (op === '$lt') return v != null && new Date(v).valueOf() < new Date(x).valueOf();
+        if (op === '$exists') return (v !== undefined) === !!x;
         throw new Error(`unsupported operator ${op}`);
       });
     }
