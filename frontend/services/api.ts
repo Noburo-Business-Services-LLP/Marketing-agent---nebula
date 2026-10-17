@@ -1443,6 +1443,10 @@ export const apiService = {
     try { return await apiCall('/week/skip', { method: 'POST' }, true); }
     catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not skip this week. Please try again.') }; }
   },
+  markWeekItemMade: async (itemId: string, ref: string, weekId?: string): Promise<WeekWriteResponse> => {
+    try { return await apiCall(`/week/items/${encodeURIComponent(itemId)}/made`, { method: 'POST', body: JSON.stringify(weekId ? { ref, weekId } : { ref }) }, true); }
+    catch { return { success: false }; }
+  },
   getSetup: async (): Promise<SetupResponse> => apiCall('/setup', { method: 'GET' }, true),
   getPlan: async (): Promise<PlanView> => apiCall('/plan', { method: 'GET' }, true),
   refreshPlan: async (): Promise<PlanRefreshReply> => apiCall('/plan/refresh', { method: 'POST' }, true),

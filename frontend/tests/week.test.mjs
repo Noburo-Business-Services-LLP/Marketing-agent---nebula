@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { headline, cardState, scaledNote, itemLine, countsOf, buildPrefill, visibleCount } from '../utils/week.ts';
+import { headline, cardState, scaledNote, itemLine, countsOf, buildPrefill, visibleCount, itemAction, pollDelay, isSlow } from '../utils/week.ts';
 
 test('the headline counts plainly and never says zero of something', () => {
   assert.equal(headline({ posts: 5, carousels: 1, videos: 2 }), 'This week we will make 5 posts, 1 carousel and 2 videos, based on your plan.');
@@ -44,12 +44,33 @@ test('the scaled-down note says balance, not pool', () => {
   assert.doesNotMatch(scaledNote({ scaledDown: true, removed: { videos: 0, carousels: 0, posts: 0 } }), /pool/i);
 });
 test('the prefill is rebuilt from the item', () => {
-  assert.deepEqual(buildPrefill({ kind: 'carousel', topic: 'T', channel: 'linkedin' }, 'hindi'), { target: 'carousel', prefill: { mode: 'carousel', topic: 'T', platform: 'linkedin', language: 'hindi' } });
-  assert.deepEqual(buildPrefill({ kind: 'carousel', topic: 'T' }), { target: 'carousel', prefill: { mode: 'carousel', topic: 'T', platform: 'instagram', language: 'English' } });
-  assert.deepEqual(buildPrefill({ kind: 'video', topic: 'V' }, 'tamil'), { target: 'video', prefill: { idea: 'V', language: 'tamil' } });
+  assert.deepEqual(buildPrefill({ id: 'i1', kind: 'carousel', topic: 'T', channel: 'linkedin' }, 'hindi', '2026-10-12'), { target: 'carousel', prefill: { mode: 'carousel', topic: 'T', platform: 'linkedin', language: 'hindi', weekItemId: 'i1', weekId: '2026-10-12' } });
+  assert.deepEqual(buildPrefill({ id: 'i2', kind: 'carousel', topic: 'T' }, undefined, '2026-10-12').prefill.platform, 'instagram');
+  assert.deepEqual(buildPrefill({ id: 'i3', kind: 'video', topic: 'V' }, 'tamil', '2026-10-12'), { target: 'video', prefill: { idea: 'V', language: 'tamil', weekItemId: 'i3', weekId: '2026-10-12' } });
 });
 test('long lists collapse to four rows', () => {
   assert.equal(visibleCount(5, false), 5);
   assert.equal(visibleCount(7, false), 4);
   assert.equal(visibleCount(7, true), 7);
+});
+
+test('a week that is already done says so', () => {
+  assert.equal(cardState({ eligible: true, reason: 'nothing_left', proposal: null }), 'done');
+});
+test('item errors have plain wording and the right action', () => {
+  assert.equal(itemLine({ kind: 'post', status: 'failed', error: 'gave_up' }), 'We could not make this post. Please try again later or contact support.');
+  assert.equal(itemAction({ kind: 'post', status: 'failed', error: 'gave_up' }), 'none');
+  assert.equal(itemLine({ kind: 'post', status: 'failed', error: 'no_pool' }), 'Top up to make this post');
+  assert.equal(itemAction({ kind: 'post', status: 'failed', error: 'no_pool' }), 'top_up');
+  assert.equal(itemLine({ kind: 'post', status: 'failed', error: 'refund_failed' }), 'Something went wrong with this post. Our team has been told.');
+  assert.equal(itemAction({ kind: 'post', status: 'failed', error: 'refund_failed' }), 'none');
+  assert.equal(itemLine({ kind: 'post', status: 'failed', error: 'other' }), 'Could not be made, try again');
+  assert.equal(itemAction({ kind: 'post', status: 'failed', error: 'other' }), 'retry');
+  assert.equal(itemAction({ kind: 'post', status: 'made' }), 'none');
+});
+test('slow items are noticed after three minutes and polling slows down', () => {
+  assert.equal(isSlow(2 * 60 * 1000), false);
+  assert.equal(isSlow(3 * 60 * 1000 + 1), true);
+  assert.equal(pollDelay(10 * 1000), 5000);
+  assert.equal(pollDelay(4 * 60 * 1000), 15000);
 });

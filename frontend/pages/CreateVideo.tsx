@@ -104,6 +104,8 @@ const CreateVideo: React.FC = () => {
     apiService.getCredits().then((r) => { if (r?.success) setBalance(Number(r.credits?.balance ?? 0)); }).catch(() => undefined);
   }, []);
 
+  const weekMark = useRef<{ itemId: string; weekId?: string } | null>(null);
+
   const loadHistory = useCallback(() => {
     studioVideosAPI.list().then((r) => {
       if (!r?.success) return;
@@ -116,6 +118,7 @@ const CreateVideo: React.FC = () => {
   useEffect(() => {
     const p = takePrefill('video');
     if (!p) return;
+    if (p.weekItemId) weekMark.current = { itemId: p.weekItemId, weekId: p.weekId };
     const text = String(p.idea || '').trim();
     if (text) { setIdea(text); setFromPlan(true); }
     if (p.language) {
@@ -208,6 +211,9 @@ const CreateVideo: React.FC = () => {
       const r = await studioVideosAPI.create({ ...c, title, concept: conceptText, beats: concept?.beats || [], spokenLine: language === 'none' ? '' : spoken, aspectRatio: '9:16' });
       if (!r?.success || !r.video) { setError(r?.message || 'We could not start the video. Please try again.'); return; }
       setCurrent(r.video); refreshBalance();
+      // Tell the week card this one is made (best effort, once).
+      const m = weekMark.current;
+      if (m && r.video.id) { weekMark.current = null; apiService.markWeekItemMade(m.itemId, String(r.video.id), m.weekId).catch(() => undefined); }
     } catch (e: any) {
       setError(e?.data?.message || e?.message || 'We could not start the video. Please try again.');
     } finally { setPlanning(false); }

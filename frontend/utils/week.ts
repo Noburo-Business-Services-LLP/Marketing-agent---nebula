@@ -1,7 +1,7 @@
 /** Plain-language helpers for the "This week" card. Customers see posts, carousels and videos, never Quarks. */
 import type { WeekCounts, WeekItem, WeekProposal, WeekResponse } from '../types';
 
-export type CardState = 'ready' | 'approved' | 'partly' | 'skipped' | 'top_up' | 'no_plan' | 'not_eligible' | 'empty';
+export type CardState = 'ready' | 'done' | 'approved' | 'partly' | 'skipped' | 'top_up' | 'no_plan' | 'not_eligible' | 'empty';
 
 const noun = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const join = (parts: string[]) => (parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
@@ -31,7 +31,12 @@ export function itemLine(item: Partial<WeekItem>): string {
   if (item.kind === 'post') {
     if (item.status === 'making' || item.status === 'approved') return 'Making…';
     if (item.status === 'made') return 'In Review and approve';
-    if (item.status === 'failed') return 'Could not be made, try again';
+    if (item.status === 'failed') {
+      if (item.error === 'gave_up') return 'We could not make this post. Please try again later or contact support.';
+      if (item.error === 'no_pool') return 'Top up to make this post';
+      if (item.error === 'refund_failed') return 'Something went wrong with this post. Our team has been told.';
+      return 'Could not be made, try again';
+    }
     return '';
   }
   if (item.status === 'approved') return 'Ready to make';
@@ -39,8 +44,21 @@ export function itemLine(item: Partial<WeekItem>): string {
   return '';
 }
 
+/** What a post offers when it failed: try again, top up, or nothing (the team has it). */
+export function itemAction(item: Partial<WeekItem>): 'retry' | 'top_up' | 'none' {
+  if (item.kind !== 'post' || item.status !== 'failed') return 'none';
+  if (item.error === 'no_pool') return 'top_up';
+  if (item.error === 'gave_up' || item.error === 'refund_failed') return 'none';
+  return 'retry';
+}
+
+export const SLOW_AFTER_MS = 3 * 60 * 1000;
+export const isSlow = (elapsedMs: number): boolean => elapsedMs > SLOW_AFTER_MS;
+export const pollDelay = (elapsedMs: number): number => (isSlow(elapsedMs) ? 15000 : 5000);
+
 export function cardState(res: Partial<WeekResponse> | null | undefined): CardState {
   if (!res) return 'not_eligible';
+  if (res.eligible && res.reason === 'nothing_left') return 'done';
   if (!res.eligible) return res.reason === 'no_plan' ? 'no_plan' : 'not_eligible';
   const p = res.proposal;
   if (!p) return 'no_plan';
@@ -77,13 +95,16 @@ export function isWorking(proposal: Partial<WeekProposal> | null | undefined): b
 }
 
 /** The hand-over for a carousel or video entry, rebuilt from the item itself (used when the server's prefill is not in this session). */
-export function buildPrefill(item: Partial<WeekItem>, language?: string | null):
-  { target: 'carousel'; prefill: { mode: 'carousel'; topic: string; platform: string; language: string } }
-  | { target: 'video'; prefill: { idea: string; language: string } } {
+export function buildPrefill(item: Partial<WeekItem>, language?: string | null, weekId?: string | null):
+  { target: 'carousel'; prefill: { mode: 'carousel'; topic: string; platform: string; language: string; weekItemId?: string; weekId?: string } }
+  | { target: 'video'; prefill: { idea: string; language: string; weekItemId?: string; weekId?: string } } {
+  const ids: { weekItemId?: string; weekId?: string } = {};
+  if (item.id) ids.weekItemId = String(item.id);
+  if (weekId) ids.weekId = String(weekId);
   const lang = (language && String(language).trim()) || 'English';
   const topic = String(item.topic || '');
-  if (item.kind === 'video') return { target: 'video', prefill: { idea: topic, language: lang } };
-  return { target: 'carousel', prefill: { mode: 'carousel', topic, platform: (item.channel && String(item.channel)) || 'instagram', language: lang } };
+  if (item.kind === 'video') return { target: 'video', prefill: { idea: topic, language: lang, ...ids } };
+  return { target: 'carousel', prefill: { mode: 'carousel', topic, platform: (item.channel && String(item.channel)) || 'instagram', language: lang, ...ids } };
 }
 
 export const COLLAPSE_AFTER = 5;

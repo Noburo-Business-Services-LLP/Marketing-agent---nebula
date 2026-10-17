@@ -1,7 +1,7 @@
 /** One-shot hand-over from the plan to the create screens. Stored briefly, read once, then gone. */
 
-export interface CarouselPrefill { mode?: 'carousel'; topic?: string; platform?: string; language?: string }
-export interface VideoPrefill { idea?: string; language?: string }
+export interface CarouselPrefill { mode?: 'carousel'; topic?: string; platform?: string; language?: string; weekItemId?: string; weekId?: string }
+export interface VideoPrefill { idea?: string; language?: string; weekItemId?: string; weekId?: string }
 export interface PrefillMap { carousel: CarouselPrefill; video: VideoPrefill }
 export type PrefillTarget = keyof PrefillMap;
 

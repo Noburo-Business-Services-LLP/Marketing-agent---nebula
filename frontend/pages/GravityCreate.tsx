@@ -241,9 +241,18 @@ const GravityCreate: React.FC = () => {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram']);
   // True while the fields still hold what the plan filled in; the first edit clears the note.
   const [fromPlan, setFromPlan] = useState(false);
+  // The plan's item this carousel is for; reported once when the carousel is saved so the week card shows it as made.
+  const weekMark = useRef<{ itemId: string; weekId?: string } | null>(null);
+  const reportMade = (ref: unknown) => {
+    const m = weekMark.current;
+    if (!m || !ref) return;
+    weekMark.current = null;
+    apiService.markWeekItemMade(m.itemId, String(ref), m.weekId).catch(() => undefined);
+  };
   useEffect(() => {
     const p = takePrefill('carousel');
     if (!p) return;
+    if (p.weekItemId) weekMark.current = { itemId: p.weekItemId, weekId: p.weekId };
     const topic = String(p.topic || '').trim();
     if (!topic && !p.platform && !p.language) return;
     setMode('carousel');
@@ -808,9 +817,11 @@ const GravityCreate: React.FC = () => {
             } else if (currentEvent === 'plan') {
               // The carousel is saved and is being drawn; carry on in the list below.
               detached = true;
+              reportMade(data.draftId || data.carouselDraftId || data.campaignId);
               handoff();
             } else if (currentEvent === 'slide') {
               landed += 1;
+              reportMade(data.draftId);
               if (detached) continue;
               setPostDurations((prev) => {
                 const startedAt = runStartRef.current ?? Date.now();

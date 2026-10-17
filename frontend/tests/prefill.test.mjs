@@ -33,3 +33,8 @@ test('a plan language maps to the nearest available id', () => {
   assert.equal(nearestLanguage('Hindi', ids, 'english'), 'english');
   assert.equal(nearestLanguage(undefined, ids, 'english'), 'english');
 });
+test('the week item ids survive the hand-over', () => {
+  const s = mem();
+  setPrefill('video', { idea: 'x', weekItemId: 'i1', weekId: '2026-10-12' }, s, 1000);
+  assert.deepEqual(takePrefill('video', s, 1500), { idea: 'x', weekItemId: 'i1', weekId: '2026-10-12' });
+});
