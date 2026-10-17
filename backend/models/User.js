@@ -214,6 +214,11 @@ const userSchema = new mongoose.Schema({
     firstPlanFailedAt: { type: Date },
     attempts: { type: Number, default: 0 }
   },
+  // Setup progress that cannot be read off the account itself: when the plan was first opened, and the first approved week.
+  setup: {
+    planOpenedAt: { type: Date },
+    firstWeekApprovedAt: { type: Date }
+  },
   // Optional invoice details the customer adds: a GSTIN for a tax invoice in the business name, and the state
   // the supply is made to (Zoho's two letter code). Read when an invoice is made; never required to pay.
   billingDetails: {

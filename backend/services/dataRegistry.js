@@ -63,7 +63,8 @@ const RULES = [
   { model: 'Submission', field: 'userId', action: D },
   { model: 'Trend', field: 'userId', action: D },
   { model: 'VideoDraft', field: 'userId', action: D },
-  { model: 'VideoJob', field: 'userId', action: D }
+  { model: 'VideoJob', field: 'userId', action: D },
+  { model: 'WeeklyProposal', field: 'userId', action: D }
 ];
 
 // Models that do not hold a customer's data, so they need no rule. Anything not listed here and not in RULES fails the test.
