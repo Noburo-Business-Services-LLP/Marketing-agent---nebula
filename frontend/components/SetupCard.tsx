@@ -24,7 +24,7 @@ const SetupCard: React.FC = () => {
   if (!m.show) return null;
 
   return (
-    <section aria-labelledby="setup-card-title" className="mb-8 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 sm:p-6">
+    <section aria-labelledby="setup-card-title" data-tour="setup" className="mb-8 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <h2 id="setup-card-title" className="text-[18px] font-semibold text-[var(--gv-text-primary)]">{m.title}</h2>
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="setup-steps" className={`inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] text-[var(--gv-text-primary)] sm:hidden ${FOCUS}`}>

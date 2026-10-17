@@ -147,7 +147,7 @@ const ThisWeekCard: React.FC<Props> = ({ language }) => {
   else top = <p className="mt-1 text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">{state === 'ready' ? headline(counts) : 'Here is where this week stands.'}</p>;
 
   return (
-    <section aria-labelledby="this-week-title" className={CARD}>
+    <section aria-labelledby="this-week-title" data-tour="this-week" className={CARD}>
       <h2 id="this-week-title" className="text-[18px] font-semibold text-[var(--gv-text-primary)]">This week</h2>
       {top}
       {note && state !== 'top_up' && <p className="mt-3 rounded-lg bg-[var(--gv-surface-2)] px-3 py-2 text-[13px] text-[var(--gv-text-secondary)]">{note}</p>}

@@ -280,7 +280,7 @@ const App: React.FC = () => {
           element={
             user ? (
               user.onboardingCompleted ? (
-                <Layout user={user} onLogout={handleLogout} needsPlan={needsPlan}>
+                <Layout user={user} onLogout={handleLogout} needsPlan={needsPlan} onTourSaved={(tour) => setUser((u) => (u ? { ...u, tour: { ...(u.tour || {}), ...tour } } : u))}>
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome user={user} />} />
                     <Route path="/plan" element={<MyPlan />} />

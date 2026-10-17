@@ -38,6 +38,10 @@ import NotificationBell from './NotificationBell';
 import AppSwitcher from './AppSwitcher';
 import ClientSwitcher from './ClientSwitcher';
 import AccountMenu from './AccountMenu';
+import GuidedTour from './GuidedTour';
+import HelpMenu, { TOUR_REPLAY_EVENT } from './HelpMenu';
+import { TOUR_STEPS, shouldAutoStart } from '../utils/tour';
+import { needsTermsPrompt } from '../utils/accountDeletion';
 import { groupHasPath } from '../utils/navMenu';
 import { apiService } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
@@ -57,11 +61,13 @@ interface LayoutProps {
   onLogout: () => void;
   /** A new account with no plan and no Quarks: show a slim prompt above the page. */
   needsPlan?: boolean;
+  /** Called when the guided tour is finished or skipped, so the local user does not start it again. */
+  onTourSaved?: (tour: { completedAt?: string; skippedAt?: string }) => void;
 }
 
 const STARTING_CREDITS = 100;
 
-const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = false }) => {
+const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = false, onTourSaved }) => {
   // The app shell scrolls inside its own main area. Stop the page behind it from scrolling as well, which is
   // what made the left menu travel up with the content on some screens.
   useEffect(() => {
@@ -78,6 +84,41 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   const creditPanelRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // The guided tour: starts once, on the home screen, for a customer's own account. A ref keeps it from reopening this session.
+  const [tourOpen, setTourOpen] = useState(false);
+  const tourDone = useRef(false);
+  const tourIsReplay = useRef(false);
+  const hasCsmPass = Boolean(localStorage.getItem('csmReturnToken'));
+  const tourEligible = shouldAutoStart({ user: user ? { ...user, tour: null } : null, path: '/dashboard', hasCsmPass });
+  useEffect(() => {
+    if (tourOpen || tourDone.current || !user) return undefined;
+    if (!shouldAutoStart({ user, path: location.pathname, hasCsmPass }) || needsTermsPrompt(user, hasCsmPass)) return undefined;
+    const t = setTimeout(() => { if (!tourDone.current) { tourIsReplay.current = false; setTourOpen(true); } }, 800);
+    return () => clearTimeout(t);
+  }, [user, location.pathname, hasCsmPass, tourOpen]);
+  const replayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const onReplay = () => {
+      if (!tourEligible || tourOpen) return;
+      tourIsReplay.current = true;
+      if (replayTimer.current) clearTimeout(replayTimer.current);
+      if (location.pathname === '/dashboard') { setTourOpen(true); return; }
+      navigate('/dashboard');
+      replayTimer.current = setTimeout(() => setTourOpen(true), 800);
+    };
+    window.addEventListener(TOUR_REPLAY_EVENT, onReplay);
+    return () => { window.removeEventListener(TOUR_REPLAY_EVENT, onReplay); if (replayTimer.current) clearTimeout(replayTimer.current); };
+  }, [tourEligible, tourOpen, location.pathname, navigate]);
+  const handleTourClose = (reason: 'finished' | 'skipped' | 'closed') => {
+    tourDone.current = true;
+    setTourOpen(false);
+    setSidebarOpen(false);
+    if (tourIsReplay.current || reason === 'closed') return; // a replay never changes the saved date; leaving by back or a link saves nothing
+    const at = new Date().toISOString();
+    if (reason === 'finished') { apiService.saveTour('complete'); onTourSaved?.({ completedAt: at }); }
+    else { apiService.saveTour('skip'); onTourSaved?.({ skippedAt: at }); }
+  };
 
   // Apply the Gravity redesign shell class to <body> so the ambient
   // radial gold glow + warm off-white text apply globally.
@@ -215,6 +256,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   const businessInitial = businessName.trim().charAt(0).toUpperCase() || 'B';
   const businessHandle = user?.email || 'Add your email in Settings';
 
+  const NAV_TOUR: Record<string, string> = { '/campaigns': 'nav-create', '/drafts': 'nav-review', '/content-calendar': 'nav-calendar', '/plan': 'nav-plan' };
   const NavLink: React.FC<{
     path: string;
     label: string;
@@ -225,6 +267,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     return (
       <Link
         to={path}
+        data-tour={NAV_TOUR[path]}
         onClick={() => setSidebarOpen(false)}
         className={`group relative flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg transition-colors ${
           active
@@ -360,7 +403,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
               <Menu className="w-5 h-5" />
             </button>
             <img src="/assets/brand/logo-nebulaa.png" alt="Nebulaa" width={784} height={360} className="h-8 w-auto" />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {trialInfo && !hideQuarks && (
                 <div
                   className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium ${
@@ -374,6 +417,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                   <span className="tabular-nums">{trialInfo.creditsBalance}</span>
                 </div>
               )}
+              <HelpMenu canReplay={tourEligible} />
               <NotificationBell />
               <AccountMenu name={businessName} email={businessHandle} onLogout={handleLogout} compact />
             </div>
@@ -399,6 +443,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
               >
                 <Search className="w-4 h-4" />
               </button>
+              <HelpMenu canReplay={tourEligible} />
               <div className="w-9 h-9 flex items-center justify-center">
                 <NotificationBell />
               </div>
@@ -495,6 +540,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
           </main>
         </div>
       </div>
+      <GuidedTour open={tourOpen} steps={TOUR_STEPS} onClose={handleTourClose} onNeedsMenu={setSidebarOpen} />
     </>
   );
 };

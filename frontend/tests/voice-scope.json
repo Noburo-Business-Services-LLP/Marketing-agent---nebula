@@ -55,5 +55,6 @@
   "utils/week.ts",
   "utils/setup.ts",
   "utils/tour.ts",
-  "components/GuidedTour.tsx"
+  "components/GuidedTour.tsx",
+  "components/HelpMenu.tsx"
 ]
