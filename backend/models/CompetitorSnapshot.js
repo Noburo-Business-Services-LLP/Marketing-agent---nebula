@@ -16,7 +16,9 @@ const snapshotSchema = new mongoose.Schema({
   avgLikes: Number,
   avgComments: Number,
   formats: { image: Number, video: Number, carousel: Number },
-  topPost: { url: String, likes: Number, comments: Number, type: String, caption: String },
+  // `type` is a key inside topPost, so the subdocument is declared explicitly (a bare nested `type` key is read by
+  // Mongoose as the type of the whole path and breaks every save).
+  topPost: { type: new mongoose.Schema({ url: String, likes: Number, comments: Number, type: String, caption: String }, { _id: false }), default: null },
   topPostAt: Date,
   hashtags: [String]
 }, { collection: 'competitor_snapshots' });
