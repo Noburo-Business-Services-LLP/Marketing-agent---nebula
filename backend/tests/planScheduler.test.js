@@ -9,7 +9,7 @@ test('the monthly run starts plans for due accounts only, at most the limit, one
   const started = [];
   const deps = {
     candidates: async () => [user('a'), user('b'), user('c', { plan: { tier: 'free' } }), user('d'), user('e')],
-    lastPlanAt: async (id) => ({ a: null, b: new Date(NOW - 5 * DAY), d: new Date(NOW - 40 * DAY), e: null })[id] ?? null,
+    lastPlanAt: async (id) => ({ a: new Date(NOW - 41 * DAY), b: new Date(NOW - 5 * DAY), d: new Date(NOW - 40 * DAY), e: null })[id] ?? null,
     inFlight: async (id) => id === 'e',
     startPlan: async ({ userId }) => { started.push(userId); return { ok: true }; }
   };

@@ -825,6 +825,15 @@ const startServer = async () => {
       console.warn('Unfinished-draft cleanup failed to start:', reaperError.message);
     }
 
+    // The plan runs live in this process, so after a restart every queued or processing one is dead: end them now.
+    try {
+      require('./services/plan/planService').reapOnBoot()
+        .then((r) => { if (r && r.reaped) console.log(`[plan] ended ${r.reaped} plan run(s) a restart interrupted`); })
+        .catch((e) => console.warn('[plan] could not end interrupted plan runs:', e && e.message));
+    } catch (reapError) {
+      console.warn('Plan run cleanup failed to start:', reapError.message);
+    }
+
     // The plan each paying account gets from its profile: monthly refresh, retries for a failed first plan
     try {
       require('./services/plan/planScheduler').startPlanScheduler();

@@ -40,7 +40,7 @@ test('a free account, a staff account or an incomplete profile starts nothing', 
 });
 
 test('refresh: once a week for customers, any time for staff, and it stamps lastRefreshAt', async () => {
-  const { svc, calls, user } = setup();
+  const { svc, calls, user } = setup({ docs: [{ userId: 'u1', kind: 'plan', status: 'completed', completedAt: new Date('2026-09-01'), blueprintId: 'old', result: { plan: {} } }] });
   assert.strictEqual((await svc.refresh({ userId: 'u1' })).ok, true);
   assert.ok(user.planState.lastRefreshAt);
   const again = await svc.refresh({ userId: 'u1' });

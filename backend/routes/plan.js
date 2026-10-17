@@ -17,13 +17,14 @@ const makeLimiter = (max, message) => rateLimit({ windowMs: 15 * 60 * 1000, max,
 const refreshLimiter = makeLimiter(5, 'You have sent too many requests. Please try again in a few minutes.');
 const readLimiter = makeLimiter(600, 'You have sent too many requests. Please try again in a few minutes.');
 
-const defaultFreeBlueprint = (userId) => require('../models/Blueprint')
-  .findOne({ userId, kind: 'blueprint', status: 'completed', freeSlot: true }).select('blueprintId').lean();
+// Blueprints made before plan runs existed have no kind, so "not a plan" is the test, as in the list and staff Usage.
+const defaultFreeBlueprint = (userId, Model = require('../models/Blueprint')) => Model
+  .findOne({ userId, kind: { $ne: 'plan' }, status: 'completed', freeSlot: true }).select('blueprintId').lean();
 
 // The body of GET /api/plan for one account (the customer's own, or a client's when staff look).
 async function viewFor(user, { service, now = new Date(), findFreeBlueprint = defaultFreeBlueprint }) {
   const userId = toUserId(user);
-  const [plan, running] = await Promise.all([service.currentPlan(userId), service.inFlight(userId)]);
+  const [plan, running, stoppedRun] = await Promise.all([service.currentPlan(userId), service.inFlight(userId), service.stoppedRun ? service.stoppedRun(userId) : null]);
   let eligible = false; let reason = ''; let missing = [];
   let freeBlueprint = null;
   if (shouldHavePlan(user)) {
@@ -36,13 +37,16 @@ async function viewFor(user, { service, now = new Date(), findFreeBlueprint = de
     const p = profileComplete(user);
     if (!p.complete) { reason = 'profile_incomplete'; missing = p.missing; } else reason = 'not_eligible';
   }
-  const rule = eligible ? canRefresh({ user, now }) : { ok: true };
-  const failed = Boolean(eligible && !plan && !running && user.planState && user.planState.firstPlanFailedAt);
+  // No plan yet means nothing to refresh, so the weekly limit does not apply.
+  const rule = eligible && plan ? (service.refreshRule ? await service.refreshRule({ user, now }) : canRefresh({ user, now })) : { ok: true };
+  const stopped = eligible && !running && stoppedRun ? { message: stoppedRun.message } : null;
+  const failed = Boolean(eligible && !plan && !running && !stopped && user.planState && user.planState.firstPlanFailedAt);
   return {
     success: true,
     plan: plan ? { id: plan.id, completedAt: plan.completedAt, stale: isStale(plan, now), result: plan.result } : null,
     running: Boolean(running),
     failed,
+    stopped,
     nextRefreshAt: !rule.ok && rule.nextAt ? new Date(rule.nextAt).toISOString() : null,
     eligible, reason, missing, freeBlueprint
   };
@@ -55,6 +59,8 @@ function refreshReply(out, nextRefreshAt) {
   if (out && out.ok) return { status: 200, json: { success: true, message: out.alreadyRunning ? 'Your plan is already being updated.' : startedMessage, nextRefreshAt } };
   if (out && out.reason === 'too_soon') return { status: 429, json: { success: false, message: out.message, nextRefreshAt: out.nextAt ? new Date(out.nextAt).toISOString() : null } };
   if (out && out.reason === 'not_eligible') return { status: 400, json: { success: false, message: 'A plan is made once your business profile is complete on a paid plan.' } };
+  if (out && out.reason === 'invalid_input') return { status: 400, json: { success: false, message: 'Your plan needs a website or Instagram page we can read. Check it in your Business profile.' } };
+  if (out && (out.reason === 'busy' || out.reason === 'daily_cap')) return { status: 503, json: { success: false, message: 'We are busy right now, please try again later' } };
   return { status: 503, json: { success: false, message: 'We could not start your plan just now. Please try again later.' } };
 }
 
@@ -106,4 +112,6 @@ router.createPlanRouter = createPlanRouter;
 router.viewFor = viewFor;
 router.staffView = staffView;
 router.staffRefresh = staffRefresh;
+router.refreshReply = refreshReply;
+router.defaultFreeBlueprint = defaultFreeBlueprint;
 module.exports = router;

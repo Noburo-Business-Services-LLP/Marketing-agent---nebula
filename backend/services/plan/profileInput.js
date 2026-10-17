@@ -2,6 +2,8 @@
 // Turns a user's saved business profile into the input the Blueprint engine expects.
 // Pure and total: never throws on missing or odd fields.
 
+const { normaliseInput } = require('../blueprint/input');
+
 const str = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
 const profileOf = (user) => (user && user.businessProfile && typeof user.businessProfile === 'object' ? user.businessProfile : {});
 const firstLong = (vals, min) => vals.map(str).find((s) => s.length >= min) || '';
@@ -58,12 +60,22 @@ function inputFromProfile(user) {
   };
 }
 
+// Complete means the Blueprint engine can actually use it: the same input check the engine runs, so "none" or "-"
+// in the website field is not a website.
 function profileComplete(user) {
   const missing = [];
   if (nameOf(user).length < 2) missing.push('business name');
   if (!str(profileOf(user).website) && !instagramOf(user)) missing.push('website or Instagram page');
   if (!whatYouSellOf(user)) missing.push('what you sell');
   if (!whoItsForOf(user)) missing.push('who it is for');
+  if (!missing.length) {
+    const n = normaliseInput(inputFromProfile(user), { allowGuided: true });
+    if (!n.ok) {
+      const e = n.errors || {};
+      if (e.website || e.instagram) missing.push('website or Instagram page');
+      else missing.push('business details we can read');
+    }
+  }
   return { complete: missing.length === 0, missing };
 }
 

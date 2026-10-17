@@ -209,6 +209,7 @@ const userSchema = new mongoose.Schema({
   // (once a week), and how the first one is going.
   planState: {
     lastStartedAt: { type: Date },
+    startingAt: { type: Date },
     lastRefreshAt: { type: Date },
     firstPlanFailedAt: { type: Date },
     attempts: { type: Number, default: 0 }
@@ -412,6 +413,9 @@ const userSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// The plan scheduler walks accounts oldest-start first.
+userSchema.index({ 'planState.lastStartedAt': 1 });
 
 // Fix credits if they are stored as a number (e.g. from manual DB edits or old bugs)
 userSchema.pre('init', function (doc) {

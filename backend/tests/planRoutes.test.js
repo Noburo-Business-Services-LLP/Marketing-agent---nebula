@@ -51,7 +51,7 @@ test('GET /api/plan for a paying account with a plan returns it with the date an
 
 test('GET /api/plan shows the next refresh date after a refresh, and the running and failed flags', async () => {
   const last = new Date(NOW.getTime() - 2 * DAY);
-  let res = await get({ service: fakeService({ inFlight: async () => true }) }, paying({ planState: { lastRefreshAt: last } }));
+  let res = await get({ service: fakeService({ inFlight: async () => true, currentPlan: async () => ({ id: 'p', completedAt: last, result: {} }) }) }, paying({ planState: { lastRefreshAt: last } }));
   assert.strictEqual(res.body.running, true);
   assert.strictEqual(res.body.nextRefreshAt, new Date(last.getTime() + 7 * DAY).toISOString());
   res = await get({ service: fakeService() }, paying({ planState: { firstPlanFailedAt: new Date(NOW.getTime() - DAY) } }));
@@ -97,11 +97,12 @@ test('an account that cannot have a plan for another reason is not eligible', as
 });
 
 // A real plan service with fake storage, so the weekly rule is the real one.
-function realService(user) {
+const HAS_PLAN = [{ userId: 'u1', kind: 'plan', status: 'completed', blueprintId: 'old', completedAt: new Date('2026-10-01T00:00:00Z'), result: { plan: {} } }];
+function realService(user, docs = HAS_PLAN) {
   const state = { started: 0 };
   const svc = createPlanService({
     loadUser: async () => user,
-    findRuns: async () => [],
+    findRuns: async (q) => docs.filter((d) => !q.status || [].concat(q.status.$in || q.status).includes(d.status)),
     startSystem: async () => { state.started += 1; return { ok: true, id: 'run1' }; },
     saveState: async (id, patch) => { user.planState = { ...(user.planState || {}), ...patch }; },
     now: () => NOW
@@ -198,7 +199,7 @@ test('staff refresh ignores the weekly limit and is logged', async () => {
   assert.deepStrictEqual(seen.args, { userId: 'c1', staff: true });
   assert.deepStrictEqual(logged, [{ actor: staff, action: 'refresh_plan', client: 'c1' }]);
   // through the real rule: a refresh a day ago is refused for the customer and allowed for staff
-  const { svc, state } = realService(client);
+  const { svc, state } = realService(client, [{ ...HAS_PLAN[0], userId: 'c1' }]);
   const own = await svc.refresh({ userId: 'c1', user: client, staff: false });
   assert.strictEqual(own.reason, 'too_soon');
   const byStaff = await router.staffRefresh({ client, staff, service: svc, record: async () => {} });
