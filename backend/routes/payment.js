@@ -11,6 +11,7 @@
  *   POST /create-subscription        { planId: 'starter' | 'professional' | 'agency' }
  *   POST /create-addon-subscription  { addon: 'publish' | 'competitors' | 'inbox' | 'bundle' }
  *   POST /create-slot-subscription   (no body) one extra client slot, Agency accounts only
+ *   POST /cancel-slot                (no body) stops one extra client place at the end of its paid month
  *   POST /verify-subscription        checkout signature, then grant (plan, add-on or client slot)
  *   POST /create-order               { packInr } one of the top-up pack prices
  *   POST /verify                     checkout signature, then grant the pack's Quarks
@@ -884,6 +885,63 @@ function createPaymentRouter(deps = {}) {
       console.error('Cancel subscription error:', error);
       require('../services/opsAlerts').recordFailure('payment', `cancel-subscription: ${error.message}`);
       res.status(500).json({ success: false, message: 'We could not cancel your plan just now. Please try again in a few minutes.' });
+    }
+  });
+
+  /**
+   * POST /api/payment/cancel-slot   (no body)
+   * Stops ONE extra client place at the END of its paid month, without touching the Agency plan. The newest active
+   * place is the one cancelled. It is refused while the clients would no longer fit; no client is ever frozen or
+   * removed here. The limit goes down only when Razorpay reports the place ended (the webhook), so the customer keeps
+   * what they paid for until then. Safe to press twice.
+   */
+  router.post('/cancel-slot', protect, payLimiter, async (req, res) => {
+    try {
+      if (req.actingAgency) return res.status(403).json({ success: false, message: 'Plans and payments are managed in your agency account. Go back to the agency to change them.' });
+      const user = await User.findById(userIdOf(req));
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+      if (refuseWorkspace(user, res)) return;
+      if (!agencyRules.isAgency(user)) return res.status(400).json({ success: false, message: 'Extra clients are part of the Agency plan.' });
+
+      const slots = storedSubscriptions(user).filter((s) => s.kind === 'slot' && s.active && !s.ended);
+      const open = slots.filter((s) => !s.cancelAtPeriodEnd);
+      if (open.length === 0) {
+        const ending = slots.find((s) => s.cancelAtPeriodEnd);
+        if (ending) return res.json({ success: true, alreadyCancelling: true, endsAt: ending.cancelEndsAt || null, message: 'This extra client place is already set to end. You can keep using it until the end of the month you paid for.' });
+        return res.status(400).json({ success: false, message: 'You have no extra client to cancel.' });
+      }
+      const target = open.slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0];
+
+      // The clients must still fit once every place that is ending, and this one, has ended. Nothing is frozen or removed here.
+      const endingAlready = slots.length - open.length;
+      const futureLimit = agencyRules.clientLimitOf(user) - endingAlready - 1;
+      const inUse = Number((user.agency && user.agency.clientCount) || 0);
+      if (inUse > futureLimit) {
+        return res.status(400).json({ success: false, message: 'You are using all your client places. Remove a client first, then cancel an extra place.' });
+      }
+
+      let endsAt = (user.subscription && (user.subscription.currentPeriodEnd || user.subscription.nextBillingAt)) || null;
+      try {
+        const result = await rz().subscriptions.cancel(target.subscriptionId, 1);
+        if (result && Number(result.current_end) > 0) endsAt = new Date(Number(result.current_end) * 1000);
+      } catch (e) {
+        if (!alreadyCancelled(e)) {
+          console.error(`Could not cancel slot subscription ${target.subscriptionId}:`, e && e.message);
+          alert('payment', `could not cancel extra client subscription ${target.subscriptionId} at the customer's request`);
+          return res.status(502).json({ success: false, message: 'We could not cancel this extra client just now. Please try again in a few minutes, or write to us and we will do it for you.' });
+        }
+      }
+      const $set = { 'plan.subscriptions.$[sub].cancelAtPeriodEnd': true, 'plan.subscriptions.$[sub].cancelRequestedAt': new Date() };
+      if (endsAt) $set['plan.subscriptions.$[sub].cancelEndsAt'] = new Date(endsAt);
+      await User.updateOne(
+        { _id: user._id, 'plan.subscriptions': { $elemMatch: { subscriptionId: target.subscriptionId, active: true, cancelAtPeriodEnd: { $ne: true } } } },
+        { $set }, { arrayFilters: [{ 'sub.subscriptionId': target.subscriptionId }] }
+      );
+      res.json({ success: true, endsAt, message: 'This extra client place will end at the end of the month you paid for. You can keep using it until then, and you will not be charged again.' });
+    } catch (error) {
+      console.error('Cancel slot error:', error);
+      require('../services/opsAlerts').recordFailure('payment', `cancel-slot: ${error.message}`);
+      res.status(500).json({ success: false, message: 'We could not cancel this extra client just now. Please try again in a few minutes.' });
     }
   });
 

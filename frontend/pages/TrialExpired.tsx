@@ -4,10 +4,11 @@ import { CreditCard, CheckCircle, Loader2, Shield, Check, Plus } from 'lucide-re
 import { apiService, PlansResponse } from '../services/api';
 import { formatInr, formatPaise, tierLabel } from '../utils/plans';
 import {
-  agencyCardNote, agencyCardState, agencyExtraClientLine, agencyFeatureLines, agencyHeadline, insideClientBillingNotice, poolText, slotAvailability,
+  agencyCardNote, agencyCardState, agencyExtraClientLine, agencyFeatureLines, agencyHeadline, canCancelExtraClient, extraClientEndingNote, insideClientBillingNotice, poolText, slotAvailability,
 } from '../utils/agencyPlan';
 import BillingDetailsForm from '../components/BillingDetailsForm';
 import ExtraClientDialog from '../components/ExtraClientDialog';
+import CancelExtraClientDialog from '../components/CancelExtraClientDialog';
 import LegalLinks from '../components/LegalLinks';
 import { returnHashAfterActing } from '../utils/staffHome';
 
@@ -163,13 +164,14 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
   const [error, setError] = useState('');
   const [accountLoaded, setAccountLoaded] = useState(false);
   // An Agency account: its client count and shared pool, shown in posts and videos.
-  const [agencyNow, setAgencyNow] = useState<{ limit: number; used: number; poolPosts?: number; poolVideos?: number } | null>(null);
+  const [agencyNow, setAgencyNow] = useState<{ limit: number; used: number; poolPosts?: number; poolVideos?: number; extraSlots?: number; slotsEnding?: number; slotsEndAt?: string | null } | null>(null);
   const [slotOpen, setSlotOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   const loadAgency = async () => {
     try {
       const [c, u] = await Promise.all([apiService.getAgencyClients(), apiService.getAgencyUsage().catch(() => null)]);
-      setAgencyNow({ limit: c.limit || 0, used: c.used ?? (c.clients || []).length, poolPosts: u?.poolPosts, poolVideos: u?.poolVideos });
+      setAgencyNow({ limit: c.limit || 0, used: c.used ?? (c.clients || []).length, poolPosts: u?.poolPosts, poolVideos: u?.poolVideos, extraSlots: c.extraSlots, slotsEnding: c.slotsEnding, slotsEndAt: c.slotsEndAt });
     } catch { setAgencyNow(null); }
   };
 
@@ -340,6 +342,10 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
                   <button type="button" className={PRIMARY_BTN + ' md:max-w-xs mt-2'} disabled={!slotRoom.canBuy || !!busy} onClick={() => { setNotice(''); setError(''); setSlotOpen(true); }}>
                     <Plus className="w-4 h-4" /> Add an extra client
                   </button>
+                  {extraClientEndingNote(agencyNow) && <p className={`${muted} text-sm mt-3`} role="status">{extraClientEndingNote(agencyNow)}</p>}
+                  {canCancelExtraClient(agencyNow) && (
+                    <button type="button" disabled={!!busy} onClick={() => { setNotice(''); setError(''); setCancelOpen(true); }} className={`${muted} block text-sm mt-3 underline underline-offset-2 hover:text-white`}>Cancel an extra client</button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -462,6 +468,13 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
           <LegalLinks className="pt-1 text-xs text-[#ededed]/60" linkClassName="hover:text-[#ededed] underline underline-offset-2" />
         </div>
       </div>
+      {cancelOpen && (
+        <CancelExtraClientDialog
+          limit={agencyNow?.limit ?? 0}
+          onClose={() => setCancelOpen(false)}
+          onCancelled={() => { loadAgency(); }}
+        />
+      )}
       {slotOpen && (
         <ExtraClientDialog
           slot={catalogue.slot}

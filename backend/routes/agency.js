@@ -28,7 +28,7 @@ router.get('/clients', protect, limiter, async (req, res) => {
   try {
     const owner = await agencyOwner(req);
     const clients = owner ? await ws.listWorkspaces({ owner, models: models() }) : [];
-    res.json({ success: true, clients, limit: owner ? ag.clientLimitOf(owner) : 0, used: clients.length, slotInr: AGENCY.slot.inr, slotQuarks: AGENCY.slot.quarks });
+    res.json({ success: true, clients, limit: owner ? ag.clientLimitOf(owner) : 0, used: clients.length, slotInr: AGENCY.slot.inr, slotQuarks: AGENCY.slot.quarks, extraSlots: owner ? ag.slotsOf(owner.agency && owner.agency.extraSlots) : 0, slotsEnding: owner ? ag.slotsEndingOf(owner) : 0, slotsEndAt: owner ? ag.slotsEndAtOf(owner) : null });
   } catch (e) {
     console.error('[agency] list failed:', e.message);
     res.status(500).json({ success: false, message: 'We could not load your clients. Please try again.' });

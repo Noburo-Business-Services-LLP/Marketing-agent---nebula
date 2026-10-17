@@ -344,6 +344,9 @@ const userSchema = new mongoose.Schema({
       expectedPaise: { type: Number },   // agency plan and client slot: the price (paise, GST included) when it was bought
       active: { type: Boolean, default: false },
       ended: { type: Boolean },          // a client slot that was cancelled or completed: a late charge must not reactivate it
+      cancelAtPeriodEnd: { type: Boolean }, // a client slot the customer cancelled: it stays until the paid month ends
+      cancelRequestedAt: { type: Date },
+      cancelEndsAt: { type: Date },      // when that paid month ends, if known
       createdAt: { type: Date, default: Date.now }
     }]
   },
@@ -454,7 +457,11 @@ userSchema.methods.toPublicJSON = function () {
     // The plan tier (starter, professional, free) or null for a managed account. Used to show the plan prompt.
     plan: { tier: (this.plan && this.plan.tier) || null },
     // How many client brands this account owns; lets an agency whose plan ended still reach its clients to see or remove them.
-    agency: { clientCount: Number((this.agency && this.agency.clientCount) || 0), workspaceName: (this.agency && this.agency.workspaceName) || '' },
+    agency: {
+      clientCount: Number((this.agency && this.agency.clientCount) || 0), workspaceName: (this.agency && this.agency.workspaceName) || '',
+      // Paid extra client places, and how many of them end with the paid month (so the app can show the state).
+      extraSlots: Number((this.agency && this.agency.extraSlots) || 0), slotsEnding: require('../services/agency').slotsEndingOf(this)
+    },
     credits: this.credits ? {
       balance: this.credits.balance,
       totalUsed: this.credits.totalUsed

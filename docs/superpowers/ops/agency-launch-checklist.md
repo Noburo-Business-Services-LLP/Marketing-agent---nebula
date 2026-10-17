@@ -18,6 +18,7 @@ The preview refuses payment, so neither checkout has ever been run for real.
 - Use Razorpay test keys on a dev or staging copy. Buy the Agency plan, then add an extra client slot.
 - Check: the plan becomes Agency, the slot count goes up, the clients stay open, the invoice looks right, and cancelling the plan pauses all clients (nothing deleted).
 - Check that a refused payment shows in staff Money failures. Those need a manual Razorpay refund; they are not retried.
+- Also cancel one extra client place (plans page, "Cancel an extra client"): Razorpay should schedule the cancel for the end of that slot's month, the limit must stay until the cancelled event arrives, and then drop by one. Not yet tried with real Razorpay.
 - Also check the webhook still verifies (`RAZORPAY_WEBHOOK_SECRET`).
 
 ## 3. Subashni (accountant)

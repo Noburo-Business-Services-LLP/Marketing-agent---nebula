@@ -20,6 +20,20 @@ function clientLimitOf(owner) {
   return Math.min(AGENCY.maxClients, AGENCY.includedClients + slotsOf(owner.agency && owner.agency.extraSlots));
 }
 
+/** Extra client places that are paid up for now but set to end with the paid month. */
+function slotsEndingOf(owner) {
+  const subs = (owner && owner.plan && Array.isArray(owner.plan.subscriptions)) ? owner.plan.subscriptions : [];
+  return subs.filter((s) => s && s.kind === 'slot' && s.active && !s.ended && s.cancelAtPeriodEnd).length;
+}
+
+/** The earliest date at which a place set to end actually ends, as an ISO string, or null when none is known. */
+function slotsEndAtOf(owner) {
+  const subs = (owner && owner.plan && Array.isArray(owner.plan.subscriptions)) ? owner.plan.subscriptions : [];
+  const times = subs.filter((s) => s && s.kind === 'slot' && s.active && !s.ended && s.cancelAtPeriodEnd && s.cancelEndsAt)
+    .map((s) => new Date(s.cancelEndsAt).getTime()).filter(Number.isFinite);
+  return times.length ? new Date(Math.min(...times)).toISOString() : null;
+}
+
 /** The account whose Quarks are spent: the agency for a client workspace, the user themselves otherwise. */
 const payerIdOf = (u) => (isWorkspace(u) ? idOf(u.agency.ownerId) : idOf(u));
 
@@ -87,4 +101,4 @@ async function publicCredits(user, { User = require('../models/User') } = {}) {
 /** The free first campaign batch is for a person's own first run. A client's work is paid from the agency's shared pool. */
 const freeFirstBatch = (u) => !isWorkspace(u) && !(u && u.initialCampaignsGenerated);
 
-module.exports = { NOT_A_WORKSPACE, publicCredits, freeFirstBatch, isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };
+module.exports = { slotsEndingOf, slotsEndAtOf, slotsOf, NOT_A_WORKSPACE, publicCredits, freeFirstBatch, isAgency, isWorkspace, clientLimitOf, payerIdOf, workspacePlanFields, placeholderEmail, walletBalance, resolvePayer, canPayForClients, CLIENT_PAYER_FILTER, idOf };

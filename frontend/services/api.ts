@@ -317,7 +317,7 @@ export interface PlansResponse {
 }
 
 export interface AgencyClient { id: string; name: string; createdAt: string; frozen: boolean }
-export interface AgencyClientsResponse { success: boolean; clients: AgencyClient[]; limit: number; used: number; slotInr: number }
+export interface AgencyClientsResponse { success: boolean; clients: AgencyClient[]; limit: number; used: number; slotInr: number; extraSlots?: number; slotsEnding?: number; slotsEndAt?: string | null }
 export interface AgencyUsageResponse {
   success: boolean; month: string; monthLabel?: string;
   /** The shared pool as posts and videos. The Quark figures in the answer are never shown. */
@@ -1532,6 +1532,9 @@ export const apiService = {
       return { success: true };
     } catch (e: any) { return { success: false, message: agencyErrorMessage(e, 'We could not prepare the usage report. Please try again.') }; }
   },
+  /** Stops one extra client place at the end of its paid month. Throws the server's plain refusal (with `status`) when it cannot. */
+  cancelExtraClient: async (): Promise<{ success: boolean; endsAt?: string | null; alreadyCancelling?: boolean; message?: string }> =>
+    apiCall('/payment/cancel-slot', { method: 'POST', body: '{}' }, true),
   createSlotSubscription: async (): Promise<any> =>
     apiCall('/payment/create-slot-subscription', { method: 'POST', body: '{}' }, true),
 

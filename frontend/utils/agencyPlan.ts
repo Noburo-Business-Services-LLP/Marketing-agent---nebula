@@ -122,6 +122,57 @@ export function slotConfirmedText(result: { clientLimit?: unknown; message?: unk
   return limit ? `${base} You can now have ${limit} clients.` : base;
 }
 
+// ---------------- cancelling one extra client ----------------
+
+type SlotState = { extraSlots?: unknown; slotsEnding?: unknown; slotsEndAt?: unknown } | undefined | null;
+
+/** The cancel link shows while an extra place is held and not every one of them is already set to end. */
+export function canCancelExtraClient(s: SlotState): boolean {
+  const extra = num(s?.extraSlots);
+  return extra > 0 && num(s?.slotsEnding) < extra;
+}
+
+const dateText = (v: unknown): string => {
+  if (typeof v !== 'string' || !v) return '';
+  const d = new Date(v);
+  if (!Number.isFinite(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
+};
+
+/** The lines of the confirm dialog. `limit` is the client limit today. */
+export function cancelExtraConfirmText(limit: number): string[] {
+  const l = num(limit);
+  return [
+    'This extra client place will end at the end of the month you have paid for. You can keep using it until then, and you will not be charged for it again.',
+    l ? `Your limit then goes from ${l} to ${l - 1} clients.` : 'Your client limit then goes down by one.',
+    'You need a free client place to do this. If all your places are in use, remove a client first.',
+  ];
+}
+
+/** A quiet line for the plans and clients pages while one or more extra places are set to end. */
+export function extraClientEndingNote(s: SlotState): string {
+  const n = num(s?.slotsEnding);
+  if (!n) return '';
+  const on = dateText(s?.slotsEndAt);
+  if (on) return `Ends on ${on}`;
+  return n === 1 ? 'One extra client place ends at the end of this month' : `${fmt(n)} extra client places end at the end of this month`;
+}
+
+export function cancelExtraDoneText(result: { endsAt?: unknown } | null | undefined): string {
+  const on = dateText(result?.endsAt);
+  return on
+    ? `This extra client place ends on ${on}. You can keep using it until then.`
+    : 'This extra client place ends at the end of the month you paid for. You can keep using it until then.';
+}
+
+/** Shows the server's own refusal (it is written in plain words); anything else gets a plain fallback. */
+export function cancelExtraMessage(err: unknown): string {
+  const fallback = 'We could not cancel this extra client just now. Please try again.';
+  const status = err && typeof err === 'object' ? Number((err as { status?: unknown }).status) : 0;
+  if (status >= 400 && status < 500) return agencyErrorMessage(err, fallback);
+  return fallback;
+}
+
 // ---------------- months ----------------
 
 export const monthKeyOf = (d: Date): string => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;

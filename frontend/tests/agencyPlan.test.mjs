@@ -226,3 +226,47 @@ test('an agency whose shared pool is used up is told in posts and videos, not Qu
   assert.match(agencyHeadline(false).title, /Agency plan/);
   assert.doesNotMatch(JSON.stringify(agencyHeadline(false)), /quark|credit|trial|!|—/i);
 });
+
+// ---------------- cancelling one extra client ----------------
+import { canCancelExtraClient, cancelExtraConfirmText, extraClientEndingNote, cancelExtraMessage, cancelExtraDoneText } from '../utils/agencyPlan.ts';
+
+test('the cancel link shows only when an extra place is held and not all are already ending', () => {
+  assert.equal(canCancelExtraClient({ extraSlots: 0, slotsEnding: 0 }), false);
+  assert.equal(canCancelExtraClient({ extraSlots: 2, slotsEnding: 0 }), true);
+  assert.equal(canCancelExtraClient({ extraSlots: 2, slotsEnding: 1 }), true);
+  assert.equal(canCancelExtraClient({ extraSlots: 2, slotsEnding: 2 }), false);
+  assert.equal(canCancelExtraClient({ extraSlots: 1, slotsEnding: 3 }), false);
+  assert.equal(canCancelExtraClient(null), false);
+  assert.equal(canCancelExtraClient({}), false);
+  assert.equal(canCancelExtraClient({ extraSlots: 'x', slotsEnding: undefined }), false);
+});
+
+test('the confirm text says the place ends with the paid month, the limit drops by one and a free place is needed', () => {
+  const lines = cancelExtraConfirmText(7);
+  const text = lines.join(' ');
+  assert.match(text, /end of the month you have paid for/i);
+  assert.match(text, /7 to 6 clients/);
+  assert.match(text, /free client place/i);
+  assert.doesNotMatch(text, /quark|credit|trial|7 days|razorpay|ayrshare/i);
+});
+
+test('the note after cancelling names the date when known, otherwise the end of the month', () => {
+  assert.equal(extraClientEndingNote({ extraSlots: 2, slotsEnding: 0 }), '');
+  assert.equal(extraClientEndingNote({ extraSlots: 2, slotsEnding: 1, slotsEndAt: '2026-11-20T00:00:00.000Z' }), 'Ends on 20 November 2026');
+  assert.equal(extraClientEndingNote({ extraSlots: 2, slotsEnding: 1 }), 'One extra client place ends at the end of this month');
+  assert.equal(extraClientEndingNote({ extraSlots: 3, slotsEnding: 2 }), '2 extra client places end at the end of this month');
+  assert.equal(extraClientEndingNote({ extraSlots: 2, slotsEnding: 1, slotsEndAt: 'garbage' }), 'One extra client place ends at the end of this month');
+  assert.doesNotMatch(extraClientEndingNote({ extraSlots: 1, slotsEnding: 1 }), /quark|credit|trial|7 days/i);
+});
+
+test('server refusals are shown as the server wrote them, with a plain fallback', () => {
+  assert.equal(cancelExtraMessage({ status: 400, message: 'You are using all your client places. Remove a client first, then cancel an extra place.' }), 'You are using all your client places. Remove a client first, then cancel an extra place.');
+  assert.match(cancelExtraMessage(new Error('Failed to fetch')), /could not cancel/i);
+  assert.match(cancelExtraMessage(undefined), /Please try again/);
+});
+
+test('the done text uses the date when the server gave one', () => {
+  assert.match(cancelExtraDoneText({ endsAt: '2026-11-20T00:00:00.000Z' }), /20 November 2026/);
+  assert.match(cancelExtraDoneText({}), /end of the month/i);
+  assert.match(cancelExtraDoneText(null), /end of the month/i);
+});
