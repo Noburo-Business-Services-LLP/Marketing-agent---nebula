@@ -88,6 +88,10 @@ async function applyHandleChange(competitor, d) {
   }
 }
 
+// A handle that does not exist may come back as an item carrying an error, or with no profile numbers at all
+// (assumed, not yet seen from the real scraper). Either way there is nothing to count.
+const notAProfile = (p) => !!p.error || (typeof p.followersCount !== 'number' && !Array.isArray(p.latestPosts) && !Array.isArray(p.posts));
+
 const failReason = (profile) => (profile && (profile.private || profile.isPrivate) ? 'This account is private' : 'Could not read this profile');
 
 /** Read one competitor and store the result. Never throws. Does not check due-ness: the pass does that. */
@@ -111,7 +115,7 @@ async function trackOne({ competitor, user, now, deps } = {}) {
     try {
       const res = await d.scrapeProfile(handle);
       const profile = res && res.success && Array.isArray(res.data) ? res.data[0] : null;
-      if (!profile || typeof profile !== 'object') error = 'Could not read this profile';
+      if (!profile || typeof profile !== 'object' || notAProfile(profile)) error = 'Could not read this profile';
       else if (profile.private || profile.isPrivate) error = failReason(profile);
       else snapshotFields = summarise({ profile, posts: profile.latestPosts || profile.posts || [], now: at });
     } catch (_) {

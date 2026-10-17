@@ -12,6 +12,8 @@ const snapshotSchema = new mongoose.Schema({
   error: { type: String, maxlength: 200 },
   followers: Number,
   postsInWindow: Number,
+  // true when the week's count may be cut short because the read returns only the newest posts
+  postsInWindowMayBeTruncated: { type: Boolean, default: false },
   posts30: Number,
   avgLikes: Number,
   avgComments: Number,
