@@ -55,7 +55,7 @@ function createPlanService(deps = defaultDeps()) {
     const rule = canRefresh({ user, now: deps.now(), staff });
     if (!rule.ok) return { ok: false, reason: 'too_soon', nextAt: rule.nextAt, message: rule.message };
     const r = await startPlan({ userId: id, reason: 'refresh' });
-    if (r.ok && !r.alreadyRunning) await deps.saveState(id, { lastRefreshAt: deps.now() });
+    if (r.ok && !r.alreadyRunning) await deps.saveState(id, { lastRefreshAt: deps.now(), firstPlanFailedAt: null, attempts: 0 });
     return r;
   }
 

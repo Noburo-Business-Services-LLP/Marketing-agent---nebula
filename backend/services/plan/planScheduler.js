@@ -4,6 +4,9 @@ const { shouldHavePlan, monthlyDue } = require('./planRules');
 
 const RETRY_PAUSE_MS = 30 * 60 * 1000;
 const MAX_RETRIES = 2;
+const MONTHLY_COOLDOWN_MS = 12 * 3600 * 1000;
+const FAILED_COOLDOWN_MS = 24 * 3600 * 1000;
+const MAX_MONTHLY_FAILURES = 3;
 const DEFAULT_INTERVAL_MS = 6 * 3600 * 1000;
 
 function defaultDeps() {
@@ -25,6 +28,10 @@ function defaultDeps() {
       return d ? d.completedAt : null;
     },
     inFlight: async (id) => !!(await active(id)),
+    lastRunFailed: async (id) => {
+      const d = await Blueprint().findOne({ userId: id, kind: 'plan' }).sort({ createdAt: -1 }).select('status').lean();
+      return !!d && d.status === 'failed';
+    },
     startPlan: (a) => plans().startPlan(a),
     failedFirst: async () => {
       const ids = await Blueprint().distinct('userId', { kind: 'plan', status: 'failed' });
@@ -59,9 +66,25 @@ async function runMonthlyOnce({ deps = defaultDeps(), now = new Date(), limit = 
       if (!shouldHavePlan(user)) { skipped += 1; continue; }
       const id = String(user._id);
       if (await deps.inFlight(id)) { skipped += 1; continue; }
-      if (!monthlyDue({ lastPlanAt: await deps.lastPlanAt(id), now })) { skipped += 1; continue; }
+      const state = user.planState || {};
+      if (state.firstPlanFailedAt) { skipped += 1; continue; }
+      const lastPlanAt = await deps.lastPlanAt(id);
+      const failed = deps.lastRunFailed ? !!(await deps.lastRunFailed(id)) : false;
+      if (failed && !lastPlanAt) { skipped += 1; continue; } // a first plan: the retry logic owns it
+      if (!failed && (state.attempts || 0) > 0 && deps.saveState) await deps.saveState(id, { attempts: 0 });
+      if (failed && (state.attempts || 0) >= MAX_MONTHLY_FAILURES) {
+        if (deps.saveState) await deps.saveState(id, { firstPlanFailedAt: new Date(now) });
+        if (deps.alert) deps.alert(`monthly plan failed ${MAX_MONTHLY_FAILURES} times for ${id}`);
+        skipped += 1; continue;
+      }
+      const since = state.lastStartedAt ? new Date(now).getTime() - new Date(state.lastStartedAt).getTime() : Infinity;
+      if (since < (failed ? FAILED_COOLDOWN_MS : MONTHLY_COOLDOWN_MS)) { skipped += 1; continue; }
+      if (!monthlyDue({ lastPlanAt, now })) { skipped += 1; continue; }
       const r = await deps.startPlan({ userId: id, reason: 'monthly' });
-      if (r && r.ok && !r.alreadyRunning) started += 1; else skipped += 1;
+      if (r && r.ok && !r.alreadyRunning) {
+        started += 1;
+        if (deps.countAttempt) await deps.countAttempt(id);
+      } else skipped += 1;
     } catch (e) {
       skipped += 1;
       console.warn(`[plan] monthly run skipped ${user && user._id}: ${e && e.message}`);
