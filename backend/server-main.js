@@ -425,6 +425,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/campaigns', aiLimiter, campaignRoutes);
 app.use('/api/competitors/insights', require('./routes/competitorInsights'));
 app.use('/api/competitors', competitorRoutes);
+app.use('/api/listening', require('./routes/listening'));
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/ad-campaigns', adCampaignRoutes);

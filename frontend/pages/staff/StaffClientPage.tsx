@@ -31,7 +31,7 @@ const ACTION_LABEL: Record<string, string> = {
   billing_zoho_sync: 'Linked invoices from Zoho Books', billing_zoho_invoice: 'Created an invoice in Zoho Books', bulk_add_quarks: 'Added Quarks', bulk_set_plan: 'Changed the plan', bulk_set_features: 'Changed the features',
   add_quarks: 'Added Quarks', disable_client: 'Switched the account off', enable_client: 'Switched the account on',
   assign_csm: 'Changed the CSM', rename_client: 'Changed the name', bulk_assign_csm: 'Changed the CSM', open_client: 'Opened the account', role_change: 'Changed a role',
-  check_competitors: 'Checked their competitors now', hide_client: 'Left the client out of the numbers', show_client: 'Counted the client in the numbers again'
+  check_competitors: 'Checked their competitors now', score_listening: 'Scored their comments now', hide_client: 'Left the client out of the numbers', show_client: 'Counted the client in the numbers again'
 };
 
 /** One client on one page: summary, access, activity, connections, Quarks, money (Owner) and history. */

@@ -379,6 +379,31 @@ router.post('/clients/:id/competitors/check', requireStaff('open_client'), requi
   }
 });
 
+// GET /api/staff/clients/:id/listening: the comment score card as the client sees it, plus the ledger counts.
+router.get('/clients/:id/listening', requireStaff('view_clients'), async (req, res) => {
+  try {
+    const client = await clientFor(req, res);
+    if (!client) return;
+    res.json(await require('./listening').staffViewFor(client));
+  } catch (error) {
+    console.error('[staff] client listening failed:', error.name);
+    res.status(500).json({ success: false, message: 'We could not load this comment score. Please try again.' });
+  }
+});
+
+// POST /api/staff/clients/:id/listening/score: score this client's comments now. Skips the weekly wait only; the daily
+// caps, the spend guard, the switch and the lease still apply. Logged.
+router.post('/clients/:id/listening/score', requireStaff('open_client'), require('./listening').checkLimiter, async (req, res) => {
+  try {
+    const client = await clientFor(req, res, 'open_client');
+    if (!client) return;
+    res.json(await require('./listening').staffScore({ client, staff: req.staff, record: recordStaffAction }));
+  } catch (error) {
+    console.error('[staff] client listening score failed:', error.name);
+    res.status(500).json({ success: false, message: 'We could not score these comments. Please try again.' });
+  }
+});
+
 // POST /api/staff/clients/:id/quarks { amount }: Owner only.
 router.post('/clients/:id/quarks', requireStaff('add_quarks'), async (req, res) => {
   try {
