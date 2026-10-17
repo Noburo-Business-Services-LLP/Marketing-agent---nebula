@@ -82,11 +82,46 @@ test('B-I5: a reminder email goes to the campaign owner and nobody else, and nev
   ses.initialized = true;
   ses.sendCampaignReminder = async (m) => { sent.push(m.to); return { success: true }; };
   const log = console.log; console.log = () => {};
+  const prevFlag = process.env.CAMPAIGN_REMINDER_EMAILS; process.env.CAMPAIGN_REMINDER_EMAILS = 'on';
   try {
     for (const id of ['u1', 'u2', 'u3', 'u4', 'u5', 'missing']) await scheduler.sendEmailNotification({ name: 'Diwali', userId: id, platforms: [] }, 30, new Date());
     await scheduler.sendEmailNotification({ name: 'Diwali', userId: { _id: 'u1' }, platforms: [] }, 15, new Date());
-  } finally { console.log = log; scheduler.UserModel = real.Model; ses.initialized = real.init; ses.sendCampaignReminder = real.send; }
+  } finally {
+    console.log = log; scheduler.UserModel = real.Model; ses.initialized = real.init; ses.sendCampaignReminder = real.send;
+    if (prevFlag === undefined) delete process.env.CAMPAIGN_REMINDER_EMAILS; else process.env.CAMPAIGN_REMINDER_EMAILS = prevFlag;
+  }
   assert.deepStrictEqual(sent, ['asha@example.com', 'asha@example.com']);
+});
+
+// ---- N2: reminder emails are off unless CAMPAIGN_REMINDER_EMAILS is 'on'
+test('N2: reminder emails send nothing by default or for any value but on; on (any case) sends to the owner only', async () => {
+  const scheduler = require('../services/notificationScheduler');
+  const ses = require('../services/sesEmailService');
+  const real = { Model: scheduler.UserModel, init: ses.initialized, send: ses.sendCampaignReminder };
+  const sent = [];
+  scheduler.UserModel = { findById: () => ({ select: () => ({ lean: async () => ({ _id: 'u1', email: 'asha@example.com' }) }) }) };
+  ses.initialized = true;
+  ses.sendCampaignReminder = async (m) => { sent.push(m.to); return { success: true }; };
+  const prev = process.env.CAMPAIGN_REMINDER_EMAILS;
+  const log = console.log; console.log = () => {};
+  const camp = { name: 'Diwali', userId: 'u1', platforms: [] };
+  try {
+    for (const v of [undefined, '', 'off', 'true', '1', 'yes', 'onn']) {
+      if (v === undefined) delete process.env.CAMPAIGN_REMINDER_EMAILS; else process.env.CAMPAIGN_REMINDER_EMAILS = v;
+      await scheduler.sendEmailNotification(camp, 30, new Date());
+      assert.strictEqual(await scheduler.recipientFor(camp), null, String(v));
+      assert.strictEqual(scheduler.reminderEmailsOn(), false, String(v));
+    }
+    assert.deepStrictEqual(sent, [], 'off sends nothing and does not throw');
+    for (const v of ['on', 'ON', ' On ']) {
+      process.env.CAMPAIGN_REMINDER_EMAILS = v;
+      await scheduler.sendEmailNotification(camp, 15, new Date());
+    }
+    assert.deepStrictEqual(sent, ['asha@example.com', 'asha@example.com', 'asha@example.com']);
+  } finally {
+    console.log = log; scheduler.UserModel = real.Model; ses.initialized = real.init; ses.sendCampaignReminder = real.send;
+    if (prev === undefined) delete process.env.CAMPAIGN_REMINDER_EMAILS; else process.env.CAMPAIGN_REMINDER_EMAILS = prev;
+  }
 });
 
 // ---- B-M2: no pass into a client from inside a CSM session

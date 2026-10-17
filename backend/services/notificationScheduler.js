@@ -13,6 +13,11 @@ const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const sesEmailService = require('./sesEmailService');
 
+/** Reminder emails (30 and 15 minutes before a post) are sent only when CAMPAIGN_REMINDER_EMAILS is 'on' (any case). Read each time, so a change needs no code. */
+function reminderEmailsOn(env = process.env) {
+  return String(env.CAMPAIGN_REMINDER_EMAILS || '').trim().toLowerCase() === 'on';
+}
+
 class NotificationScheduler {
   constructor() {
     this.isRunning = false;
@@ -35,6 +40,7 @@ class NotificationScheduler {
     // Initialize SES
     sesEmailService.initialize();
 
+    console.log(`📧 Campaign reminder emails are ${reminderEmailsOn() ? 'ON' : 'OFF'} (CAMPAIGN_REMINDER_EMAILS=${reminderEmailsOn() ? 'on' : 'not on'})`);
     console.log('🔔 Starting campaign notification scheduler...');
     this.isRunning = true;
 
@@ -253,6 +259,7 @@ class NotificationScheduler {
    * an account waiting to be deleted, or an owner we cannot find. Customer data is never sent to a fixed address.
    */
   async recipientFor(campaign) {
+    if (!reminderEmailsOn()) return null; // the one switch: no reminder email goes anywhere unless it is on
     const ownerId = campaign && campaign.userId && (campaign.userId._id || campaign.userId);
     if (!ownerId) return null;
     const owner = await this.UserModel.findById(ownerId).select('email isActive deletion.status agency.ownerId').lean();
@@ -265,6 +272,7 @@ class NotificationScheduler {
   }
 
   async sendEmailNotification(campaign, minutesLeft, scheduledTime) {
+    if (!reminderEmailsOn()) return; // reminder emails are off (the in-app notification was already created)
     try {
       const userEmail = await this.recipientFor(campaign);
       if (!userEmail) {
@@ -370,3 +378,4 @@ class NotificationScheduler {
 const notificationScheduler = new NotificationScheduler();
 
 module.exports = notificationScheduler;
+module.exports.reminderEmailsOn = reminderEmailsOn;

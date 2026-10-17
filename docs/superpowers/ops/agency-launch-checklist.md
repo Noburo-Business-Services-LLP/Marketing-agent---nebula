@@ -57,6 +57,8 @@ Each client brand uses one Ayrshare profile. Ask Ayrshare whether a profile crea
 - A personal email is hard-coded in `services/notificationScheduler`, so every campaign reminder goes to it. Replace it with the configured alert address.
 - The CSM pass path check (`isBlockedWhileActing`) does not lower-case or decode the path, so a path like `/API/PAYMENT` might get past it. The agency pass already handles this (`isBlockedInsideClient`); give the CSM one the same treatment.
 
+- Campaign reminder emails (30 and 15 minutes before a scheduled post) are OFF by default. The in-app reminders still work. To turn the emails on, set the environment variable `CAMPAIGN_REMINDER_EMAILS=on` (case does not matter; anything else or unset means off) and restart the backend. They then go to the post owner only. The start-up log says whether they are on or off.
+
 ## 10. Last
 
 - Take the verification run result (real run on `nebulaa_dev`) from the controller report.
