@@ -486,6 +486,18 @@ test('(I11) the default account lookup pages through every account, not the firs
   assert.doesNotMatch(src, /accounts: \(limit = 500/, 'no hard 500');
 });
 
+test('(I11) the account lookup is asked for pages of caps.ACCOUNTS_PAGE, and the default lookup honours a page size', async () => {
+  const w = world({ users: [user('u1')], competitors: [comp('c1', 'u1')] });
+  const asked = [];
+  const accounts = w.deps.accounts;
+  w.deps.accounts = async (args) => { asked.push(args); return accounts(args); };
+  w.deps.caps = { ...w.deps.caps, ACCOUNTS_PAGE: 3 };
+  await runTrackerOnce({ deps: w.deps, now: NOW });
+  assert.strictEqual(asked[0].pageSize, 3);
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../services/competitors/tracker.js'), 'utf8');
+  assert.match(src, /limit\(size\)/, 'the page size is not hard-coded');
+});
+
 test('(busy) the pass reports busy when a pass is already running in this process', async () => {
   let release;
   const hold = new Promise((r) => { release = r; });

@@ -47,7 +47,8 @@ function defaultDeps() {
       prune: (...a) => lazyStore().prune(...a)
     },
     // Every non-free, active, onboarded account (the entitlement check is canUse), read in pages by _id so none is cut off.
-    accounts: async ({ ids = null } = {}) => {
+    accounts: async ({ ids = null, pageSize } = {}) => {
+      const size = Number(pageSize) > 0 ? Number(pageSize) : PAGE;
       const out = [];
       let last = null;
       for (;;) {
@@ -55,9 +56,9 @@ function defaultDeps() {
           isActive: { $ne: false }, onboardingCompleted: true, staffRole: null, isCsm: { $ne: true }, 'plan.tier': { $ne: 'free' },
           ...(ids ? { _id: { $in: ids } } : {}),
           ...(last ? { _id: { ...(ids ? { $in: ids } : {}), $gt: last } } : {})
-        }).select('_id isActive onboardingCompleted staffRole isCsm plan competitorsReadAt').sort({ _id: 1 }).limit(PAGE).lean();
+        }).select('_id isActive onboardingCompleted staffRole isCsm plan competitorsReadAt').sort({ _id: 1 }).limit(size).lean();
         out.push(...page);
-        if (page.length < PAGE) break;
+        if (page.length < size) break;
         last = page[page.length - 1]._id;
       }
       return out;
@@ -200,7 +201,7 @@ async function runTrackerOnce({ deps, now, limit, accountIds = null, force = fal
     catch (e) { console.warn('[competitors] could not read the paused accounts, skipping this pass:', e && e.message); return out; }
 
     const only = Array.isArray(accountIds) ? new Set(accountIds.map(String)) : null;
-    let users = (await d.accounts({ ids: only ? [...only] : null })) || [];
+    let users = (await d.accounts({ ids: only ? [...only] : null, pageSize: caps.ACCOUNTS_PAGE })) || [];
     if (only) users = users.filter((u) => u && only.has(String(u._id)));
     // Fair rotation: accounts never read first, then the oldest last read.
     const readAt = (u) => (u && u.competitorsReadAt ? new Date(u.competitorsReadAt).getTime() : 0);
@@ -271,4 +272,4 @@ function startCompetitorTracker({ env = process.env, intervalMs = EVERY_MS, firs
   return { stop: () => { clearTimeout(first); clearInterval(timer); } };
 }
 
-module.exports = { trackOne, runTrackerOnce, startCompetitorTracker };
+module.exports = { trackOne, runTrackerOnce, startCompetitorTracker, defaultDeps };
