@@ -1227,6 +1227,9 @@ router.put('/update-profile', protect, [
       { new: true, runValidators: true }
     );
 
+    // Fire and forget: a plan is started if this save completed the profile; it never delays or fails the save.
+    require('../services/plan/planService').maybeStartFirstPlanSafe(req.user._id);
+
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
@@ -1345,6 +1348,8 @@ router.put('/complete-onboarding', protect, async (req, res) => {
       updateData,
       { new: true }
     );
+
+    require('../services/plan/planService').maybeStartFirstPlanSafe(req.user._id);
 
     // Also save to OnboardingContext for AI outreach
     try {

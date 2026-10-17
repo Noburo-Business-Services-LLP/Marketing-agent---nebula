@@ -824,6 +824,13 @@ const startServer = async () => {
       console.warn('Unfinished-draft cleanup failed to start:', reaperError.message);
     }
 
+    // The plan each paying account gets from its profile: monthly refresh, retries for a failed first plan
+    try {
+      require('./services/plan/planScheduler').startPlanScheduler();
+    } catch (schedulerError) {
+      console.warn('Plan scheduler failed to start:', schedulerError.message);
+    }
+
     // Start weekly AI memory distillation scheduler
     try {
       startMemoryDistillationScheduler();

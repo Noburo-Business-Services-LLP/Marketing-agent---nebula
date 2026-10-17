@@ -62,4 +62,25 @@ function createPlanService(deps = defaultDeps()) {
   return { startPlan, currentPlan, inFlight, refresh };
 }
 
-module.exports = { createPlanService, defaultDeps };
+let sharedService = null;
+const shared = () => (sharedService = sharedService || createPlanService());
+
+// After a profile is saved: start the first plan if the account qualifies and has none yet.
+async function maybeStartFirstPlan(userId, service = shared()) {
+  if (!userId) return;
+  if (await service.currentPlan(userId)) return;
+  if (await service.inFlight(userId)) return;
+  await service.startPlan({ userId, reason: 'first' });
+}
+
+// For routes: fire and forget. Never throws, never returns a promise the caller must wait for.
+function maybeStartFirstPlanSafe(userId, { service, log = (m) => console.warn(m) } = {}) {
+  try {
+    Promise.resolve(maybeStartFirstPlan(userId, service || shared()))
+      .catch((e) => log(`[plan] first plan not started for ${userId}: ${e && e.message}`));
+  } catch (e) {
+    log(`[plan] first plan not started for ${userId}: ${e && e.message}`);
+  }
+}
+
+module.exports = { createPlanService, defaultDeps, maybeStartFirstPlan, maybeStartFirstPlanSafe };
