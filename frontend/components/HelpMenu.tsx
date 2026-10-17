@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { HelpCircle } from 'lucide-react';
 import { apiService } from '../services/api';
 import { SUPPORT_EMAIL } from '../constants/legal';
+import { cardModel } from '../utils/setup';
 
 export const TOUR_REPLAY_EVENT = 'nebulaa-tour-replay';
 
@@ -10,12 +11,13 @@ const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outli
 const ITEM = `flex min-h-[44px] w-full items-center rounded-lg px-3 text-left text-[13.5px] font-medium text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] ${FOCUS}`;
 
 /** The "?" button: replay the tour, jump to the setup steps, or write to support. Opens with a click or Enter, closes with Escape or a click outside. */
-const HelpMenu: React.FC<{ canReplay?: boolean; className?: string }> = ({ canReplay = true, className = '' }) => {
+const HelpMenu: React.FC<{ canReplay?: boolean; canSetup?: boolean; className?: string }> = ({ canReplay = true, canSetup = true, className = '' }) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+  const [setupShown, setSetupShown] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -23,6 +25,14 @@ const HelpMenu: React.FC<{ canReplay?: boolean; className?: string }> = ({ canRe
     setOpen(false);
     if (refocus) button.current?.focus();
   }, []);
+
+  // "Your setup steps" only appears while the Setup card does: the account is a customer's own and some step is left.
+  useEffect(() => {
+    if (!open || !canSetup) { if (!canSetup) setSetupShown(false); return undefined; }
+    let live = true;
+    apiService.getSetup().then((r) => { if (live) setSetupShown(cardModel(r).show); }).catch(() => { if (live) setSetupShown(false); });
+    return () => { live = false; };
+  }, [open, canSetup]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -46,6 +56,7 @@ const HelpMenu: React.FC<{ canReplay?: boolean; className?: string }> = ({ canRe
 
   const replay = () => {
     setOpen(false);
+    button.current?.focus(); // the tour hands focus back to the button that was focused when it opened
     apiService.saveTour('replay');
     window.dispatchEvent(new CustomEvent(TOUR_REPLAY_EVENT));
   };
@@ -79,7 +90,7 @@ const HelpMenu: React.FC<{ canReplay?: boolean; className?: string }> = ({ canRe
       {open && (
         <div ref={menu} role="menu" aria-label="Help" className="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-1.5 shadow-2xl">
           {canReplay && <button type="button" role="menuitem" onClick={replay} className={ITEM}>Replay the tour</button>}
-          <button type="button" role="menuitem" onClick={setupSteps} className={ITEM}>Your setup steps</button>
+          {canSetup && setupShown && <button type="button" role="menuitem" onClick={setupSteps} className={ITEM}>Your setup steps</button>}
           <a role="menuitem" href={`mailto:${SUPPORT_EMAIL}`} onClick={() => setOpen(false)} className={ITEM}>Contact support</a>
         </div>
       )}

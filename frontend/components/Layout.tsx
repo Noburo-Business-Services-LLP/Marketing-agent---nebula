@@ -97,19 +97,24 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     const t = setTimeout(() => { if (!tourDone.current) { tourIsReplay.current = false; setTourOpen(true); } }, 800);
     return () => clearTimeout(t);
   }, [user, location.pathname, hasCsmPass, tourOpen]);
-  const replayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A replay asked for from any page waits here until the home screen is showing and its cards have had time to draw.
+  const [replayPending, setReplayPending] = useState(false);
+  const replayDelay = useRef(0);
   useEffect(() => {
     const onReplay = () => {
       if (!tourEligible || tourOpen) return;
-      tourIsReplay.current = true;
-      if (replayTimer.current) clearTimeout(replayTimer.current);
-      if (location.pathname === '/dashboard') { setTourOpen(true); return; }
-      navigate('/dashboard');
-      replayTimer.current = setTimeout(() => setTourOpen(true), 800);
+      replayDelay.current = location.pathname === '/dashboard' ? 0 : 800;
+      setReplayPending(true);
+      if (location.pathname !== '/dashboard') navigate('/dashboard');
     };
     window.addEventListener(TOUR_REPLAY_EVENT, onReplay);
-    return () => { window.removeEventListener(TOUR_REPLAY_EVENT, onReplay); if (replayTimer.current) clearTimeout(replayTimer.current); };
+    return () => window.removeEventListener(TOUR_REPLAY_EVENT, onReplay);
   }, [tourEligible, tourOpen, location.pathname, navigate]);
+  useEffect(() => {
+    if (!replayPending || tourOpen || location.pathname !== '/dashboard') return undefined;
+    const t = setTimeout(() => { tourIsReplay.current = true; setReplayPending(false); setTourOpen(true); }, replayDelay.current);
+    return () => clearTimeout(t);
+  }, [replayPending, tourOpen, location.pathname]);
   const handleTourClose = (reason: 'finished' | 'skipped' | 'closed') => {
     tourDone.current = true;
     setTourOpen(false);
@@ -417,7 +422,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                   <span className="tabular-nums">{trialInfo.creditsBalance}</span>
                 </div>
               )}
-              <HelpMenu canReplay={tourEligible} />
+              <HelpMenu canReplay={tourEligible} canSetup={tourEligible} />
               <NotificationBell />
               <AccountMenu name={businessName} email={businessHandle} onLogout={handleLogout} compact />
             </div>
@@ -443,7 +448,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
               >
                 <Search className="w-4 h-4" />
               </button>
-              <HelpMenu canReplay={tourEligible} />
+              <HelpMenu canReplay={tourEligible} canSetup={tourEligible} />
               <div className="w-9 h-9 flex items-center justify-center">
                 <NotificationBell />
               </div>

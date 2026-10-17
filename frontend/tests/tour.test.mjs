@@ -66,3 +66,20 @@ test('waitForTargets stops when cancelled', async () => {
   assert.deepEqual(r, []);
   assert.ok(c.t < 2500);
 });
+
+import { keyAction } from '../utils/tour.ts';
+test('while no step is shown every key is ignored', () => {
+  for (const key of ['Escape', 'ArrowRight', 'ArrowLeft', 'Tab', 'Enter', 'a']) assert.equal(keyAction({ key, hasStep: false }), 'ignore', key);
+});
+test('with a step shown the keys act', () => {
+  assert.equal(keyAction({ key: 'Escape', hasStep: true }), 'skip');
+  assert.equal(keyAction({ key: 'ArrowRight', hasStep: true }), 'next');
+  assert.equal(keyAction({ key: 'ArrowLeft', hasStep: true }), 'back');
+  assert.equal(keyAction({ key: 'Tab', hasStep: true }), 'tab');
+  assert.equal(keyAction({ key: 'ArrowRight', hasStep: true, typing: true }), 'ignore');
+  assert.equal(keyAction({ key: 'ArrowLeft', hasStep: true, modified: true }), 'ignore');
+  assert.equal(keyAction({ key: 'x', hasStep: true }), 'ignore');
+});
+test('step 1 wording matches the Approve button', () => {
+  assert.match(TOUR_STEPS[0].body, /Approve it and the posts are made for you\./);
+});

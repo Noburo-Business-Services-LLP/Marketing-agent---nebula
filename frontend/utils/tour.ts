@@ -10,7 +10,7 @@ export interface TourStep {
 }
 
 export const TOUR_STEPS: TourStep[] = [
-  { id: 'welcome', route: '/dashboard', target: '[data-tour="this-week"]', title: 'This is your week', body: 'Every week Nebulaa suggests what to make, based on your plan. Say yes and the posts are made for you.' },
+  { id: 'welcome', route: '/dashboard', target: '[data-tour="this-week"]', title: 'This is your week', body: 'Every week Nebulaa suggests what to make, based on your plan. Approve it and the posts are made for you.' },
   { id: 'create', route: '/dashboard', target: '[data-tour="nav-create"]', title: 'Make something yourself', body: 'Posts, carousels and videos start here, when you want to make one now.' },
   { id: 'review', route: '/dashboard', target: '[data-tour="nav-review"]', title: 'Review and approve', body: 'Everything Nebulaa makes waits here until you approve it.' },
   { id: 'calendar', route: '/dashboard', target: '[data-tour="nav-calendar"]', title: 'Your calendar', body: 'See what is planned and what has gone out.' },
@@ -36,6 +36,19 @@ export async function waitForTargets(selectors: string[], hasTarget: (selector: 
     await sleep(intervalMs);
     elapsed += intervalMs;
   }
+}
+
+export type KeyAction = 'ignore' | 'skip' | 'next' | 'back' | 'tab';
+
+/** What a key press means for the tour. Nothing while no step is on screen (still waiting for the page), so the page's own keys are untouched. */
+export function keyAction({ key, hasStep, typing = false, modified = false }: { key: string; hasStep: boolean; typing?: boolean; modified?: boolean }): KeyAction {
+  if (!hasStep) return 'ignore';
+  if (key === 'Escape') return 'skip';
+  if (key === 'Tab') return 'tab';
+  if (typing || modified) return 'ignore';
+  if (key === 'ArrowRight') return 'next';
+  if (key === 'ArrowLeft') return 'back';
+  return 'ignore';
 }
 
 export interface AutoStartInput {

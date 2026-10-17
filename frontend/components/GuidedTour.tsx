@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { placeCard, spotlightRect, visibleSteps, waitForTargets } from '../utils/tour';
+import { apiService } from '../services/api';
+import { placeCard, spotlightRect, keyAction, visibleSteps, waitForTargets } from '../utils/tour';
 import type { Rect, TourStep } from '../utils/tour';
 
 export type TourCloseReason = 'finished' | 'skipped' | 'closed';
@@ -58,6 +59,8 @@ const TourRun: React.FC<Props> = ({ steps, onClose, onNeedsMenu }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const dir = useRef(1);
+  const shown = useRef(false);
+  const savedSteps = useRef<Set<string>>(new Set());
   const menuOpen = useRef(false);
   const navigatingTo = useRef<string | null>(null);
   const live = useRef({ onClose, onNeedsMenu, index, count: vis.length, step: vis[index] });
@@ -194,19 +197,22 @@ const TourRun: React.FC<Props> = ({ steps, onClose, onNeedsMenu }) => {
   // Focus moves into the card at each step.
   useEffect(() => {
     if (target && headingRef.current) { try { headingRef.current.focus({ preventScroll: true }); } catch { /* ignore */ } }
+    // Progress is saved once per step per run, best effort.
+    if (target && step && !savedSteps.current.has(step.id)) { savedSteps.current.add(step.id); apiService.saveTour('step', step.id); }
   }, [index, !!target]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard: Escape skips, arrows move, Tab stays inside the card.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish('skipped'); return; }
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
-      if (e.key === 'ArrowRight' && !typing && !e.altKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); goNext(); return; }
-      if (e.key === 'ArrowLeft' && !typing && !e.altKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); goBack(); return; }
-      if (e.key !== 'Tab') return;
+      const act = keyAction({ key: e.key, hasStep: shown.current, typing, modified: e.altKey || e.metaKey || e.ctrlKey });
+      if (act === 'ignore') return;
+      if (act === 'skip') { e.preventDefault(); e.stopPropagation(); finish('skipped'); return; }
+      if (act === 'next') { e.preventDefault(); goNext(); return; }
+      if (act === 'back') { e.preventDefault(); goBack(); return; }
       const card = cardRef.current;
-      if (!card) { e.preventDefault(); return; }
+      if (!card) return;
       const items = Array.from(card.querySelectorAll<HTMLElement>('button:not([disabled])'));
       const first = headingRef.current || items[0];
       const last = items[items.length - 1] || first;
@@ -219,6 +225,7 @@ const TourRun: React.FC<Props> = ({ steps, onClose, onNeedsMenu }) => {
     return () => document.removeEventListener('keydown', onKey, true);
   }, [finish, goNext, goBack]);
 
+  shown.current = !!step && !!target;
   if (!step || !target) return null;
 
   const phone = viewport.w < 640;
