@@ -326,6 +326,34 @@ router.get('/clients/:id', requireStaff('view_clients'), async (req, res) => {
   }
 });
 
+// GET /api/staff/clients/:id/plan: the client's plan as they see it, plus when it last ran and how it ended.
+router.get('/clients/:id/plan', requireStaff('view_clients'), async (req, res) => {
+  try {
+    const client = await clientFor(req, res);
+    if (!client) return;
+    const planRoutes = require('./plan');
+    const lastRun = (id) => require('../models/Blueprint').findOne({ userId: id, kind: 'plan' }).sort({ createdAt: -1 }).select('status completedAt createdAt').lean();
+    const body = await planRoutes.staffView({ client, service: require('../services/plan/planService').createPlanService(), lastRun });
+    res.json(body);
+  } catch (error) {
+    console.error('[staff] client plan failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not load this plan. Please try again.' });
+  }
+});
+
+// POST /api/staff/clients/:id/plan/refresh: start a new plan for a client. The weekly limit does not apply; it is logged.
+router.post('/clients/:id/plan/refresh', requireStaff('open_client'), async (req, res) => {
+  try {
+    const client = await clientFor(req, res, 'open_client');
+    if (!client) return;
+    const out = await require('./plan').staffRefresh({ client, staff: req.staff, service: require('../services/plan/planService').createPlanService(), record: recordStaffAction });
+    res.status(out.status).json(out.json);
+  } catch (error) {
+    console.error('[staff] client plan refresh failed:', error.message);
+    res.status(500).json({ success: false, message: 'We could not refresh this plan. Please try again.' });
+  }
+});
+
 // POST /api/staff/clients/:id/quarks { amount }: Owner only.
 router.post('/clients/:id/quarks', requireStaff('add_quarks'), async (req, res) => {
   try {

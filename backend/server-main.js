@@ -478,6 +478,7 @@ app.use('/api/agency', require('./routes/agency'));
 app.use('/api/videos', protect, requireFeature('video', { when: (req) => req.method === 'POST' && /^\/(create|[a-f0-9]{24}\/change)\/?$/.test(req.path) }));
 app.use('/api/videos', require('./routes/studioVideos'));
 app.use('/api/blueprint', blueprintRoutes);
+app.use('/api/plan', require('./routes/plan'));
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);
