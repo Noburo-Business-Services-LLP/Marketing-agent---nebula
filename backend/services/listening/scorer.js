@@ -10,6 +10,7 @@
  *   - spendGuard.check('listening_score') before every batch and spendGuard.record after it (staff switch, AI_KILLED, daily ceiling),
  *   - one pass at a time across all server instances (OpsState lease, key listening_scorer_lease), released in `finally`,
  *   - fair rotation: every entitled account is paged in, never-scored first, then oldest listeningRunAt,
+ *   - before an account is scored, scores whose inbox item no longer exists are erased (erase.sweepOrphans, bounded, never throws),
  *   - 3 failed runs in a row pause the account until a newer item arrives on a later day, with one ops alert a day.
  * Nothing here logs comment text or the model's reply: only counts, ids and error names.
  * Every external call goes through `deps` so tests use fakes; defaults are required lazily so tests exit cleanly.
@@ -101,6 +102,9 @@ async function scoreAccount({ user, now, deps, force = false } = {}) {
       const last = [ledgerLast, lastKnown].filter(Boolean).sort((a, b) => b - a)[0];
       if (last && at - last < caps.RUN_EVERY_DAYS * DAY) return { ...out, skipped: 'not_due' };
     }
+
+    // Scores whose inbox item is gone are erased first, so the counts below never include a deleted comment.
+    try { await d.erase.sweepOrphans({ userId, now: at }); } catch (e) { console.error('[listening] orphan sweep failed:', errTag(e)); }
 
     const since = new Date(at.getTime() - caps.ITEM_WINDOW_DAYS * DAY);
     const raw = (await d.items({ userId, since, types: TYPES, limit: caps.MAX_ITEMS_PER_RUN * 2 })) || [];
@@ -237,7 +241,6 @@ async function runScorerOnce({ deps, now, accountIds = null, force = false, limi
       }
       if (STOP_PASS.has(r.skipped) || STOP_PASS.has(r.stopped)) break;
     }
-    try { await d.erase.sweepOrphans({ now: at }); } catch (e) { console.error('[listening] orphan sweep failed:', errTag(e)); }
     return out;
   } catch (e) {
     console.error('[listening] scoring pass failed:', errTag(e));

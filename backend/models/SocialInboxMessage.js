@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+// Social listening keeps a label (no text) per message in ListeningScore. If a path that deletes inbox messages is ever added,
+// it must call require('../services/listening/erase').eraseForInboxItems({ userId, itemIds }); a test checks the route source.
 const socialInboxMessageSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,

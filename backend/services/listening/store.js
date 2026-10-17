@@ -40,6 +40,16 @@ function listeningStore({ Score, Weekly } = {}) {
     scoresSince(userId, since) {
       return S().find({ userId, itemAt: { $gte: since } }).lean();
     },
+    /** Newest scores first, one page at a time: [{ _id, inboxItemId }]. `before` is the _id the previous page ended on. Always this account only. */
+    scoredPage(userId, { before = null, limit = 500 } = {}) {
+      return S().find({ userId, ...(before ? { _id: { $lt: before } } : {}) }).sort({ _id: -1 }).limit(limit).select('_id inboxItemId').lean();
+    },
+    /** Delete the scores of these inbox items for this account only. Returns how many went. */
+    async deleteScores(userId, itemIds = []) {
+      if (!itemIds.length) return 0;
+      const r = await S().deleteMany({ userId, inboxItemId: { $in: itemIds } });
+      return (r && r.deletedCount) || 0;
+    },
     /** Recompute the last KEEP_WEEKS weeks from the scores and delete older weeks. */
     async rebuildWeeks(userId, now = new Date()) {
       const current = weekStartOf(now);

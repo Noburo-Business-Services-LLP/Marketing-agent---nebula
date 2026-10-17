@@ -7,7 +7,7 @@ const batchLogSchema = new mongoose.Schema({
   day: { type: String, required: true }, // UTC day, YYYY-MM-DD
   at: { type: Date, default: Date.now, expires: 14 * 24 * 3600 },
   itemIds: [{ type: mongoose.Schema.Types.ObjectId }],
-  source: { type: String, enum: ['tracker', 'staff'], default: 'tracker' }
+  source: { type: String, enum: ['tracker', 'scorer', 'staff'], default: 'tracker' }
 }, { collection: 'listening_batch_log' });
 
 batchLogSchema.index({ day: 1, userId: 1 });

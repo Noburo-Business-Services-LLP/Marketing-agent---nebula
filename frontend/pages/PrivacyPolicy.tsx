@@ -140,6 +140,7 @@ const PrivacyPolicy: React.FC = () => {
                 <li>AI/ML infrastructure providers (for model hosting and inference).</li>
               </ul>
               <p className="mb-4">All service providers are bound by data processing agreements and may only use your data as instructed by us.</p>
+              <p className="mb-4">Comments and messages received on your connected accounts may be analysed by an AI service to show you a positive, neutral or negative summary. We keep only the label for each one, not the text, and this analysis is deleted when you delete your account.</p>
 
               <h3 className={`text-lg font-semibold mb-3 ${text}`}>5.2 Legal & Regulatory Disclosure</h3>
               <p className="mb-4">We may disclose your data if required to do so by applicable law, regulation, court order, or governmental authority, or to enforce our legal rights.</p>

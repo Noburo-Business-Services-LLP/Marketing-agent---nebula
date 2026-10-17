@@ -406,14 +406,14 @@ test('(t) logs carry counts and ids only, never comment text or the raw reply', 
   assert.ok(!lines.join('\n').includes('SECRETREPLY'));
 });
 
-test('(u) a pass sleeps 1 s only after a model call and sweeps orphans once; stubs and defaults load lazily', async () => {
+test('(u) a pass sleeps 1 s only after a model call and sweeps each account about to be scored, before it is read; stubs and defaults load lazily', async () => {
   const users = [user('a'), user('b')];
   const w = world({ users, items: [...many('a', 25), ...many('b', 5)] });
   let swept = 0;
-  w.deps.erase = { sweepOrphans: async () => { swept++; return 0; } };
+  w.deps.erase = { sweepOrphans: async ({ userId }) => { swept++; assert.ok(userId); return { removed: 0 }; } };
   const r = await runScorerOnce({ deps: w.deps, now: NOW });
   assert.deepStrictEqual(w.calls.slept, [1000]);
-  assert.strictEqual(swept, 1); assert.strictEqual(r.accounts, 1);
+  assert.strictEqual(swept, 2); assert.strictEqual(r.accounts, 1);
   assert.ok(require('../services/listening/erase').sweepOrphans);
 });
 
