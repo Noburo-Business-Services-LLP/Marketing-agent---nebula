@@ -18,7 +18,7 @@ const competitor = (extra = {}) => ({ _id: 'c1', userId: 'u1', name: 'Sweet Co',
 function setup({ env = ON, caps = CAPS, spendOk = true, profile = rich, searchUsername = null } = {}) {
   const ledger = createReadLedger({ Model: null });
   const spendCalls = [];
-  const guard = createReadGuard({ ledger, spend: { check: async () => (spendOk ? { ok: true } : { ok: false, message: 'Busy.' }), record: async (a, n) => spendCalls.push([a, n]) }, caps, env });
+  const guard = createReadGuard({ ledger, spend: { check: async () => (spendOk ? { ok: true } : { ok: false, message: 'Busy. Please try again later.' }), record: async (a, n) => spendCalls.push([a, n]) }, caps, env });
   const scraped = [];
   const searched = [];
   const db = [];
@@ -34,16 +34,35 @@ function setup({ env = ON, caps = CAPS, spendOk = true, profile = rich, searchUs
 }
 test.afterEach(() => { router._deps.guard = null; router._deps.scrapeProfile = null; router._deps.searchByName = null; router._deps.Competitor = null; });
 
-test('I13: with the switch off, finding a handle refuses before any scraper call', async () => {
+test('R1: the tracker opt-in switch does not stop a customer read: it still goes ahead and is counted', async () => {
   const s = setup({ env: {} });
-  await assert.rejects(() => quiet(() => router.findInstagramProfile(competitor())), (e) => e instanceof ReadRefused && e.reason === 'switched_off');
-  assert.deepStrictEqual(s.scraped, []);
-  assert.deepStrictEqual(s.searched, []);
-  assert.strictEqual(await s.ledger.countToday(new Date()), 0);
+  const found = await quiet(() => router.findInstagramProfile(competitor()));
+  assert.ok(found && found.handle === 'sweetco');
+  assert.deepStrictEqual(s.scraped, ['sweetco']);
+  assert.strictEqual(await s.ledger.countUserToday('u1', new Date()), 1);
+});
+
+test('R1: a customer read still stops when the spend guard (staff "Competitor checks" switch) says no, even with the opt-in on or off', async () => {
+  for (const env of [{}, ON]) {
+    const s = setup({ env, spendOk: false });
+    await assert.rejects(() => quiet(() => router.findInstagramProfile(competitor())), (e) => e instanceof ReadRefused && e.reason === 'spend');
+    assert.deepStrictEqual(s.scraped, []);
+    assert.deepStrictEqual(s.searched, []);
+    assert.strictEqual(await s.ledger.countToday(new Date()), 0);
+  }
+});
+
+test('R1: a customer read still stops at the per-account cap and at the daily ceiling with the opt-in off', async () => {
+  const s = setup({ env: {}, caps: { ...CAPS, maxReadsPerAccountPerDay: 1 } });
+  await quiet(() => router.findInstagramProfile(competitor()));
+  await assert.rejects(() => quiet(() => router.findInstagramProfile(competitor())), (e) => e instanceof ReadRefused && e.reason === 'account_cap');
+  const t = setup({ env: {}, caps: { ...CAPS, READS_PER_DAY_MAX: 0 } });
+  await assert.rejects(() => quiet(() => router.findInstagramProfile(competitor())), (e) => e instanceof ReadRefused && e.reason === 'daily_cap');
+  assert.deepStrictEqual(t.scraped, []);
 });
 
 test('I13: the background post fetch after an add or a discovery stops quietly when the guard says no', async () => {
-  const s = setup({ env: {} });
+  const s = setup({ spendOk: false });
   const posts = await quiet(() => router.fetchPostsForCompetitors([competitor(), competitor({ _id: 'c2' })]));
   assert.deepStrictEqual(posts, []);
   assert.deepStrictEqual(s.scraped, []);
@@ -83,8 +102,8 @@ function handlerFor(p) {
 }
 const mkRes = () => ({ code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } });
 
-test('I13: /scrape-by-type refuses with a plain message when the switch or a cap stops it, before any scraper call', async () => {
-  const s = setup({ env: {} });
+test('I13: /scrape-by-type refuses with a plain message when the staff switch (spend guard) or a cap stops it, before any scraper call', async () => {
+  const s = setup({ spendOk: false });
   const res = mkRes();
   await quiet(() => handlerFor('/scrape-by-type')({ user: { userId: 'u1' }, body: { competitorType: 'local' } }, res));
   assert.strictEqual(res.code, 429);

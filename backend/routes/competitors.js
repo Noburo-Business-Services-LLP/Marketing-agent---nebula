@@ -802,8 +802,8 @@ router.post('/scrape-by-type', protect, requireFeature('competitors'), async (re
 
     console.log(` Found ${competitors.length} ${competitorType} competitors without posts`);
 
-    // Same guard as the weekly tracker: the switch, the daily ceiling, this account's daily cap and the spend guard.
-    const verdict = await (_deps.guard || sharedGuard()).allow({ userId, at: new Date() });
+    // Same guard as the weekly tracker (minus its opt-in switch): the daily ceiling, this account's daily cap and the spend guard.
+    const verdict = await (_deps.guard || sharedGuard()).allow({ userId, at: new Date(), source: 'customer' });
     if (!verdict.ok) return res.status(429).json({ success: false, message: verdict.message });
     let notice = null;
 

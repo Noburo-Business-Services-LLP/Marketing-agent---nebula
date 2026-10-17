@@ -2,7 +2,8 @@
 /**
  * One guard for EVERY competitor profile read: the weekly tracker, the staff "check now" and the customer-triggered
  * scrapes in routes/competitors.js. A read is allowed only when
- *   1. ENABLE_COMPETITOR_TRACKER is exactly "on" (off by default everywhere; the owner sets it deliberately),
+ *   1. for the weekly tracker and staff checks only: ENABLE_COMPETITOR_TRACKER is exactly "on" (off by default everywhere;
+ *      customer-triggered scrapes do not depend on it),
  *   2. this account is under its daily cap (maxReadsPerAccountPerDay),
  *   3. all accounts together are under the daily ceiling (READS_PER_DAY_MAX), counting real read attempts,
  *   4. the spend guard (staff "Competitor checks" switch, AI_KILLED, daily USD ceiling) says yes.
@@ -29,8 +30,10 @@ function createReadGuard({ ledger, spend, caps = defaultCaps, env = process.env 
   const S = () => spend || { check: (a) => require('../spendGuard').check(a), record: (a, n) => require('../spendGuard').record(a, n) };
   return {
     enabled: () => trackerEnabled(env),
-    async allow({ userId, at = new Date() } = {}) {
-      if (!trackerEnabled(env)) return { ok: false, reason: 'switched_off', message: MESSAGES.switched_off };
+    async allow({ userId, at = new Date(), source = 'tracker' } = {}) {
+      // The opt-in switch is for the weekly tracker (and staff "check now") only. A customer's own action on the
+      // Competitors page worked before the tracker existed and keeps working; it still obeys every cap and the spend guard.
+      if (source !== 'customer' && !trackerEnabled(env)) return { ok: false, reason: 'switched_off', message: MESSAGES.switched_off };
       const perAccount = Number(caps.maxReadsPerAccountPerDay);
       if (Number.isFinite(perAccount) && userId !== undefined && userId !== null && (await L().countUserToday(userId, at)) >= perAccount) {
         return { ok: false, reason: 'account_cap', message: MESSAGES.account_cap };
@@ -54,7 +57,7 @@ const sharedGuard = () => (shared = shared || createReadGuard());
 
 /** Run one scraper call through the guard: refuse (throw ReadRefused) before it, count it when it goes ahead. */
 async function guardedRead({ guard = sharedGuard(), userId, competitorId, handle = null, at = new Date(), source = 'customer', fn }) {
-  const verdict = await guard.allow({ userId, at });
+  const verdict = await guard.allow({ userId, at, source });
   if (!verdict.ok) throw new ReadRefused(verdict.reason, verdict.message);
   await guard.note({ userId, competitorId, handle, at, source });
   return fn();

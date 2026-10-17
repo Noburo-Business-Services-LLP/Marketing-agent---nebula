@@ -173,10 +173,10 @@ test('I13: guardedRead refuses before calling the scraper when the guard says no
   const ledger = createReadLedger({ Model: null });
   let calls = 0;
   const fn = async () => { calls++; return 'ok'; };
-  const off = createReadGuard({ ledger, spend: okSpend(), caps: CAPS, env: {} });
+  const off = createReadGuard({ ledger, spend: { check: async () => ({ ok: false, message: 'Busy. Please try again later.' }), record: async () => {} }, caps: CAPS, env: ON });
   await assert.rejects(() => guardedRead({ guard: off, userId: 'u1', competitorId: 'c1', handle: 'h', at: AT, fn }), (e) => e instanceof ReadRefused && /try again/i.test(e.message));
   assert.strictEqual(calls, 0);
-  const on = createReadGuard({ ledger, spend: okSpend(), caps: CAPS, env: ON });
+  const on = createReadGuard({ ledger, spend: okSpend(), caps: CAPS, env: {} }); // opt-in off: a customer read still goes ahead
   assert.strictEqual(await guardedRead({ guard: on, userId: 'u1', competitorId: 'c1', handle: 'h', at: AT, fn }), 'ok');
   assert.strictEqual(calls, 1);
   assert.strictEqual(await ledger.countToday(AT), 1);
