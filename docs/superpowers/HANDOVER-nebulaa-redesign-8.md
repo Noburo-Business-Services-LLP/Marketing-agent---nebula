@@ -31,3 +31,14 @@ Planned, not started. Stage 2 plan reuses `generateSingleCalendarItem` in `servi
 
 ## How to continue
 Use the `superpowers:subagent-driven-development` skill (scripts in `~/.claude/plugins/cache/claude-plugins-official/superpowers/6.4.1/skills/subagent-driven-development/scripts/`): `task-brief PLAN N`, sonnet implementers, the controller verifies tests and does real dev runs and visual checks itself, ONE final review on the most capable model. Rules unchanged: plain replies, honest reporting, owner types the release, no paid generation without his OK per run, real runs only on `nebulaa_dev` through throwaway scripts with users deleted afterwards, never read or print secrets.
+
+## Stage 2 (content follows the plan, setup path, This week): BUILT, reviewed, fixed, verified with one real post (2026-10-17)
+Commits `684c764` to the Stage 2 review fixes (see `git log`), records in `docs/superpowers/plan-led-sdd/stage-2/`, owner checklist `docs/superpowers/ops/week-launch-checklist.md`.
+- Pure helpers: `services/week/weekMath.js`, `weekProposal.js` (scaled to the balance: videos first, then carousels, then posts), `setupSteps.js`, `planContext.js` (calendar prompt gets the plan's themes, channels and the 30/60/90 phase; prompt unchanged without a plan).
+- Money core: `services/week/weekService.js` + `models/WeeklyProposal.js`. Approve only claims and answers at once; `runApprovedPosts` makes each post one at a time in the background (charge once, refund on failure; ownership token `makingAt`; `charged`/`chargedTo`; spend guard; 3-attempt cap; crash recovery every 15 minutes through `weekRecovery.js`). Prices from `QUARK_COSTS` only: post 11, carousel 40 (5 x 8), video 161 (`studio_video`).
+- API: `/api/week` (GET, approve, items, items/:id/made, skip) and `/api/setup`; switch `ENABLE_WEEKLY_PROPOSAL=off`.
+- UI: Setup card and This week card on the home screen, one-shot prefill for the create screens (carousel and video report back when generated so the card shows them as made).
+- Reviews: opus review of the money task (7 Important fixed), real-Mongo check of the atomic claims (20-way claim one winner, 10-way takeover one winner), final opus review (no Critical; Important fixed: plan fallback cannot duplicate a made week, carousels/videos become made, calendar auto-generation leak reduced).
+- Real run: one real post on `nebulaa_dev` (owner's OK): approve answered in 0.85 s, made in 154 s, balance 3000 to 2989 (exactly 11), one ledger row, draft with image and caption, second approve changed nothing, calendar row generated. Throwaway data removed (the generated image remains in dev Cloudinary).
+- OWNER DECISION OPEN: calendar auto-generation and "generate this week" are free for paying accounts (pre-existing; now bounded, see checklist).
+- Not proven: plan-sourced posts with a real generation; the carousel/video "made" report with a real Generate (tests only); the recovery sweep against a real crash.
