@@ -144,7 +144,7 @@ async function scoreAccount({ user, now, deps, force = false } = {}) {
 
       let reply;
       try {
-        reply = await d.callText(buildPrompt(batch), { jsonMode: true, maxTokens: 1500, temperature: 0, model, timeout: 60000 });
+        reply = await d.callText(buildPrompt(batch), { jsonMode: true, maxTokens: 1500, temperature: 0, model, timeout: 60000, noFallback: true });
       } catch (e) {
         console.warn(`[listening] a batch of ${batch.length} failed (${errTag(e)}); it is not retried`);
         failed++;
@@ -248,4 +248,31 @@ async function runScorerOnce({ deps, now, accountIds = null, force = false, limi
   }
 }
 
-module.exports = { scoreAccount, runScorerOnce, defaultDeps };
+const EVERY_MS = 6 * 3600000;       // a tick every 6 hours; accounts are only scored when their weekly run is due
+const FIRST_MS = 25 * 60 * 1000;    // first tick 25 minutes after startup, after the competitor tracker's
+
+/**
+ * Starts the weekly scorer's timers. Returns null (starts nothing, logs nothing) unless ENABLE_LISTENING is exactly "on",
+ * and always null under NODE_ENV=test. Timers are unref'd; a tick never throws and never overlaps a tick still running in
+ * this process (the lease covers other servers). Failures log only the error name, never a message that could echo text.
+ */
+function startListeningScorer({ env = process.env, intervalMs = EVERY_MS, firstDelayMs = FIRST_MS, logger = console, deps, run, timers } = {}) {
+  if (String((env && env.ENABLE_LISTENING) || '') !== 'on' || (env && env.NODE_ENV) === 'test') return null;
+  const t = timers || { setTimeout, setInterval, clearTimeout, clearInterval };
+  const pass = run || (() => runScorerOnce({ deps }));
+  let busy = false;
+  const tick = async () => {
+    if (busy) return;
+    busy = true;
+    try { await pass(); } catch (e) { try { logger.error('[listening] scorer tick failed:', errTag(e)); } catch (_) { /* logging never throws out */ } }
+    finally { busy = false; }
+  };
+  const first = t.setTimeout(tick, firstDelayMs);
+  const timer = t.setInterval(tick, intervalMs);
+  if (first && first.unref) first.unref();
+  if (timer && timer.unref) timer.unref();
+  logger.log(`[listening] comment scoring on: a check every ${Math.round(intervalMs / 3600000)} h, first check in ${Math.round(firstDelayMs / 60000)} min`);
+  return { stop: () => { t.clearTimeout(first); t.clearInterval(timer); } };
+}
+
+module.exports = { scoreAccount, runScorerOnce, startListeningScorer, defaultDeps };

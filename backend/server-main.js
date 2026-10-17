@@ -852,6 +852,13 @@ const startServer = async () => {
       console.warn('Competitor tracker failed to start:', schedulerError.message);
     }
 
+    // Weekly comment scoring (a small model reads each account's own comments and messages). OFF unless ENABLE_LISTENING is exactly "on"
+    try {
+      require('./services/listening/scorer').startListeningScorer();
+    } catch (schedulerError) {
+      console.warn('Comment scoring failed to start:', schedulerError.message);
+    }
+
     // The plan each paying account gets from its profile: monthly refresh, retries for a failed first plan
     try {
       require('./services/plan/planScheduler').startPlanScheduler();

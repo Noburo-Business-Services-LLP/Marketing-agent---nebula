@@ -11,6 +11,7 @@ My plan (Stage 1 of the plan-led work) builds each customer's strategy automatic
 
 ## Switches
 - **Competitor tracker: set `ENABLE_COMPETITOR_TRACKER=on` in the production secret to start weekly reads (about USD 0.46 a day at the 200 cap).** It is off by default in every environment, production included, and only the exact value `on` turns it on. Only the weekly tracker needs it. Customer-triggered competitor scrapes (add, discover, Competitors page) do not depend on it and keep working. Staff can stop every competitor read, weekly and customer-triggered, at any time with the "Competitor checks" switch on the staff AI spend card. Limits: 200 reads a day in total, 5 a day for one account (`backend/config/competitors.js`).
+- **Comment scoring: set ENABLE_LISTENING=on and LISTENING_MODEL=<small model name> in the production secret; estimated cost to be measured with one real call; scoring sends comment and message text to the model provider (privacy page wording).** It is off by default in every environment, and only the exact value `on` turns it on. The call is pinned to `LISTENING_MODEL` with no fallback to another model or provider. Staff can stop it with the "Comment scoring" switch on the staff AI spend card.
 - `ENABLE_PLAN_SCHEDULER=off` stops the monthly refresh pass and the retry pass (the first plan from a profile save and the Build my plan button still work).
 - Staff can refresh any client's plan from the staff client page; customers can refresh once a week.
 

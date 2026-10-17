@@ -132,12 +132,17 @@ async function callOpenAI(prompt, options = {}) {
  * `jsonMode` must be set correctly by the caller: OpenAI errors on a
  * JSON-mode request whose prompt doesn't itself ask for JSON, so this
  * can't safely guess it from the prompt text.
+ *
+ * `noFallback: true` pins the call to `model`: if it fails the error is thrown and Gemini is NOT tried (default false,
+ * so every other caller keeps the fallback).
  */
-async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false, language = '', model = '', purpose = '' } = {}) {
+async function callTextLLM(prompt, { jsonMode = false, maxTokens = 3000, temperature = 0.7, timeout = 120000, skipCache = false, language = '', model = '', purpose = '', noFallback = false } = {}) {
   const chosen = model || textModelFor(language, purpose);
   try {
     return await callOpenAI(prompt, { model: chosen, temperature, maxTokens, timeout, jsonMode });
   } catch (openAiErr) {
+    // noFallback: the caller pinned this model on purpose (a priced background job); a failure is its to handle, never a second paid call.
+    if (noFallback) throw openAiErr;
     console.warn(`[TextLLM] ${chosen} call failed, falling back to Gemini: ${openAiErr.message}`);
     const { callGemini } = require('./geminiAI');
     try {
