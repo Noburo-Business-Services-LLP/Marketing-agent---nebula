@@ -116,7 +116,7 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
   const inPeriod = rows.filter((r) => r && BUCKET[r.label] && r.itemAt && istDay(r.itemAt) >= agg.period.from && new Date(r.itemAt) <= now)
     .sort((a, b) => new Date(b.itemAt) - new Date(a.itemAt));
   const quotable = inPeriod.filter((r) => r.kind === 'public' && (r.label === 'pos' || r.label === 'neg')).slice(0, SCORE_ROWS_MAX);
-  const negatives = inPeriod.filter((r) => r.label === 'neg').slice(0, SCORE_ROWS_MAX);
+  const negatives = inPeriod.filter((r) => r.label === 'neg' && r.kind !== 'private').slice(0, SCORE_ROWS_MAX);
   const ids = [...new Set([...quotable, ...negatives].map((r) => String(r.inboxItemId)))];
   const live = new Map();
   if (ids.length) {
@@ -147,6 +147,8 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
     if (out.recentNegative.length >= cfg.RECENT_NEGATIVE_MAX) break;
     const m = live.get(String(r.inboxItemId));
     if (!m) continue;
+    // Private messages are counted but never shown outside the Inbox, not even as a short preview (the live item decides).
+    if (r.kind === 'private' || kindOf(m) !== 'public') continue;
     const text = preview(m.body);
     if (!text) continue;
     out.recentNegative.push({ id: String(r.inboxItemId), conversationId: m.conversationId ? String(m.conversationId) : null, platform: m.platform || r.platform, date: istDay(m.createdAt || r.itemAt), preview: text });

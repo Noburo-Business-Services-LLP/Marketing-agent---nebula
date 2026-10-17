@@ -272,6 +272,16 @@ function safeQuoteText(text) {
   return t;
 }
 
+// The ~270 abuse patterns compile on their first uses (about 125 ms for plain text, 90 ms more for the first Tamil or emoji
+// text, and a slower second run). Doing that once at load keeps the first card load after a restart from stalling.
+(function warmQuoteFilter() {
+  try {
+    for (const sample of ['A perfectly ordinary warm up sentence for the filter.', 'கூ \u{1F600} a perfectly ordinary warm up sentence.']) {
+      for (let i = 0; i < 3; i++) safeQuoteText(sample);
+    }
+  } catch (_) { /* a failed warm-up changes nothing: the filter still works, only slower once */ }
+}());
+
 // ---------- quote selection ----------
 function pickQuotes(candidates, now) {
   try {

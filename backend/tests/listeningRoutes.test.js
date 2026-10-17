@@ -208,6 +208,19 @@ test('recent negative: previews are the first 80 characters of the live body, ne
   assert.deepStrictEqual([...dates].sort().reverse(), dates);
 });
 
+test('recent negative: a private message (dm or message) is never listed, even when it is the newest negative item', async () => {
+  const secret = 'PRIVATE-DM-SECRET the delivery was late and the staff were rude';
+  const pairs = [
+    ...spread('u1', 20),
+    pair('u1', { label: 'neg', body: secret, days: 0.01, type: 'dm' }),
+    pair('u1', { label: 'neg', body: `${secret} again`, days: 0.02, type: 'message' }),
+    pair('u1', { label: 'neg', body: 'A public complaint about the late delivery', days: 0.5, type: 'comment' })
+  ];
+  const res = await call({ deps: world({ pairs }).deps, user: owner() });
+  assert.ok(!JSON.stringify(res.body).includes('PRIVATE-DM-SECRET'), 'a private message appears on the card');
+  assert.ok(res.body.recentNegative.some((x) => /public complaint/.test(x.preview)), 'the public complaint is missing');
+});
+
 test('no other account\'s data: two accounts with the same inbox item id see only their own', async () => {
   const mine = spread('u1', 20);
   const theirs = spread('u2', 22, () => 'neg', () => ({ body: 'Their private shop complaint about wrong colour' }));
