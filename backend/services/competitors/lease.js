@@ -8,7 +8,8 @@
  */
 const KEY = 'competitor_tracker_lease';
 
-function opsStateStore(Model, key = KEY) {
+function opsStateStore(Model, keyOrOptions = KEY) {
+  const key = (keyOrOptions && typeof keyOrOptions === 'object' ? keyOrOptions.key : keyOrOptions) || KEY;
   const M = () => (Model || require('../../models/OpsState'));
   return {
     async claim(value, nowIso) {
@@ -28,7 +29,7 @@ function opsStateStore(Model, key = KEY) {
   };
 }
 
-function createLease({ store = opsStateStore(), ttlMs = 45 * 60 * 1000, holder = `${process.pid}-${Math.random().toString(36).slice(2, 8)}` } = {}) {
+function createLease({ key = KEY, store = opsStateStore(undefined, key), ttlMs = 45 * 60 * 1000, holder = `${process.pid}-${Math.random().toString(36).slice(2, 8)}` } = {}) {
   const valueAt = (at) => `${new Date(at.getTime() + ttlMs).toISOString()}|${holder}`;
   return {
     /** Returns a token (the stored value) or null. Never throws. */

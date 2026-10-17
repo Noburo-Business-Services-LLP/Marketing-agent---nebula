@@ -408,6 +408,8 @@ const userSchema = new mongoose.Schema({
   competitorsReadAt: { type: Date },
   // When comment scoring (social listening) last ran for this account (oldest first = fair rotation).
   listeningRunAt: { type: Date },
+  // Consecutive scoring runs where every batch failed; FAIL_PAUSE_AFTER of them pause the account until a new item arrives.
+  listeningFailures: { type: Number, default: 0 },
   // Customer success manager: may open the accounts of clients assigned to them.
   // Nebulaa team role: 'owner' | 'admin' | 'csm' (null for customers). See services/staff/permissions.js.
   staffRole: { type: String, enum: ['owner', 'admin', 'csm', null], default: null, index: true },
