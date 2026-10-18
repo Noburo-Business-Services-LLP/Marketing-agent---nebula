@@ -36,8 +36,10 @@ function createAsk({ input = process.stdin, output = process.stdout } = {}) {
   const readline = require('readline');
   return (question) => new Promise((resolve) => {
     const rl = readline.createInterface({ input, output });
-    rl.on('SIGINT', () => { rl.close(); process.emit('SIGINT'); });
-    rl.on('close', () => resolve(''));
+    let interrupted = false;
+    // Ctrl+C at a prompt must stop the run (the cleanup handler exits the process), not carry on as if Enter was pressed.
+    rl.on('SIGINT', () => { interrupted = true; rl.close(); process.emit('SIGINT'); });
+    rl.on('close', () => { if (!interrupted) resolve(''); });
     rl.question(question, (answer) => { rl.removeAllListeners('close'); rl.close(); resolve(String(answer || '').trim()); });
   });
 }
