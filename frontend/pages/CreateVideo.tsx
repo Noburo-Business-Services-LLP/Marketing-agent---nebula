@@ -171,6 +171,8 @@ const CreateVideo: React.FC = () => {
   }, [current?.id, current?.status, loadHistory, refreshBalance]);
 
   useEffect(() => { if (current) setStep('result'); }, [current?.id]);
+  // Opening a video from the list below must bring its player into view, wherever the page was scrolled.
+  useEffect(() => { if (step === 'result' && current) document.getElementById('video-result')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [step, current?.id]);
 
   /** Photos picked from a device have no saved record yet: save them to the brand assets first so they can be reused. */
   const saveNew = async (assets: PickedAsset[], type: 'character' | 'environment'): Promise<string[]> => {
@@ -402,7 +404,7 @@ const CreateVideo: React.FC = () => {
       )}
 
       {step === 'result' && current && (
-        <div className="space-y-6">
+        <div id="video-result" className="space-y-6">
           <GravityPanel>
             <div className="flex flex-col items-center gap-4">
               {processing && (
@@ -456,7 +458,7 @@ const CreateVideo: React.FC = () => {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {history.slice(0, 8).map((v) => (
               <div key={v.id} className="group relative overflow-hidden rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
-                <button type="button" onClick={() => setCurrent(v)} className="block w-full text-left">
+                <button type="button" onClick={() => { setCurrent(v); setStep('result'); setError(''); }} className="block w-full text-left">
                   <div className={`${v.aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[9/16]'} w-full bg-[var(--gv-surface-2)]`}>
                     {v.status === 'completed' && v.videoUrl
                       ? <video src={`${v.videoUrl}#t=0.5`} className="h-full w-full object-cover" muted playsInline preload="metadata" />
