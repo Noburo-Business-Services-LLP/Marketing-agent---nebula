@@ -378,7 +378,7 @@ const ReelGenerator: React.FC = () => {
   // the app (GravityCreate/GravityApprove/DraftPreviewModal).
   const confirmRegenerateCost = (count: number, costPerUnit: number, label: string) => {
     const total = count * costPerUnit;
-    const msg = total > 0 ? 'This uses part of what you have left.' : 'This replaces what you have now.';
+    const msg = total > 0 ? `This costs ${total} Quark${total === 1 ? '' : 's'}.` : 'This replaces what you have now.';
     return confirmDialog(msg, { title: `Regenerate ${label}?`, confirmLabel: 'Regenerate' });
   };
   // Products/services featured in the video, and the environment it is set
@@ -2942,6 +2942,11 @@ setCharacterAge(nextDraft?.characterAge || '');
                       <>
                         <Film className="w-4 h-4 text-[#F5A623]" />
                         Auto-Generate Full Video
+                        {quarkCosts.video_generated > 0 && (
+                          <span className="ml-0.5 px-1.5 py-0.5 rounded-md bg-white/[0.08] text-[11.5px] font-semibold tabular-nums">
+                            {(quarkCosts.video_base || 0) + quarkCosts.video_generated * estimatedSceneCount}
+                          </span>
+                        )}
                       </>
                     )}
                   </button>
@@ -3187,7 +3192,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                         The cast is ready to be designed from “{acceptedConcept?.title || 'your concept'}”.
                       </div>
                       <div className="text-[12px] text-white/45 mt-1">
-                        Select Generate above to begin. This uses part of what you have left, so nothing runs until you ask.
+                        Select Generate above to begin. This costs Quarks, so nothing runs until you ask.
                       </div>
                     </div>
                   )}

@@ -46,7 +46,6 @@ import { needsTermsPrompt } from '../utils/accountDeletion';
 import { groupHasPath, showsCompetitorsEntry } from '../utils/navMenu';
 import { apiService } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
-import { balanceChip } from '../utils/plans';
 import { actingBannerText, actingClientName, isAgencyUser, isInsideClient, isLapsedAgency, returnButtonLabel, showClientSwitcher, showsPostsNotQuarks } from '../utils/agency';
 
 interface TrialData {
@@ -61,7 +60,7 @@ interface LayoutProps {
   children: React.ReactNode;
   user: User | null;
   onLogout: () => void;
-  /** A new account with no plan and nothing left: show a slim prompt above the page. */
+  /** A new account with no plan and no Quarks: show a slim prompt above the page. */
   needsPlan?: boolean;
   /** Called when the guided tour is finished or skipped, so the local user does not start it again. */
   onTourSaved?: (tour: { completedAt?: string; skippedAt?: string }) => void;
@@ -249,7 +248,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
 
   const topBarMeta = resolveTopBarMeta(location.pathname);
   // With two switchers in the bar, a computer-sized screen has no room for the page title; the page has its own heading.
-  // Agencies and their clients see the shared pool on the plans page, so the balance chip is not shown to them.
+  // Agencies and their clients see posts and videos, never Quarks, so the Quark balance is not shown to them.
   const hideQuarks = showsPostsNotQuarks(user);
   const clientSwitcherShown = showClientSwitcher(user, Boolean(localStorage.getItem('csmReturnToken')));
   const isActive = (path: string) =>
@@ -416,14 +415,14 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
               {trialInfo && !hideQuarks && (
                 <div
                   className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium ${
-                    balanceChip(trialInfo.creditsBalance, trialInfo.costs).low
+                    trialInfo.creditsBalance <= 25
                       ? 'bg-red-500/10 text-red-400'
                       : 'bg-[var(--gv-surface-2)] text-[var(--gv-text-secondary)]'
                   }`}
-                  aria-label={balanceChip(trialInfo.creditsBalance, trialInfo.costs).full || 'Posts and videos left'}
+                  title="Quarks"
                 >
                   <Zap className="w-3 h-3" />
-                  <span className="tabular-nums whitespace-nowrap">{balanceChip(trialInfo.creditsBalance, trialInfo.costs).compact || 'Left'}</span>
+                  <span className="tabular-nums">{trialInfo.creditsBalance}</span>
                 </div>
               )}
               <HelpMenu canReplay={tourEligible} canSetup={tourEligible} />
@@ -457,7 +456,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                 <NotificationBell />
               </div>
 
-              {/* Balance pill, in posts and videos */}
+              {/* Quarks pill */}
               {trialInfo && !hideQuarks && (() => {
                 // An absolute threshold, not percent-of-100: the old bar
                 // computed balance / startingCredits, and startingCredits
@@ -469,9 +468,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                 // to show honest progress against, so this shows the count
                 // plainly instead of a fraction implying a quota that isn't
                 // actually being tracked.
-                const chip = balanceChip(trialInfo.creditsBalance, trialInfo.costs);
-                const isLow = chip.low;
-                const isMed = !isLow && trialInfo.creditsBalance <= 75;
+                const isLow = trialInfo.creditsBalance <= 25;
+                const isMed = trialInfo.creditsBalance > 25 && trialInfo.creditsBalance <= 75;
                 const dotColor = isLow ? '#ef4444' : isMed ? 'var(--gv-accent)' : '#4ADE80';
                 return (
                   <div className="relative" ref={creditPanelRef}>
@@ -480,7 +478,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                       className="flex items-center gap-2.5 pl-2.5 pr-3 h-9 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)] transition-colors"
                     >
                       <span className="w-2 h-2 rounded-full" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />
-                      <span className="text-[13px] font-semibold text-[var(--gv-text-primary)] whitespace-nowrap">{chip.full || 'Posts and videos left'}</span>
+                      <span className="text-[13px] font-semibold text-[var(--gv-text-primary)] tabular-nums">{trialInfo.creditsBalance}</span>
+                      <span className="text-[11px] text-[var(--gv-text-tertiary)]">Quarks</span>
                       <ChevronDown className={`w-3.5 h-3.5 text-[var(--gv-text-muted)] transition-transform ${showCreditPanel ? 'rotate-180' : ''}`} />
                     </button>
                     {showCreditPanel && (
@@ -490,12 +489,18 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                       >
                         <div className="px-5 pt-5 pb-4 bg-[var(--gv-surface-1)]">
                           <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-[13px] font-semibold text-[var(--gv-text-primary)]">What you have left</h3>
+                            <h3 className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Usage overview</h3>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="flex items-baseline gap-1.5">
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />
-                              <span className="text-[18px] font-serif-display font-semibold text-[var(--gv-text-primary)] leading-snug">{chip.full || 'Posts and videos'}</span>
+                              <span className="text-3xl font-serif-display font-semibold text-[var(--gv-text-primary)] tabular-nums leading-none">{trialInfo.creditsBalance}</span>
+                              <span className="text-[13px] text-[var(--gv-text-tertiary)]">Quarks</span>
+                            </div>
+                            <div className="h-8 w-px bg-[var(--gv-surface-3)]" />
+                            <div className="text-[11px] text-[var(--gv-text-muted)] leading-tight">
+                              <div className="tabular-nums text-[var(--gv-text-tertiary)] font-medium">{trialInfo.totalUsed}</div>
+                              <div>used in total</div>
                             </div>
                           </div>
                         </div>
@@ -504,8 +509,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                             onClick={() => { setShowCreditPanel(false); navigate('/settings'); }}
                             className="w-full flex items-center justify-between text-[11.5px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] transition-colors"
                           >
-                            <span>Posts and videos share what you have left.</span>
-                            <span className="text-[var(--gv-accent-text)]">Settings →</span>
+                            <span>See what each action costs.</span>
+                            <span className="text-[var(--gv-accent-text)]">View in Settings →</span>
                           </button>
                         </div>
                         {isInsideClient(user) ? (
@@ -517,7 +522,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Zap className="w-3.5 h-3.5 text-[var(--gv-text-muted)]" />
-                                <span className="text-[11px] text-[var(--gv-text-tertiary)]">Need more posts and videos?</span>
+                                <span className="text-[11px] text-[var(--gv-text-tertiary)]">Need more Quarks?</span>
                               </div>
                               <button
                                 onClick={() => navigate('/trial-expired')}

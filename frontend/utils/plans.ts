@@ -9,7 +9,7 @@ export interface UpgradeInfo {
   message: string;
 }
 
-const BASE = 'Please upgrade your plan, or add more posts and videos.';
+const BASE = 'Please upgrade your plan, or buy an add-on pack or Quarks.';
 
 const FEATURE_LABELS: Record<string, string> = {
   social_connect: 'Connecting social accounts',
@@ -27,7 +27,7 @@ export function featureLabel(feature?: string): string {
 /** The plain message for each reason, always ending with the one next step. */
 export function upgradeMessage(reason: UpgradeReason, feature?: string): string {
   const label = featureLabel(feature);
-  if (reason === 'quarks') return `This needs more than you have left. ${BASE}`;
+  if (reason === 'quarks') return `You do not have enough Quarks for this action. ${BASE}`;
   if (reason === 'addon') return `${label || 'This feature'} is available as an add-on. ${BASE}`;
   return `${label || 'This feature'} is not included in your current plan. ${BASE}`;
 }
@@ -105,35 +105,6 @@ export function leftText(balance: number | null | undefined, costs: Record<strin
   if (!posts) return 'No posts or videos left. Add more below.';
   if (!videos) return `About ${noun(posts, 'post', 'posts')} left.`;
   return `About ${noun(posts, 'post', 'posts')} or ${noun(videos, 'short video', 'short videos')} left, in any mix.`;
-}
-
-/**
- * The header balance chip, in posts and videos. `compact` fits a phone header ("24 posts · 1 video"); `full` is the
- * desktop line ("About 24 posts or 1 video left"). The raw balance is never shown. Empty strings when the costs are unknown.
- */
-export function balanceChip(balance: number | null | undefined, costs: Record<string, number> | null | undefined): { compact: string; full: string; low: boolean } {
-  const post = wholeCost(costs?.image_generated);
-  const video = wholeCost(costs?.studio_video);
-  if (typeof balance !== 'number' || !Number.isFinite(balance) || !post) return { compact: '', full: '', low: false };
-  const b = Math.max(0, balance);
-  const posts = Math.floor(b / post);
-  const videos = video ? Math.floor(b / video) : 0;
-  const low = posts < 4;
-  if (!posts) return { compact: 'None left', full: 'No posts or videos left', low: true };
-  if (!videos) return { compact: noun(posts, 'post', 'posts'), full: `About ${noun(posts, 'post', 'posts')} left`, low };
-  return {
-    compact: `${noun(posts, 'post', 'posts')} · ${noun(videos, 'video', 'videos')}`,
-    full: `About ${noun(posts, 'post', 'posts')} or ${noun(videos, 'video', 'videos')} left`,
-    low,
-  };
-}
-
-/** "You have enough for 3 Hero videos", from a balance and a price. Empty when it cannot be worked out or nothing is affordable. */
-export function enoughFor(balance: number | null | undefined, price: number | null | undefined, one: string, many: string): string {
-  const p = wholeCost(price);
-  if (typeof balance !== 'number' || !Number.isFinite(balance) || !p) return '';
-  const n = Math.floor(Math.max(0, balance) / p);
-  return n > 0 ? `You have enough for ${noun(n, one, many)}.` : '';
 }
 
 /** One top-up pack, in the posts and videos it adds. */

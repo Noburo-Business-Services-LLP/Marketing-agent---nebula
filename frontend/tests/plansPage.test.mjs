@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  orderedPlans, leftText, balanceChip, enoughFor, topupLine, plainMessage, planLines, currentPlanLine, addonBlurb, PLANS_INTRO, renewalText,
+  orderedPlans, leftText, topupLine, plainMessage, planLines, currentPlanLine, addonBlurb, PLANS_INTRO, renewalText,
 } from '../utils/plans.ts';
 
 const costs = { image_generated: 11, studio_video: 161 };
@@ -81,23 +81,4 @@ test('the page keeps the three cards in a fixed order and prints the helpers', a
   assert.match(src, /orderedPlans\(catalogue\.plans\)/);
   assert.match(src, /<h1[^>]*>Plans<\/h1>/);
   assert.doesNotMatch(src, /Plans and Quarks|Extra Quarks|Quarks remaining/);
-});
-
-test('the header chip shows posts and videos left, short on a phone, never Quarks or a raw number', () => {
-  assert.deepEqual(balanceChip(4200, costs), { compact: '381 posts · 26 videos', full: 'About 381 posts or 26 videos left', low: false });
-  assert.deepEqual(balanceChip(170, costs), { compact: '15 posts · 1 video', full: 'About 15 posts or 1 video left', low: false });
-  assert.deepEqual(balanceChip(60, costs), { compact: '5 posts', full: 'About 5 posts left', low: false });
-  assert.equal(balanceChip(22, costs).low, true);
-  assert.deepEqual(balanceChip(0, costs), { compact: 'None left', full: 'No posts or videos left', low: true });
-  assert.deepEqual(balanceChip(100, {}), { compact: '', full: '', low: false });
-  assert.deepEqual(balanceChip(undefined, costs), { compact: '', full: '', low: false });
-  for (const b of [0, 5, 170, 4200]) { const c = balanceChip(b, costs); assert.doesNotMatch(`${c.compact} ${c.full}`, /quark|credit/i); }
-});
-
-test('enoughFor says how many of one thing a balance covers', () => {
-  assert.equal(enoughFor(500, 161, 'Hero video', 'Hero videos'), 'You have enough for 3 Hero videos.');
-  assert.equal(enoughFor(161, 161, 'Hero video', 'Hero videos'), 'You have enough for 1 Hero video.');
-  assert.equal(enoughFor(100, 161, 'Hero video', 'Hero videos'), '');
-  assert.equal(enoughFor(undefined, 161, 'a', 'b'), '');
-  assert.equal(enoughFor(500, 0, 'a', 'b'), '');
 });

@@ -25,7 +25,7 @@ export const BLUEPRINT_COPY = {
       { label: '[Unverified]', meaning: 'Could not be confirmed, so it is marked as such.' },
     ],
     button: 'Get my free Blueprint',
-    note: 'It uses a small part of what you have left.',
+    note: 'It uses 7 of your Quarks.',
   },
   form: {
     title: 'Your Brand Growth Blueprint',
@@ -109,7 +109,7 @@ export const BLUEPRINT_COPY = {
     calendarError: 'We could not build your calendar just now. Please try again.',
     another: 'Create another Blueprint',
     freeUsed: 'Your free Blueprint is used. Choose a plan to create another.',
-    viewPlans: 'See plans',
+    viewPlans: 'View plans and Quarks',
     pageLabel: 'Page',
     coverLabel: 'Brand Growth Blueprint',
     confirmedHeading: 'What we confirmed',

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, Download, Check, X } from 'lucide-react';
-import { enoughFor } from '../utils/plans';
 import {
   apiService, heroVideoAPI, HeroAspectRatio, HeroAudioMode, HeroBrandSummary, HeroBrief, HeroJobSummary, HeroPlan, HeroReference,
   HeroStyleOption,
@@ -19,17 +18,17 @@ import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton
 // state ({ brief }); the server validates it and stages the reference images (/brief), writes
 // the prompt (/plan), and charges + generates only on /generate.
 
-// limit is null when there is no monthly cap: what you have left is the only limit.
+// limit is null when there is no monthly cap: the Quark price is the only limit.
 interface QuotaInfo { used: number; limit: number | null; resetsOn: string }
 
 const POLL_MS = 5000;
 // Server fails any job older than 60 min; stop client polling a little after that.
 const MAX_POLL_MS = 65 * 60 * 1000;
 // Matches the sentence the server sends when the video model refuses photos of people.
-const PEOPLE_REFUSAL_COPY = 'The video model cannot use photos that show people. You were not charged. Try again without the people photos, or use the default setting.';
+const PEOPLE_REFUSAL_COPY = 'The video model cannot use photos that show people. We have refunded your Quarks. Try again without the people photos, or use the default setting.';
 const SLOW_COPY = 'This is taking longer than usual. Check back in a few minutes; it will appear in your history.';
 const FAILED_COPY =
-  "We couldn't finish this video. You were not charged and this one doesn't count toward your monthly limit. Please try again.";
+  "We couldn't finish this video. Your Quarks have been returned and this one doesn't count toward your monthly limit. Please try again.";
 const FINISH_NOTE =
   "We couldn't add the finishing touches (colour grade, logo and end card) this time, so this is the original clip.";
 const ASPECTS: HeroAspectRatio[] = ['9:16', '16:9', '1:1'];
@@ -464,7 +463,7 @@ const HeroVideoInner: React.FC = () => {
         setQuota((q) => ({ used: d.used ?? q?.used ?? 0, limit: d.limit ?? q?.limit ?? 0, resetsOn: d.resetsOn || q?.resetsOn || '' }));
         setGenError('You have used all your Hero videos for this month.');
       } else if (d?.creditsExhausted || outOfCredits || e?.status === 403) {
-        setGenError("This needs more than you have left. Add more posts and videos to make one.");
+        setGenError("You don't have enough Quarks for a Hero video. Top up to make one.");
       } else {
         setGenError(e?.message || 'Your Hero video could not be started. Please try again.');
       }
@@ -1046,16 +1045,18 @@ const HeroVideoInner: React.FC = () => {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {cannotAfford ? (
-              <GravityButton onClick={() => navigate('/trial-expired')}>Add more posts and videos</GravityButton>
+              <GravityButton onClick={() => navigate('/trial-expired')}>Top up Quarks</GravityButton>
             ) : (
               <GravityButton onClick={generate} disabled={!canGenerate}>
                 {inFlight ? <><Loader2 className="w-4 h-4 animate-spin" />Generating…</> : 'Generate'}
-                
+                {!inFlight && price !== undefined && <span className="opacity-70">· {price} Quarks</span>}
               </GravityButton>
             )}
-            {enoughFor(balance, price, 'Hero video', 'Hero videos') && (
+            {(price !== undefined || balance !== undefined) && (
               <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">
-                {enoughFor(balance, price, 'Hero video', 'Hero videos')}
+                {price !== undefined && <>Price {price} Quarks</>}
+                {price !== undefined && balance !== undefined && ' · '}
+                {balance !== undefined && <>Your balance {balance} Quarks</>}
               </span>
             )}
           </div>
@@ -1067,7 +1068,7 @@ const HeroVideoInner: React.FC = () => {
           )}
           {cannotAfford && (
             <p role="status" className="text-[12.5px] text-[var(--gv-text-primary)]">
-              This needs more than you have left. Add more posts and videos to make one; nothing is used until you generate.
+              A Hero video costs {price} Quarks and you have {balance}. Top up to make one; nothing is charged until you generate.
             </p>
           )}
           {quotaUsedUp && (

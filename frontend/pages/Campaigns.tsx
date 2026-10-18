@@ -565,7 +565,7 @@ const SuggestionCard: React.FC<{
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert('This needs more than you have left. Add more posts and videos from the plans page.');
+        alert(`You have ${balance} Quarks but need 7.`);
         return;
       }
     } catch (err) {
@@ -1691,7 +1691,7 @@ const Campaigns: React.FC = () => {
         const balance = creditData?.credits?.balance ?? 0;
         const required = 42;
         if (balance < required) {
-          alert('This needs more than you have left. Add more posts and videos from the plans page.');
+          alert(`You have ${balance} Quarks but need ${required} to generate new campaigns.`);
           return;
         }
       } catch (err) {
@@ -1758,10 +1758,10 @@ const Campaigns: React.FC = () => {
         // On error - check if it's a credit issue before falling back
         async (error) => {
           // If it's a credit-related error, show it to the user instead of falling back
-          if (error && (error.includes('more than you have left') || error.includes('credits'))) {
+          if (error && (error.includes('Quarks') || error.includes('credits'))) {
             setLoadingSuggestions(false);
             setStreamingProgress(null);
-            alert('This needs more than you have left. Add more posts and videos from the plans page.');
+            alert('You do not have enough Quarks to generate new campaigns. See the plans page to add more.');
             return;
           }
           // Streaming failed, falling back to regular API
@@ -1798,7 +1798,7 @@ const Campaigns: React.FC = () => {
       // Check for insufficient credits error from the API
       if (response.insufficientCredits) {
         setLoadingSuggestions(false);
-        alert('This needs more than you have left. Add more posts and videos from the plans page.');
+        alert(`You have ${response.creditsRemaining} Quarks but need ${response.required}. See the plans page to add more.`);
         return;
       }
       
@@ -1834,9 +1834,9 @@ const Campaigns: React.FC = () => {
       }
     } catch (error: any) {
       // Check if the error is a credit issue
-      if (error?.message?.includes('more than you have left') || error?.message?.includes('credits')) {
+      if (error?.message?.includes('Quarks') || error?.message?.includes('credits')) {
         setLoadingSuggestions(false);
-        alert('This needs more than you have left. Add more posts and videos from the plans page.');
+        alert('You do not have enough Quarks to generate new campaigns. See the plans page to add more.');
         return;
       }
       // AI suggestions not available, using personalized fallback
@@ -5247,13 +5247,13 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         const creditData = await apiService.getCredits();
         const balance = creditData?.credits?.balance ?? 0;
         if (balance < creditCost) {
-          alert('This needs more than you have left. Add more posts and videos from the plans page.');
+          alert(`You have ${balance} Quarks but need ${creditCost} (7 per post for ${totalPosts} posts).`);
           generationRequestInFlightRef.current = false;
           return;
         }
       } catch (error) {
         console.error('Credit check failed:', error);
-        alert('Could not check what you have left. Please try again.');
+        alert('Could not check your Quarks. Please try again.');
         generationRequestInFlightRef.current = false;
         return;
       }
@@ -8748,7 +8748,7 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
             const creditData = await apiService.getCredits();
             const balance = creditData?.credits?.balance ?? 0;
             if (balance < 3) {
-                alert('This needs more than you have left. Add more posts and videos from the plans page.');
+                alert(`You need 3 Quarks to refine an image but you only have ${balance}. See the plans page to add more.`);
                 return;
             }
         } catch (e) {
@@ -8784,7 +8784,7 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
             const creditData = await apiService.getCredits();
             const balance = creditData?.credits?.balance ?? 0;
             if (balance < 5) {
-                alert('This needs more than you have left. Add more posts and videos from the plans page.');
+                alert(`You need 5 Quarks to regenerate an image but you only have ${balance}. See the plans page to add more.`);
                 return;
             }
         } catch (e) {

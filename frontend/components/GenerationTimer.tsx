@@ -28,7 +28,7 @@ const GenerationTimer: React.FC<{
       </div>
       <p className="mt-1.5 text-[12.5px] leading-snug text-[var(--gv-text-secondary)]" style={onDark ? { color: 'rgba(255,255,255,0.88)' } : undefined}>
         {s.over
-          ? `Time so far ${s.elapsed}. This is taking longer than usual, but it is still working. If it fails, you will not be charged.`
+          ? `Time so far ${s.elapsed}. This is taking longer than usual, but it is still working. If it fails, your Quarks are returned.`
           : `Time so far ${s.elapsed} · usually ${s.range}`}
       </p>
     </div>

@@ -13,10 +13,9 @@ test('paise are shown as exact rupees and paise', () => {
 
 test('each reason gives a plain message that ends with the next step', () => {
   for (const r of ['upgrade', 'addon', 'quarks']) {
-    assert.match(upgradeMessage(r), /Please upgrade your plan, or add more posts and videos\.$/);
+    assert.match(upgradeMessage(r), /Please upgrade your plan, or buy an add-on pack or Quarks\.$/);
   }
-  assert.match(upgradeMessage('quarks'), /more than you have left/);
-  for (const r of ['upgrade', 'addon', 'quarks']) assert.doesNotMatch(upgradeMessage(r), /quark|credit/i);
+  assert.match(upgradeMessage('quarks'), /enough Quarks/);
   assert.match(upgradeMessage('addon', 'competitors'), /^Competitor insights is available as an add-on/);
   assert.match(upgradeMessage('upgrade', 'publish'), /^Publishing is not included in your current plan/);
 });

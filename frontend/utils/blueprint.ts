@@ -290,7 +290,7 @@ const withStop = (s: string): string => {
   const t = String(s || '').trim();
   return !t || /[.]$/.test(t) ? t : `${t}.`;
 };
-const RETURNED = 'You were not charged.';
+const RETURNED = 'Your Quarks were returned.';
 
 export function statusHeading(view: Pick<BlueprintView, 'status' | 'checkpoint'>): string {
   switch (view.status) {
@@ -336,8 +336,8 @@ export function pollDelayMs(attempt: number): number {
 
 export function quarksNote(cost?: number | null): string {
   return typeof cost === 'number' && cost > 0
-    ? 'This uses a small part of what you have left.'
-    : 'This uses a small part of what you have left.';
+    ? `This uses ${cost} of your Quarks.`
+    : 'This uses a small number of your Quarks.';
 }
 
 // ---------- the document (pure helpers; the page is components/blueprint/BlueprintDocument.tsx) ----------

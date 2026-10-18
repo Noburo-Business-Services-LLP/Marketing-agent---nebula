@@ -6,7 +6,7 @@ import type { PickedAsset } from './AssetPicker';
 
 /**
  * Make a person (a reference sheet showing the same person from several angles) or a place with AI, look at it, and
- * keep it or ask for another. Each picture uses a little of what you have left. A kept picture is saved to the
+ * keep it or ask for another. Each picture costs a few Quarks, shown before it is made. A kept picture is saved to the
  * brand assets so it can be used again in later videos.
  */
 const ReferenceMaker: React.FC<{
@@ -81,7 +81,7 @@ const ReferenceMaker: React.FC<{
         )}
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-[12px] text-[var(--gv-text-tertiary)]">{quarks ? 'Each new picture uses a little of what you have left' : ''}</span>
+          <span className="text-[12px] text-[var(--gv-text-tertiary)]">{quarks ? `${quarks} Quarks each time you make one` : ''}</span>
           <div className="flex gap-2">
             {url ? (
               <>
