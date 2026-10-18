@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_TILES, actionCostKey, createTileCost } from '../utils/createTiles.ts';
+import { CREATE_TILES, VIDEO_ENTRY, actionCostKey, createTileCost, videoEntryCost } from '../utils/createTiles.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -70,4 +70,13 @@ test('the Create tile copy file is in the voice scope', () => {
   const scope = JSON.parse(read('tests/voice-scope.json'));
   assert.ok(scope.includes('utils/createTiles.ts'));
   assert.ok(scope.includes('components/Tile.tsx'));
+});
+
+test('Video is offered as an entry that opens the existing Videos page, with its price', () => {
+  assert.deepEqual({ ...VIDEO_ENTRY }, { title: 'Video', subtitle: 'A short video for your business', accent: 'video', to: '/reels' });
+  assert.equal(videoEntryCost(COSTS), "161 Quarks (about 1 video's worth)");
+  assert.equal(videoEntryCost({}), '');
+  const page = read('pages/GravityCreate.tsx');
+  assert.ok(page.includes('VIDEO_ENTRY.to') && page.includes('<VideoArt'), 'the page shows it');
+  assert.ok(read('App.tsx').includes('path="/reels"'), 'the destination route exists');
 });

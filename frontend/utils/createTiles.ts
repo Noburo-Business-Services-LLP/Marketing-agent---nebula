@@ -29,3 +29,12 @@ export function createTileCost(mode: CreateModeKey, costs: Record<string, number
   if (mode === 'carousel') return `${unit.toLocaleString('en-IN')} ${unit === 1 ? 'Quark' : 'Quarks'} for each slide`;
   return priceWithWorth(unit, costs);
 }
+
+/** The Video entry under the four modes: it opens the Videos page, it does not change the mode. */
+export const VIDEO_ENTRY = { title: 'Video', subtitle: 'A short video for your business', accent: 'video', to: '/reels' } as const;
+
+/** "161 Quarks (about 1 video's worth)" or "" while the price is unknown. */
+export function videoEntryCost(costs: Record<string, number> | null | undefined): string {
+  const unit = Number(costs?.studio_video);
+  return Number.isFinite(unit) && unit > 0 ? priceWithWorth(unit, costs) : '';
+}

@@ -23,7 +23,7 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 
 ## Area: CREATE CONTENT
 - [DONE, NOT RELEASED] Tiles with a picture for Single post, Campaign, Carousel and LinkedIn so people understand at a glance (one-line description and the price under each; rows on a phone). (2026-10-18) Also fixed: the LinkedIn price now reads the action the server really charges for a LinkedIn post.
-- [NOT STARTED] "Video" entry tile on Create content: the design draft lists it; the Videos page exists, so it can be added with the Home tiles (kept out of the first proof so the four modes stay one choice). (2026-10-18)
+- [DONE, NOT RELEASED] "Video" entry tile on Create content: opens the Videos page and shows its price (the Photoshoot tile waits for its page). (2026-10-18)
 - [NOT STARTED, Photoshoot page does not exist yet, so no Create content tile yet] Photoshoot option in Images and on Home: ready-made packs (product photoshoot, model photoshoot, marketplace pack, festival pack): states how many photos, which styles, how long and what it costs. Uses the products and environment photos already uploaded. (2026-10-18)
 - [NOT STARTED] Templates and ready-made packs available from the dashboard (remaining for Create content together with Photoshoot). (2026-10-18)
 

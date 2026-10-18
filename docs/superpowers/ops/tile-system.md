@@ -78,7 +78,7 @@ Import art from the barrel (`../components/art`) or from the piece file. The pro
 ## What was looked at (2026-10-18, sample-data preview at 127.0.0.1:3101)
 
 - `/art-showcase` at 1280 wide: all 22 pieces, each accent, the hero, badge, locked, not available, selected, count badge, compact and idea tiles, the Tamil, Hindi and unbroken long titles, the feature panel. Fixed on the way: the arrow icon inheriting the picture sizing, compact tiles showing a cut-out of the art, tiles on the dark panel looking grey.
-- Create content at 1280 and 375: the four tiles, selecting by click and by keyboard (Tab then Enter), the focus ring, the hover lift. On 375 the tiles were four full-width stacked cards (about 360 px each); they are now rows (picture left), about 125 px each.
+- Create content at 1280 and 375: the four mode tiles and the Video entry (a compact link tile to the Videos page), selecting by click and by keyboard (Tab then Enter), the focus ring, the hover lift. On 375 the tiles were four full-width stacked cards (about 360 px each); they are now rows (picture left), about 125 px each.
 - Contrast audit (the repo's runner) on the showcase and Create content at 1280 and 375: no failure on any tile text. The failures that remain on Create content are the old small option captions and the account initial (they were there before).
 
 ## Not done yet (by design)

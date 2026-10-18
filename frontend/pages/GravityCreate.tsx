@@ -14,8 +14,8 @@ import PostDesignPanel from '../components/PostDesignPanel';
 import ModeExplainer from '../components/ModeExplainer';
 import Tile from '../components/Tile';
 import TileGrid from '../components/TileGrid';
-import { SinglePostArt, CampaignArt, CarouselArt, LinkedInArt } from '../components/art';
-import { CREATE_TILES, actionCostKey, createTileCost } from '../utils/createTiles';
+import { SinglePostArt, CampaignArt, CarouselArt, LinkedInArt, VideoArt } from '../components/art';
+import { CREATE_TILES, VIDEO_ENTRY, actionCostKey, createTileCost, videoEntryCost } from '../utils/createTiles';
 import IdeaBoxTools, { ReadUpload } from '../components/IdeaBoxTools';
 import { appendText, mergeDetails } from '../utils/ideaFiles';
 import { DEFAULT_DESIGN, PostDesign, designRequestFields } from '../utils/postDesign';
@@ -1142,6 +1142,18 @@ const GravityCreate: React.FC = () => {
             />
           ))}
         </TileGrid>
+        {/* Video is made on its own page, so this one opens it instead of changing the mode. */}
+        <div className="mt-4 max-w-[460px]">
+          <Tile
+            variant="compact"
+            title={VIDEO_ENTRY.title}
+            subtitle={VIDEO_ENTRY.subtitle}
+            footer={videoEntryCost(quarkCosts) || undefined}
+            accent={VIDEO_ENTRY.accent}
+            art={<VideoArt />}
+            to={VIDEO_ENTRY.to}
+          />
+        </div>
       </div>
 
       <ModeExplainer mode={mode} />
