@@ -1388,10 +1388,12 @@ export const apiService = {
     unreadMessageCount: number;
     inboxEnabled: boolean;
     inboxStatus: 'active' | 'disabled' | 'needs_setup' | string;
+    /** Replies the owner still has to approve. */
+    pendingCount?: number;
     syncStatus: {
       status: 'synced' | 'pending' | 'not_started' | string;
+      /** When the last comment or message arrived, or null when none has yet. */
       lastSyncAt?: string | null;
-      nextSyncAt?: string | null;
     };
     webhookStatus: {
       registered: boolean;
@@ -4529,6 +4531,9 @@ export interface InboxMessage {
   provider_parent_id?: string;
   direction: 'inbound' | 'outbound';
   message_type: string;
+  /** 'sent' only when the platform accepted it; 'failed' keeps the reason in error_message. */
+  status?: 'sent' | 'failed' | string;
+  error_message?: string;
   author_id?: string;
   author_name: string;
   body: string;
@@ -4549,6 +4554,20 @@ export interface InboxMessage {
   auto_sent?: boolean;
   sender_type?: 'customer' | 'agent' | 'ai' | 'system';
   created_at: string;
+}
+
+export interface InboxPendingApproval {
+  id: string;
+  conversation_id: string;
+  platform: string;
+  message_type: string;
+  draft_text: string;
+  suggested_replies: string[];
+  reason: string;
+  original_message: string;
+  author_name: string;
+  created_at: string;
+  conversation: { id: string; participant_name: string; participant_username?: string; avatar_url?: string; platform: string; status: string; priority: string } | null;
 }
 
 export interface AutoReplySettings {
@@ -4636,26 +4655,33 @@ export const inboxAPI = {
     return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/messages`);
   },
 
-  reply: async (conversationId: string, body: string, dispatch = true): Promise<{ success: boolean; message: InboxMessage; dispatch?: any }> => {
+  /** Sends a reply. A failed send throws an error whose `data.sentMessage` is the stored message with status 'failed'. */
+  reply: async (conversationId: string, body: string, commentId?: string): Promise<{ success: boolean; message: InboxMessage; dispatch?: any }> => {
     return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/reply`, {
       method: 'POST',
-      body: JSON.stringify({ body, dispatch }),
+      body: JSON.stringify(commentId ? { body, commentId } : { body }),
     });
   },
 
-  replyToComment: async (conversationId: string, body: string, commentId?: string, dispatch = true): Promise<{ success: boolean; message: InboxMessage; dispatch?: any }> => {
-    return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/reply`, {
+  /** Replies drafted by Nebulaa that wait for the owner. */
+  getPending: async (): Promise<{ success: boolean; pending: InboxPendingApproval[]; pendingCount: number }> => {
+    return inboxCall('/pending');
+  },
+
+  /** Sends a waiting reply (optionally with edited text). 404 means it is not waiting any more; 502 carries `data.sentMessage`. */
+  approvePending: async (id: string, text?: string): Promise<{ success: boolean; message: InboxMessage }> => {
+    return inboxCall(`/pending/${encodeURIComponent(id)}/approve`, {
       method: 'POST',
-      body: JSON.stringify({ body, dispatch, commentId }),
+      body: JSON.stringify(text ? { text } : {}),
     });
+  },
+
+  discardPending: async (id: string): Promise<{ success: boolean }> => {
+    return inboxCall(`/pending/${encodeURIComponent(id)}/discard`, { method: 'POST' });
   },
 
   getComments: async (filters: any = {}): Promise<{ success: boolean; conversations: InboxConversation[] }> => {
     return inboxAPI.getConversations({ ...filters, type: 'comment' });
-  },
-
-  toggleCommentAutoReply: async (enabled: boolean): Promise<{ success: boolean; settings: AutoReplySettings }> => {
-    return inboxAPI.updateSettings({ enabled });
   },
 
   updateStatus: async (conversationId: string, status: string): Promise<{ success: boolean }> => {
@@ -4672,7 +4698,8 @@ export const inboxAPI = {
     });
   },
 
-  syncAccount: async (accountId: string): Promise<{ success: boolean; queued: boolean }> => {
+  /** Nothing to sync: updates arrive by themselves. Kept so older callers still compile. */
+  syncAccount: async (accountId: string): Promise<{ success: boolean; mode: 'webhook'; platform: string; message: string }> => {
     return inboxCall(`/sync/${encodeURIComponent(accountId)}`, { method: 'POST' });
   },
 
@@ -4680,10 +4707,11 @@ export const inboxAPI = {
     return inboxCall('/settings');
   },
 
-  updateSettings: async (settings: Partial<AutoReplySettings>): Promise<{ success: boolean; settings: AutoReplySettings }> => {
+  /** Choosing Fully automatic from another mode needs `confirm: true`, sent only after the owner agreed. */
+  updateSettings: async (settings: Partial<AutoReplySettings>, confirm = false): Promise<{ success: boolean; settings: AutoReplySettings }> => {
     return inboxCall('/settings', {
       method: 'PUT',
-      body: JSON.stringify(settings),
+      body: JSON.stringify(confirm ? { ...settings, confirm: true } : settings),
     });
   },
 
@@ -4691,6 +4719,8 @@ export const inboxAPI = {
     platform: string;
     channelType: 'message' | 'comment';
     enabled: boolean;
+    /** Required to turn automatic replies on. Send true only after the owner confirmed. */
+    confirm?: boolean;
   }): Promise<{ success: boolean; settings: AutoReplySettings }> => {
     return inboxCall('/auto-reply/toggle', {
       method: 'POST',
