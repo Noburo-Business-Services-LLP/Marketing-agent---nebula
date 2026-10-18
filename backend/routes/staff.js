@@ -21,8 +21,33 @@ const billing = require('../services/staff/billingLedger');
 const billingZoho = require('../services/staff/billingZoho');
 const { bulkClients, createClient } = require('../services/staff/clientBulk');
 const { canonicalEmail } = require('../services/signupGuard');
+const { keyFor, defaultCache } = require('../services/staff/cache');
+
+// The four heavy pages (Home, Clients, Team, Usage) keep their last result for 5 minutes (see services/staff/cache.js).
+// Off under `node --test` unless a test injects one with router._setCache(cache).
+let staffCache = defaultCache();
+router._setCache = (cache) => { staffCache = cache; };
+
+/**
+ * Runs `compute` through the cache. The key always carries the caller's permission level (and, for a CSM, their own id),
+ * so one level never gets another level's data. Returns { value, freshness }: freshness is null when the cache is off.
+ * `?refresh=1` skips the stored result and reads everything again.
+ */
+async function cachedRead(req, { endpoint, window = '' }, compute) {
+  if (!staffCache) return { value: await compute(), freshness: null };
+  const role = roleOf(req.staff);
+  const key = keyFor({ endpoint, window, role, csmId: role === 'csm' ? String(req.staff._id) : '' });
+  const hit = await staffCache.get(key, compute, { refresh: String((req.query || {}).refresh) === '1' });
+  return { value: hit.value, freshness: { updatedAt: new Date(hit.updatedAt).toISOString(), fromCache: hit.fromCache, stale: hit.stale } };
+}
+const withFreshness = (body, freshness) => (freshness ? { ...body, freshness } : body);
 
 router.use(protect);
+// A staff change (assign a CSM, switch a client off, add Quarks, hide, add a team member ...) makes what was stored out of date: forget it all.
+router.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') res.on('finish', () => { if (staffCache && res.statusCode < 400) staffCache.clear(); });
+  next();
+});
 
 // GET /api/staff/me: who I am and what my role may do (the screens use this to show or hide things).
 router.get('/me', requireStaff('view_home'), (req, res) => {
@@ -70,9 +95,8 @@ async function runTeam(res, label, work) {
 router.get('/team', requireStaff('add_csm'), async (req, res) => {
   try {
     const models = { User, FeatureEvent: require('../models/FeatureEvent'), Draft: require('../models/Draft') };
-    const data = await loadTeamData({ models });
-    const team = buildTeam(data);
-    res.json({ success: true, me: String(req.staff._id), grantable: grantableRoles(req.staff), can: { reset_accounts: can(req.staff, 'reset_accounts'), add_quarks: can(req.staff, 'add_quarks') }, ...team });
+    const { value: team, freshness } = await cachedRead(req, { endpoint: 'team' }, async () => buildTeam(await loadTeamData({ models })));
+    res.json(withFreshness({ success: true, me: String(req.staff._id), grantable: grantableRoles(req.staff), can: { reset_accounts: can(req.staff, 'reset_accounts'), add_quarks: can(req.staff, 'add_quarks') }, ...team }, freshness));
   } catch (error) {
     console.error('[staff] team list failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the team. Please try again.' });
@@ -189,17 +213,19 @@ router.get('/home', requireStaff('view_home'), async (req, res) => {
   try {
     const FeatureEvent = require('../models/FeatureEvent');
     const models = { User, FeatureEvent, Draft: require('../models/Draft') };
-    const data = await loadClientData({ viewer: req.staff, models });
-    let dailyActive = [];
-    try { dailyActive = await loadDailyActive({ FeatureEvent, ids: activityIds(data.users) }); } catch (error) { console.error('[staff] daily activity failed:', error.message); }
-    const home = buildHome({ viewer: req.staff, ...data, dailyActive });
+    const { value: home, freshness } = await cachedRead(req, { endpoint: 'home' }, async () => {
+      const data = await loadClientData({ viewer: req.staff, models });
+      let dailyActive = [];
+      try { dailyActive = await loadDailyActive({ FeatureEvent, ids: activityIds(data.users) }); } catch (error) { console.error('[staff] daily activity failed:', error.message); }
+      return buildHome({ viewer: req.staff, ...data, dailyActive });
+    });
 
     const snapshot = require('../services/opsAlerts').snapshot();
     let breaker = { tripped: false };
     try { breaker = require('../services/socialMediaAPI').getAyrshareCircuitBreakerState(); } catch (_) { /* leave as not tripped */ }
     const seeErrors = roleOf(req.staff) !== 'csm';
     const cards = buildHealth({ snapshot, breaker }).map((c) => (seeErrors ? c : { ...c, latest: [] }));
-    res.json({ success: true, health: { since: snapshot.since, cards }, attention: home.attention, growth: home.growth });
+    res.json(withFreshness({ success: true, health: { since: snapshot.since, cards }, attention: home.attention, growth: home.growth }, freshness));
   } catch (error) {
     console.error('[staff] home failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the Home numbers. Please try again.' });
@@ -241,9 +267,12 @@ router.get('/usage', requireStaff('view_usage_summary'), async (req, res) => {
       User, Draft: require('../models/Draft'), Campaign: require('../models/Campaign'), VideoJob: require('../models/VideoJob'),
       HeroVideoJob: require('../models/HeroVideoJob'), Blueprint: require('../models/Blueprint'), SocialInboxMessage: require('../models/SocialInboxMessage')
     };
-    const data = await loadUsageData({ models, window: w.days });
     const level = can(req.staff, 'view_usage_full') ? 'full' : 'summary';
-    res.json({ success: true, ...buildUsage({ ...data, window: w.days, level }) });
+    const { value, freshness } = await cachedRead(req, { endpoint: 'usage', window: String(w.days) }, async () => {
+      const data = await loadUsageData({ models, window: w.days, level });
+      return buildUsage({ ...data, window: w.days, level });
+    });
+    res.json(withFreshness({ success: true, ...value }, freshness));
   } catch (error) {
     console.error('[staff] usage failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the Usage numbers. Please try again.' });
@@ -264,9 +293,10 @@ router.get('/csms', requireStaff('assign_csm'), async (req, res) => {
 router.get('/clients', requireStaff('view_clients'), async (req, res) => {
   try {
     const models = { User, FeatureEvent: require('../models/FeatureEvent'), Draft: require('../models/Draft') };
-    const data = await loadClientData({ viewer: req.staff, models });
+    // What is stored is the data read from the database; the filter, search, sort and page are applied fresh on every request.
+    const { value: data, freshness } = await cachedRead(req, { endpoint: 'clients' }, () => loadClientData({ viewer: req.staff, models }));
     const q = req.query || {};
-    res.json({ success: true, ...buildList({ viewer: req.staff, ...data, filter: q.filter, q: q.q, sort: q.sort, dir: q.dir, page: q.page, pageSize: q.pageSize }) });
+    res.json(withFreshness({ success: true, ...buildList({ viewer: req.staff, ...data, filter: q.filter, q: q.q, sort: q.sort, dir: q.dir, page: q.page, pageSize: q.pageSize }) }, freshness));
   } catch (error) {
     console.error('[staff] client list failed:', error.message);
     res.status(500).json({ success: false, message: 'We could not load the clients. Please try again.' });
