@@ -3,7 +3,8 @@
  * business is growing. Pure except for `loadDailyActive`. Days are counted in India time.
  */
 const { urgency } = require('./clientStatus');
-const { buildList } = require('./clientList');
+const { classifyAll, rowsOf } = require('./clientList');
+const { READ_OPTIONS } = require('./readErrors');
 
 const DAY = 86400000;
 const IST_OFFSET_MIN = 330;
@@ -51,28 +52,27 @@ function series30(signupTimes, dailyActive, now) {
 }
 
 function buildHome({ viewer, users, extras = {}, csmNames = {}, dailyActive = [], now = Date.now(), attentionLimit = 25 }) {
-  const list = buildList({ viewer, users, extras, csmNames, now, filter: 'attention', pageSize: 100 });
-  const attention = list.rows
+  // Everyone is classified once; the attention list and the full list are two views of that.
+  const classified = classifyAll({ viewer, users, extras, now });
+  // The attention list has always been cut to the first 100 (most recently active first) before it is ranked by urgency.
+  const attentionRows = rowsOf(classified, { csmNames, filter: 'attention' }).rows.slice(0, 100);
+  const attention = attentionRows
     .map((r) => ({ ...r, urgency: urgency(r.attention, r.quarks) }))
     .sort((a, b) => b.urgency - a.urgency || a.quarks - b.quarks)
     .slice(0, attentionLimit)
     .map(({ id, name, email, quarks, attention: reasons, csm, lastActiveAt }) => ({ id, name, email, quarks, reasons, csm, lastActiveAt }));
 
-  const all = buildList({ viewer, users, extras, csmNames, now, filter: 'all', pageSize: 100 });
+  const all = rowsOf(classified, { csmNames, filter: 'all' });
   const counts = all.counts;
 
   // Sign-up times of the clients this person may see (hidden test accounts excluded).
-  const ids = new Set();
-  let page = 1; let pages = 1;
-  const clients = [];
-  do {
-    const p = buildList({ viewer, users, extras, csmNames, now, filter: 'all', pageSize: 100, page });
-    pages = p.pages; p.rows.forEach((r) => { ids.add(r.id); clients.push(r); }); page += 1;
-  } while (page <= pages);
+  const clients = all.rows;
+  const ids = new Set(clients.map((r) => r.id));
   const signupTimes = users.filter((u) => ids.has(String(u._id || u.id)) && u.createdAt).map((u) => new Date(u.createdAt).getTime());
 
   const cohort = users.filter((u) => ids.has(String(u._id || u.id)) && u.createdAt && now - new Date(u.createdAt).getTime() <= 30 * DAY);
-  const cohortPaying = clients.filter((r) => r.paying && cohort.some((u) => String(u._id || u.id) === r.id)).length;
+  const cohortIds = new Set(cohort.map((u) => String(u._id || u.id)));
+  const cohortPaying = clients.filter((r) => r.paying && cohortIds.has(r.id)).length;
 
   return {
     attention: { total: counts.attention, items: attention },
@@ -97,7 +97,7 @@ async function loadDailyActive({ FeatureEvent, ids, now = Date.now() }) {
     { $match: { userId: { $in: ids }, timestamp: { $gte: new Date(now - 30 * DAY) } } },
     { $group: { _id: { day: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp', timezone: '+05:30' } }, user: '$userId' } } },
     { $group: { _id: '$_id.day', n: { $sum: 1 } } }
-  ]);
+  ], READ_OPTIONS);
   return rows.map((r) => ({ day: r._id, n: r.n }));
 }
 

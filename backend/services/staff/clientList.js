@@ -5,6 +5,7 @@
 const { classifyClient, matchesFilter, FILTERS } = require('./clientStatus');
 const { roleOf } = require('./permissions');
 const { NOT_A_WORKSPACE } = require('../agency');
+const { READ_OPTIONS } = require('./readErrors');
 
 const SORTS = ['name', 'quarks', 'lastActive', 'status', 'plan'];
 
@@ -78,9 +79,22 @@ function sorter(sort, dir) {
  * csmNames: { [staffId]: name }
  */
 function buildList({ viewer, users, extras = {}, csmNames = {}, now = Date.now(), filter = 'all', q = '', sort = 'lastActive', dir = 'desc', page = 1, pageSize = 25 }) {
-  const f = FILTERS.includes(filter) ? filter : 'all';
+  const { counts, rows } = buildRows({ viewer, users, extras, csmNames, now, filter, q, sort, dir });
+  const size = Math.max(1, Math.min(100, Number(pageSize) || 25));
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  const current = Math.max(1, Math.min(pages, Number(page) || 1));
+  return { counts, total: rows.length, page: current, pages, rows: rows.slice((current - 1) * size, current * size) };
+}
+
+/** Every visible client classified once. Home needs several views of the same list, so it does this once and asks `rowsOf` for each. */
+function classifyAll({ viewer, users, extras = {}, now = Date.now() }) {
   const scoped = users.filter((u) => visibleTo(viewer, u));
-  const classified = scoped.map((u) => ({ u, c: classifyClient(u, now, extras[idOf(u)] || {}) }));
+  return scoped.map((u) => ({ u, c: classifyClient(u, now, extras[idOf(u)] || {}) }));
+}
+
+/** The filter counts and all matching rows (not yet cut into pages), sorted. */
+function rowsOf(classified, { csmNames = {}, filter = 'all', q = '', sort = 'lastActive', dir = 'desc' }) {
+  const f = FILTERS.includes(filter) ? filter : 'all';
 
   // Hidden accounts (test accounts the owner hid) stay out of everything except their own filter.
   const shown = classified.filter(({ u }) => !u.isHidden);
@@ -98,47 +112,55 @@ function buildList({ viewer, users, extras = {}, csmNames = {}, now = Date.now()
     : pool;
 
   const rows = searched.map(({ u, c }) => toRow(u, c, csmNames)).sort(sorter(sort, dir));
-  const size = Math.max(1, Math.min(100, Number(pageSize) || 25));
-  const pages = Math.max(1, Math.ceil(rows.length / size));
-  const current = Math.max(1, Math.min(pages, Number(page) || 1));
-  return { counts, total: rows.length, page: current, pages, rows: rows.slice((current - 1) * size, current * size) };
+  return { counts, rows };
 }
 
-/** Reads what the list needs. `models` is injected for tests. */
+function buildRows({ viewer, users, extras = {}, csmNames = {}, now = Date.now(), filter = 'all', q = '', sort = 'lastActive', dir = 'desc' }) {
+  return rowsOf(classifyAll({ viewer, users, extras, now }), { csmNames, filter, q, sort, dir });
+}
+
+/**
+ * The only user fields the client list, Home and Team read. Social accounts are read as a list of platforms (the list
+ * shows the platform names and the status rules count them), the plan as tier, add-ons and the paid flags.
+ */
+const CLIENT_USER_PROJECTION = Object.freeze({
+  email: 1, firstName: 1, lastName: 1, companyName: 1, mobileNumber: 1, createdAt: 1, isActive: 1, isHidden: 1, lastLoginAt: 1,
+  onboardingCompleted: 1, 'credits.balance': 1, 'connectedSocials.platform': 1, 'ayrshare.activeSocialAccounts': 1,
+  'plan.tier': 1, 'plan.addons': 1, 'plan.paidManually': 1, 'plan.subscriptions.active': 1, 'trial.isExpired': 1, 'payments.status': 1,
+  assignedCsm: 1, staffRole: 1, isCsm: 1, 'businessProfile.name': 1
+});
+
+/** Reads what the list needs. `models` is injected for tests. Each activity read stands alone: one that fails is logged and the others still load. */
 async function loadClientData({ viewer, models, now = Date.now(), assignedOnly = false }) {
   const { User, FeatureEvent, Draft } = models;
   const scope = { staffRole: null, isCsm: { $ne: true }, ...NOT_A_WORKSPACE }; // null also matches accounts that never had a role; a client workspace is never a customer here
   if (roleOf(viewer) === 'csm') scope.assignedCsm = viewer._id;
   else if (assignedOnly) scope.assignedCsm = { $ne: null }; // the Team page only needs clients that have a CSM
-  const users = await User.find(scope, {
-    email: 1, firstName: 1, lastName: 1, companyName: 1, mobileNumber: 1, createdAt: 1, isActive: 1, isHidden: 1, lastLoginAt: 1,
-    onboardingCompleted: 1, 'credits.balance': 1, connectedSocials: 1, 'ayrshare.activeSocialAccounts': 1,
-    plan: 1, trial: 1, 'payments.status': 1, assignedCsm: 1, staffRole: 1, isCsm: 1, 'businessProfile.name': 1
-  }).lean();
+  const users = await User.find(scope, CLIENT_USER_PROJECTION, { maxTimeMS: READ_OPTIONS.maxTimeMS }).lean();
   const ids = users.map((u) => u._id);
   const extras = {};
   const put = (id, patch) => { extras[String(id)] = { ...(extras[String(id)] || {}), ...patch }; };
 
-  try {
-    const events = await FeatureEvent.aggregate([{ $match: { userId: { $in: ids } } }, { $group: { _id: '$userId', last: { $max: '$timestamp' } } }]);
-    events.forEach((e) => put(e._id, { lastEventAt: e.last }));
-    const drafts = await Draft.aggregate([
+  const reads = [
+    ['activity', async () => (await FeatureEvent.aggregate([{ $match: { userId: { $in: ids } } }, { $group: { _id: '$userId', last: { $max: '$timestamp' } } }], READ_OPTIONS))
+      .forEach((e) => put(e._id, { lastEventAt: e.last }))],
+    ['waiting drafts', async () => (await Draft.aggregate([
       { $match: { userId: { $in: ids }, status: 'draft' } },
       { $group: { _id: '$userId', oldest: { $min: '$createdAt' }, n: { $sum: 1 } } }
-    ]);
-    drafts.forEach((d) => put(d._id, { oldestDraftAt: d.oldest, draftCount: d.n }));
-    const failed = await Draft.aggregate([
+    ], READ_OPTIONS)).forEach((d) => put(d._id, { oldestDraftAt: d.oldest, draftCount: d.n }))],
+    ['failed posts', async () => (await Draft.aggregate([
       { $match: { userId: { $in: ids }, status: 'failed', updatedAt: { $gte: new Date(now - 7 * 86400000) } } },
       { $group: { _id: '$userId', n: { $sum: 1 } } }
-    ]);
-    failed.forEach((d) => put(d._id, { failedPosts7d: d.n }));
-  } catch (error) {
-    console.error('[staff] could not read activity for the client list:', error.message);
-  }
+    ], READ_OPTIONS)).forEach((d) => put(d._id, { failedPosts7d: d.n }))]
+  ];
+  const results = await Promise.allSettled(reads.map(([, run]) => run()));
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') console.error(`[staff] could not read ${reads[i][0]} for the client list:`, r.reason.message);
+  });
 
   const staff = await User.find({ $or: [{ staffRole: { $ne: null } }, { isCsm: true }] }, { firstName: 1, lastName: 1, email: 1 }).lean();
   const csmNames = Object.fromEntries(staff.map((s) => [String(s._id), [s.firstName, s.lastName].filter(Boolean).join(' ') || s.email]));
   return { users, extras, csmNames };
 }
 
-module.exports = { buildList, loadClientData, displayName, platformsOf, SORTS };
+module.exports = { buildList, buildRows, classifyAll, rowsOf, loadClientData, displayName, platformsOf, SORTS, CLIENT_USER_PROJECTION };

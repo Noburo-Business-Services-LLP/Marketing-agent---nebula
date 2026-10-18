@@ -10,10 +10,23 @@ const { USD_PER_QUARK } = require('../../config/apiCosts');
 const { monthStart, HISTORY_CAP_WARN } = require('./money');
 const { NOT_A_WORKSPACE } = require('../agency');
 const { isPaying, connectedCount } = require('./clientStatus');
+const { READ_OPTIONS, unreadable } = require('./readErrors');
 
 const DAY = 86400000;
 const FEATURE_DAYS = 30;
 const WINDOWS = [30, 90];
+
+/**
+ * The only user fields the Usage numbers read. Social accounts are read as a list of platforms (only their count is used,
+ * and this keeps tokens and account ids out of memory), the plan as tier, add-ons and the paid flags.
+ */
+const USAGE_USER_PROJECTION = Object.freeze({
+  createdAt: 1, isHidden: 1, staffRole: 1, isCsm: 1, onboardingCompleted: 1,
+  'connectedSocials.platform': 1, 'ayrshare.activeSocialAccounts': 1,
+  'plan.tier': 1, 'plan.paidManually': 1, 'plan.subscriptions.active': 1, 'payments.status': 1
+});
+/** The Quark history read for the Owner's breakdown: the app keeps at most the last 100 entries per account. */
+const HISTORY_READ_CAP = 100;
 
 const toMs = (v) => { const t = v ? new Date(v).getTime() : NaN; return Number.isFinite(t) ? t : null; };
 const idOf = (u) => String((u && (u._id || u.id)) || '');
@@ -214,7 +227,7 @@ function buildUsage({ users, usage = {}, unavailable = {}, funnelData = null, wi
 
 /** The shape every per-client count comes back in: [{ _id: userId, n }]. */
 async function perClient(model, pipeline) {
-  const rows = await model.aggregate(pipeline);
+  const rows = await model.aggregate(pipeline, READ_OPTIONS);
   return rows.map((r) => ({ _id: String(r._id), n: Number(r.n) || 0 }));
 }
 const byUser = (match, n = { $sum: 1 }) => [{ $match: match }, { $group: { _id: '$userId', n } }];
@@ -226,37 +239,50 @@ const IMAGES_ON_DRAFT = {
     { $cond: [{ $gt: [{ $strLenCP: { $ifNull: ['$imageUrl', ''] } }, 0] }, 1, 0] }
   ]
 };
-const PUBLISHED = { $or: [{ publishedAt: { $ne: null } }, { status: 'posted' }] };
+// "Published" is either of two stored signs. They are read as two separate lookups (one per sign, each narrowed by client
+// id) instead of one $or, so the database never picks the date index (which would walk every published post of every client).
+const PUBLISHED_SIGNS = [{ publishedAt: { $ne: null } }, { status: 'posted' }];
+
+/**
+ * The seven per-client counts the Usage page needs, as data: key, the model's name, the words used if it cannot be
+ * read, and the pipeline. Shared by `loadUsageData` and by the perf check (`scripts/staff-perf-check.js --explain`).
+ */
+function usageSources(since) {
+  const notLanguageCopy = { languageVariantOf: null };
+  return [
+    { key: 'images', model: 'Draft', what: 'drafts', pipeline: byUser({ createdAt: { $gte: since }, ...notLanguageCopy }, { $sum: IMAGES_ON_DRAFT }) },
+    { key: 'postsDrafted', model: 'Draft', what: 'drafts', pipeline: byUser({ createdAt: { $gte: since }, ...notLanguageCopy }) },
+    { key: 'postsPublished', model: 'Campaign', what: 'published posts', pipeline: byUser({ publishedAt: { $gte: since } }) },
+    { key: 'videos', model: 'VideoJob', what: 'video jobs', pipeline: byUser({ status: 'completed', createdAt: { $gte: since } }) },
+    { key: 'heroVideos', model: 'HeroVideoJob', what: 'hero video jobs', pipeline: byUser({ status: 'completed', createdAt: { $gte: since } }) },
+    { key: 'blueprints', model: 'Blueprint', what: 'Blueprints', pipeline: byUser({ status: 'completed', kind: { $ne: 'plan' }, createdAt: { $gte: since } }) },
+    {
+      key: 'repliesDrafted', model: 'SocialInboxMessage', what: 'inbox',
+      pipeline: byUser({ 'ai.generatedAt': { $gte: since }, $or: [{ 'ai.suggestedReplies.0': { $exists: true } }, { 'ai.autoReplyCandidate': { $nin: ['', null] } }] })
+    }
+  ];
+}
 
 /**
  * Reads what Usage needs. Each source is read on its own: one that fails is reported as unavailable and the rest
- * still load. `models` is injected for tests.
+ * still load. A source that ran out of time says so ("took too long") instead of looking like an error.
+ * `models` is injected for tests. `level` 'summary' (an Admin) skips the Quark history, which only the Owner's
+ * breakdown reads.
  */
-async function loadUsageData({ models, window: windowDays = 30, now = Date.now() }) {
+async function loadUsageData({ models, window: windowDays = 30, now = Date.now(), level = 'full' }) {
   const { User, Draft, Campaign, VideoJob, HeroVideoJob, Blueprint, SocialInboxMessage } = models;
-  const users = await User.find({ staffRole: null, isCsm: { $ne: true }, ...NOT_A_WORKSPACE }, {
-    email: 1, createdAt: 1, isHidden: 1, staffRole: 1, isCsm: 1, onboardingCompleted: 1,
-    connectedSocials: 1, 'ayrshare.activeSocialAccounts': 1, plan: 1, 'payments.status': 1, 'credits.history': 1
-  }).lean();
+  const projection = level === 'full' ? { ...USAGE_USER_PROJECTION, 'credits.history': { $slice: -HISTORY_READ_CAP } } : USAGE_USER_PROJECTION;
+  const users = await User.find({ staffRole: null, isCsm: { $ne: true }, ...NOT_A_WORKSPACE }, projection, { maxTimeMS: READ_OPTIONS.maxTimeMS }).lean();
   const since = new Date(now - FEATURE_DAYS * DAY);
   const usage = {}; const unavailable = {};
-  const src = async (key, reason, run) => {
-    try { usage[key] = await run(); }
-    catch (error) { console.error(`[staff] usage: could not read ${key}:`, error.message); unavailable[key] = reason; }
-  };
-  const notLanguageCopy = { languageVariantOf: null };
-  await Promise.all([
-    src('images', 'We could not read the drafts right now.', () => perClient(Draft, byUser({ createdAt: { $gte: since }, ...notLanguageCopy }, { $sum: IMAGES_ON_DRAFT }))),
-    src('postsDrafted', 'We could not read the drafts right now.', () => perClient(Draft, byUser({ createdAt: { $gte: since }, ...notLanguageCopy }))),
-    src('postsPublished', 'We could not read the published posts right now.', () => perClient(Campaign, byUser({ publishedAt: { $gte: since } }))),
-    src('videos', 'We could not read the video jobs right now.', () => perClient(VideoJob, byUser({ status: 'completed', createdAt: { $gte: since } }))),
-    src('heroVideos', 'We could not read the hero video jobs right now.', () => perClient(HeroVideoJob, byUser({ status: 'completed', createdAt: { $gte: since } }))),
-    src('blueprints', 'We could not read the Blueprints right now.', () => perClient(Blueprint, byUser({ status: 'completed', kind: { $ne: 'plan' }, createdAt: { $gte: since } }))),
-    src('repliesDrafted', 'We could not read the inbox right now.', () => perClient(SocialInboxMessage, byUser({
-      'ai.generatedAt': { $gte: since },
-      $or: [{ 'ai.suggestedReplies.0': { $exists: true } }, { 'ai.autoReplyCandidate': { $nin: ['', null] } }]
-    })))
-  ]);
+  const byName = { Draft, Campaign, VideoJob, HeroVideoJob, Blueprint, SocialInboxMessage };
+  await Promise.all(usageSources(since).map(async (source) => {
+    try { usage[source.key] = await perClient(byName[source.model], source.pipeline); }
+    catch (error) {
+      console.error(`[staff] usage: could not read ${source.key}:`, error.message);
+      unavailable[source.key] = unreadable(source.what, error);
+    }
+  }));
 
   // Funnel: which of the clients who signed up in the window ever made content or published.
   const from = now - (WINDOWS.includes(Number(windowDays)) ? Number(windowDays) : 30) * DAY;
@@ -268,13 +294,15 @@ async function loadUsageData({ models, window: windowDays = 30, now = Date.now()
     return [...seen];
   };
   const mine = { userId: { $in: cohortIds } };
-  try {
-    funnelData.contentIds = await ids([[Draft, byUser(mine)], [Campaign, byUser(mine)], [VideoJob, byUser(mine)]]);
-  } catch (error) { console.error('[staff] usage: could not read content records:', error.message); funnelData.contentReason = 'We could not read the content records right now.'; }
-  try {
-    funnelData.publishedIds = await ids([[Campaign, byUser({ ...mine, ...PUBLISHED })], [Draft, byUser({ ...mine, status: 'published' })]]);
-  } catch (error) { console.error('[staff] usage: could not read published posts:', error.message); funnelData.publishedReason = 'We could not read the published posts right now.'; }
+  const [content, published] = await Promise.allSettled([
+    ids([[Draft, byUser(mine)], [Campaign, byUser(mine)], [VideoJob, byUser(mine)]]),
+    ids([...PUBLISHED_SIGNS.map((sign) => [Campaign, byUser({ ...mine, ...sign })]), [Draft, byUser({ ...mine, status: 'published' })]])
+  ]);
+  if (content.status === 'fulfilled') funnelData.contentIds = content.value;
+  else { console.error('[staff] usage: could not read content records:', content.reason.message); funnelData.contentReason = unreadable('content records', content.reason); }
+  if (published.status === 'fulfilled') funnelData.publishedIds = published.value;
+  else { console.error('[staff] usage: could not read published posts:', published.reason.message); funnelData.publishedReason = unreadable('published posts', published.reason); }
   return { users, usage, unavailable, funnelData };
 }
 
-module.exports = { buildUsage, loadUsageData, categoryOf, parseWindow, CATEGORIES, FEATURES, FUNNEL_STEPS };
+module.exports = { buildUsage, loadUsageData, usageSources, categoryOf, parseWindow, CATEGORIES, FEATURES, FUNNEL_STEPS, USAGE_USER_PROJECTION, HISTORY_READ_CAP };
