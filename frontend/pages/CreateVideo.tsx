@@ -111,8 +111,7 @@ const CreateVideo: React.FC = () => {
     studioVideosAPI.list().then((r) => {
       if (!r?.success) return;
       setHistory(r.videos || []);
-      const running = (r.videos || []).find((v) => v.status === 'processing');
-      if (running) { setCurrent((c) => c || running); }
+      // A video still being made stays in the list as "Being made". Opening the page never pulls the person back to it.
     }).catch(() => undefined);
   }, []);
 
@@ -169,6 +168,14 @@ const CreateVideo: React.FC = () => {
     pollRef.current = window.setTimeout(poll, 5000);
     return () => { if (pollRef.current) window.clearTimeout(pollRef.current); if (tickRef.current) { window.clearInterval(tickRef.current); tickRef.current = null; } };
   }, [current?.id, current?.status, loadHistory, refreshBalance]);
+
+  // Videos being made in the background: keep their cards in the list up to date while the person works on another.
+  const othersMaking = history.some((v) => v.status === 'processing' && v.id !== current?.id);
+  useEffect(() => {
+    if (!othersMaking) return;
+    const t = window.setInterval(loadHistory, 8000);
+    return () => window.clearInterval(t);
+  }, [othersMaking, loadHistory]);
 
   useEffect(() => { if (current) setStep('result'); }, [current?.id]);
   // Opening a video from the list below must bring its player into view, wherever the page was scrolled.
@@ -430,6 +437,7 @@ const CreateVideo: React.FC = () => {
                   <GravityButton variant="ghost" onClick={startOver}>Make another video</GravityButton>
                 </div>
               )}
+              {processing && <GravityButton variant="ghost" onClick={startOver}>Make another video while you wait</GravityButton>}
               {current.status === 'failed' && <GravityButton onClick={startOver}>Try again</GravityButton>}
             </div>
           </GravityPanel>
