@@ -77,7 +77,7 @@ async function extractFromFile(part, { languageLabel = 'English' } = {}, io = {}
     const data = await res.json();
     const out = parseExtraction(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
     if (out.sensitive) return { ok: false, sensitive: true, message: 'This looks like a personal or financial document. Please add a pamphlet, poster or price list instead.' };
-    if (!out.summary && !out.brief && !Object.values(out.details).some(Boolean)) return { ok: false, message: 'Nothing readable was found in this file. Try a clearer photo or a different file.' };
+    if (!out.summary && !out.brief && !Object.values(out.details).some(Boolean)) return { ok: false, message: 'No printed text was found in this file. If it is a photo, use it as a person, place or product reference instead.' };
     return { ok: true, ...out };
   } catch (error) {
     return { ok: false, message: 'Could not read this file. Please try again.' };

@@ -25,7 +25,7 @@ test('a personal or financial document is refused, and nothing from it is return
 test('an unreadable or empty answer is reported plainly, and a failed call never throws', async () => {
   const empty = await extractFromFile({ type: 'image', dataUrl: 'data:image/png;base64,AA==' }, {}, { apiKey: 'k', fetch: async () => reply({}) });
   assert.strictEqual(empty.ok, false);
-  assert.match(empty.message, /Nothing readable/);
+  assert.match(empty.message, /No printed text was found/);
   const failed = await extractFromFile({ type: 'image', dataUrl: 'data:image/png;base64,AA==' }, {}, { apiKey: 'k', fetch: async () => { throw new Error('net'); } });
   assert.strictEqual(failed.ok, false);
 });

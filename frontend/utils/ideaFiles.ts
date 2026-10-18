@@ -34,3 +34,21 @@ export function mergeDetails<T extends Record<string, string>>(mine: T, found: P
   }
   return out as T;
 }
+
+/** True when the server says a file had no printed text (current and earlier wording). */
+export function isNoTextResult(message: string | undefined | null): boolean {
+  return /No printed text was found|Nothing readable was found/i.test(String(message || ''));
+}
+
+/** A photo kept as a reference is shaped like anything chosen in the asset picker. */
+export function referenceAssetFromFile(f: { name: string; dataUrl: string }) {
+  return { id: '', name: f.name, imageUrl: f.dataUrl, dataUrl: f.dataUrl };
+}
+
+/** Offer reference buttons only for a picture that had no text, and only where the screen has somewhere to put it. */
+export function referenceOfferFor(a: { file: { type?: string } | null | undefined; message: string | undefined | null; hasChoices: boolean }): boolean {
+  return a.hasChoices && /^image\//i.test(String(a.file?.type || '')) && isNoTextResult(a.message);
+}
+
+export const referenceOfferText = (name: string) => `${name} is a photo with no text to read. Use it as a reference instead:`;
+export const referenceAddedText = (label: string) => `Added as ${label.charAt(0).toLowerCase()}${label.slice(1)} reference`;

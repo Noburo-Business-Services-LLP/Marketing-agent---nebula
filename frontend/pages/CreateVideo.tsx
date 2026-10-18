@@ -7,7 +7,7 @@ import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import ReferenceMaker from '../components/ReferenceMaker';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import { apiService, brandAssetsAPI, studioVideosAPI, StudioVideo, StudioConcept } from '../services/api';
-import { appendText } from '../utils/ideaFiles';
+import { appendText, referenceAssetFromFile } from '../utils/ideaFiles';
 import { canPlan, waitMessage, videosLeft, CHANGE_IDEAS, StepKey } from '../utils/studioVideo';
 import { downloadImage } from '../utils/download';
 import { takePrefill, nearestLanguage } from '../utils/prefill';
@@ -289,6 +289,11 @@ const CreateVideo: React.FC = () => {
               onText={(t) => setIdea((d) => appendText(d, t))}
               onRead={(ups) => ups.forEach((u) => u.brief && setIdea((d) => appendText(d, u.brief)))}
               onReuse={(u) => u.brief && setIdea((d) => appendText(d, u.brief))}
+              referenceChoices={[
+                { label: 'A person', onPick: (f) => { if (people.length >= 2) return 'You already have two people. Remove one first.'; setPeople((p) => [...p, referenceAssetFromFile(f)].slice(0, 2)); } },
+                { label: 'A place', onPick: (f) => setPlaces([referenceAssetFromFile(f)]) },
+                { label: 'A product', onPick: (f) => { if (products.length >= 2) return 'You already have two products. Remove one first.'; setProducts((p) => [...p, referenceAssetFromFile(f)].slice(0, 2)); } },
+              ]}
             />
           </GravityPanel>
 

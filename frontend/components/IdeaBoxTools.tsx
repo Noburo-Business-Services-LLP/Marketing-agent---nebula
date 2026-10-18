@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, Paperclip, Square, Loader2, X, FileText, Image as ImageIcon } from 'lucide-react';
 import { apiService } from '../services/api';
-import { ACCEPT, fileProblem, speechLanguage } from '../utils/ideaFiles';
+import { ACCEPT, fileProblem, speechLanguage, referenceOfferFor, referenceOfferText, referenceAddedText } from '../utils/ideaFiles';
 
 export interface ReadUpload { id: string; name: string; kind: string; url: string; summary: string; brief: string; details: Record<string, string>; notes: string }
 
@@ -42,11 +42,15 @@ const IdeaBoxTools: React.FC<{
   onRead: (uploads: ReadUpload[]) => void;
   /** a saved file chosen again from the recent list: no new reading is needed */
   onReuse?: (upload: ReadUpload) => void;
-}> = ({ languageLabel, onText, onRead, onReuse }) => {
+  /** where a photo with no text can go instead, for example a person, place or product reference */
+  referenceChoices?: Array<{ label: string; onPick: (asset: { name: string; dataUrl: string }) => void | string }>;
+}> = ({ languageLabel, onText, onRead, onReuse, referenceChoices }) => {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [reading, setReading] = useState(false);
   const [note, setNote] = useState('');
+  const [offers, setOffers] = useState<Array<{ name: string; dataUrl: string }>>([]);
+  const [added, setAdded] = useState('');
   const [attached, setAttached] = useState<ReadUpload[]>([]);
   const [recent, setRecent] = useState<ReadUpload[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -101,7 +105,7 @@ const IdeaBoxTools: React.FC<{
 
   const addFiles = async (list: FileList | File[]) => {
     const files = Array.from(list);
-    setNote('');
+    setNote(''); setOffers([]); setAdded('');
     const accepted: File[] = [];
     let count = attached.length;
     for (const f of files) {
@@ -117,8 +121,11 @@ const IdeaBoxTools: React.FC<{
       if (!r.success || !r.results) { setNote(r.message || 'Could not read the files. You can type the details in.'); return; }
       const ok = r.results.filter((x) => x.ok && x.upload).map((x) => x.upload as ReadUpload);
       const bad = r.results.filter((x) => !x.ok);
+      const offered = bad.filter((b) => { const f = accepted.find((a) => a.name === b.name); return referenceOfferFor({ file: f, message: b.message, hasChoices: !!referenceChoices?.length }); });
+      const rest = bad.filter((b) => !offered.includes(b));
+      if (offered.length) setOffers(offered.map((b) => ({ name: b.name, dataUrl: payload.find((p) => p.name === b.name)?.data || '' })).filter((o) => o.dataUrl));
       if (ok.length) { setAttached((a) => [...a, ...ok]); setRecent((rc) => [...ok, ...rc.filter((x) => !ok.some((o) => o.id === x.id))].slice(0, 6)); onRead(ok); }
-      if (bad.length) setNote(bad.map((b) => `${b.name}: ${b.message}`).join(' '));
+      if (rest.length) setNote(rest.map((b) => `${b.name}: ${b.message}`).join(' '));
     } catch {
       setNote('Could not read the files. You can type the details in.');
     } finally { setReading(false); }
@@ -162,6 +169,17 @@ const IdeaBoxTools: React.FC<{
         {!recording && !busy && <span className="text-[12px] text-[var(--gv-text-tertiary)]">Or drop a pamphlet, poster or price list here.</span>}
       </div>
 
+      {offers.map((o) => (
+        <div key={o.name} className="mt-2" role="alert">
+          <p className="text-[12.5px] text-[var(--gv-text-primary)]">{referenceOfferText(o.name)}</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {(referenceChoices || []).map((c) => (
+              <button key={c.label} type="button" onClick={() => { const full = c.onPick({ name: o.name, dataUrl: o.dataUrl }); if (typeof full === 'string') { setAdded(full); return; } setOffers((x) => x.filter((y) => y.name !== o.name)); setAdded(referenceAddedText(c.label)); }} className="h-8 px-3 rounded-full border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[12.5px] font-semibold text-[var(--gv-text-primary)]">{c.label}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {added && <p role="status" className="mt-2 text-[12.5px] text-[var(--gv-text-primary)]">{added}</p>}
       {note && <p role="alert" className="mt-2 text-[12.5px] text-[var(--gv-text-primary)]">{note}</p>}
 
       {attached.length > 0 && (
