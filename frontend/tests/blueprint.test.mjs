@@ -161,6 +161,7 @@ test('deep link handling', () => {
 
 test('quarks note', () => {
   assert.equal(quarksNote(7), 'This uses 7 of your Quarks.');
+  assert.equal(quarksNote(161, { image_generated: 11, studio_video: 161 }), 'This uses 161 of your Quarks (about 1 video\'s worth).');
   assert.equal(quarksNote(), 'This uses a small number of your Quarks.');
   assert.equal(quarksNote(0), 'This uses a small number of your Quarks.');
 });

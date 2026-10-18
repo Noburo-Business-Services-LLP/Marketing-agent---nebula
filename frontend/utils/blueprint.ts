@@ -2,6 +2,8 @@
 // the sign-up deep link. No React, no browser APIs, no enums: Node runs this file directly in
 // tests (like utils/plans.ts). Every sentence follows the app voice rules.
 
+import { worthText } from './plans.ts';
+
 export type BlueprintStatusName = 'queued' | 'processing' | 'awaiting_approval' | 'completed' | 'stopped' | 'failed';
 export type BlueprintTag = 'verified' | 'inference' | 'proposed' | 'unverified';
 export type BlueprintMode = 'auto' | 'guided';
@@ -334,10 +336,12 @@ export function pollDelayMs(attempt: number): number {
   return attempt < 20 ? 3000 : 6000;
 }
 
-export function quarksNote(cost?: number | null): string {
-  return typeof cost === 'number' && cost > 0
-    ? `This uses ${cost} of your Quarks.`
-    : 'This uses a small number of your Quarks.';
+export function quarksNote(cost?: number | null, costs?: Record<string, number> | null): string {
+  if (typeof cost === 'number' && cost > 0) {
+    const w = worthText(cost, costs);
+    return `This uses ${cost} of your Quarks${w ? ` (${w})` : ''}.`;
+  }
+  return 'This uses a small number of your Quarks.';
 }
 
 // ---------- the document (pure helpers; the page is components/blueprint/BlueprintDocument.tsx) ----------

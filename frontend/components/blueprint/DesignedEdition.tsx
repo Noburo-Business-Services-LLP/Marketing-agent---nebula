@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useQuarkCosts } from '../../hooks/useQuarkCosts';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import { GravityPanel, GravityLabel, GravityButton } from '../gravity';
 import { apiService } from '../../services/api';
@@ -10,6 +11,7 @@ import { BlueprintView, designedActive, quarksNote } from '../../utils/blueprint
  */
 const DesignedEdition: React.FC<{ view: BlueprintView; onStarted: () => void }> = ({ view, onStarted }) => {
   const d = view.designed;
+  const quarkCosts = useQuarkCosts();
   const [cost, setCost] = useState<number | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +63,7 @@ const DesignedEdition: React.FC<{ view: BlueprintView; onStarted: () => void }> 
           <GravityButton onClick={start} disabled={busy}>
             {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>) : `Make the designed PDF${cost ? ` · ${cost} Quarks` : ''}`}
           </GravityButton>
-          <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">{quarksNote(cost)} It takes about 5 to 10 minutes. You can leave this page.</span>
+          <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">{quarksNote(cost, quarkCosts)} It takes about 5 to 10 minutes. You can leave this page.</span>
         </div>
       )}
 

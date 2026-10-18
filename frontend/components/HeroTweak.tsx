@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { priceWithWorth, balanceWithEquivalent } from '../utils/plans';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { Loader2 } from 'lucide-react';
 import { GravityPanel, GravityLabel, GravityButton } from './gravity';
 import { apiService, heroVideoAPI } from '../services/api';
@@ -19,6 +21,7 @@ const field =
  */
 const HeroTweak: React.FC<{ source: TweakSource; onStarted: (jobId: string) => void }> = ({ source, onStarted }) => {
   const [prompt, setPrompt] = useState(source.prompt || '');
+  const costs = useQuarkCosts();
   const [price, setPrice] = useState<number | undefined>(undefined);
   const [balance, setBalance] = useState<number | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -69,11 +72,11 @@ const HeroTweak: React.FC<{ source: TweakSource; onStarted: (jobId: string) => v
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <GravityButton onClick={make} disabled={busy || !prompt.trim() || cannotAfford}>
-          {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>) : `Make a new version${price !== undefined ? ` · ${price} Quarks` : ''}`}
+          {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>) : `Make a new version${price !== undefined ? ` · ${priceWithWorth(price, costs)}` : ''}`}
         </GravityButton>
-        {price !== undefined && balance !== undefined && <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Price {price} Quarks · Your balance {balance} Quarks</span>}
+        {price !== undefined && balance !== undefined && <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Price {priceWithWorth(price, costs)} · Your balance {balanceWithEquivalent(balance, costs)}</span>}
       </div>
-      {cannotAfford && <p role="status" className="text-[12.5px] text-[var(--gv-text-primary)]">A Hero video costs {price} Quarks and you have {balance}. Top up to make one; nothing is charged until you press the button.</p>}
+      {cannotAfford && <p role="status" className="text-[12.5px] text-[var(--gv-text-primary)]">A Hero video costs {priceWithWorth(price, costs)} and you have {balanceWithEquivalent(balance, costs)}. Top up to make one; nothing is charged until you press the button.</p>}
       {error && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{error}</p>}
     </GravityPanel>
   );

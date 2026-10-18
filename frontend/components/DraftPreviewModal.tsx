@@ -1,4 +1,5 @@
 import PlatformIcon from './PlatformIcon';
+import { priceWithWorth } from '../utils/plans';
 import { choicesFor } from '../utils/platforms';
 import React, { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, Save, Download, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
@@ -132,7 +133,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
 
   const handleRetryImage = async () => {
     const confirmMsg = regenerateCost > 0
-      ? `This costs ${regenerateCost} Quark${regenerateCost === 1 ? '' : 's'} and replaces the current image.`
+      ? `This costs ${priceWithWorth(regenerateCost, quarkCosts)} and replaces the current image.`
       : 'This replaces the current image.';
     if (!(await confirm(confirmMsg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' }))) return;
     setIsRetryingImage(true);

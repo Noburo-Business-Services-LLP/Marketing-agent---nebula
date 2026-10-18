@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { priceWithWorth, balanceWithEquivalent } from '../utils/plans';
+import { getQuarkCosts } from '../hooks/useQuarkCosts';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Campaign, ContentCalendarItem, Product, Draft } from '../types';
 import { apiService, inventoryAPI, brandAssetsAPI, contentCalendarAPI, draftsAPI } from '../services/api';
@@ -565,7 +567,7 @@ const SuggestionCard: React.FC<{
       const creditData = await apiService.getCredits();
       const balance = creditData?.credits?.balance ?? 0;
       if (balance < 7) {
-        alert(`You have ${balance} Quarks but need 7.`);
+        alert(`You have ${balanceWithEquivalent(balance, creditData?.costs)} but need ${priceWithWorth(7, creditData?.costs)}.`);
         return;
       }
     } catch (err) {
@@ -1691,7 +1693,7 @@ const Campaigns: React.FC = () => {
         const balance = creditData?.credits?.balance ?? 0;
         const required = 42;
         if (balance < required) {
-          alert(`You have ${balance} Quarks but need ${required} to generate new campaigns.`);
+          alert(`You have ${balanceWithEquivalent(balance, creditData?.costs)} but need ${priceWithWorth(required, creditData?.costs)} to generate new campaigns.`);
           return;
         }
       } catch (err) {
@@ -1798,7 +1800,7 @@ const Campaigns: React.FC = () => {
       // Check for insufficient credits error from the API
       if (response.insufficientCredits) {
         setLoadingSuggestions(false);
-        alert(`You have ${response.creditsRemaining} Quarks but need ${response.required}. See the plans page to add more.`);
+        alert(`You have ${balanceWithEquivalent(response.creditsRemaining, await getQuarkCosts())} but need ${priceWithWorth(response.required, await getQuarkCosts())}. See the plans page to add more.`);
         return;
       }
       
@@ -5247,7 +5249,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
         const creditData = await apiService.getCredits();
         const balance = creditData?.credits?.balance ?? 0;
         if (balance < creditCost) {
-          alert(`You have ${balance} Quarks but need ${creditCost} (7 per post for ${totalPosts} posts).`);
+          alert(`You have ${balanceWithEquivalent(balance, creditData?.costs)} but need ${priceWithWorth(creditCost, creditData?.costs)} (7 per post for ${totalPosts} posts).`);
           generationRequestInFlightRef.current = false;
           return;
         }
@@ -8748,7 +8750,7 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
             const creditData = await apiService.getCredits();
             const balance = creditData?.credits?.balance ?? 0;
             if (balance < 3) {
-                alert(`You need 3 Quarks to refine an image but you only have ${balance}. See the plans page to add more.`);
+                alert(`You need ${priceWithWorth(3, creditData?.costs)} to refine an image but you only have ${balanceWithEquivalent(balance, creditData?.costs)}. See the plans page to add more.`);
                 return;
             }
         } catch (e) {
@@ -8784,7 +8786,7 @@ const EditSuggestionModal: React.FC<EditSuggestionModalProps> = ({ suggestion, o
             const creditData = await apiService.getCredits();
             const balance = creditData?.credits?.balance ?? 0;
             if (balance < 5) {
-                alert(`You need 5 Quarks to regenerate an image but you only have ${balance}. See the plans page to add more.`);
+                alert(`You need ${priceWithWorth(5, creditData?.costs)} to regenerate an image but you only have ${balanceWithEquivalent(balance, creditData?.costs)}. See the plans page to add more.`);
                 return;
             }
         } catch (e) {

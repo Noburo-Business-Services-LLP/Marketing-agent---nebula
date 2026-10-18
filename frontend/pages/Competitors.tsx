@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { priceWithWorth, balanceWithEquivalent } from '../utils/plans';
+import { getQuarkCosts } from '../hooks/useQuarkCosts';
 import { apiService } from '../services/api';
 import { CompetitorPost } from '../types';
 import { Loader2, Search, RotateCw, ExternalLink, Heart, MessageCircle, Plus, Instagram, Twitter, Linkedin, Facebook, Youtube, Swords, Sparkles, X, Eye, Download, Copy, Save, MessageSquare, FileText, EyeOff, Users, MapPin, Edit3, Zap } from 'lucide-react';
@@ -211,7 +213,7 @@ const Competitors: React.FC = () => {
   // Close rival post modal with credit warning
   const handleCloseRivalModal = async () => {
     if (rivalPostLoading || rivalPost) {
-      const shouldClose = await confirm('7 Quarks have already been consumed. Do you want to close?', { title: '⚡ Close rival post?', confirmLabel: 'Close' });
+      const shouldClose = await confirm(`${priceWithWorth(7, await getQuarkCosts())} have already been consumed. Do you want to close?`, { title: '⚡ Close rival post?', confirmLabel: 'Close' });
       if (!shouldClose) return;
     }
     setShowRivalPostModal(false);

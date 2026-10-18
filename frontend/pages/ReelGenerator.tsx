@@ -1,4 +1,5 @@
 import PlatformPicker from '../components/PlatformPicker';
+import { priceWithWorth } from '../utils/plans';
 import GenerationTimer from '../components/GenerationTimer';
 import PlatformIcon from '../components/PlatformIcon';
 import { choicesFor, platformLabel } from '../utils/platforms';
@@ -378,7 +379,7 @@ const ReelGenerator: React.FC = () => {
   // the app (GravityCreate/GravityApprove/DraftPreviewModal).
   const confirmRegenerateCost = (count: number, costPerUnit: number, label: string) => {
     const total = count * costPerUnit;
-    const msg = total > 0 ? `This costs ${total} Quark${total === 1 ? '' : 's'}.` : 'This replaces what you have now.';
+    const msg = total > 0 ? `This costs ${priceWithWorth(total, quarkCosts)}.` : 'This replaces what you have now.';
     return confirmDialog(msg, { title: `Regenerate ${label}?`, confirmLabel: 'Regenerate' });
   };
   // Products/services featured in the video, and the environment it is set

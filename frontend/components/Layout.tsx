@@ -46,6 +46,7 @@ import { needsTermsPrompt } from '../utils/accountDeletion';
 import { groupHasPath, showsCompetitorsEntry } from '../utils/navMenu';
 import { apiService } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
+import { balanceWithEquivalent, equivalentText } from '../utils/plans';
 import { actingBannerText, actingClientName, isAgencyUser, isInsideClient, isLapsedAgency, returnButtonLabel, showClientSwitcher, showsPostsNotQuarks } from '../utils/agency';
 
 interface TrialData {
@@ -419,10 +420,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                       ? 'bg-red-500/10 text-red-400'
                       : 'bg-[var(--gv-surface-2)] text-[var(--gv-text-secondary)]'
                   }`}
-                  title="Quarks"
+                  title={balanceWithEquivalent(trialInfo.creditsBalance, trialInfo.costs)}
+                  aria-label={balanceWithEquivalent(trialInfo.creditsBalance, trialInfo.costs)}
                 >
                   <Zap className="w-3 h-3" />
-                  <span className="tabular-nums">{trialInfo.creditsBalance}</span>
+                  <span className="tabular-nums whitespace-nowrap">{trialInfo.creditsBalance} Quarks</span>
                 </div>
               )}
               <HelpMenu canReplay={tourEligible} canSetup={tourEligible} />
@@ -478,8 +480,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                       className="flex items-center gap-2.5 pl-2.5 pr-3 h-9 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)] transition-colors"
                     >
                       <span className="w-2 h-2 rounded-full" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />
-                      <span className="text-[13px] font-semibold text-[var(--gv-text-primary)] tabular-nums">{trialInfo.creditsBalance}</span>
-                      <span className="text-[11px] text-[var(--gv-text-tertiary)]">Quarks</span>
+                      <span className="flex flex-col items-start leading-tight">
+                        <span className="text-[13px] font-semibold text-[var(--gv-text-primary)] tabular-nums whitespace-nowrap">{trialInfo.creditsBalance} Quarks</span>
+                        {equivalentText(trialInfo.creditsBalance, trialInfo.costs) && (
+                          <span className="text-[10.5px] text-[var(--gv-text-tertiary)] whitespace-nowrap">{equivalentText(trialInfo.creditsBalance, trialInfo.costs)}</span>
+                        )}
+                      </span>
                       <ChevronDown className={`w-3.5 h-3.5 text-[var(--gv-text-muted)] transition-transform ${showCreditPanel ? 'rotate-180' : ''}`} />
                     </button>
                     {showCreditPanel && (
@@ -503,6 +509,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                               <div>used in total</div>
                             </div>
                           </div>
+                          {equivalentText(trialInfo.creditsBalance, trialInfo.costs) && (
+                            <p className="mt-3 text-[12.5px] text-[var(--gv-text-secondary)]">That is {equivalentText(trialInfo.creditsBalance, trialInfo.costs)}, in any mix.</p>
+                          )}
                         </div>
                         <div className="px-5 py-3 border-t border-[var(--gv-border-subtle)]">
                           <button

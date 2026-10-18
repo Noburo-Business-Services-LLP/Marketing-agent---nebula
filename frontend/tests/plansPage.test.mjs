@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  orderedPlans, leftText, topupLine, plainMessage, planLines, currentPlanLine, addonBlurb, PLANS_INTRO, renewalText,
+  orderedPlans, leftText, equivalentText, worthText, priceWithWorth, balanceWithEquivalent, topupLine, plainMessage, planLines, currentPlanLine, addonBlurb, PLANS_INTRO, renewalText,
 } from '../utils/plans.ts';
 
 const costs = { image_generated: 11, studio_video: 161 };
@@ -81,4 +81,22 @@ test('the page keeps the three cards in a fixed order and prints the helpers', a
   assert.match(src, /orderedPlans\(catalogue\.plans\)/);
   assert.match(src, /<h1[^>]*>Plans<\/h1>/);
   assert.doesNotMatch(src, /Plans and Quarks|Extra Quarks|Quarks remaining/);
+});
+
+test('a Quark figure keeps the word Quarks and gets the posts-and-videos equivalent beside it', () => {
+  assert.equal(balanceWithEquivalent(4200, costs), '4,200 Quarks · about 381 posts or 26 videos');
+  assert.equal(balanceWithEquivalent(170, costs), '170 Quarks · about 15 posts or 1 video');
+  assert.equal(balanceWithEquivalent(5, costs), '5 Quarks');
+  assert.equal(balanceWithEquivalent(4200, {}), '4,200 Quarks');
+  assert.equal(equivalentText(60, costs), 'about 5 posts');
+  assert.equal(equivalentText(undefined, costs), '');
+});
+
+test('a price is written as Quarks with what it is worth', () => {
+  assert.equal(priceWithWorth(161, costs), '161 Quarks (about 1 video\'s worth)');
+  assert.equal(priceWithWorth(11, costs), '11 Quarks (about 1 post\'s worth)');
+  assert.equal(priceWithWorth(322, costs), '322 Quarks (about 2 videos\' worth)');
+  assert.equal(priceWithWorth(1, costs), '1 Quark (about 1 post\'s worth)');
+  assert.equal(priceWithWorth(161, undefined), '161 Quarks');
+  assert.equal(worthText(0, costs), '');
 });

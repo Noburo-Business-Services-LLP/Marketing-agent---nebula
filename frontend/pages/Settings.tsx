@@ -1,4 +1,5 @@
 import AccountPrivacy from '../components/AccountPrivacy';
+import { equivalentText } from '../utils/plans';
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
@@ -81,6 +82,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   // Billing State
   const [billingData, setBillingData] = useState<BillingData | null>(null);
   const { costs: quarkCosts, units: quarkUnits } = useQuarkPricing();
+  const balanceNote = (n: number) => (equivalentText(n, quarkCosts) ? `, ${equivalentText(n, quarkCosts)}` : '');
   const [loadingBilling, setLoadingBilling] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -755,7 +757,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.balance}</p>
-                                    <p className={`text-xs ${theme.textSecondary}`}>Remaining</p>
+                                    <p className={`text-xs ${theme.textSecondary}`}>Remaining{balanceNote(billingData.credits.balance)}</p>
                                   </div>
                                   <div>
                                     <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.totalUsed}</p>

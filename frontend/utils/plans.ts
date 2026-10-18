@@ -107,6 +107,43 @@ export function leftText(balance: number | null | undefined, costs: Record<strin
   return `About ${noun(posts, 'post', 'posts')} or ${noun(videos, 'short video', 'short videos')} left, in any mix.`;
 }
 
+/** "about 24 posts or 1 video": what a balance buys. Empty when the costs are unknown or it buys no post. */
+export function equivalentText(quarks: number | null | undefined, costs: Record<string, number> | null | undefined): string {
+  const post = wholeCost(costs?.image_generated);
+  const video = wholeCost(costs?.studio_video);
+  if (typeof quarks !== 'number' || !Number.isFinite(quarks) || !post) return '';
+  const posts = Math.floor(Math.max(0, quarks) / post);
+  if (!posts) return '';
+  const videos = video ? Math.floor(Math.max(0, quarks) / video) : 0;
+  return videos ? `about ${noun(posts, 'post', 'posts')} or ${noun(videos, 'video', 'videos')}` : `about ${noun(posts, 'post', 'posts')}`;
+}
+
+/** "about 1 video's worth" for a price: videos from a video's price up, otherwise posts, at least 1. Empty when unknown. */
+export function worthText(quarks: number | null | undefined, costs: Record<string, number> | null | undefined): string {
+  const post = wholeCost(costs?.image_generated);
+  const video = wholeCost(costs?.studio_video);
+  if (typeof quarks !== 'number' || !Number.isFinite(quarks) || quarks <= 0 || !post) return '';
+  if (video && quarks >= video) { const n = Math.max(1, Math.round(quarks / video)); return `about ${n} ${n === 1 ? "video's" : "videos'"} worth`; }
+  const n = Math.max(1, Math.round(quarks / post));
+  return `about ${n} ${n === 1 ? "post's" : "posts'"} worth`;
+}
+
+/** "161 Quarks (about 1 video's worth)": a price with its equivalent beside it. */
+export function priceWithWorth(quarks: number | null | undefined, costs: Record<string, number> | null | undefined): string {
+  const q = Number(quarks) || 0;
+  const w = worthText(q, costs);
+  const unit = q === 1 ? 'Quark' : 'Quarks';
+  return w ? `${count(q)} ${unit} (${w})` : `${count(q)} ${unit}`;
+}
+
+/** "4,200 Quarks · about 381 posts or 26 videos": a balance with its equivalent beside it. */
+export function balanceWithEquivalent(quarks: number | null | undefined, costs: Record<string, number> | null | undefined): string {
+  const q = Number(quarks) || 0;
+  const e = equivalentText(q, costs);
+  const unit = q === 1 ? 'Quark' : 'Quarks';
+  return e ? `${count(q)} ${unit} · ${e}` : `${count(q)} ${unit}`;
+}
+
 /** One top-up pack, in the posts and videos it adds. */
 export function topupLine(outputs: { posts?: number; videos?: number } | null | undefined): string {
   const posts = Math.floor(wholeCost(outputs?.posts));

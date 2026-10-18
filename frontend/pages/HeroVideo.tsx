@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { priceWithWorth, balanceWithEquivalent } from '../utils/plans';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, Download, Check, X } from 'lucide-react';
 import {
@@ -165,6 +167,7 @@ const HeroVideoInner: React.FC = () => {
 
   // ---- credits, quota, job ----
   const [balance, setBalance] = useState<number | undefined>(undefined);
+  const quarkCosts = useQuarkCosts();
   const [price, setPrice] = useState<number | undefined>(undefined);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1049,14 +1052,14 @@ const HeroVideoInner: React.FC = () => {
             ) : (
               <GravityButton onClick={generate} disabled={!canGenerate}>
                 {inFlight ? <><Loader2 className="w-4 h-4 animate-spin" />Generating…</> : 'Generate'}
-                {!inFlight && price !== undefined && <span className="opacity-70">· {price} Quarks</span>}
+                {!inFlight && price !== undefined && <span className="opacity-70">· {priceWithWorth(price, quarkCosts)}</span>}
               </GravityButton>
             )}
             {(price !== undefined || balance !== undefined) && (
               <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">
-                {price !== undefined && <>Price {price} Quarks</>}
+                {price !== undefined && <>Price {priceWithWorth(price, quarkCosts)}</>}
                 {price !== undefined && balance !== undefined && ' · '}
-                {balance !== undefined && <>Your balance {balance} Quarks</>}
+                {balance !== undefined && <>Your balance {balanceWithEquivalent(balance, quarkCosts)}</>}
               </span>
             )}
           </div>
@@ -1068,7 +1071,7 @@ const HeroVideoInner: React.FC = () => {
           )}
           {cannotAfford && (
             <p role="status" className="text-[12.5px] text-[var(--gv-text-primary)]">
-              A Hero video costs {price} Quarks and you have {balance}. Top up to make one; nothing is charged until you generate.
+              A Hero video costs {priceWithWorth(price, quarkCosts)} and you have {balanceWithEquivalent(balance, quarkCosts)}. Top up to make one; nothing is charged until you generate.
             </p>
           )}
           {quotaUsedUp && (

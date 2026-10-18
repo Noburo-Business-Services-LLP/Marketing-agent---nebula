@@ -1,4 +1,5 @@
 import PlatformPicker from '../components/PlatformPicker';
+import { priceWithWorth } from '../utils/plans';
 import PlatformIcon from '../components/PlatformIcon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -512,7 +513,7 @@ const GravityCreate: React.FC = () => {
     const cost = regenerateCostFor(d);
     const hasImage = !!((d as any)?.imageUrl || (d as any)?.creative?.imageUrls?.[0]);
     const msg = cost > 0
-      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
+      ? `This costs ${priceWithWorth(cost, quarkCosts)} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
       : hasImage ? 'This replaces the current image.' : 'This adds an image to this post.';
     const title = hasImage ? 'Regenerate this image?' : 'Add an image?';
     const confirmLabel = hasImage ? 'Regenerate' : 'Add';

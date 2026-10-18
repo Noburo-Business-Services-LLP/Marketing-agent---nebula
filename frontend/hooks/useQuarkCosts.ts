@@ -35,6 +35,11 @@ async function loadCosts(): Promise<QuarkPricing> {
   return inFlight;
 }
 
+/** The per-unit costs once, for handlers that are already async (alerts and confirms). */
+export async function getQuarkCosts(): Promise<Record<string, number>> {
+  return (await loadCosts()).costs;
+}
+
 /**
  * Just the per-unit numbers, for the small badges on generate buttons.
  * Those already multiply by slide/scene count themselves.

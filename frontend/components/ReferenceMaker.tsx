@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { priceWithWorth } from '../utils/plans';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { Loader2, X, Check, RefreshCw, Wand2 } from 'lucide-react';
 import { studioVideosAPI } from '../services/api';
 import { GravityButton } from './gravity';
@@ -16,6 +18,7 @@ const ReferenceMaker: React.FC<{
   onUse: (asset: PickedAsset) => void;
   onClose: () => void;
 }> = ({ kind, initialDescription, quarks, onUse, onClose }) => {
+  const costs = useQuarkCosts();
   const [description, setDescription] = useState(initialDescription);
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
@@ -81,7 +84,7 @@ const ReferenceMaker: React.FC<{
         )}
 
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-[12px] text-[var(--gv-text-tertiary)]">{quarks ? `${quarks} Quarks each time you make one` : ''}</span>
+          <span className="text-[12px] text-[var(--gv-text-tertiary)]">{quarks ? `${priceWithWorth(quarks, costs)} each time you make one` : ''}</span>
           <div className="flex gap-2">
             {url ? (
               <>

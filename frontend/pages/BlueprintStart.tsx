@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, X as XIcon } from 'lucide-react';
 import { GravityPanel, GravityLabel, GravityButton, GravityFileInput } from '../components/gravity';
@@ -36,6 +37,7 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
   const [message, setMessage] = useState('');
   const [already, setAlready] = useState<{ id: string; message: string } | null>(null);
   const [upgrade, setUpgrade] = useState<ReturnType<typeof upgradeInfoOf>>(null);
+  const quarkCosts = useQuarkCosts();
   const [cost, setCost] = useState<number | undefined>(undefined);
   const allowMode = canChooseMode(user as any);
 
@@ -235,7 +237,7 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
           {busy && <Loader2 className="w-4 h-4 animate-spin" />}
           {busy ? C.submitting : C.submit}
         </GravityButton>
-        <p className="text-[13px] text-[var(--gv-text-secondary)]">{quarksNote(cost)}</p>
+        <p className="text-[13px] text-[var(--gv-text-secondary)]">{quarksNote(cost, quarkCosts)}</p>
       </div>
       <p className="text-[12.5px] text-[var(--gv-text-tertiary)]">{C.privacy}</p>
     </form>
