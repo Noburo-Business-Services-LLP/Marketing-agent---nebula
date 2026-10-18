@@ -204,11 +204,8 @@ const GATED = [
   ['routes/social.js', 'get', '/inbox/summary', 'inbox'],
   ['routes/social.js', 'get', '/inbox/conversations', 'inbox'],
   ['routes/social.js', 'get', '/inbox/conversations/:id/messages', 'inbox'],
-  ['routes/social.js', 'post', '/inbox/conversations/:id/reply', 'inbox'],
   ['routes/social.js', 'patch', '/inbox/conversations/:id/status', 'inbox'],
   ['routes/social.js', 'patch', '/inbox/conversations/:id/meta', 'inbox'],
-  ['routes/social.js', 'post', '/inbox/sync/:platform', 'inbox'],
-  ['routes/social.js', 'post', '/inbox/webhooks/register', 'inbox'],
   ['routes/socialInboxRoutes.js', 'get', '/summary', 'inbox'],
   ['routes/socialInboxRoutes.js', 'get', '/settings', 'inbox'],
   ['routes/socialInboxRoutes.js', 'put', '/settings', 'inbox'],
@@ -219,6 +216,10 @@ const GATED = [
   ['routes/socialInboxRoutes.js', 'patch', '/conversations/:id/status', 'inbox'],
   ['routes/socialInboxRoutes.js', 'patch', '/conversations/:id/meta', 'inbox'],
   ['routes/socialInboxRoutes.js', 'post', '/sync/:platform', 'inbox'],
+  ['routes/socialInboxRoutes.js', 'post', '/webhooks/register', 'inbox'],
+  ['routes/socialInboxRoutes.js', 'get', '/pending', 'inbox'],
+  ['routes/socialInboxRoutes.js', 'post', '/pending/:id/approve', 'inbox'],
+  ['routes/socialInboxRoutes.js', 'post', '/pending/:id/discard', 'inbox'],
   ['routes/socialInboxRoutes.js', 'post', '/dev/ingest', 'inbox'],
   ['routes/socialInboxRoutes.js', 'post', '/dev/test', 'inbox'],
   ['routes/competitors.js', 'post', '/auto-discover', 'competitors'],
@@ -274,7 +275,7 @@ test('callbacks, webhooks, Hero, billing, auth and admin routes carry no require
   const social = fs.readFileSync(path.join(__dirname, '../routes/social.js'), 'utf8');
   for (const l of social.split('\n').filter((x) => /callback'|webhooks\/:platform'/.test(x))) assert.ok(!l.includes('requireFeature'), l);
   const inbox = fs.readFileSync(path.join(__dirname, '../routes/socialInboxRoutes.js'), 'utf8');
-  for (const l of inbox.split('\n').filter((x) => /webhooks|'\/stream'/.test(x))) assert.ok(!l.includes('requireFeature'), l);
+  for (const l of inbox.split('\n').filter((x) => /webhooks|'\/stream'/.test(x) && !x.includes('/webhooks/register'))) assert.ok(!l.includes('requireFeature'), l);
 });
 
 // ---- Hero quota ----

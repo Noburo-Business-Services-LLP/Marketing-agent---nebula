@@ -127,7 +127,6 @@ const { startContentCalendarScheduler } = require('./services/contentCalendarSer
 const { startPerformanceTrackerScheduler } = require('./services/performanceTracker');
 const { startMemoryDistillationScheduler } = require('./services/memoryDistillation');
 const { initializeSocketHub } = require('./services/socketHub');
-const { startInboxPolling } = require('./services/socialInboxService');
 
 const app = express();
 
@@ -880,13 +879,6 @@ const startServer = async () => {
       otpService.initialize();
     } catch (otpError) {
       console.warn('⚠️  OTP service failed to initialize:', otpError.message);
-    }
-    
-    // Start Social Inbox Polling Fallback
-    try {
-      startInboxPolling();
-    } catch (pollingError) {
-      console.warn('⚠️  Social Inbox polling failed to start:', pollingError.message);
     }
   } catch (error) {
     console.warn('⚠️  MongoDB not available:', error.message);

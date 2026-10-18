@@ -38,6 +38,9 @@ const socialInboxMessageSchema = new mongoose.Schema({
     default: 'message',
     index: true
   },
+  // Outbound only: whether the provider accepted the reply. Older rows have no value and read as sent.
+  status: { type: String, enum: ['sent', 'failed'], default: 'sent' },
+  errorMessage: { type: String, default: '' },
   authorId: { type: String, default: '' },
   authorName: { type: String, default: '' },
   body: { type: String, default: '' },
@@ -53,10 +56,11 @@ const socialInboxMessageSchema = new mongoose.Schema({
     autoReplyCandidate: { type: String, default: '' },
     autoReplyStatus: {
       type: String,
-      enum: ['none', 'suggested', 'pending_approval', 'sent', 'failed', 'skipped'],
+      enum: ['none', 'suggested', 'pending_approval', 'sending', 'sent', 'failed', 'skipped'],
       default: 'none'
     },
     autoReplyReason: { type: String, default: '' },
+    sendAttempts: { type: Number, default: 0 },
     generatedAt: { type: Date, default: null }
   },
   autoReplied: { type: Boolean, default: false },

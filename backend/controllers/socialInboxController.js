@@ -11,30 +11,27 @@ const {
   getSettings,
   updateSettings,
   setAutoReplyToggle,
+  listPendingApprovals,
+  approvePending,
+  discardPending,
+  syncPlatform: syncPlatformService,
   toConversationDTO,
   toMessageDTO
 } = require('../services/socialInboxService');
+const { verifyWebhookToken, registerInboxWebhook } = require('../services/inboxWebhook');
 const { addSseSubscriber, isSocketReady } = require('../services/socketHub');
 
 function getUserId(req) {
   return req.user?._id || req.user?.id || req.user?.userId;
 }
 
-function verifyWebhookRequest(req) {
-  const incomingSignature = req.headers['x-ayrshare-signature'] || req.headers['ayrshare-signature'] || req.headers['x-nebulaa-webhook-secret'] || req.query.secret || req.body?.secret;
-  
-  if (!incomingSignature) return false;
-
+// The registered address carries ?userId=...&token=... . The call is accepted only when the token matches the one
+// stored for that user. The token is never logged.
+async function verifyWebhookRequest(req) {
   try {
-    const decoded = require('jsonwebtoken').verify(
-      incomingSignature,
-      process.env.AYRSHARE_PRIVATE_KEY,
-      { algorithms: ["RS256"] }
-    );
-    console.log("Webhook signature verified");
-    return true;
+    return await verifyWebhookToken(req.query.userId, req.query.token);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('Webhook token check failed:', err.message);
     return false;
   }
 }
@@ -99,16 +96,25 @@ exports.reply = async (req, res) => {
     }
 
     const user = await User.findById(getUserId(req));
+    // Replies are always sent for real. There is no "save without sending" switch.
     const result = await createOutboundReply(conversation, body, {
       user,
-      dispatch: req.body?.dispatch !== false,
+      dispatch: true,
       commentId: req.body?.commentId || ''
     });
+
+    if (!result.ok) {
+      return res.status(502).json({
+        success: false,
+        message: result.error,
+        sentMessage: toMessageDTO(result.message, conversation)
+      });
+    }
 
     res.json({
       success: true,
       message: toMessageDTO(result.message, conversation),
-      dispatch: result.dispatch
+      dispatch: { success: true, provider: result.dispatch?.provider }
     });
   } catch (error) {
     console.error('Reply social inbox error:', error);
@@ -140,11 +146,10 @@ exports.updateMeta = async (req, res) => {
     const priority = ['low', 'normal', 'high', 'urgent'].includes(req.body?.priority)
       ? req.body.priority
       : 'normal';
-    const assignedUserId = req.body?.assignedUserId || null;
-
+    // Customers cannot assign conversations: any assignedUserId in the request is ignored.
     await SocialInboxConversation.updateOne(
       { _id: req.params.id, userId: getUserId(req) },
-      { $set: { tags, priority, assignedUserId: assignedUserId || null } }
+      { $set: { tags, priority } }
     );
     res.json({ success: true });
   } catch (error) {
@@ -154,17 +159,8 @@ exports.updateMeta = async (req, res) => {
 };
 
 exports.syncPlatform = async (req, res) => {
-  try {
-    const platform = normalizePlatform(req.params.platform);
-    await SocialInboxConversation.updateMany(
-      { userId: getUserId(req), platform },
-      { $set: { lastSyncedAt: new Date() } }
-    );
-    res.json({ success: true, queued: true, platform });
-  } catch (error) {
-    console.error('Social inbox sync error:', error);
-    res.status(500).json({ success: false, message: 'Failed to queue inbox sync' });
-  }
+  const result = syncPlatformService(req.params.platform);
+  res.status(result.success ? 200 : 400).json(result);
 };
 
 exports.getSettings = async (req, res) => {
@@ -182,6 +178,7 @@ exports.updateSettings = async (req, res) => {
     const settings = await updateSettings(getUserId(req), req.body || {}, getUserId(req));
     res.json({ success: true, settings });
   } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
     console.error('Update auto reply settings error:', error);
     res.status(500).json({ success: false, message: 'Failed to update auto reply settings' });
   }
@@ -192,10 +189,10 @@ exports.toggleAutoReply = async (req, res) => {
     const settings = await setAutoReplyToggle(getUserId(req), req.body || {}, getUserId(req));
     res.json({ success: true, settings });
   } catch (error) {
-    console.error('Toggle auto reply error:', error);
+    if (!error.statusCode) console.error('Toggle auto reply error:', error);
     res.status(error.statusCode || 500).json({
       success: false,
-      message: error.message || 'Failed to update auto reply toggle'
+      message: error.statusCode ? error.message : 'Failed to update auto reply toggle'
     });
   }
 };
@@ -237,36 +234,40 @@ exports.verifyWebhook = (req, res) => {
   });
 };
 
+// Check the token first and touch nothing (no logging of the body, no database writes) until it passes.
+async function rejectUnlessTrusted(req, res, label) {
+  if (await verifyWebhookRequest(req)) return false;
+  console.warn(`[${label}] Rejected a webhook call with a missing or wrong token (platform: ${req.params.platform})`);
+  res.status(401).json({ success: false, message: 'Invalid webhook token' });
+  return true;
+}
+
+// Message hooks also announce reads, reactions and edits. Only a new message is a conversation event.
+function isNewMessageEvent(payload) {
+  const sub = payload?.subAction;
+  return !sub || sub === 'messageCreated';
+}
+
 exports.receiveWebhook = async (req, res) => {
-  console.log("RAW WEBHOOK:", JSON.stringify(req.body, null, 2));
   try {
-    console.log(`[Webhook] Received incoming webhook payload on platform: ${req.params.platform}`);
-    console.log(`[Webhook] Raw Payload:`, JSON.stringify(req.body, null, 2));
-
-    if (!verifyWebhookRequest(req)) {
-      console.warn(`[Webhook] Invalid webhook secret for platform: ${req.params.platform}`);
-      return res.status(401).json({ success: false, message: 'Invalid webhook secret' });
-    }
-
-    const userId = req.query.userId || req.body?.userId;
-    if (!userId) {
-      console.warn(`[Webhook] Missing userId in payload for platform: ${req.params.platform}`);
-      return res.status(400).json({ success: false, message: 'Webhook userId is required' });
-    }
+    if (await rejectUnlessTrusted(req, res, 'Webhook')) return;
+    const userId = req.query.userId;
 
     const payloads = Array.isArray(req.body?.events) ? req.body.events : [req.body || {}];
     const results = [];
 
     for (const payload of payloads) {
+      if (!isNewMessageEvent(payload)) continue;
       const event = normalizeWebhookPayload(req.params.platform, userId, payload);
-      console.log(`[Webhook] Processing event for user: ${userId}, platform: ${event.platform}, threadId: ${event.providerThreadId}, messageId: ${event.providerMessageId}`);
+      console.log(`[Webhook] Processing event for user: ${userId}, platform: ${event.platform}, type: ${event.messageType}`);
       results.push(await ingestEvent(event));
     }
 
     res.json({
       success: true,
-      received: results.length,
-      duplicates: results.filter(item => item.duplicate).length
+      received: results.filter(item => !item.unsupported).length,
+      duplicates: results.filter(item => item.duplicate).length,
+      unsupported: results.filter(item => item.unsupported).length
     });
   } catch (error) {
     console.error('Social inbox webhook error:', error);
@@ -275,43 +276,89 @@ exports.receiveWebhook = async (req, res) => {
 };
 
 exports.receiveCommentWebhook = async (req, res) => {
-  console.log("RAW COMMENT WEBHOOK:", JSON.stringify(req.body, null, 2));
   try {
-    console.log(`[Comment Webhook] Received incoming comment webhook payload on platform: ${req.params.platform}`);
-    
-    // We can use same verify logic if needed, or skip based on setup
-    if (!verifyWebhookRequest(req)) {
-      console.warn(`[Comment Webhook] Invalid webhook secret for platform: ${req.params.platform}`);
-      return res.status(401).json({ success: false, message: 'Invalid webhook secret' });
-    }
-
-    const userId = req.query.userId || req.body?.userId;
-    if (!userId) {
-      console.warn(`[Comment Webhook] Missing userId in payload for platform: ${req.params.platform}`);
-      return res.status(400).json({ success: false, message: 'Webhook userId is required' });
-    }
+    if (await rejectUnlessTrusted(req, res, 'Comment Webhook')) return;
+    const userId = req.query.userId;
 
     const payloads = Array.isArray(req.body?.events) ? req.body.events : [req.body || {}];
     const results = [];
-
-    // Import ingestComment if needed from service, assuming it's exported
     const { ingestComment } = require('../services/socialInboxService');
 
     for (const payload of payloads) {
       console.log(`[Comment Webhook] Processing comment event for user: ${userId}, platform: ${req.params.platform}`);
-      // Pass the userId into payload to keep it consistent
-      payload.userId = userId;
-      results.push(await ingestComment(req.params.platform, payload));
+      results.push(await ingestComment(req.params.platform, { ...payload, userId }));
     }
 
     res.json({
       success: true,
-      received: results.length,
-      duplicates: results.filter(item => item && item.duplicate).length
+      received: results.filter(item => item && !item.unsupported).length,
+      duplicates: results.filter(item => item && item.duplicate).length,
+      unsupported: results.filter(item => item && item.unsupported).length
     });
   } catch (error) {
     console.error('Social inbox comment webhook error:', error);
     res.status(500).json({ success: false, message: 'Failed to process comment webhook' });
+  }
+};
+
+// ---- Approval queue ----
+
+exports.listPending = async (req, res) => {
+  try {
+    const pending = await listPendingApprovals(getUserId(req));
+    res.json({ success: true, pending, pendingCount: pending.length });
+  } catch (error) {
+    console.error('List pending replies error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load replies waiting for approval' });
+  }
+};
+
+exports.approvePending = async (req, res) => {
+  try {
+    const user = await User.findById(getUserId(req));
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    const result = await approvePending(user, req.params.id, req.body?.text);
+    if (result.notFound) return res.status(404).json({ success: false, message: 'That reply is not waiting for approval' });
+    if (result.badRequest) return res.status(400).json({ success: false, message: result.error });
+    if (!result.ok) {
+      return res.status(502).json({
+        success: false,
+        message: result.error,
+        sentMessage: toMessageDTO(result.message, result.conversation)
+      });
+    }
+    res.json({ success: true, message: toMessageDTO(result.message, result.conversation) });
+  } catch (error) {
+    console.error('Approve pending reply error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send the reply' });
+  }
+};
+
+exports.discardPending = async (req, res) => {
+  try {
+    const discarded = await discardPending(getUserId(req), req.params.id);
+    if (!discarded) return res.status(404).json({ success: false, message: 'That reply is not waiting for approval' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Discard pending reply error:', error);
+    res.status(500).json({ success: false, message: 'Failed to discard the reply' });
+  }
+};
+
+exports.registerWebhook = async (req, res) => {
+  try {
+    const user = await User.findById(getUserId(req));
+    if (!user || !user.ayrshare?.profileKey) {
+      return res.status(400).json({ success: false, message: 'Please connect a social account first' });
+    }
+    const result = await registerInboxWebhook(user);
+    if (!result.success) {
+      return res.status(502).json({ success: false, message: 'We could not switch on live updates. Please try again later.' });
+    }
+    res.json({ success: true, message: 'Live updates are on' });
+  } catch (error) {
+    console.error('Webhook registration error:', error);
+    res.status(500).json({ success: false, message: 'We could not switch on live updates. Please try again later.' });
   }
 };
 
@@ -320,6 +367,7 @@ exports.devIngest = async (req, res) => {
 
     const event = normalizeWebhookPayload(req.body?.platform || 'instagram', getUserId(req), req.body || {});
     const result = await ingestEvent(event);
+    if (result.unsupported) return res.status(400).json({ success: false, message: result.message });
     res.json({
       success: true,
       conversation: toConversationDTO(result.conversation),
@@ -371,6 +419,7 @@ exports.testWebhook = async (req, res) => {
       results.push(await ingestEvent(event));
     }
 
+    if (results[0]?.unsupported) return res.status(400).json({ success: false, message: results[0].message });
     res.json({
       success: true,
       received: results.length,

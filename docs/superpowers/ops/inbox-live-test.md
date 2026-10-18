@@ -75,3 +75,19 @@ Plain steps, no coding. Use only your own accounts: Instagram nebulaa.os and one
 10. **Google reviews tab** is read-only: it lists reviews and drafts replies, but there is no way to post the reply back.
 11. **Screens use dark-theme styling and strings** like "Unified Inbox", "AI Assist", "Notification Center" and "real inbox messages", which do not match the light look or plain wording of the rest of the app.
 12. **Landing page claim:** step 6 on the landing page and the website copy promise a reply inbox. Hold those lines until Tests 2 and 3 pass.
+
+## Backend fixes (fixed in code, still unproven live)
+Nothing below has run against a real account. Tests use fakes only. Treat each as "should work", and confirm in the live test.
+
+- Gap 1, replies become public posts: **fixed in code.** A comment is answered through Ayrshare's reply-to-comment call, a direct message through its send-message call. There is no fallback to a public post. Still unproven: the comment-reply shape (see the UNVERIFIED comments in socialMediaAPI.js: the use of the comment id from the webhook with `searchPlatformId`, and the success shape).
+- Gap 2, "sent" when sending failed: **fixed in code.** A failed send is stored as failed with a plain reason, the conversation status is left alone, and the reply route returns success false.
+- Gap 3, no approval queue: **backend fixed in code** (list, approve with optional edited text, discard, and a pending count in the summary). The screen for it is separate.
+- Gap 4, sync not real: **fixed in code.** The polling stub is gone, the Sync call says plainly that updates arrive by webhook, and the made-up "next sync" time is gone.
+- Gap 5, webhook check rejects real events: **fixed in code.** Each user has a private token carried in the registered address; calls without the right token get 401. Ayrshare's own HMAC signature is not checked (its encoding is not documented). The helper `registerInboxWebhook` in services/inboxWebhook.js registers the messages and comments hooks; it is not called anywhere, so **existing connections must be re-registered once** (needs WEBHOOK_BASE_URL on https). The old route for registering was hidden behind another route and could not be reached; it now works at POST /api/social/inbox/webhooks/register.
+- Gap 6, one click turns on fully automatic: **fixed in code.** The toggle and the settings save both need `confirm: true` to turn on fully automatic. A failed automatic send is marked failed, tried once only, and never sent twice. Failed tries count toward the daily limit.
+- Gap 7, settings that do nothing: **fixed in code.** The signature is added to what is sent, new regex rules are refused (stored ones stay), and assigned user ids from customers are ignored.
+- Gap 8, platforms never set up: **fixed in code.** Only Instagram and Facebook receive and reply; the others get a plain "not available yet". Old data stays readable.
+- Gaps 9, 10, 11, 12 (Simulate button, Google reviews reply, dark styling and wording, landing page claim): not backend work, unchanged.
+
+Log lines changed: the raw webhook body is no longer logged. Look for `Rejected a webhook call with a missing or wrong token`, `[Webhook] Processing event`, `[Inbox] comment reply failed`, `[Inbox] direct message failed`.
+Also fixed while there: a repeated webhook delivery used to flip a replied conversation back to unread; a repeat now changes nothing.

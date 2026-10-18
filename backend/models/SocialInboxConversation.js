@@ -7,6 +7,8 @@ const socialInboxMessageSchema = new mongoose.Schema({
   senderType: { type: String, enum: ['customer', 'agent', 'ai', 'system'], default: 'customer' },
   autoSent: { type: Boolean, default: false },
   messageType: { type: String, default: 'message' },
+  status: { type: String, enum: ['sent', 'failed'], default: 'sent' },
+  errorMessage: { type: String, default: '' },
   authorId: { type: String, default: '' },
   authorName: { type: String, default: '' },
   body: { type: String, default: '' },

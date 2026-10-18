@@ -15,8 +15,7 @@ const {
   createAyrshareProfile,
   generateAyrshareJWT,
   getAyrshareUserProfile,
-  deleteAyrshareProfile,
-  setAyrshareWebhook
+  deleteAyrshareProfile
 } = require('../services/socialMediaAPI');
 const { publishSocialPostWithSafetyWrapper } = require('../services/instagram-fix');
 const SocialInboxConversation = require('../models/SocialInboxConversation');
@@ -25,9 +24,6 @@ const { friendlyMessage, isProviderLimitError } = require('../services/providerE
 const {
   normalizePlatform,
   analyzeEngagement,
-  normalizeWebhookPayload,
-  ingestEvent,
-  createOutboundReply,
   toConversationDTO,
   toMessageDTO
 } = require('../services/socialInboxService');
@@ -360,34 +356,6 @@ router.get('/inbox/conversations/:id/messages', protect, requireFeature('inbox')
   }
 });
 
-router.post('/inbox/conversations/:id/reply', protect, requireFeature('inbox'), async (req, res) => {
-  try {
-    const body = String(req.body?.body || '').trim();
-    if (!body) {
-      return res.status(400).json({ success: false, message: 'Reply body is required' });
-    }
-
-    const conversation = await SocialInboxConversation.findOne({
-      _id: req.params.id,
-      userId: req.user._id
-    });
-    if (!conversation) {
-      return res.status(404).json({ success: false, message: 'Conversation not found' });
-    }
-
-    // Provider API dispatch belongs here:
-    // Meta Graph, LinkedIn, X, and YouTube reply calls should use the stored connected account token.
-    const message = await createOutboundReply(conversation, body);
-    res.json({
-      success: true,
-      message: toMessageDTO(message, conversation)
-    });
-  } catch (error) {
-    console.error('Reply social inbox error:', error);
-    res.status(500).json({ success: false, message: 'Failed to send reply' });
-  }
-});
-
 router.patch('/inbox/conversations/:id/status', protect, requireFeature('inbox'), async (req, res) => {
   try {
     const status = String(req.body?.status || '');
@@ -424,68 +392,8 @@ router.patch('/inbox/conversations/:id/meta', protect, requireFeature('inbox'), 
   }
 });
 
-router.post('/inbox/sync/:platform', protect, requireFeature('inbox'), async (req, res) => {
-  try {
-    const platform = normalizePlatform(req.params.platform);
-    await SocialInboxConversation.updateMany(
-      { userId: req.user._id, platform },
-      { $set: { lastSyncedAt: new Date() } }
-    );
-    res.json({ success: true, queued: true, platform });
-  } catch (error) {
-    console.error('Social inbox sync error:', error);
-    res.status(500).json({ success: false, message: 'Failed to queue inbox sync' });
-  }
-});
-
-router.get('/inbox/webhooks/:platform', (req, res) => {
-  if (req.query['hub.challenge']) {
-    return res.send(req.query['hub.challenge']);
-  }
-  res.json({ success: true, platform: normalizePlatform(req.params.platform), status: 'ready' });
-});
-
-router.post('/inbox/webhooks/:platform', async (req, res) => {
-  try {
-    const userId = req.query.userId || req.body?.userId;
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'Webhook userId is required' });
-    }
-
-    const event = normalizeWebhookPayload(req.params.platform, userId, req.body || {});
-    await ingestEvent(event);
-    res.json({ success: true, received: 1 });
-  } catch (error) {
-    console.error('Social inbox webhook error:', error);
-    res.status(500).json({ success: false, message: 'Failed to process webhook' });
-  }
-});
-
-router.post('/inbox/webhooks/register', protect, requireFeature('inbox'), async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    if (!user || !user.ayrshare?.profileKey) {
-      return res.status(400).json({ success: false, message: 'No Ayrshare profile key found' });
-    }
-
-    const baseUrl = process.env.WEBHOOK_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5000';
-    // Use a generic webhook or specific platform one? Ayrshare handles all platforms in one webhook.
-    // However, our code has `/:platform` in the URL. For Ayrshare, we can just pass 'ayrshare' as platform,
-    // or rely on Ayrshare's platform field. Our normalizeWebhookPayload supports 'ayrshare' as platform.
-    const webhookUrl = `${baseUrl}/api/social/inbox/webhooks/ayrshare?userId=${user._id}`;
-
-    const result = await setAyrshareWebhook(user.ayrshare.profileKey, webhookUrl);
-    if (!result.success) {
-      console.error('Webhook registration failed:', result.error);
-      return res.status(500).json({ success: false, message: 'Failed to register webhook', error: friendlyMessage(result.error, 'social') });
-    }
-
-    res.json({ success: true, message: 'Webhook registered successfully', webhookUrl });
-  } catch (error) {
-    console.error('Webhook registration error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error during webhook registration' });
-  }
-});
+// The inbox webhook routes live in routes/socialInboxRoutes.js (mounted first at /api/social/inbox), where the
+// private token is checked. The old open copies were removed so a changed mount order can never expose them.
 
 /**
  * GET /api/social/:platform/auth

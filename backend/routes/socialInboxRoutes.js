@@ -46,6 +46,8 @@ const streamAuth = async (req, res, next) => {
   }
 };
 
+// Registered before the :platform routes so 'register' is not read as a platform name.
+router.post('/webhooks/register', protect, requireFeature('inbox'), controller.registerWebhook);
 router.get('/webhooks/:platform', controller.verifyWebhook);
 router.post('/webhooks/:platform', controller.receiveWebhook);
 router.post('/webhooks/comments/:platform', controller.receiveCommentWebhook);
@@ -57,6 +59,9 @@ router.get('/summary', requireFeature('inbox'), controller.getSummary);
 router.get('/settings', requireFeature('inbox'), controller.getSettings);
 router.put('/settings', requireFeature('inbox'), controller.updateSettings);
 router.post('/auto-reply/toggle', requireFeature('auto_reply'), controller.toggleAutoReply);
+router.get('/pending', requireFeature('inbox'), controller.listPending);
+router.post('/pending/:id/approve', requireFeature('inbox'), controller.approvePending);
+router.post('/pending/:id/discard', requireFeature('inbox'), controller.discardPending);
 router.get('/conversations', requireFeature('inbox'), controller.listConversations);
 router.get('/conversations/:id/messages', requireFeature('inbox'), controller.getMessages);
 router.post('/conversations/:id/reply', requireFeature('inbox'), controller.reply);

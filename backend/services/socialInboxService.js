@@ -5,7 +5,18 @@ const AutoReplySettings = require('../models/AutoReplySettings');
 const User = require('../models/User');
 const { generateWithLLM } = require('./llmRouter');
 const { emitToUser } = require('./socketHub');
-const { dispatchReply } = require('./socialInboxProviderService');
+const { dispatchReply, isReplyPlatform, REPLY_PLATFORMS, NOT_AVAILABLE_YET } = require('./socialInboxProviderService');
+
+const NOT_AVAILABLE_MESSAGE = NOT_AVAILABLE_YET;
+const SAFE_RULE_TYPES = ['contains', 'sentiment', 'messageType', 'platform'];
+const MAX_AUTO_SEND_ATTEMPTS = 1;
+const CONFIRM_AUTOMATIC_MESSAGE = 'Fully automatic replies send without your approval. Please confirm to turn them on.';
+
+function httpError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
 
 const PLATFORM_ALIASES = {
   instagram: 'instagram',
@@ -117,14 +128,15 @@ function normalizeWebhookPayload(platform, userId, payload = {}) {
   const now = new Date();
   
   // Extract Ayrshare specific fields directly
-  const ayrUser = payload.user || payload.sender || payload.from || payload.author || {};
-  const authorId = ayrUser.id || 'unknown';
+  // Ayrshare message hooks carry senderDetails/senderId; comment hooks carry from { id, username }.
+  const ayrUser = payload.senderDetails || payload.user || payload.sender || payload.from || payload.author || {};
+  const authorId = ayrUser.id || payload.senderId || 'unknown';
   const authorName = ayrUser.name || ayrUser.username || '';
   const authorUsername = ayrUser.username || '';
   const authorAvatar = ayrUser.profilePicture || ayrUser.picture || ayrUser.profile_pic || payload.avatar_url || '';
   
   const messageText = payload.message?.text || payload.text || extractBody(payload);
-  const threadId = payload.conversation?.id || payload.threadId || payload.thread_id || payload.conversation_id || payload.parent_id || payload.post_id || payload.video_id || payload.entry?.[0]?.messaging?.[0]?.sender?.id || '';
+  const threadId = payload.conversation?.id || payload.conversationId || payload.threadId || payload.thread_id || payload.conversation_id || payload.parent_id || payload.post_id || payload.postId || payload.media?.id || payload.video_id || payload.entry?.[0]?.messaging?.[0]?.sender?.id || payload.senderId || '';
 
   // Handle Instagram specific structure or fallbacks
   const rawMessageId =
@@ -193,6 +205,23 @@ async function getSettings(userId) {
 }
 
 async function updateSettings(userId, data = {}, updatedBy = null) {
+  const current = await AutoReplySettings.findOne({ userId });
+  if (data.automationMode !== undefined && !['suggested', 'approval_required', 'fully_automatic'].includes(data.automationMode)) {
+    throw httpError('That reply mode is not available.');
+  }
+  if (data.automationMode === 'fully_automatic' && current?.automationMode !== 'fully_automatic' && data.confirm !== true) {
+    throw httpError(CONFIRM_AUTOMATIC_MESSAGE);
+  }
+  if (Array.isArray(data.responseRules)) {
+    // Customers can use the safe rule types only. A rule already saved with another type may stay as it is.
+    const stored = (current?.responseRules || []).map((rule) => ({ id: String(rule._id), type: rule.matchType }));
+    data = { ...data, responseRules: data.responseRules.map((rule) => {
+      if (SAFE_RULE_TYPES.includes(rule?.matchType)) return rule;
+      const kept = rule?._id && stored.find((item) => item.id === String(rule._id) && item.type === rule.matchType);
+      if (!kept) throw httpError('That rule type is not available.');
+      return rule;
+    }) };
+  }
   const allowed = {
     enabled: data.enabled,
     automationMode: data.automationMode,
@@ -219,16 +248,16 @@ async function setAutoReplyToggle(userId, data = {}, updatedBy = null) {
   const channelType = normalizeChannelType(data.channelType);
 
   if (!['instagram', 'facebook', 'linkedin', 'x', 'youtube'].includes(platform)) {
-    const error = new Error('Invalid platform');
-    error.statusCode = 400;
-    throw error;
+    throw httpError('Invalid platform');
   }
 
   if (typeof data.enabled !== 'boolean') {
-    const error = new Error('Enabled must be a boolean');
-    error.statusCode = 400;
-    throw error;
+    throw httpError('Enabled must be a boolean');
   }
+
+  if (data.enabled && !isReplyPlatform(platform)) throw httpError(NOT_AVAILABLE_MESSAGE);
+  // Turning automatic replies on needs an explicit yes. Turning them off never does.
+  if (data.enabled && data.confirm !== true) throw httpError(CONFIRM_AUTOMATIC_MESSAGE);
 
   const settings = await getSettings(userId);
   const channelKey = channelType === 'comment' ? 'comments' : 'messages';
@@ -329,7 +358,7 @@ async function countAutoRepliesToday(conversationId) {
   return SocialInboxMessage.countDocuments({
     conversationId,
     direction: 'outbound',
-    'ai.autoReplyStatus': 'sent',
+    'ai.autoReplyStatus': { $in: ['sent', 'failed'] }, // failed tries count too, so a broken connection cannot loop
     createdAt: { $gte: start }
   });
 }
@@ -436,6 +465,19 @@ async function ingestEvent(eventInput) {
     platform: normalizePlatform(eventInput.platform),
     messageType: normalizeMessageType(eventInput.messageType)
   };
+  if (!isReplyPlatform(event.platform)) {
+    return { success: false, unsupported: true, platform: event.platform, message: NOT_AVAILABLE_MESSAGE };
+  }
+  // Ayrshare delivers at least once, so the same event can arrive again. A repeat changes nothing.
+  const already = await SocialInboxMessage.findOne({
+    userId: event.userId,
+    platform: event.platform,
+    providerMessageId: event.providerMessageId
+  });
+  if (already) {
+    const existing = await SocialInboxConversation.findOne({ _id: already.conversationId, userId: event.userId });
+    return { conversation: existing, message: already, duplicate: true, insights: analyzeEngagement(event.body), ai: null, autoReply: null };
+  }
   const insights = analyzeEngagement(event.body);
   const messageTypes = Array.from(new Set([event.messageType].filter(Boolean)));
 
@@ -552,20 +594,37 @@ async function ingestEvent(eventInput) {
       autoReplyCandidate: aiResult.recommendedReply,
       autoReplyStatus: decision.action === 'auto_reply' ? 'suggested' : decision.action === 'needs_approval' ? 'pending_approval' : decision.action === 'skip' ? 'skipped' : 'suggested',
       autoReplyReason: decision.reason,
+      sendAttempts: 0,
       generatedAt: new Date()
     };
     await message.save();
 
     if (decision.action === 'auto_reply' && aiResult.recommendedReply) {
-      autoReply = await createOutboundReply(conversation, aiResult.recommendedReply, {
-        user,
-        aiAuto: true,
-        dispatch: true,
-        commentId: event.commentId || event.providerMessageId
-      });
-      message.ai.autoReplyStatus = autoReply.dispatch?.success ? 'sent' : 'failed';
-      message.autoReplied = autoReply.dispatch?.success ? true : false;
-      await message.save();
+      // One try only: claim the message first so it can never be sent twice, and a failure is not retried.
+      const claimed = await SocialInboxMessage.findOneAndUpdate(
+        { _id: message._id, 'ai.sendAttempts': { $not: { $gte: MAX_AUTO_SEND_ATTEMPTS } } },
+        { $set: { 'ai.autoReplyStatus': 'sending' }, $inc: { 'ai.sendAttempts': 1 } },
+        { new: true }
+      );
+      if (claimed) {
+        let finalStatus = 'failed';
+        try {
+          autoReply = await createOutboundReply(conversation, aiResult.recommendedReply, {
+            user,
+            aiAuto: true,
+            dispatch: true,
+            inbound: message,
+            commentId: event.commentId || event.providerMessageId
+          });
+          finalStatus = autoReply.ok ? 'sent' : 'failed';
+        } catch (sendError) {
+          console.error('Social inbox auto reply error:', sendError.message);
+        }
+        message.ai.autoReplyStatus = finalStatus;
+        if (finalStatus === 'failed') message.ai.autoReplyReason = autoReply?.error || 'The automatic reply could not be sent.';
+        message.autoReplied = finalStatus === 'sent';
+        await SocialInboxMessage.updateOne({ _id: message._id }, { $set: { 'ai.autoReplyStatus': finalStatus, 'ai.autoReplyReason': message.ai.autoReplyReason, autoReplied: message.autoReplied } });
+      }
     }
   }
 
@@ -594,15 +653,55 @@ async function ingestEvent(eventInput) {
   return { conversation, message, duplicate, insights, ai: aiResult, autoReply };
 }
 
+function withSignature(body, signature) {
+  const sig = String(signature || '').trim();
+  const text = String(body || '').trim();
+  if (!sig || text.endsWith(sig)) return text;
+  return `${text}\n\n${sig}`;
+}
+
+// The message this reply answers: the given one, the one with the given comment id, or the latest from the customer.
+async function findInboundTarget(conversation, options = {}) {
+  if (options.inbound) return options.inbound;
+  if (options.commentId) {
+    const byComment = await SocialInboxMessage.findOne({
+      conversationId: conversation._id,
+      direction: 'inbound',
+      $or: [{ commentId: String(options.commentId) }, { providerMessageId: String(options.commentId) }]
+    });
+    if (byComment) return byComment;
+  }
+  return SocialInboxMessage.findOne({ conversationId: conversation._id, direction: 'inbound' }).sort({ createdAt: -1 });
+}
+
+/**
+ * Send a reply and record it honestly.
+ * Sent: stored as sent, conversation marked replied.
+ * Failed: stored as failed with a plain reason, conversation left as it was.
+ * Returns { message, dispatch, ok, error }.
+ */
 async function createOutboundReply(conversation, body, options = {}) {
   const user = options.user || await User.findById(conversation.userId);
-  // If we have a specific commentId, we should pass it to dispatchReply
-  const dispatchPayload = { user, conversation, body };
-  if (options.commentId) {
-    dispatchPayload.commentId = options.commentId;
+  const sending = options.dispatch !== false;
+  const settings = sending ? await getSettings(conversation.userId) : null;
+  const text = sending ? withSignature(body, settings?.guardrails?.signature) : String(body || '').trim();
+
+  let dispatch = { success: true, provider: 'local' };
+  if (sending) {
+    const target = await findInboundTarget(conversation, options);
+    dispatch = await dispatchReply({
+      user,
+      conversation,
+      body: text,
+      messageType: target?.messageType || options.messageType || '',
+      commentId: options.commentId || target?.commentId || target?.providerMessageId || '',
+      recipientId: target?.authorId || conversation.participantId || ''
+    });
   }
-  const dispatch = options.dispatch ? await dispatchReply(dispatchPayload) : { success: true, provider: 'local' };
-  const providerMessageId = dispatch?.providerResponse?.id || dispatch?.providerResponse?.postIds?.[0] || `nebulaa-reply-${Date.now()}`;
+  const ok = Boolean(dispatch?.success);
+  const error = ok ? '' : (dispatch?.error || 'The reply could not be sent. Please try again in a moment.');
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const providerMessageId = (ok && dispatch?.providerResponse?.id) || `${ok ? 'nebulaa-reply' : 'nebulaa-failed'}-${unique}`;
 
   const message = await SocialInboxMessage.create({
     userId: conversation.userId,
@@ -615,14 +714,16 @@ async function createOutboundReply(conversation, body, options = {}) {
     senderType: options.aiAuto ? 'ai' : 'agent',
     autoSent: Boolean(options.aiAuto),
     messageType: 'reply',
+    status: ok ? 'sent' : 'failed',
+    errorMessage: error,
     authorId: 'nebulaa',
     authorName: options.aiAuto ? 'AI' : 'Nebulaa',
-    body,
+    body: text,
     sentiment: 'neutral',
     spamScore: 0,
     priority: 'normal',
-    ai: options.aiAuto ? { autoReplyStatus: dispatch.success ? 'sent' : 'failed' } : undefined,
-    rawPayload: { dispatch }
+    ai: options.aiAuto ? { autoReplyStatus: ok ? 'sent' : 'failed' } : undefined,
+    rawPayload: { dispatch: { success: ok, provider: dispatch?.provider, code: dispatch?.code || 0 } }
   });
 
   conversation.messages.push({
@@ -631,27 +732,122 @@ async function createOutboundReply(conversation, body, options = {}) {
     senderType: message.senderType,
     autoSent: message.autoSent,
     messageType: 'reply',
+    status: message.status,
+    errorMessage: error,
     authorId: 'nebulaa',
     authorName: message.authorName,
-    body,
+    body: text,
     sentiment: 'neutral',
     spamScore: 0,
     createdAt: message.createdAt
   });
   if (conversation.messages.length > 50) conversation.messages = conversation.messages.slice(-50);
-  conversation.status = 'replied';
-  conversation.unreadCount = 0;
-  conversation.lastMessagePreview = body;
-  conversation.lastMessageAt = message.createdAt;
+  if (ok) {
+    conversation.status = 'replied';
+    conversation.unreadCount = 0;
+    conversation.lastMessagePreview = text;
+    conversation.lastMessageAt = message.createdAt;
+  }
   await conversation.save();
 
   const dto = toMessageDTO(message, conversation);
-  emitToUser(conversation.userId, 'inbox.message.replied', dto);
-  emitToUser(conversation.userId, 'reply:new', {
-    conversation: toConversationDTO(conversation),
-    message: dto
-  });
-  return { message, dispatch };
+  if (ok) {
+    emitToUser(conversation.userId, 'inbox.message.replied', dto);
+    emitToUser(conversation.userId, 'reply:new', {
+      conversation: toConversationDTO(conversation),
+      message: dto
+    });
+  }
+  return { message, dispatch, ok, error };
+}
+
+// ---- Approval queue: drafts the app wrote that wait for the owner's yes ----
+
+function toPendingDTO(draft, conversation) {
+  return {
+    id: String(draft._id),
+    conversation_id: String(draft.conversationId),
+    platform: draft.platform,
+    message_type: draft.messageType,
+    draft_text: draft.ai?.autoReplyCandidate || '',
+    suggested_replies: draft.ai?.suggestedReplies || [],
+    reason: draft.ai?.autoReplyReason || '',
+    original_message: draft.body,
+    author_name: draft.authorName,
+    created_at: draft.createdAt,
+    conversation: conversation ? {
+      id: String(conversation._id),
+      participant_name: conversation.participantName,
+      participant_username: conversation.participantUsername,
+      avatar_url: conversation.avatarUrl,
+      platform: conversation.platform,
+      status: conversation.status,
+      priority: conversation.priority
+    } : null
+  };
+}
+
+async function countPending(userId) {
+  return SocialInboxMessage.countDocuments({ userId, direction: 'inbound', 'ai.autoReplyStatus': 'pending_approval' });
+}
+
+async function listPendingApprovals(userId) {
+  const drafts = await SocialInboxMessage.find({ userId, direction: 'inbound', 'ai.autoReplyStatus': 'pending_approval' })
+    .sort({ createdAt: -1 })
+    .limit(100);
+  const ids = Array.from(new Set(drafts.map((d) => String(d.conversationId))));
+  const conversations = ids.length ? await SocialInboxConversation.find({ _id: { $in: ids }, userId }) : [];
+  const byId = new Map(conversations.map((c) => [String(c._id), c]));
+  return drafts.map((draft) => toPendingDTO(draft, byId.get(String(draft.conversationId))));
+}
+
+/**
+ * Approve one waiting draft (optionally with edited text) and send it.
+ * Returns { notFound } when the id is not this user's waiting draft, otherwise { ok, error, message, ... }.
+ */
+async function approvePending(user, draftId, editedText) {
+  if (!mongoose.Types.ObjectId.isValid(String(draftId))) return { notFound: true };
+  // Claim first: only one approval can ever send a given draft.
+  const draft = await SocialInboxMessage.findOneAndUpdate(
+    { _id: draftId, userId: user._id, direction: 'inbound', 'ai.autoReplyStatus': { $in: ['pending_approval', 'failed'] } },
+    { $set: { 'ai.autoReplyStatus': 'sending' } },
+    { new: true }
+  );
+  if (!draft) return { notFound: true };
+  const text = String(editedText || '').trim() || draft.ai?.autoReplyCandidate || '';
+  const conversation = await SocialInboxConversation.findOne({ _id: draft.conversationId, userId: user._id });
+  if (!conversation || !text) {
+    await SocialInboxMessage.updateOne({ _id: draft._id }, { $set: { 'ai.autoReplyStatus': 'pending_approval' } });
+    return conversation ? { ok: false, error: 'There is no reply text to send.', badRequest: true } : { notFound: true };
+  }
+  let result;
+  try {
+    result = await createOutboundReply(conversation, text, { user, dispatch: true, inbound: draft });
+  } catch (error) {
+    console.error('Approve pending reply error:', error.message);
+    result = { ok: false, error: 'The reply could not be sent. Please try again in a moment.' };
+  }
+  await SocialInboxMessage.updateOne(
+    { _id: draft._id },
+    { $set: { 'ai.autoReplyStatus': result.ok ? 'sent' : 'failed', autoReplied: false, 'ai.autoReplyReason': result.ok ? 'Approved and sent' : result.error } }
+  );
+  return { ok: result.ok, error: result.error || '', message: result.message, conversation };
+}
+
+async function discardPending(userId, draftId) {
+  if (!mongoose.Types.ObjectId.isValid(String(draftId))) return false;
+  const res = await SocialInboxMessage.updateOne(
+    { _id: draftId, userId, direction: 'inbound', 'ai.autoReplyStatus': { $in: ['pending_approval', 'failed'] } },
+    { $set: { 'ai.autoReplyStatus': 'skipped', 'ai.autoReplyReason': 'Discarded by you' } }
+  );
+  return Number(res.matchedCount ?? res.n ?? 0) > 0;
+}
+
+// Messages and comments arrive by themselves through Ayrshare webhooks; there is nothing to pull.
+function syncPlatform(platform) {
+  const normalized = normalizePlatform(platform);
+  if (!isReplyPlatform(normalized)) return { success: false, platform: normalized, message: NOT_AVAILABLE_MESSAGE };
+  return { success: true, mode: 'webhook', platform: normalized, message: 'New comments and messages arrive on their own as soon as they are posted.' };
 }
 
 async function listConversations(userId, filters = {}) {
@@ -715,6 +911,7 @@ async function getSummary(user) {
     .select('lastSyncedAt webhookRegistered')
     .lean();
   const settings = await getSettings(userId);
+  const pendingCount = await countPending(userId);
   const webhookRegistered = connectedPlatformCount > 0 && Boolean(user.ayrshare?.profileKey || user.connectedSocials?.some(s => s.accessToken));
 
   return {
@@ -725,12 +922,13 @@ async function getSummary(user) {
       acc[item._id] = item.count;
       return acc;
     }, {}),
+    pendingCount,
     inboxEnabled: connectedPlatformCount > 0,
     inboxStatus: connectedPlatformCount > 0 ? (webhookRegistered ? 'active' : 'needs_setup') : 'disabled',
     syncStatus: {
       status: connectedPlatformCount > 0 ? (latestConversation?.lastSyncedAt ? 'synced' : 'pending') : 'not_started',
-      lastSyncAt: latestConversation?.lastSyncedAt || user.ayrshare?.lastCheckedAt || user.updatedAt || null,
-      nextSyncAt: connectedPlatformCount > 0 ? new Date(Date.now() + 15 * 60 * 1000) : null
+      // The time of the latest comment or message received (there is no scheduled sync).
+      lastSyncAt: latestConversation?.lastSyncedAt || null
     },
     webhookStatus: {
       registered: webhookRegistered,
@@ -809,6 +1007,8 @@ function toMessageDTO(message, conversation) {
     direction: message.direction,
     sender_type: message.senderType || (message.direction === 'outbound' ? 'agent' : 'customer'),
     auto_sent: Boolean(message.autoSent),
+    status: message.status || 'sent',
+    error_message: message.errorMessage || '',
     message_type: message.messageType,
     author_id: message.authorId,
     author_name: message.authorName,
@@ -824,33 +1024,6 @@ function toMessageDTO(message, conversation) {
     auto_replied: message.autoReplied || false,
     created_at: message.createdAt
   };
-}
-
-let pollingInterval = null;
-
-function startInboxPolling() {
-  if (pollingInterval) return;
-  console.log('✅ Started Social Inbox fallback polling (every 30s)');
-  
-  pollingInterval = setInterval(async () => {
-    try {
-      // In a real production setup, this would query Ayrshare's history or Meta Graph API directly.
-      // Here we stub the execution to simulate polling fetch logic.
-      // We look for active users with social connections
-      const activeUsers = await User.find({ isActive: true }).select('_id ayrshare connectedSocials');
-      
-      for (const user of activeUsers) {
-        // Pseudo-code for actual implementation:
-        // const missedEvents = await fetchMissedEventsFromAyrshare(user);
-        // for (const event of missedEvents) {
-        //   const normalized = normalizeWebhookPayload(event.platform, user._id, event);
-        //   await ingestEvent(normalized);
-        // }
-      }
-    } catch (error) {
-      console.error('Social Inbox polling error:', error.message);
-    }
-  }, 30000);
 }
 
 module.exports = {
@@ -870,5 +1043,11 @@ module.exports = {
   toConversationDTO,
   toMessageDTO,
   getConnectedInboxPlatforms,
-  startInboxPolling
+  listPendingApprovals,
+  approvePending,
+  discardPending,
+  countPending,
+  syncPlatform,
+  NOT_AVAILABLE_MESSAGE,
+  REPLY_PLATFORMS
 };
