@@ -11,6 +11,7 @@ import {
   GravityButton,
 } from '../components/gravity';
 import UnifiedInbox from './UnifiedInbox';
+import { inboxConnectedCount } from '../utils/inbox';
 import AutoReplySettingsPage from './AutoReplySettingsPage';
 import UpgradePrompt from '../components/UpgradePrompt';
 import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
@@ -33,7 +34,6 @@ type InboxSummary = {
   syncStatus: {
     status: string;
     lastSyncAt?: string | null;
-    nextSyncAt?: string | null;
   };
   webhookStatus: {
     registered: boolean;
@@ -46,8 +46,6 @@ type InboxSummary = {
     unreadAlerts: boolean;
   };
 };
-
-const INBOX_PLATFORMS = ['Instagram', 'Facebook', 'LinkedIn', 'X', 'YouTube'];
 
 const ConnectSocials: React.FC = () => {
   const { isDarkMode } = useTheme();
@@ -74,7 +72,8 @@ const ConnectSocials: React.FC = () => {
   const [loadingPlatform, setLoadingPlatform] = useState<string | null>(null);
   const isInboxRoute = location.pathname.startsWith('/connect-socials/inbox');
   const connectedSocials = socials.filter(social => social.connected);
-  const connectedPlatformCount = inboxSummary?.connectedPlatformCount ?? connectedSocials.length;
+  // Only Instagram and Facebook can use the inbox, so only they are counted.
+  const connectedPlatformCount = inboxConnectedCount(inboxSummary ? inboxSummary.connectedPlatforms : connectedSocials.map(social => social.platform));
   const inboxEnabled = (inboxSummary?.inboxEnabled ?? connectedPlatformCount > 0) && connectedPlatformCount > 0;
   const unreadMessageCount = inboxSummary?.unreadMessageCount ?? 0;
 
@@ -369,7 +368,7 @@ const ConnectSocials: React.FC = () => {
         unreadMessageCount: 0,
         inboxEnabled: connected.length > 0,
         inboxStatus: connected.length > 0 ? 'needs_setup' : 'disabled',
-        syncStatus: { status: connected.length > 0 ? 'pending' : 'not_started', lastSyncAt: null, nextSyncAt: null },
+        syncStatus: { status: connected.length > 0 ? 'pending' : 'not_started', lastSyncAt: null },
         webhookStatus: { registered: false, activePlatforms: [], missingPlatforms: connected },
         aiEngagement: { replySuggestions: true, priorityTagging: true, unreadAlerts: true },
       });
@@ -698,11 +697,6 @@ const ConnectSocials: React.FC = () => {
                   <div className="flex items-center gap-2 mt-auto">
                       {social.connected ? (
                            <>
-                             <button className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                               isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                             }`}>
-                                <RefreshCw className="w-3 h-3" /> Sync
-                             </button>
                              <button 
                                 onClick={() => handleDisconnect(social.platform)}
                                 className={`px-3 py-2 text-xs font-bold rounded-lg transition-colors ${
@@ -740,23 +734,23 @@ const ConnectSocials: React.FC = () => {
       {activeTab === 'inbox' && (
         inboxEnabled ? (
           <div className="space-y-4">
-            <div className={`rounded-2xl border p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
+            <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
-                <h2 className="font-serif-display text-[20px] text-[#F5F4F1]">Social inbox</h2>
-                <p className={`text-sm ${theme.textSecondary}`}>Real comments, DMs, mentions, and replies from connected social accounts.</p>
+                <h2 className="text-[20px] font-semibold text-[var(--gv-text-primary)]">Inbox</h2>
+                <p className="text-sm text-[var(--gv-text-secondary)]">Comments and messages from your connected Instagram and Facebook accounts.</p>
               </div>
-              <div className="flex items-center gap-2 text-xs font-bold text-green-400">
+              <div className="flex items-center gap-2 text-xs font-bold text-[var(--gv-text-primary)]">
                 <CheckCircle2 className="w-4 h-4" /> {connectedPlatformCount} connected
               </div>
             </div>
             <UnifiedInbox />
           </div>
         ) : (
-          <div className={`rounded-2xl border p-8 text-center ${theme.bgCard} ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-            <Lock className="w-10 h-10 mx-auto text-slate-400" />
-            <h2 className="mt-3 font-serif-display text-[22px] text-[#F5F4F1]">Social inbox is disabled</h2>
-            <p className={`mt-1 text-sm ${theme.textSecondary}`}>Connect social accounts to enable inbox management.</p>
-            <button onClick={() => navigate('/connect-socials')} className="mt-5 px-5 py-3 rounded-lg bg-[#F5A623] text-[#070A12] font-bold inline-flex items-center gap-2">
+          <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-8 text-center">
+            <Lock className="w-10 h-10 mx-auto text-[var(--gv-text-muted)]" />
+            <h2 className="mt-3 text-[22px] font-semibold text-[var(--gv-text-primary)]">Your inbox is not on yet</h2>
+            <p className="mt-1 text-sm text-[var(--gv-text-secondary)]">Connect Instagram or Facebook to see your comments and messages here.</p>
+            <button onClick={() => navigate('/connect-socials')} className="mt-5 px-5 py-3 rounded-lg bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] font-bold inline-flex items-center gap-2">
               Connect accounts <ArrowRight className="w-4 h-4" />
             </button>
           </div>
