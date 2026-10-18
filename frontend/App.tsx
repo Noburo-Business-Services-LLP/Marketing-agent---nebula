@@ -14,6 +14,8 @@ import NeedPlanModal from './components/NeedPlanModal';
 import Dashboard from './pages/Dashboard';
 import GravityHome from './pages/GravityHome';
 import MyPlan from './pages/MyPlan';
+// Developer page for the tile and illustration set; the condition below is false in a production build.
+const ArtShowcase = import.meta.env.DEV ? React.lazy(() => import('./pages/ArtShowcase')) : null;
 import GravityCreate from './pages/GravityCreate';
 import GravityApprove from './pages/GravityApprove';
 import Library from './pages/Library';
@@ -276,6 +278,7 @@ const App: React.FC = () => {
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome user={user} />} />
                     <Route path="/plan" element={<MyPlan />} />
+                    {ArtShowcase && <Route path="/art-showcase" element={<React.Suspense fallback={null}><ArtShowcase /></React.Suspense>} />}
                     {/* The plans page sits inside the app shell like every other page. The route name is kept for old links. */}
                     <Route path="/trial-expired" element={<TrialExpired insideClient={isInsideClient(user)} />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />

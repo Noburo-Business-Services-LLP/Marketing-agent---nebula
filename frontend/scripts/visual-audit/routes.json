@@ -10,6 +10,7 @@
     { "label": "content-calendar-grid", "path": "/content-calendar-grid", "mode": "normal", "group": "shell" },
     { "label": "content-calendar-classic", "path": "/content-calendar-classic", "mode": "normal", "group": "shell" },
     { "label": "idea-inbox", "path": "/idea-inbox", "mode": "normal", "group": "shell", "nav": "Idea Inbox" },
+    { "label": "art-showcase", "path": "/art-showcase", "mode": "normal", "group": "shell", "note": "Developer page (development and the sample-data preview only, not in a production build): all 22 illustrations and the tile in every accent, variant and state, with long Tamil and Hindi titles." },
     { "label": "campaigns", "path": "/campaigns", "mode": "normal", "group": "shell", "nav": "Create" },
     { "label": "campaigns-classic", "path": "/campaigns-classic", "mode": "normal", "group": "shell" },
     { "label": "drafts-review", "path": "/drafts", "mode": "normal", "group": "shell", "nav": "Approve" },
