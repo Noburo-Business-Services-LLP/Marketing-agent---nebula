@@ -28,7 +28,7 @@ const DesignedEdition: React.FC<{ view: BlueprintView; onStarted: () => void }> 
       if (!r?.success) throw new Error(r?.message || 'We could not start the designed PDF. Please try again.');
       onStarted();
     } catch (e: any) {
-      setError(e?.data?.creditsExhausted ? 'You do not have enough Quarks for this. Please buy Quarks or upgrade your plan.' : (e?.message || 'We could not start the designed PDF. Please try again.'));
+      setError(e?.data?.creditsExhausted ? 'This needs more than you have left. Please add more posts and videos or choose a plan.' : (e?.message || 'We could not start the designed PDF. Please try again.'));
     } finally { setBusy(false); }
   };
 
@@ -59,7 +59,7 @@ const DesignedEdition: React.FC<{ view: BlueprintView; onStarted: () => void }> 
       {!d && (
         <div className="flex flex-wrap items-center gap-3">
           <GravityButton onClick={start} disabled={busy}>
-            {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>) : `Make the designed PDF${cost ? ` · ${cost} Quarks` : ''}`}
+            {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>) : 'Make the designed PDF'}
           </GravityButton>
           <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">{quarksNote(cost)} It takes about 5 to 10 minutes. You can leave this page.</span>
         </div>
@@ -89,7 +89,7 @@ const DesignedEdition: React.FC<{ view: BlueprintView; onStarted: () => void }> 
 
       {d && d.status === 'failed' && (
         <div className="space-y-3">
-          <p role="alert" className="text-[13.5px] text-[var(--gv-text-primary)]">{d.error || 'We could not make the designed PDF this time. Your Quarks were returned.'}</p>
+          <p role="alert" className="text-[13.5px] text-[var(--gv-text-primary)]">{d.error || 'We could not make the designed PDF this time. You were not charged.'}</p>
           <GravityButton onClick={start} disabled={busy}>{busy ? 'Starting…' : 'Try again'}</GravityButton>
         </div>
       )}

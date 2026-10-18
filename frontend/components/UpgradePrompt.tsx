@@ -24,7 +24,7 @@ const UpgradePrompt: React.FC<UpgradePromptProps> = ({ reason, feature, classNam
         onClick={() => navigate('/trial-expired')}
         className="shrink-0 px-4 py-2 rounded-lg bg-[#ffcc29] text-[#070A12] text-sm font-semibold hover:bg-[#e6b825] transition-colors"
       >
-        {actionLabel || 'View plans and Quarks'}
+        {actionLabel || 'See plans'}
       </button>
     </div>
   );

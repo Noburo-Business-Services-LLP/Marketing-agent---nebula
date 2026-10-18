@@ -23,11 +23,22 @@ import { fileURLToPath } from 'node:url';
  *  - files excluded below: the staff area is staff-only, and the legal
  *    pages (Terms, Privacy) are contract text that needs a lawyer's edit
  *  - console.* lines (developer logs)
+ *
+ * "Quark(s)" is covered by the same scan: customers see posts and videos, never Quarks. It may stay in identifiers and
+ * API field names (quarks, quarkCosts, reason 'quarks') but never in JSX text or a multi-word literal.
  */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'tests', 'public', 'scripts', 'scratch']);
-const SKIP_FILES = [/^pages\/staff\//, /^pages\/TermsAndConditions\.tsx$/, /^pages\/PrivacyPolicy\.tsx$/, /^pages\/RefundPolicy\.tsx$/];
-const WORDS = /\bcredits?\b|\btrials?\b|\b7[- ]days?\b/i;
+// Each entry is a file the scan leaves alone, with the reason.
+const SKIP_FILES = [
+  /^pages\/staff\//,                 // the staff area is staff-only
+  /^utils\/staff[A-Za-z]*\.ts$/,      // helpers for the staff area
+  /^pages\/CsmClients\.tsx$/,         // the CSM portal is for our own customer-success staff, who track balances in Quarks
+  /^pages\/TermsAndConditions\.tsx$/, // legal text: the owner reviews it with a lawyer
+  /^pages\/PrivacyPolicy\.tsx$/,      // legal text
+  /^pages\/RefundPolicy\.tsx$/,       // legal text
+];
+const WORDS = /\bcredits?\b|\btrials?\b|\b7[- ]days?\b|\bquarks?\b/i;
 const ALLOWED_PHRASES = [/(last|previous) 7 days/i, /\(7 days\)/i, /Credit, loans/];
 
 function walk(dir, out = []) {
@@ -42,7 +53,7 @@ export function visibleText(line) {
   const parts = [];
   for (const m of line.matchAll(/(['"`])((?:\\.|(?!\1).)*?)\1/g)) {
     const s = m[2];
-    if (/\s/.test(s.trim()) || /^(Credits?|Trials?)$/.test(s)) parts.push(s);
+    if (/\s/.test(s.trim()) || /^(Credits?|Trials?|Quarks?)$/.test(s)) parts.push(s);
   }
   for (const m of line.matchAll(/>([^<>{}]+)</g)) parts.push(m[1]);
   // A bare line of JSX text that wraps from the line above.
@@ -80,8 +91,13 @@ test('scanner flags customer text and ignores identifiers, comments and analytic
     'const creditsRemaining = res.creditsRemaining;',
     '{/* credits note */}',
     "const h = ['User', 'Credits'];",
+    '<span>4200 Quarks</span>',
+    "alert('You need 7 Quarks to make this');",
+    "includes('Quarks')",
+    "const reason = 'quarks'; const q = quarkCosts.image_generated; fetch(`/staff/clients/${id}/quarks`);",
+    '<p>{`${quarkCosts.a} left`}</p>',
   ].join('\n');
-  assert.deepEqual(findWordingViolations(src).map((h) => h.line), [1, 2, 3, 10]);
+  assert.deepEqual(findWordingViolations(src).map((h) => h.line), [1, 2, 3, 10, 11, 12, 13]);
 });
 
 test('no customer-facing credits, trial or 7-day wording in the frontend', () => {
@@ -141,7 +157,6 @@ test('the plans page and its helpers show no Quarks, credits, trial or 7 days to
       for (const t of visibleText(line)) if (QUARK.test(t)) bad.push(`${rel}:${i + 1}  ${t.trim().slice(0, 90)}`);
     });
   }
-  // utils/plans.ts is not listed: its upgrade messages are shared with other pages (UpgradePrompt) and still name Quarks; the new plans-page helpers in it are covered by plansPage.test.mjs.
   assert.deepEqual(bad, []);
 });
 

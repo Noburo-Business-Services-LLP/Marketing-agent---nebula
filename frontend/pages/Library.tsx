@@ -91,7 +91,7 @@ const Library: React.FC = () => {
   const canRemove = (i: LibraryItem) => i.source === 'hero' || i.source === 'video-draft' || i.source === 'reel';
   const remove = async (i: LibraryItem) => {
     if (removing) return;
-    const ok = await confirmDialog(i.source === 'hero' ? 'This removes the video from your library. Quarks already spent are not returned.' : 'This removes it and its files. This cannot be undone.', { title: `Delete "${i.title}"?`, confirmLabel: 'Delete', danger: true });
+    const ok = await confirmDialog(i.source === 'hero' ? 'This removes the video from your library. What it used is not returned.' : 'This removes it and its files. This cannot be undone.', { title: `Delete "${i.title}"?`, confirmLabel: 'Delete', danger: true });
     if (!ok) return;
     setRemoving(true); setRemoveError('');
     try {

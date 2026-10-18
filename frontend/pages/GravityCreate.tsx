@@ -505,14 +505,14 @@ const GravityCreate: React.FC = () => {
   };
 
   // Regenerate re-runs the full generation pipeline, so it costs the same
-  // Quarks as the original — campaign-type drafts are billed through the
+  // what the original used — campaign-type drafts are billed through the
   // legacy Campaigns flow already (matches backend/routes/drafts.js).
   const regenerateCostFor = (d: Draft) => (d.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0));
   const confirmRegenerate = (d: Draft) => {
     const cost = regenerateCostFor(d);
     const hasImage = !!((d as any)?.imageUrl || (d as any)?.creative?.imageUrls?.[0]);
     const msg = cost > 0
-      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
+      ? `This uses part of what you have left and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
       : hasImage ? 'This replaces the current image.' : 'This adds an image to this post.';
     const title = hasImage ? 'Regenerate this image?' : 'Add an image?';
     const confirmLabel = hasImage ? 'Regenerate' : 'Add';
@@ -1785,7 +1785,7 @@ const GravityCreate: React.FC = () => {
                                   >
                                     Reset
                                   </button>
-                                  <span className="text-[11px] text-[var(--gv-text-muted)] ml-auto">Regenerating costs Quarks.</span>
+                                  <span className="text-[11px] text-[var(--gv-text-muted)] ml-auto">Regenerating uses part of what you have left.</span>
                                 </div>
                               </>
                             )}

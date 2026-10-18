@@ -298,7 +298,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
     const cost = regenerateCostFor(draft);
     const hasImage = !!(draft?.imageUrl || draft?.creative?.imageUrls?.[0]);
     const confirmMsg = cost > 0
-      ? `This costs ${cost} Quark${cost === 1 ? '' : 's'} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
+      ? `This uses part of what you have left and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
       : hasImage ? 'This replaces the current image.' : 'This adds an image to this post.';
     const dialogTitle = hasImage ? 'Regenerate this image?' : 'Add an image?';
     const dialogConfirmLabel = hasImage ? 'Regenerate' : 'Add';

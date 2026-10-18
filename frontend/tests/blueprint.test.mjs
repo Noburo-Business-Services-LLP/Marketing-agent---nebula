@@ -103,9 +103,9 @@ test('status text gives the exact sentences', () => {
 
 test('stopped and failed views show the server message and the refund line only when refunded', () => {
   const stop = { reason: 'thin', message: 'We could not find enough about your business to build a reliable Blueprint.' };
-  assert.equal(progressText({ status: 'stopped', stop, refunded: true }), `${stop.message} Your Quarks were returned.`);
+  assert.equal(progressText({ status: 'stopped', stop, refunded: true }), `${stop.message} You were not charged.`);
   assert.equal(progressText({ status: 'stopped', stop, refunded: false }), stop.message);
-  assert.equal(progressText({ status: 'failed', error: 'Something went wrong', refunded: true }), 'Something went wrong. Your Quarks were returned.');
+  assert.equal(progressText({ status: 'failed', error: 'Something went wrong', refunded: true }), 'Something went wrong. You were not charged.');
   assert.equal(progressText({ status: 'failed', error: 'Something went wrong.', refunded: false }), 'Something went wrong.');
 });
 
@@ -159,10 +159,11 @@ test('deep link handling', () => {
   assert.equal(BLUEPRINT_SIGNUP_PATH, '/login?mode=signup&intent=blueprint');
 });
 
-test('quarks note', () => {
-  assert.equal(quarksNote(7), 'This uses 7 of your Quarks.');
-  assert.equal(quarksNote(), 'This uses a small number of your Quarks.');
-  assert.equal(quarksNote(0), 'This uses a small number of your Quarks.');
+test('the cost note speaks of what is left, never a number of Quarks', () => {
+  for (const v of [7, undefined, 0]) {
+    assert.equal(quarksNote(v), 'This uses a small part of what you have left.');
+    assert.doesNotMatch(quarksNote(v), /quark/i);
+  }
 });
 
 function strings(o, out = []) {

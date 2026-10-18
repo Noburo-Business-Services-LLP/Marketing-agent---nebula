@@ -6,7 +6,7 @@ import { User, BillingData, BusinessProfile } from '../types';
 import BillingDetailsForm from '../components/BillingDetailsForm';
 import { tierLabel } from '../utils/plans';
 import { isInsideClient } from '../utils/agency';
-import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
+import { balanceChip } from '../utils/plans';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { buildStrategyPdf } from '../utils/strategyPdf';
 import { apiService, brandAssetsAPI } from '../services/api';
@@ -80,7 +80,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
   // Billing State
   const [billingData, setBillingData] = useState<BillingData | null>(null);
-  const { costs: quarkCosts, units: quarkUnits } = useQuarkPricing();
+  const { costs: quarkCosts } = useQuarkPricing();
   const [loadingBilling, setLoadingBilling] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -691,7 +691,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       </p>
                                     )}
                                   </div>
-                                  <a href="#/trial-expired" className="text-sm font-semibold text-[#F5A623] hover:underline">Plans and Quarks</a>
+                                  <a href="#/trial-expired" className="text-sm font-semibold text-[#F5A623] hover:underline">Plans</a>
                                   <CreditCard className={`w-8 h-8 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
                                 </div>
 
@@ -707,7 +707,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       <div role="alertdialog" aria-labelledby="cancel-plan-title">
                                         <p id="cancel-plan-title" className={`text-sm font-semibold ${theme.text}`}>Cancel your plan?</p>
                                         <p className={`mt-1 text-sm ${theme.textSecondary}`}>
-                                          You will not be charged again. You can keep using your plan{billingData.subscription.endsAt ? ` until ${new Date(billingData.subscription.endsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}` : ' until the end of the month you paid for'}, and the Quarks that came with it until then. Used Quarks are not refunded. You can choose a plan again whenever you like.
+                                          You will not be charged again. You can keep using your plan{billingData.subscription.endsAt ? ` until ${new Date(billingData.subscription.endsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}` : ' until the end of the month you paid for'}, and what came with it until then. What you have already used is not refunded. You can choose a plan again whenever you like.
                                         </p>
                                         <div className="mt-3 flex flex-wrap gap-2">
                                           <button type="button" disabled={cancelling} onClick={() => setConfirmingCancel(false)} className="rounded-lg border border-[var(--gv-border-default)] px-4 py-2 text-sm font-semibold">Keep my plan</button>
@@ -747,88 +747,17 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 <BillingDetailsForm />
                               </div>
 
-                              {/* Quarks */}
+                              {/* What you have left, in posts and videos */}
                               <div className={`p-5 rounded-lg border ${
                                 isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
                               }`}>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Quarks</p>
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.balance}</p>
-                                    <p className={`text-xs ${theme.textSecondary}`}>Remaining</p>
-                                  </div>
-                                  <div>
-                                    <p className={`text-2xl font-bold ${theme.text}`}>{billingData.credits.totalUsed}</p>
-                                    <p className={`text-xs ${theme.textSecondary}`}>Used</p>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* What each action costs. Grouped the way the work is
-                                  actually thought about — posts, carousels, video, edits —
-                                  because a flat list of twelve keys is what made the old
-                                  header popover unreadable. */}
-                              <div className={`p-5 rounded-lg border ${
-                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
-                              }`}>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Quark Costs</p>
-                                <p className={`text-xs mb-4 ${theme.textSecondary}`}>
-                                  Every price is per unit of work, so bigger jobs cost proportionally more.
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">What you have left</p>
+                                <p className={`text-base font-semibold ${theme.text}`}>
+                                  {balanceChip(billingData.credits.balance, quarkCosts).full || 'Posts and videos'}
                                 </p>
-
-                                <div className="space-y-4">
-                                  {QUARK_GROUPS.map((group) => {
-                                    const rows = group.actions.filter((a) => (quarkCosts[a] || 0) > 0);
-                                    if (!rows.length) return null;
-                                    return (
-                                      <div key={group.title}>
-                                        <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                                          <p className={`text-[13px] font-semibold ${theme.text}`}>{group.title}</p>
-                                          {group.example && (
-                                            <p className="text-[11px] text-slate-500 tabular-nums shrink-0">
-                                              {group.example(quarkCosts)}
-                                            </p>
-                                          )}
-                                        </div>
-                                        <p className="text-[11.5px] text-slate-500 mb-2 leading-snug">{group.blurb}</p>
-                                        <div className={`rounded-lg overflow-hidden border ${
-                                          isDarkMode ? 'border-white/[0.06]' : 'border-slate-200'
-                                        }`}>
-                                          {rows.map((action, i) => (
-                                            <div
-                                              key={action}
-                                              className={`flex items-center justify-between gap-3 px-3 py-2 ${
-                                                isDarkMode ? 'bg-white/[0.03]' : 'bg-white'
-                                              } ${i > 0 ? (isDarkMode ? 'border-t border-white/[0.06]' : 'border-t border-slate-100') : ''}`}
-                                            >
-                                              <span className={`text-[13px] truncate ${theme.textSecondary}`}>
-                                                {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
-                                              </span>
-                                              <span className="flex items-baseline gap-1.5 shrink-0">
-                                                <span className={`text-[13px] font-semibold tabular-nums ${theme.text}`}>
-                                                  {quarkCosts[action]}
-                                                </span>
-                                                {/* The unit is the whole point: "19" next to "Carousel"
-                                                    reads as the price of a carousel, which it isn't. */}
-                                                {quarkUnits[action] && (
-                                                  <span className="text-[11px] text-slate-500 w-[62px] text-left">
-                                                    {quarkUnits[action]}
-                                                  </span>
-                                                )}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-
-                                {(quarkCosts.competitor_scrape === 0) && (
-                                  <p className="text-[11.5px] text-slate-500 mt-4 pt-3 border-t border-slate-200/40">
-                                    Competitor Intel is free.
-                                  </p>
-                                )}
+                                <p className={`text-xs mt-1 ${theme.textSecondary}`}>
+                                  Posts and videos share what you have left, in any mix. Add more any time from the plans page.
+                                </p>
                               </div>
 
                               {/* Payment History */}
@@ -843,7 +772,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                         <tr className={isDarkMode ? 'bg-slate-800/50' : 'bg-slate-50'}>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Date</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Amount</th>
-                                          <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Quarks</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Status</th>
                                           <th className={`text-left px-4 py-3 font-medium ${theme.textSecondary}`}>Invoice</th>
                                         </tr>
@@ -858,9 +786,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                             </td>
                                             <td className={`px-4 py-3 ${theme.text}`}>
                                               {payment.currency === 'INR' ? '\u20B9' : payment.currency} {payment.amount?.toLocaleString()}
-                                            </td>
-                                            <td className={`px-4 py-3 ${theme.text}`}>
-                                              {payment.credits || '—'}
                                             </td>
                                             <td className="px-4 py-3">
                                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${

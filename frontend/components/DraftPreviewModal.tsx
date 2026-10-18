@@ -132,7 +132,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
 
   const handleRetryImage = async () => {
     const confirmMsg = regenerateCost > 0
-      ? `This costs ${regenerateCost} Quark${regenerateCost === 1 ? '' : 's'} and replaces the current image.`
+      ? 'This uses part of what you have left and replaces the current image.'
       : 'This replaces the current image.';
     if (!(await confirm(confirmMsg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' }))) return;
     setIsRetryingImage(true);

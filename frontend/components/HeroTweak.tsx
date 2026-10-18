@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { enoughFor } from '../utils/plans';
 import { GravityPanel, GravityLabel, GravityButton } from './gravity';
 import { apiService, heroVideoAPI } from '../services/api';
 
@@ -15,7 +16,7 @@ const field =
 
 /**
  * Start a new version of a finished Hero video from its own prompt. Change the prompt, then make it. This makes a
- * new video, so it costs Quarks like any other; the earlier video stays in your library.
+ * new video, so it uses what you have left like any other; the earlier video stays in your library.
  */
 const HeroTweak: React.FC<{ source: TweakSource; onStarted: (jobId: string) => void }> = ({ source, onStarted }) => {
   const [prompt, setPrompt] = useState(source.prompt || '');
@@ -53,7 +54,7 @@ const HeroTweak: React.FC<{ source: TweakSource; onStarted: (jobId: string) => v
       if (!r?.success || !r.jobId) throw Object.assign(new Error(r?.message || 'Your Hero video could not be started.'), { data: r });
       onStarted(r.jobId);
     } catch (e: any) {
-      setError(e?.data?.creditsExhausted ? 'You do not have enough Quarks for this video. Top up and try again.' : (e?.message || 'Your Hero video could not be started. Please try again.'));
+      setError(e?.data?.creditsExhausted ? 'You do not have enough left for this video. Add more posts and videos and try again.' : (e?.message || 'Your Hero video could not be started. Please try again.'));
     } finally { setBusy(false); }
   };
 
@@ -69,11 +70,11 @@ const HeroTweak: React.FC<{ source: TweakSource; onStarted: (jobId: string) => v
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <GravityButton onClick={make} disabled={busy || !prompt.trim() || cannotAfford}>
-          {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>) : `Make a new version${price !== undefined ? ` · ${price} Quarks` : ''}`}
+          {busy ? (<><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>) : 'Make a new version'}
         </GravityButton>
-        {price !== undefined && balance !== undefined && <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Price {price} Quarks · Your balance {balance} Quarks</span>}
+        {enoughFor(balance, price, 'Hero video', 'Hero videos') && <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">{enoughFor(balance, price, 'Hero video', 'Hero videos')}</span>}
       </div>
-      {cannotAfford && <p role="status" className="text-[12.5px] text-[var(--gv-text-primary)]">A Hero video costs {price} Quarks and you have {balance}. Top up to make one; nothing is charged until you press the button.</p>}
+      {cannotAfford && <p role="status" className="text-[12.5px] text-[var(--gv-text-primary)]">This needs more than you have left. Add more posts and videos to make one; nothing is used until you press the button.</p>}
       {error && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{error}</p>}
     </GravityPanel>
   );
