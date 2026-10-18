@@ -34,11 +34,11 @@ const PROVIDER_RATES = {
   gpt4o_input_per_mtok: 5.00,
   gpt4o_output_per_mtok: 30.00,
 
-  // Comment scoring (social listening) runs on LISTENING_MODEL, a small cheap model chosen at deploy time. Its own
-  // pricing page was not confirmed at build time (2026-10-17), so these use the conservative writing-model rates above
-  // (dated 2026-10-15). Replace with the real rates once the model is chosen; the action cost follows automatically.
-  listening_input_per_mtok: 5.00,
-  listening_output_per_mtok: 30.00,
+  // Comment scoring (social listening) runs on LISTENING_MODEL. The owner chose gpt-4o-mini; OpenAI's pricing page
+  // (checked by the owner on 2026-10-18, standard processing, per 1M tokens) lists it at $0.15 input and $0.60 output.
+  // If LISTENING_MODEL is set to another model, update these two rates to that model's prices.
+  listening_input_per_mtok: 0.15,
+  listening_output_per_mtok: 0.60,
 
   // Google Nano Banana Pro (nano-banana-pro-preview) — flat per generated
   // image up to 2K. This is our PRIMARY image model, so it is the one that

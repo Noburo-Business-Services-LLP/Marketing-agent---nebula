@@ -429,7 +429,8 @@ test('(v) accountIds restricts a pass; force runs even a not-due account but nev
 const { createSpendGuard } = require('../services/spendGuard');
 const { listeningCost } = require('../config/apiCosts');
 const { buildPrompt } = require('../services/listening/helpers');
-const RATE_IN = 5.0; const RATE_OUT = 30.0; // the placeholder rates, per million tokens
+const { PROVIDER_RATES } = require('../config/apiCosts');
+const RATE_IN = PROVIDER_RATES.listening_input_per_mtok; const RATE_OUT = PROVIDER_RATES.listening_output_per_mtok; // from the config, per million tokens: never typed here
 const worstUsd = (prompt) => (Buffer.byteLength(prompt, 'utf8') * RATE_IN + 4500 * RATE_OUT) / 1e6; // 1500 x 3 = 4,500 output tokens
 
 test('(I1) a throwing model call is still recorded with the spend guard, at the worst case for the batch', async () => {
