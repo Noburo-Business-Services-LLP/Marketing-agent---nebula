@@ -70,3 +70,13 @@ test('a reference picture is priced as one medium picture', () => {
   assert.strictEqual(Q.studio_reference, Math.round((A.studio_reference * 2.5) / 0.02));
   assert.ok(Q.studio_reference >= 4 && Q.studio_reference <= 10);
 });
+
+test('a spoken line is said once and the rest of the clip has no speech (the model used to repeat lines to fill 10 seconds)', () => {
+  const p = sv.assemblePrompt({ concept: 'x', spokenLine: 'Order today and get free home delivery.', style: 'daily-life-vlog', language: 'english', aspectRatio: '9:16' });
+  assert.match(p, /says the line ONCE only/);
+  assert.match(p, /never repeats any word, phrase or sentence/);
+  assert.match(p, /no speech at all/);
+  assert.match(p, /finishing in about 3 seconds/);
+  assert.strictEqual(sv.speechSeconds('தீபாவளி நல்வாழ்த்துகள்'), 2);
+  assert.strictEqual(sv.speechSeconds(new Array(60).fill('word').join(' ')), 9);
+});

@@ -149,6 +149,13 @@ function parseConcept(raw, clips = 1) {
 }
 
 /** The one prompt sent to the model for one clip. Everything the owner can see and edit is in here; nothing else is added. */
+const STUDIO_SECONDS = 10;
+/** About how long a line takes to say at a natural pace (roughly 2.3 words a second), kept inside the clip. */
+function speechSeconds(text) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  return Math.min(STUDIO_SECONDS - 1, Math.max(2, Math.round(words / 2.3)));
+}
+
 function assemblePrompt({ concept, beats = [], spokenLine, style, language, voice, aspectRatio, who, where, hasProductPhoto, hasPersonPhoto, hasPlacePhoto, brandName, continuation = false }) {
   const lang = LANGUAGES[languageOf(language)];
   const parts = [];
@@ -165,7 +172,8 @@ function assemblePrompt({ concept, beats = [], spokenLine, style, language, voic
   if (hasProductPhoto) parts.push('Show the product exactly as in the reference photo: same shape, colours and label.');
   if (lang && spokenLine) {
     parts.push(`The voice is a ${voiceOf(voice)} voice.`);
-    parts.push(`A person says clearly in ${lang}, saying exactly these words, word for word, without adding, dropping or changing any word: "${clip(spokenLine, 240)}" with natural pauses; lips match the words. Soft music under the voice.`);
+    const secs = speechSeconds(spokenLine);
+    parts.push(`A person says clearly in ${lang}, saying exactly these words, word for word, without adding, dropping or changing any word: "${clip(spokenLine, 240)}" She says the line ONCE only, starting about one second in and finishing in about ${secs} seconds. She never repeats any word, phrase or sentence, and says nothing else. For the rest of the ${STUDIO_SECONDS} seconds there is no speech at all: only action, expressions, ambient sound and soft music. Lips match the words.`);
   } else parts.push('No spoken words. Music and natural ambient sound only.');
   if (brandName) parts.push(`Brand: ${clip(brandName, 60)}. Show brand text only where it appears in a reference photo; do not invent logos, prices or other text.`);
   parts.push('No subtitles, no watermarks, no gibberish text.');
@@ -181,4 +189,5 @@ function buildReferencePrompt({ kind, description, city }) {
   return `Realistic wide photograph of a real place: ${d}. Natural light, lived-in and believable, an everyday Indian business${city ? ` in ${clip(city, 40)}` : ''}. No people, no text, no signs with words, no logos, no watermark.`;
 }
 
-module.exports = { buildReferencePrompt, STYLES, STYLE_ALIASES, DEFAULT_STYLE, LANGUAGES, LANGUAGE_SCRIPTS, LANGUAGE_LABELS, VOICES, MAX_CLIPS, ASPECT_RATIOS, PLATFORM_IDS, CONTINUE_TEXT, styleOf, languageOf, voiceOf, clipsOf, aspectOf, platformsOf, shapeFor, platformShapes, buildConceptPrompt, parseConcept, assemblePrompt, clip };
+module.exports = {
+  speechSeconds, buildReferencePrompt, STYLES, STYLE_ALIASES, DEFAULT_STYLE, LANGUAGES, LANGUAGE_SCRIPTS, LANGUAGE_LABELS, VOICES, MAX_CLIPS, ASPECT_RATIOS, PLATFORM_IDS, CONTINUE_TEXT, styleOf, languageOf, voiceOf, clipsOf, aspectOf, platformsOf, shapeFor, platformShapes, buildConceptPrompt, parseConcept, assemblePrompt, clip };
