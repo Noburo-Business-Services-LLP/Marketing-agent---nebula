@@ -4978,15 +4978,23 @@ export interface StudioVideo {
   id: string; status: 'processing' | 'completed' | 'failed'; title: string; concept: string; spokenLine: string;
   style: string; language: string; aspectRatio: string; videoUrl: string; seconds: number; parent: string | null;
   change: string; quarks: number; error: string; createdAt: string; completedAt: string | null;
+  voice?: string; clips?: number; clipsDone?: number; platforms?: string[]; parts?: StudioPart[]; notice?: string;
 }
-export interface StudioConcept { title: string; concept: string; beats: string[]; spokenLine: string; quarks: number; references: Array<{ kind: string; name: string; url: string }>; }
-export interface StudioChoices { idea: string; style: string; language: string; who?: string; where?: string; characterIds?: string[]; placeIds?: string[]; productIds?: string[]; }
+export interface StudioPart { beats: string[]; spokenLine: string; }
+export interface StudioConcept { title: string; concept: string; beats: string[]; spokenLine: string; parts?: StudioPart[]; clips?: number; seconds?: number; quarks: number; references: Array<{ kind: string; name: string; url: string }>; }
+export interface StudioChoices { idea: string; style: string; language: string; clips?: number; aspectRatio?: string; who?: string; where?: string; characterIds?: string[]; placeIds?: string[]; productIds?: string[]; }
+export interface StudioOptions {
+  success: boolean; styles: Array<{ key: string; label: string; hint: string; image?: string }>; languages: Array<{ key: string; label: string }>;
+  voices?: Array<{ key: string; label: string }>; lengths?: Array<{ clips: number; seconds: number; quarks: number }>; aspectRatios?: string[];
+  platformShapes?: Record<string, string>; platforms?: string[]; costPerClip?: number; max?: number; clipSeconds?: number;
+  quarks: number; referenceQuarks?: number; seconds: number;
+}
 export const studioVideosAPI = {
-  options: async (): Promise<{ success: boolean; styles: Array<{ key: string; label: string; hint: string }>; languages: Array<{ key: string; label: string }>; quarks: number; referenceQuarks?: number; seconds: number }> =>
+  options: async (): Promise<StudioOptions> =>
     apiCall('/videos/options', {}, true),
   concept: async (c: StudioChoices): Promise<{ success: boolean; message?: string } & Partial<StudioConcept>> =>
     apiCall('/videos/concept', { method: 'POST', body: JSON.stringify(c) }, true),
-  create: async (c: StudioChoices & { title: string; concept: string; beats: string[]; spokenLine: string; aspectRatio: string }): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
+  create: async (c: StudioChoices & { title: string; concept: string; beats: string[]; spokenLine: string; aspectRatio: string; voice?: string; parts?: StudioPart[]; platforms?: string[] }): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
     apiCall('/videos/create', { method: 'POST', body: JSON.stringify(c) }, true),
   change: async (id: string, instruction: string): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
     apiCall(`/videos/${encodeURIComponent(id)}/change`, { method: 'POST', body: JSON.stringify({ instruction }) }, true),
