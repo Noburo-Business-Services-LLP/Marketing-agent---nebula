@@ -333,26 +333,26 @@
     }],
     ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user, actingAgency: user.actingAgency || null, actingCsm: null }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
-    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7 }, units: {} })],
+    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7, image_generated: 11, studio_video: 161 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {
       var price = function (inr) { var gst = Math.round(inr * 18); return { inr: inr, gstPaise: gst, chargePaise: inr * 100 + gst }; };
       var feat = function (posts, videos) { return ['Up to ' + posts + ' posts a month, or', 'up to ' + videos + ' short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time']; };
       return ok({
         plans: [
           Object.assign({ id: 'starter', name: 'Starter', description: 'For a single business getting started.', quarks: 600, outputs: { posts: 54, videos: 3 }, features: feat(54, 3).concat(['Brand Blueprint']) }, price(999)),
-          Object.assign({ id: 'professional', name: 'Growth', description: 'For a business that posts every day.', quarks: 2000, outputs: { posts: 181, videos: 12 }, features: feat(181, 12).concat(['Priority support']) }, price(2999)),
+          Object.assign({ id: 'professional', name: 'Growth', description: 'For a business that posts every day.', quarks: 2000, outputs: { posts: 181, videos: 12 }, features: feat(181, 12).concat(['Priority support']) }, price(1999)),
           Object.assign({ id: 'agency', name: 'Agency', description: 'Run several client brands from one account, with one shared pool of posts and videos.', quarks: 6000, outputs: { posts: 545, videos: 37 }, features: feat(545, 37).concat(['5 client brands included', 'Publishing, inbox and competitor insights included', 'Usage report for each client']) }, price(6999)),
         ],
-        topups: [Object.assign({ quarks: 500, outputs: { posts: 45, videos: 3 } }, price(1000)), Object.assign({ quarks: 1000, outputs: { posts: 90, videos: 6 } }, price(2000))],
-        addons: [Object.assign({ id: 'publish', label: 'Publish and schedule', requires: [], includes: [] }, price(1000)), Object.assign({ id: 'competitors', label: 'Competitor insights', requires: ['publish'], includes: [] }, price(1000)), Object.assign({ id: 'inbox', label: 'Inbox and automatic replies', requires: ['publish'], includes: [] }, price(1000)), Object.assign({ id: 'bundle', label: 'Publish, competitors and inbox bundle', requires: [], includes: ['publish', 'competitors', 'inbox'] }, price(2500))],
+        topups: [[500, 240, 21, 1], [1000, 475, 43, 2], [2500, 1190, 108, 7], [5000, 2380, 216, 14], [10000, 4760, 432, 29]].map(function (t) { return Object.assign({ quarks: t[1], outputs: { posts: t[2], videos: t[3] } }, price(t[0])); }),
+        addons: [Object.assign({ id: 'publish', label: 'Publish and schedule', requires: [], includes: [] }, price(1000)), Object.assign({ id: 'competitors', label: 'Competitor insights', requires: [], includes: [] }, price(500)), Object.assign({ id: 'inbox', label: 'Inbox and automatic replies', requires: ['publish'], includes: [] }, price(500)), Object.assign({ id: 'bundle', label: 'Publish, competitors and inbox bundle', requires: [], includes: ['publish', 'competitors', 'inbox'] }, price(1800))],
         agency: { includedClients: 5, maxClients: 25, slotInr: 1499, slotQuarks: 500 },
         slot: Object.assign({ id: 'client', quarks: 500 }, price(1499)),
       });
     }],
     ['GET', /^\/payment\/billing-details$/, ok({ details: { gstin: '', legalName: '', address: '', pin: '', stateCode: '' }, states: [{ abbr: 'TN', name: 'Tamil Nadu' }, { abbr: 'KA', name: 'Karnataka' }] })],
     ['GET', /^\/payment\/billing$/, function () {
-      var tier = AGENCY ? 'agency' : MANAGED ? 'managed' : ASTATE === 'starter' ? 'starter' : 'free';
-      return ok({ plan: { tier: tier, addons: tier === 'agency' ? ['bundle'] : [] }, subscription: user.subscription, credits: { balance: ASTATE === 'pool-empty' ? 0 : credits.balance }, payments: [] });
+      var tier = AGENCY ? 'agency' : MANAGED ? 'managed' : ASTATE === 'starter' ? 'starter' : (TIERQ === 'starter' || TIERQ === 'professional') ? TIERQ : 'free';
+      return ok({ plan: { tier: tier, addons: tier === 'agency' ? ['bundle'] : [] }, subscription: (tier === 'free' || tier === 'managed') ? { plan: 'free', status: 'active' } : { plan: tier, status: 'active', cancelAtPeriodEnd: false, endsAt: iso(21) }, credits: { balance: ASTATE === 'pool-empty' ? 0 : tier === 'free' ? 0 : credits.balance }, payments: [] });
     }],
     ['GET', /^\/payment\/status/, ok({ subscription: user.subscription, credits: credits, payments: [] })],
     ['GET', /^\/drafts\/?$/, ok({ drafts: drafts, total: drafts.length })],
