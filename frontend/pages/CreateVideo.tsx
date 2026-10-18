@@ -41,9 +41,9 @@ const field = 'w-full rounded-xl border border-[var(--gv-border-default)] bg-[va
 
 const StyleTile: React.FC<{ s: StyleOption; on: boolean; pick: () => void }> = ({ s, on, pick }) => (
   <button type="button" role="radio" aria-checked={on} onClick={pick}
-    className={`group relative overflow-hidden rounded-xl border text-left transition-colors ${on ? 'border-[var(--gv-accent)] ring-1 ring-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'} bg-[var(--gv-surface-1)]`}>
+    className={`group relative block w-full min-w-0 overflow-hidden rounded-xl border text-left transition-colors ${on ? 'border-[var(--gv-accent)] ring-1 ring-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'} bg-[var(--gv-surface-1)]`}>
     <div className="relative aspect-video w-full bg-[var(--gv-surface-2)]">
-      {s.image && <img src={s.image} alt="" loading="lazy" className="h-full w-full object-cover"
+      {s.image && <img src={s.image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover"
         onError={(e) => { const img = e.currentTarget; const f = styleImageFallback(img.getAttribute('src') || ''); if (f) img.src = f; }} />}
       {on && <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--gv-accent)] text-[var(--gv-accent-ink)]"><Check className="h-3 w-3" /></span>}
     </div>
@@ -379,7 +379,7 @@ const CreateVideo: React.FC = () => {
             <div className="gravity-label mb-2">Look</div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Look of the video">
               {orderedStyles.map((st) => (
-                <div key={st.key} className={shownStyles.includes(st) ? '' : 'hidden sm:block'}><StyleTile s={st} on={style === st.key} pick={() => setStyle(st.key)} /></div>
+                <div key={st.key} className={`min-w-0 ${shownStyles.includes(st) ? '' : 'hidden sm:block'}`}><StyleTile s={st} on={style === st.key} pick={() => setStyle(st.key)} /></div>
               ))}
             </div>
             {orderedStyles.length > SHOW_FIRST_STYLES && (
