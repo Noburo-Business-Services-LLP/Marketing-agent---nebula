@@ -15,6 +15,7 @@ const omni = require('../services/omniVideo');
 const sv = require('../services/studioVideo');
 const quarkBuckets = require('../services/quarkBuckets');
 const chain = require('../services/studioVideoChain');
+const finishing = require('../services/studioVideoFinish');
 const { QUARK_COSTS, STUDIO_CLIP_SECONDS } = require('../config/apiCosts');
 const { generateOpenAIImage } = require('../services/openaiImage');
 
@@ -45,6 +46,7 @@ const shape = (v) => ({
   id: String(v._id), status: v.status, title: v.title, concept: v.concept, spokenLine: v.spokenLine,
   style: v.style, language: v.language, voice: v.voice || 'female', aspectRatio: v.aspectRatio, videoUrl: v.videoUrl,
   clips: v.clips || 1, clipsDone: v.clipsDone || 0, platforms: Array.isArray(v.platforms) ? v.platforms : [], parts: Array.isArray(v.parts) ? v.parts.map((p) => ({ beats: p.beats || [], spokenLine: p.spokenLine || '' })) : [],
+  transition: v.transition || 'fade', subtitles: !!v.subtitles, logo: !!v.logo, endLine: v.endLine || '',
   notice: v.notice || '', seconds: v.seconds, parent: v.parent ? String(v.parent) : null, change: v.change,
   quarks: v.quarks, error: v.status === 'failed' ? (v.error || 'The video could not be made. Your Quarks were returned.') : '',
   createdAt: v.createdAt, completedAt: v.completedAt
@@ -54,6 +56,15 @@ async function brandOf(userId) {
   const user = await User.findById(userId).select('businessProfile companyName').lean();
   const bp = (user && user.businessProfile) || {};
   return { name: bp.name || (user && user.companyName) || '', industry: bp.industry || '', location: bp.businessLocation || '', facts: bp.description || '' };
+}
+
+// The brand logo link for this account (same sources as the Hero flow); '' when none is saved.
+async function logoUrlOf(userId) {
+  try {
+    if (testIo.logoUrl) return await testIo.logoUrl(userId);
+    const b = await require('../services/heroVideoBrief').loadBrand(userId);
+    return (b && b.logoUrl) || '';
+  } catch (_) { return ''; }
 }
 
 async function toRef(url) {
@@ -90,8 +101,10 @@ router.get('/options', protect, async (req, res) => {
   const languages = Object.keys(sv.LANGUAGES).map((key) => ({ key, label: sv.LANGUAGE_LABELS[key] }));
   const voices = sv.VOICES.map((key) => ({ key, label: key === 'male' ? 'Male voice' : 'Female voice' }));
   const lengths = Array.from({ length: sv.MAX_CLIPS }, (_, i) => ({ clips: i + 1, seconds: (i + 1) * STUDIO_CLIP_SECONDS, quarks: (i + 1) * COST() }));
+  const transitions = finishing.TRANSITIONS.map((t) => ({ key: t.key, label: t.label }));
+  const hasLogo = !!(await logoUrlOf(userIdOf(req)));
   res.json({
-    success: true, styles, languages, voices, lengths, aspectRatios: sv.ASPECT_RATIOS, platformShapes: sv.platformShapes(), platforms: sv.PLATFORM_IDS,
+    success: true, styles, languages, voices, lengths, transitions, hasLogo, endLineMax: finishing.END_LINE_MAX, aspectRatios: sv.ASPECT_RATIOS, platformShapes: sv.platformShapes(), platforms: sv.PLATFORM_IDS,
     // quarks is the price of one clip (kept for older screens); costPerClip is the same number, named for what it is.
     quarks: COST(), costPerClip: COST(), max: sv.MAX_CLIPS, referenceQuarks: QUARK_COSTS.studio_reference, seconds: STUDIO_CLIP_SECONDS, clipSeconds: STUDIO_CLIP_SECONDS
   });
@@ -134,17 +147,36 @@ async function store(buffer) {
 }
 
 /** Runs one clip in the background: make, store, mark done. On any failure the Quarks go back, once. */
-async function run(doc, work, io = {}) {
+async function run(doc, work, io = {}, fin = null) {
   const makeIt = io.work || work;
   try {
     const out = await makeIt();
     if (!out.ok) throw Object.assign(new Error(out.message), { friendly: true });
-    const url = await (io.store || store)(out.buffer);
+    const done = await applyFinish(out.buffer, fin, io, null);
+    const url = await (io.store || store)(done.buffer);
     if (!url) throw Object.assign(new Error('The video could not be saved. Your Quarks were returned. Please try again.'), { friendly: true });
-    await StudioVideo.updateOne({ _id: doc._id }, { $set: { status: 'completed', videoUrl: url, completedAt: new Date() } });
+    await StudioVideo.updateOne({ _id: doc._id }, { $set: { status: 'completed', videoUrl: url, completedAt: new Date(), ...(done.notice ? { notice: done.notice } : {}), ...(done.seconds ? { seconds: done.seconds } : {}) } });
   } catch (e) {
     console.error('[videos] failed:', e.message);
     await fail(doc, e.friendly ? e.message : 'The video could not be made this time. Your Quarks were returned. Please try again.');
+  }
+}
+
+/**
+ * The finishing pass (subtitles, logo, closing line). Never throws: on any problem the unfinished video comes back
+ * with a plain notice, and the video is never failed or refunded because of it.
+ * fin = { features, parts, language, logoUrl } or null for no finishing.
+ */
+async function applyFinish(buffer, fin, io, timing) {
+  if (!fin || !finishing.wantsFinish(fin.features)) return { buffer, notice: '', seconds: null };
+  try {
+    const r = await (io.finish || finishing.finishVideo)({ buffer, features: fin.features, parts: fin.parts, language: fin.language, join: timing, logoUrl: fin.logoUrl });
+    return { buffer: r.buffer || buffer, notice: r.notice || '', seconds: r.seconds ? Math.round(r.seconds * 10) / 10 : null };
+  } catch (e) {
+    console.error('[videos] finishing failed:', e.message);
+    const f = fin.features;
+    const note = [f.subtitles && finishing.NOTICE.subtitles, f.endLine && finishing.NOTICE.endLine, f.logo && finishing.NOTICE.logo].filter(Boolean).join(' ');
+    return { buffer, notice: note, seconds: null };
   }
 }
 
@@ -180,7 +212,7 @@ async function runChain(doc, work, io = {}) {
   const total = work.prompts.length;
   try {
     const references = io.loadRefs ? await io.loadRefs() : await work.loadRefs();
-    const out = await chain.makeChain({ prompts: work.prompts, references, aspectRatio: work.aspectRatio }, {
+    const out = await chain.makeChain({ prompts: work.prompts, references, aspectRatio: work.aspectRatio, transition: work.transition || 'fade' }, {
       generate: io.generate || ((a) => omni.generate(a)),
       lastFrame: io.lastFrame, concat: io.concat,
       onClip: (done) => StudioVideo.updateOne({ _id: doc._id }, { $set: { clipsDone: done } })
@@ -189,12 +221,16 @@ async function runChain(doc, work, io = {}) {
       const m = String(out.message || '');
       throw Object.assign(new Error(m), { friendly: true, shown: /returned/i.test(m) ? m : `${m.replace(/\s*$/, '')} Your Quarks were returned.`.trim() });
     }
-    const url = await (io.store || store)(out.buffer);
+    const fin = work.finish ? { ...work.finish, parts: work.finish.parts.slice(0, out.made) } : null;
+    const done = await applyFinish(out.buffer, fin, io, out.timing);
+    const url = await (io.store || store)(done.buffer);
     if (!url) throw Object.assign(new Error('The video could not be saved. Your Quarks were returned. Please try again.'), { friendly: true });
+    // Real length: the clips overlap a little when they are joined with a fade or zoom.
+    const realSeconds = done.seconds || (out.timing && out.timing.seconds ? Math.round(out.timing.seconds * 10) / 10 : out.made * STUDIO_CLIP_SECONDS);
     if (out.made >= total) {
-      await StudioVideo.updateOne({ _id: doc._id }, { $set: { status: 'completed', videoUrl: url, clipsDone: total, seconds: total * STUDIO_CLIP_SECONDS, completedAt: new Date() } });
+      await StudioVideo.updateOne({ _id: doc._id }, { $set: { status: 'completed', videoUrl: url, clipsDone: total, seconds: realSeconds, notice: done.notice, completedAt: new Date() } });
     } else {
-      await finishShort(doc, out.made, total, url);
+      await finishShort(doc, out.made, total, url, realSeconds, done.notice);
     }
   } catch (e) {
     console.error('[videos] failed:', e.message);
@@ -203,9 +239,10 @@ async function runChain(doc, work, io = {}) {
 }
 
 /** Keeps the clips that were made as a shorter video and returns the Quarks for the ones that were not. Once only. */
-async function finishShort(doc, made, total, url) {
-  const secs = made * STUDIO_CLIP_SECONDS;
-  const notice = `Only ${made} of ${total} parts could be made, so this video is ${secs} seconds instead of ${total * STUDIO_CLIP_SECONDS}. You were not charged for the missing ${total - made === 1 ? 'part' : 'parts'}.`;
+async function finishShort(doc, made, total, url, realSeconds = 0, extraNotice = '') {
+  const secs = realSeconds || made * STUDIO_CLIP_SECONDS;
+  const shown = Math.round(secs);
+  const notice = [`Only ${made} of ${total} parts could be made, so this video is ${shown} seconds instead of ${total * STUDIO_CLIP_SECONDS}. You were not charged for the missing ${total - made === 1 ? 'part' : 'parts'}.`, extraNotice].filter(Boolean).join(' ');
   const before = await StudioVideo.findOneAndUpdate(
     { _id: doc._id, refunded: false },
     { $set: { status: 'completed', videoUrl: url, clipsDone: made, seconds: secs, notice, refunded: true, completedAt: new Date() } },
@@ -245,6 +282,7 @@ router.post('/create', protect, async (req, res) => {
     const aspectRatio = sv.aspectOf(b.aspectRatio); const platforms = sv.platformsOf(b.platforms);
     const refs = await resolveReferences(userId, b);
     const brand = await brandOf(userId);
+    const finishOpts = finishing.normalizeFinish(b, language);
     const parts = partsFrom(b, clips).map((p) => (language === 'none' ? { ...p, spokenLine: '' } : p));
     const base = {
       concept, style, language, voice, aspectRatio, who: sv.clip(b.who, 300), where: sv.clip(b.where, 300),
@@ -256,7 +294,7 @@ router.post('/create', protect, async (req, res) => {
     const doc = await StudioVideo.create({
       user: userId, title: sv.clip(b.title, 60) || 'My video', idea: sv.clip(b.idea, 1200), concept,
       spokenLine: parts.map((p) => p.spokenLine).filter(Boolean).join(' ').slice(0, 1200), style, language, voice, aspectRatio, clips, clipsDone: 0,
-      parts: clips > 1 ? parts : [], platforms, prompt: prompts.join('\n---\n'), references: refs, quarks: total, seconds: clips * STUDIO_CLIP_SECONDS
+      parts: clips > 1 ? parts : [], platforms, transition: finishOpts.transition, subtitles: finishOpts.subtitles, logo: finishOpts.logo, endLine: finishOpts.endLine, prompt: prompts.join('\n---\n'), references: refs, quarks: total, seconds: clips * STUDIO_CLIP_SECONDS
     });
     // The whole price is taken in one charge, before anything is made: it either covers every clip or nothing starts.
     if (!(await charge(userId, String(doc._id), total))) {
@@ -265,11 +303,13 @@ router.post('/create', protect, async (req, res) => {
     }
     res.status(202).json({ success: true, video: shape(doc) });
     const loadRefs = async () => (await Promise.all(refs.map((r) => toRef(r.url)))).filter(Boolean);
-    setImmediate(() => {
+    setImmediate(async () => {
+      const logoUrl = finishOpts.logo ? await logoUrlOf(userId) : '';
+      const finish = { features: finishOpts, parts, language, logoUrl };
       if (clips === 1) {
-        return run(doc, async () => omni.generate({ prompt: prompts[0], references: await loadRefs(), aspectRatio }), testIo);
+        return run(doc, async () => omni.generate({ prompt: prompts[0], references: await loadRefs(), aspectRatio }), testIo, finish);
       }
-      return runChain(doc, { prompts, aspectRatio, loadRefs }, testIo);
+      return runChain(doc, { prompts, aspectRatio, loadRefs, transition: finishOpts.transition, finish }, testIo);
     });
   } catch (e) {
     console.error('[videos] create failed:', e.message);

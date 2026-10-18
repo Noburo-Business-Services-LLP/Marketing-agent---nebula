@@ -369,3 +369,94 @@ test('a single clip is priced, charged and made as before, with voice and platfo
     assert.strictEqual(w.docs.v1.status, 'completed');
   } finally { w.restore(); }
 });
+
+// ---- finishing: options, API contract, never failing a video over a finishing problem ----
+test('the options list the transitions and say whether the account has a logo', async () => {
+  const w = world();
+  try {
+    route._io.logoUrl = async () => 'https://cdn.example/logo.png';
+    const res = resp(); await handler('/options', 'get')({ user: { userId: 'uL' } }, res);
+    assert.deepStrictEqual(res.body.transitions, [{ key: 'fade', label: 'Smooth fade' }, { key: 'zoom', label: 'Quick zoom' }, { key: 'cut', label: 'Cut' }]);
+    assert.strictEqual(res.body.hasLogo, true);
+    route._io.logoUrl = async () => '';
+    const res2 = resp(); await handler('/options', 'get')({ user: { userId: 'uL' } }, res2);
+    assert.strictEqual(res2.body.hasLogo, false);
+  } finally { w.restore(); }
+});
+
+test('a 3-clip video is joined with the chosen transition, finished with subtitles, logo and closing line, and keeps its price', async () => {
+  const w = world();
+  try {
+    let joinTr = ''; let finArgs = null;
+    Object.assign(route._io, {
+      generate: async () => ok('c'), lastFrame: async () => png, loadRefs: async () => [],
+      concat: async (b, ar, tr) => { joinTr = tr; return { buffer: Buffer.from('J'), starts: [0, 9.6, 19.2], durations: [10, 10, 10], seconds: 29.2 }; },
+      logoUrl: async () => 'https://cdn.example/logo.png',
+      finish: async (a) => { finArgs = a; return { buffer: Buffer.from('F'), notice: '', seconds: 29.25 }; },
+      store: async (buf) => `https://cdn.example/${buf}.mp4`
+    });
+    const res = await create(longBody({ transition: 'zoom', subtitles: true, logo: true, endLine: `  Thanks\u0007 ${'y'.repeat(80)}` }));
+    assert.strictEqual(res.code, 202);
+    assert.strictEqual(w.spends[0].amount, 3 * QUARK_COSTS.studio_video);
+    const v = res.body.video;
+    assert.deepStrictEqual({ transition: v.transition, subtitles: v.subtitles, logo: v.logo, len: Array.from(v.endLine).length }, { transition: 'zoom', subtitles: true, logo: true, len: 60 });
+    await flush();
+    assert.strictEqual(joinTr, 'zoom');
+    assert.strictEqual(finArgs.logoUrl, 'https://cdn.example/logo.png');
+    assert.strictEqual(finArgs.parts.length, 3);
+    assert.deepStrictEqual(finArgs.join.starts, [0, 9.6, 19.2]);
+    const d = w.docs.v1;
+    assert.deepStrictEqual({ status: d.status, url: d.videoUrl, seconds: d.seconds, notice: d.notice }, { status: 'completed', url: 'https://cdn.example/F.mp4', seconds: 29.3, notice: '' });
+  } finally { w.restore(); }
+});
+
+test('without finishing choices the default is a fade, nothing is finished and the real joined length is stored', async () => {
+  const w = world();
+  try {
+    let fin = false; let joinTr = '';
+    Object.assign(route._io, {
+      generate: async () => ok('c'), lastFrame: async () => png, loadRefs: async () => [],
+      concat: async (b, ar, tr) => { joinTr = tr; return { buffer: Buffer.from('J'), starts: [0, 9.7], durations: [10, 10], seconds: 19.7 }; },
+      finish: async () => { fin = true; return { buffer: Buffer.from('F'), notice: '' }; }, store: async () => 'https://cdn.example/v.mp4'
+    });
+    const res = await create(longBody({ clips: 2 }));
+    assert.deepStrictEqual({ t: res.body.video.transition, s: res.body.video.subtitles, l: res.body.video.logo, e: res.body.video.endLine }, { t: 'fade', s: false, l: false, e: '' });
+    await flush();
+    assert.strictEqual(joinTr, 'fade'); assert.strictEqual(fin, false);
+    assert.strictEqual(w.docs.v1.seconds, 19.7);
+  } finally { w.restore(); }
+});
+
+test('a finishing problem never fails or refunds the video: it is delivered unfinished with a plain notice', async () => {
+  const w = world();
+  try {
+    Object.assign(route._io, {
+      generate: async () => ok('c'), lastFrame: async () => png, loadRefs: async () => [],
+      concat: async () => Buffer.from('J'), finish: async () => { throw new Error('ffmpeg exploded'); }, store: async (b) => `https://cdn.example/${b}.mp4`
+    });
+    await quiet(async () => { await create(longBody({ clips: 2, subtitles: true })); await flush(); });
+    const d = w.docs.v1;
+    assert.strictEqual(d.status, 'completed');
+    assert.strictEqual(d.videoUrl, 'https://cdn.example/J.mp4');
+    assert.strictEqual(d.notice, 'We could not add the subtitles, so this video has none.');
+    assert.strictEqual(w.refunds.length, 0);
+  } finally { w.restore(); }
+});
+
+test('a single clip is finished too, and subtitles are ignored when there is no spoken language', async () => {
+  const w = world();
+  try {
+    let args = null;
+    Object.assign(route._io, {
+      work: async () => ({ ok: true, buffer: Buffer.from('c') }), logoUrl: async () => 'https://cdn.example/l.png',
+      finish: async (a) => { args = a; return { buffer: Buffer.from('F'), notice: 'We could not find your logo in Brand assets, so this video has none.' }; },
+      store: async (b) => `https://cdn.example/${b}.mp4`
+    });
+    const res = await create({ concept: 'A shop.', language: 'none', subtitles: true, logo: true, endLine: 'Visit us' });
+    assert.strictEqual(res.body.video.subtitles, false);
+    await flush();
+    assert.deepStrictEqual({ s: args.features.subtitles, l: args.features.logo, e: args.features.endLine }, { s: false, l: true, e: 'Visit us' });
+    assert.strictEqual(w.docs.v1.videoUrl, 'https://cdn.example/F.mp4');
+    assert.match(w.docs.v1.notice, /could not find your logo/);
+  } finally { w.restore(); }
+});
