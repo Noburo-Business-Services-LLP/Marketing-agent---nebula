@@ -75,6 +75,7 @@ export function priceLine(opts: { seconds: number; clips: number; total: number;
   const base = `A ${seconds} second video`;
   if (balance == null) return base;
   const n = videosLeft(balance, total);
+  if (n < 1) return base;
   return `${base} · you have enough for ${n} video${n === 1 ? '' : 's'} like this`;
 }
 

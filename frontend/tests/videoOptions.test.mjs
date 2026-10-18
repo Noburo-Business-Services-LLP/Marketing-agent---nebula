@@ -58,6 +58,7 @@ test('price line counts videos at the chosen length', () => {
   assert.equal(v.priceLine({ seconds: 10, clips: 1, total: 100, balance: 100 }), 'A 10 second video · you have enough for 1 video like this');
   assert.equal(v.priceLine({ seconds: 10, clips: 1, total: 100, balance: null }), 'A 10 second video');
   assert.equal(v.priceLine({ seconds: 10, clips: 1, total: 0, balance: 5 }), '');
+  assert.equal(v.priceLine({ seconds: 30, clips: 3, total: 300, balance: 250 }), 'A 30 second video');
 });
 
 test('parts are padded or trimmed to the number of clips and edits stay local', () => {
