@@ -13,7 +13,7 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [NOT STARTED] Dashboard is "very boring": make it colourful and appealing (references: Scalio home, Higgsfield, Pollo; light theme with gold glow, a few dark accent panels). (2026-10-18)
 - [NOT STARTED] Show tiles with small SVG art or tiny photos instead of plain buttons (for example "Review queue" as a tile with a picture). Must not slow the app. (2026-10-18)
 - [NOT STARTED] Home shows: important numbers, "Do this next" actionables, ready-made photoshoot packs and templates, trends and competitor posts, ideas for you, a big "describe what you want" box. (2026-10-18)
-- [NOT STARTED] Competitor rival posts on the home: pick a competitor post and tell the AI to write a rival post or a witty comment draft; decent only (no offence, no derogatory, racist or obscene content); the customer posts the comment themselves, Nebulaa never posts on other people's pages. (2026-10-18)
+- [PARTLY] Competitor rival posts on the home (old unsafe flow removed 2026-10-18; the new safe, gated one is not built yet, it is Home build Task 7): pick a competitor post and tell the AI to write a rival post or a witty comment draft; decent only (no offence, no derogatory, racist or obscene content); the customer posts the comment themselves, Nebulaa never posts on other people's pages. (2026-10-18)
 - [NOT STARTED] Setup, This week and Ideas cards restyled as tiles. (2026-10-18)
 
 ## Area: MY PLAN / STRATEGY (top-down view)
@@ -41,6 +41,7 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 ## Area: COMPETITORS / TRENDS
 - [NOT STARTED] Competitors page shows more than names: handle, followers, posts this week, their recent posts, what worked well. (2026-10-18)
 - [DONE, NOT RELEASED] Competitors in the sidebar menu for paid plans. (2026-10-18)
+- [DONE, NOT RELEASED] Old unsafe Create Rival Post retired (route returns a plain message, button removed); safe replacement is Home build Task 7. (2026-10-18)
 - [NOT STARTED] "What's working for your competitors" and "Trending for your business" (honest sources only: competitor best posts, your own best posts, your plan and festivals; no scraping of social platforms). "Make a post like this". (2026-10-18)
 - [NOT STARTED] Use the competitor insight to improve the plan day by day. (2026-10-18)
 

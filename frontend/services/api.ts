@@ -925,41 +925,6 @@ export const apiService = {
     }
   },
 
-  // Generate Rival Post
-  generateRivalPost: async (data: {
-    competitorName: string;
-    competitorContent: string;
-    platform: string;
-    sentiment?: string;
-    likes?: number;
-    comments?: number;
-    brandLogo?: string | null;
-    aspectRatio?: string;
-  }): Promise<{ caption: string; hashtags: string[]; imageUrl: string; imagePrompt?: string }> => {
-    try {
-      const response = await apiCall<{
-        success: boolean;
-        caption: string;
-        hashtags: string[];
-        imageUrl: string;
-        imagePrompt?: string
-      }>(
-        '/dashboard/generate-rival-post',
-        { method: 'POST', body: JSON.stringify(data) },
-        true
-      );
-      return {
-        caption: response.caption,
-        hashtags: response.hashtags,
-        imageUrl: response.imageUrl,
-        imagePrompt: response.imagePrompt
-      };
-    } catch (error) {
-      console.error('Rival post generation error:', error);
-      throw error;
-    }
-  },
-
   // ============================================
   // AI CAPTION GENERATION
   // ============================================

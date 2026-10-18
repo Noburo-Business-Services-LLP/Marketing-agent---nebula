@@ -24,7 +24,6 @@ const {
   generateCampaignSuggestions,
   generateSectionSynopsis,
   generateSingleCampaign,
-  generateRivalPost,
   generateEventPost
 } = require('../services/geminiAI');
 const { generateWithLLM } = require('../services/llmRouter');
@@ -1229,54 +1228,12 @@ router.post('/synopsis', protect, async (req, res) => {
 
 /**
  * POST /api/dashboard/generate-rival-post
- * Generate a rival post to counter a competitor's content
+ * Retired. The old flow is gone; the route stays mounted so an old client gets a plain message.
+ * It reads no account, charges nothing and calls no model.
  */
-router.post('/generate-rival-post', protect, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.userId || req.user.id);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // Credit check
-    await ensureCreditCycle(user);
-    const poolBalance = await walletBalance(user._id); // the agency's shared pool for a client workspace
-    if (poolBalance < 7) {
-      return res.status(403).json({ success: false, message: 'Insufficient Quarks', creditsRemaining: poolBalance, required: 7 });
-    }
-
-    const { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo, aspectRatio } = req.body;
-
-    if (!competitorContent) {
-      return res.status(400).json({ success: false, message: 'Competitor content is required' });
-    }
-
-    console.log(`🗡️ Generating rival post to counter ${competitorName} on ${platform}`);
-
-    // Deduct credits UPFRONT before generation starts
-    const creditResult = await deductCredits(user._id, 'rival_post', 1, 'Create rival post');
-
-    // Generate the rival post using Gemini AI (image gen may take time)
-    const rivalPost = await generateRivalPost(
-      { competitorName, competitorContent, platform, sentiment, likes, comments, brandLogo, aspectRatio },
-      user.businessProfile
-    );
-
-    console.log('✅ Rival post generated successfully');
-
-    res.json({
-      success: true,
-      caption: rivalPost.caption,
-      hashtags: rivalPost.hashtags,
-      imageUrl: rivalPost.imageUrl,
-      imagePrompt: rivalPost.imagePrompt || '',
-      creditsRemaining: creditResult.creditsRemaining
-    });
-  } catch (error) {
-    console.error('Rival post generation error:', error);
-    res.status(500).json({ success: false, message: 'Failed to generate rival post', error: error.message });
-  }
+const RIVAL_POST_RETIRED_MESSAGE = "This feature has been replaced. Use What's working for your competitors on the Competitors page when it is available.";
+router.post('/generate-rival-post', protect, (req, res) => {
+  res.status(410).json({ success: false, message: RIVAL_POST_RETIRED_MESSAGE });
 });
 
 // Helper functions
