@@ -69,7 +69,7 @@ Plain steps, no coding. Use only your own accounts: Instagram nebulaa.os and one
 4. **Sync is not real.** Polling is an empty stub, the Sync button only updates a timestamp, and "next sync" is a fixed 15-minute guess. The only delivery path is the Ayrshare webhook.
 5. **Webhook security check likely rejects real events.** It demands a signed token in a header or a secret in the URL, but the registered URL carries only the user id (socialInboxController.js, verifyWebhookRequest).
 6. **One click turns on fully automatic.** The header robot toggle sets "Fully automatic" for the whole account, not just the one conversation or platform.
-7. **Settings that do nothing or are wider than shown.** The "signature" guardrail is saved but never added to replies. "Luxury" and "Playful" tones are offered but the backend only knows its own reply styles. Rule "Regex" is available to customers. The "Assigned user ID" box asks a customer to type an internal id.
+7. **Settings that do nothing or are wider than shown.** The "signature" guardrail is saved but never added to replies. The "Regex" rule type is available to customers. The "Assigned user ID" box asks a customer to type an internal id.
 8. **Platforms listed that were never set up:** LinkedIn, X and YouTube are shown in filters, toggles and the connected count, but no one has tested receiving or replying on them.
 9. **A "Simulate" button** in the inbox list creates a fake "Demo Lead" conversation in a real customer's inbox. It should be hidden before launch (frontend/pages/UnifiedInbox.tsx).
 10. **Google reviews tab** is read-only: it lists reviews and drafts replies, but there is no way to post the reply back.
