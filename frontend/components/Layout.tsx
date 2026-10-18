@@ -31,7 +31,8 @@ import {
   ClipboardList,
   Inbox,
   Shield,
-  Images
+  Images,
+  Binoculars
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
@@ -42,7 +43,7 @@ import GuidedTour from './GuidedTour';
 import HelpMenu, { TOUR_REPLAY_EVENT } from './HelpMenu';
 import { TOUR_STEPS, shouldAutoStart } from '../utils/tour';
 import { needsTermsPrompt } from '../utils/accountDeletion';
-import { groupHasPath } from '../utils/navMenu';
+import { groupHasPath, showsCompetitorsEntry } from '../utils/navMenu';
 import { apiService } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
 import { actingBannerText, actingClientName, isAgencyUser, isInsideClient, isLapsedAgency, returnButtonLabel, showClientSwitcher, showsPostsNotQuarks } from '../utils/agency';
@@ -197,9 +198,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     { path: '/content-calendar', label: 'Calendar',          icon: CalendarDays },
     { path: '/inbox',            label: 'Inbox',             icon: Inbox },
     { path: '/analytics',        label: 'Performance',       icon: BarChart3 },
+    ...(showsCompetitorsEntry(user, Boolean(localStorage.getItem('csmReturnToken'))) ? [{ path: '/competitors', label: 'Competitors', icon: Binoculars }] : []),
   ];
   // Tools used now and then, and set-once configuration, are folded into one group so the menu stays short.
-  // Ad Campaigns, Influencer Portal and Competitors remain hidden from navigation; their routes are intact.
+  // Ad Campaigns and Influencer Portal remain hidden from navigation; their routes are intact.
   const secondaryNav = [
     ...(staffEntry && !staffEntry.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
     { path: '/blueprint',        label: 'Growth Blueprint',  icon: FileText },

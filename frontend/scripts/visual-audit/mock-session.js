@@ -66,6 +66,9 @@
   // puterr / put403 / put429 = saving a handle is refused.
   if (params.get('compstate')) sessionStorage.setItem('audit-comp-state', params.get('compstate'));
   var CSTATE = sessionStorage.getItem('audit-comp-state') || 'all';
+  // ?tier= free | starter | professional gives the normal account that plan tier (kept for the tab); used to look at the Competitors menu entry.
+  if (params.get('tier')) sessionStorage.setItem('audit-tier', params.get('tier'));
+  var TIERQ = sessionStorage.getItem('audit-tier') || '';
   // ?listenstate= ready | stale | notenough | off | error | locked | empty | waiting picks the "What people say about you" card variant (kept for the tab):
   // ready = scored with a trend, quotes and recent negative; stale = ready, but last checked more than 10 days ago ("Last checked on ..." line);
   // notenough = scored before, under the minimum; off = scoring not running or never scored: the card shows NOTHING (empty is the same);
@@ -138,6 +141,7 @@
     preferences: { emailNotifications: true }, createdAt: iso(-30),
   };
   if (MANAGED) user.plan = { tier: 'managed' };
+  if (TIERQ && !AGENCY && !MANAGED) user.plan = { tier: TIERQ };
   // The Terms prompt would cover the plans page; the Task 11 plans-page routes are audited with the terms already accepted.
   if (MANAGED || MODE === 'normal') user.consent = { acceptedAt: iso(-30), termsVersion: 'audit' };
   if (AGENCY) { var clientName = (function () { try { return localStorage.getItem('csmActingClient') || 'Sweet Co'; } catch (e) { return 'Sweet Co'; } })(); user.plan = { tier: 'agency' }; if (!INSIDE) user.consent = { acceptedAt: iso(-30), termsVersion: 'audit' }; user.actingAgency = INSIDE ? { name: 'Studio North' } : null; if (INSIDE) { user.businessProfile = Object.assign({}, businessProfile, { name: clientName }); user.firstName = clientName; } else { user.firstName = 'Studio North'; user.businessProfile = Object.assign({}, businessProfile, { name: 'Studio North' }); } }
