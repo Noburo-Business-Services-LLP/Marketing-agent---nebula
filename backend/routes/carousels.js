@@ -1,3 +1,4 @@
+const { priceText } = require('../config/quarkWording');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -120,7 +121,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
     // starts, same as campaign charges against its own post count.
     const creditResult = await deductCredits(req.user.id, 'carousel_generated', requestedSlides, 'AI carousel generation');
     if (!creditResult.success) {
-      send('error', { message: creditResult.error || `Insufficient Quarks. Need ${requestedSlides * CREDIT_COSTS.carousel_generated} Quarks for a ${requestedSlides}-slide carousel.` });
+      send('error', { message: creditResult.error || `Insufficient Quarks. Need ${priceText(requestedSlides * CREDIT_COSTS.carousel_generated)} for a ${requestedSlides}-slide carousel.` });
       return res.end();
     }
 

@@ -1,3 +1,4 @@
+const { priceText } = require('../config/quarkWording');
 const express = require('express');
 const { buildPrompt } = require('../services/promptRegistry');
 const router = express.Router();
@@ -1479,7 +1480,7 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     return res.status(403).json({
       success: false,
       creditsExhausted: true,
-      message: baseCharge.error || `Insufficient Quarks. Need ${videoTotal} Quarks for a ${sceneCount}-scene video.`
+      message: baseCharge.error || `Insufficient Quarks. Need ${priceText(videoTotal)} for a ${sceneCount}-scene video.`
     });
   }
 
@@ -1491,7 +1492,7 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     return res.status(403).json({
       success: false,
       creditsExhausted: true,
-      message: creditResult.error || `Insufficient Quarks. Need ${videoTotal} Quarks for a ${sceneCount}-scene video.`
+      message: creditResult.error || `Insufficient Quarks. Need ${priceText(videoTotal)} for a ${sceneCount}-scene video.`
     });
   }
 
@@ -1926,7 +1927,7 @@ router.post('/generateCharacterPortrait', protect, checkTrial, videoAiWriteLimit
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_character_portrait} Quarks to regenerate this portrait.`
+        message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.video_character_portrait)} to regenerate this portrait.`
       });
     }
     creditsDeducted = true;
@@ -2465,7 +2466,7 @@ const handleGenerateSingleSceneImage = async (req, res) => {
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image} Quarks to regenerate this scene's image.`
+        message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.video_scene_image)} to regenerate this scene's image.`
       });
     }
     creditsDeducted = true;
@@ -2857,7 +2858,7 @@ const handleGenerateSingleVideoClip = async (req, res) => {
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_clip} Quarks to regenerate this scene's clip.`
+        message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.video_scene_clip)} to regenerate this scene's clip.`
       });
     }
     creditsDeducted = true;
@@ -3062,7 +3063,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
         return res.status(403).json({
           success: false,
           creditsExhausted: true,
-          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image} Quarks to regenerate this scene's image.`
+          message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.video_scene_image)} to regenerate this scene's image.`
         });
       }
       creditsDeductedCount = 1;
@@ -3072,7 +3073,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
         return res.status(403).json({
           success: false,
           creditsExhausted: true,
-          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_image * sourceScenes.length} Quarks to regenerate all ${sourceScenes.length} scene images.`
+          message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.video_scene_image * sourceScenes.length)} to regenerate all ${sourceScenes.length} scene images.`
         });
       }
       creditsDeductedCount = sourceScenes.length;
@@ -3305,7 +3306,7 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (r
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.video_scene_clip * sourceScenes.length} Quarks to regenerate all ${sourceScenes.length} clips.`
+        message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.video_scene_clip * sourceScenes.length)} to regenerate all ${sourceScenes.length} clips.`
       });
     }
     creditsDeductedCount = sourceScenes.length;
@@ -3972,7 +3973,7 @@ router.post('/renderMissing', protect, checkTrial, videoAiWriteLimiter, async (r
     const unit = Number(CREDIT_COSTS[kind === 'images' ? 'video_scene_image' : 'video_scene_clip']) || 0;
     const balance = await walletBalance(userId); // the agency's shared pool for a client workspace
     if (unit > 0 && balance < unit) {
-      return res.status(403).json({ success: false, creditsExhausted: true, message: `You need at least ${unit} Quarks to make the next ${kind === 'images' ? 'image' : 'clip'}. Add Quarks and try again.` });
+      return res.status(403).json({ success: false, creditsExhausted: true, message: `You need at least ${priceText(unit)} to make the next ${kind === 'images' ? 'image' : 'clip'}. Add Quarks and try again.` });
     }
 
     const aspect = ['9:16', '16:9', '1:1', '4:5'].includes(String(aspectRatio)) ? String(aspectRatio) : (draft?.input?.aspectRatio || '9:16');

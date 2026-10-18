@@ -1,3 +1,4 @@
+const { priceText, balanceText } = require('../config/quarkWording');
 const User = require('../models/User');
 const quarkBuckets = require('../services/quarkBuckets');
 const agencyRules = require('../services/agency');
@@ -94,7 +95,7 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
         success: false,
         creditsRemaining: currentBalance,
         creditsDeducted: 0,
-        error: `Insufficient Quarks. Need ${totalCost}, have ${currentBalance}. Please upgrade your plan, or buy an add-on pack or Quarks.`
+        error: `Insufficient Quarks. Need ${priceText(totalCost)}, have ${balanceText(currentBalance)}. Please upgrade your plan, or buy an add-on pack or Quarks.`
       };
     }
 
@@ -144,7 +145,7 @@ const requireCredits = (action, countOrFn = 1) => {
           creditsExhausted: true,
           upgradeRequired: true,
           reason: 'quarks',
-          message: `This needs ${totalCost} Quarks but you have ${currentBalance}. Please upgrade your plan, or buy an add-on pack or Quarks.`,
+          message: `This needs ${priceText(totalCost)} but you have ${balanceText(currentBalance)}. Please upgrade your plan, or buy an add-on pack or Quarks.`,
           creditsRequired: totalCost,
           creditsRemaining: currentBalance
         });

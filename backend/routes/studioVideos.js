@@ -1,4 +1,5 @@
 // The Videos flow (/api/videos): idea -> concept -> one clip from Gemini Omni -> optional changes.
+const { priceText } = require('../config/quarkWording');
 const express = require('express');
 const fs = require('fs');
 const os = require('os');
@@ -260,7 +261,7 @@ router.post('/create', protect, async (req, res) => {
     // The whole price is taken in one charge, before anything is made: it either covers every clip or nothing starts.
     if (!(await charge(userId, String(doc._id), total))) {
       await StudioVideo.deleteOne({ _id: doc._id });
-      return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `${clips > 1 ? `A ${clips * STUDIO_CLIP_SECONDS} second video` : 'A video'} needs ${total} Quarks. Please top up or choose a plan.` });
+      return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `${clips > 1 ? `A ${clips * STUDIO_CLIP_SECONDS} second video` : 'A video'} needs ${priceText(total)}. Please top up or choose a plan.` });
     }
     res.status(202).json({ success: true, video: shape(doc) });
     const loadRefs = async () => (await Promise.all(refs.map((r) => toRef(r.url)))).filter(Boolean);
@@ -309,7 +310,7 @@ router.post('/reference', protect, async (req, res) => {
     const cost = QUARK_COSTS.studio_reference;
     await quarkBuckets.settleWallet(userId).catch(() => null);
     const paid = await quarkBuckets.spend(userId, cost, { action: 'studio_reference', description: kind === 'person' ? 'Person for a video' : 'Place for a video' });
-    if (!paid.success) return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `This needs ${cost} Quarks. Please top up or choose a plan.` });
+    if (!paid.success) return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `This needs ${priceText(cost)}. Please top up or choose a plan.` });
     const brand = await brandOf(userId);
     let out = null;
     try {
@@ -363,7 +364,7 @@ router.post('/:id/change', protect, async (req, res) => {
     });
     if (!(await charge(userId, String(doc._id)))) {
       await StudioVideo.deleteOne({ _id: doc._id });
-      return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `A change needs ${COST()} Quarks. Please top up or choose a plan.` });
+      return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `A change needs ${priceText(COST())}. Please top up or choose a plan.` });
     }
     res.status(202).json({ success: true, video: shape(doc) });
     setImmediate(() => run(doc, async () => {

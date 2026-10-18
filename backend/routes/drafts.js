@@ -1,3 +1,4 @@
+const { priceText } = require('../config/quarkWording');
 const express = require('express');
 const path = require('path');
 const router = express.Router();
@@ -545,7 +546,7 @@ router.post('/generate-linkedin-post', protect, checkTrial, async (req, res) => 
       return res.status(403).json({
         success: false,
         creditsExhausted: true,
-        message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.campaign_text} Quarks to generate a LinkedIn post.`
+        message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.campaign_text)} to generate a LinkedIn post.`
       });
     }
     creditsDeducted = true;
@@ -623,7 +624,7 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
         return res.status(403).json({
           success: false,
           creditsExhausted: true,
-          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.image_generated} Quarks to generate a post.`
+          message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.image_generated)} to generate a post.`
         });
       }
       creditsDeducted = true;
@@ -727,7 +728,7 @@ router.post('/:id/retry-image', protect, async (req, res) => {
         return res.status(403).json({
           success: false,
           creditsExhausted: true,
-          message: creditResult.error || `Insufficient Quarks. Need ${CREDIT_COSTS.image_generated} Quarks to regenerate.`
+          message: creditResult.error || `Insufficient Quarks. Need ${priceText(CREDIT_COSTS.image_generated)} to regenerate.`
         });
       }
       creditsDeducted = true;

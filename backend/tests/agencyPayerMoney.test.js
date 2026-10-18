@@ -137,7 +137,7 @@ test('an account without an agency block is charged exactly as before (managed a
     // too little: refused with the same message shape
     const poor = await guard.deductCredits(id, ACTION, 100, 'test');
     assert.strictEqual(poor.success, false);
-    assert.match(poor.error, new RegExp(`^Insufficient Quarks. Need ${COST * 100}, have ${100 - COST}\\.`));
+    assert.match(poor.error, /^Insufficient Quarks\. Need 1,100 Quarks \(about \d+ (videos'|video's|posts'|post's) worth\), have 89 Quarks \(about \d+ posts?\)\./);
   }
 });
 

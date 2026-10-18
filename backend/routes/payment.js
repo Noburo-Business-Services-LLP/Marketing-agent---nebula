@@ -18,6 +18,7 @@
  *   POST /webhook                    subscription.charged / halted / cancelled / completed
  *   GET  /status, /billing, POST /retry-invoices, /validate-coupon
  */
+const { priceText } = require('../config/quarkWording');
 const express = require('express');
 const crypto = require('crypto');
 const bp = require('../services/billingPlans');
@@ -718,7 +719,7 @@ function createPaymentRouter(deps = {}) {
         order: { id: order.id, amount: order.amount, currency: order.currency },
         pack: { inr: pack.inr, quarks: pack.quarks, gstPaise: quote.gstPaise, chargePaise: quote.totalPaise },
         key: env().RAZORPAY_KEY_ID,
-        description: `Nebulaa: ${pack.quarks} Quarks`,
+        description: `Nebulaa: ${priceText(pack.quarks)}`,
         prefill: prefillOf(user)
       });
     } catch (error) {
@@ -760,7 +761,7 @@ function createPaymentRouter(deps = {}) {
       res.json({
         success: true,
         alreadyProcessed: !result.applied,
-        message: result.applied ? `${pack.quarks} Quarks added to your account.` : 'This payment was already added to your account.',
+        message: result.applied ? `${priceText(pack.quarks)} added to your account.` : 'This payment was already added to your account.',
         quarksGranted: result.applied ? result.quarks : 0,
         balance: result.applied ? result.balance : user.credits?.balance
       });

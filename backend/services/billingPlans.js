@@ -3,6 +3,7 @@
  * Every price, Quark amount and add-on rule comes from config/apiCosts.js;
  * nothing here accepts an amount from a request.
  */
+const { priceText } = require('../config/quarkWording');
 const crypto = require('crypto');
 const { PLANS, TOPUP_PACKS, ADDONS, AGENCY, GST_RATE, gstPaise, chargePaise, outputsFor } = require('../config/apiCosts');
 const { PLAN_PRESENTATION, ADDON_ENV_VARS, SLOT_ENV_VAR, INVOICE_ITEMS } = require('../config/plans');
@@ -108,7 +109,7 @@ function invoiceSpec(kind, key) {
   let inr; let description;
   let itemName = INVOICE_ITEMS[kind];
   if (kind === 'plan' && isPlanId(key)) {
-    inr = PLANS[key].inr; description = `${PLAN_PRESENTATION[key].name} plan, one month, ${fmt(PLANS[key].quarks)} Quarks`;
+    inr = PLANS[key].inr; description = `${PLAN_PRESENTATION[key].name} plan, one month, ${priceText(PLANS[key].quarks)}`;
     if (INVOICE_ITEMS[key]) itemName = INVOICE_ITEMS[key];
   }
   else if (kind === 'addon' && isAddonId(key)) { inr = ADDONS[key].inr; description = `${ADDONS[key].label}, one month`; }
@@ -116,7 +117,7 @@ function invoiceSpec(kind, key) {
   else if (kind === 'topup') {
     const pack = findTopupPack(key);
     if (!pack) return null;
-    inr = pack.inr; description = `${fmt(pack.quarks)} Quarks`;
+    inr = pack.inr; description = priceText(pack.quarks);
   } else return null;
   const gst = gstPaise(inr);
   return { itemName, description, amountInr: inr, gstPercent: GST_PERCENT, gstPaise: gst, totalPaise: chargePaise(inr) };
