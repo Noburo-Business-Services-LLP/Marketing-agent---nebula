@@ -34,7 +34,7 @@ function languageOf(key) { return Object.prototype.hasOwnProperty.call(LANGUAGES
 /** What the model is asked to write: a plain concept for the owner and a short spoken line. */
 function buildConceptPrompt({ idea, style, language, brand, who, where, products }) {
   const lang = LANGUAGES[languageOf(language)];
-  return `You help the owner of a small Indian business plan a 10 second vertical marketing video.
+  return `You help the owner of a small Indian business plan a 10 second marketing video.
 
 THE VIDEO MUST BE ABOUT THIS IDEA. It is the subject of the video. Use every product, offer, place and name it mentions exactly as written:
 """
@@ -45,6 +45,7 @@ RULES
 - Never replace the idea's business, product or offer with the account's own business. If the idea names a business or product, that is the one in the video.
 - Use the account details below ONLY to fill what the idea leaves out (for example the city or the business name when the idea names none).
 - Never invent prices, discounts, phone numbers or claims that are not in the idea.
+- If the idea already contains words someone should say (in quotation marks, or after "says", "saying", "dialogue" or "tagline"), the spoken line MUST be exactly those words, copied unchanged, even if longer than 18 words. Do not shorten, reword, improve or add to them. Only when the language chosen below differs from the language they are written in, translate them faithfully and keep every fact.
 - Describe only what the camera sees and what is said. Do not describe on-screen text, captions or titles: they are not added.
 
 ACCOUNT DETAILS (background only):
@@ -64,7 +65,7 @@ Return JSON only:
   "title": "3 to 6 words about the idea",
   "concept": "2 or 3 plain sentences telling the owner what the video will show, in simple English",
   "beats": ["3 short shot descriptions, one line each"],
-  "spokenLine": ${lang ? `"one natural sentence of at most 18 words spoken in ${lang}${lang === 'Tamil' ? ', in Tamil script' : ''}, using only facts from the idea"` : '""'}
+  "spokenLine": ${lang ? `"the exact words from the idea if it gives any, otherwise one natural sentence of at most 18 words, spoken in ${lang}${lang === 'Tamil' ? ', in Tamil script' : ''}, using only facts from the idea"` : '""'}
 }`;
 }
 
@@ -92,7 +93,7 @@ function assemblePrompt({ concept, beats = [], spokenLine, style, language, aspe
   if (where) parts.push(`The place: ${clip(where, 300)}.${hasPlacePhoto ? ' Match the place in the reference photo.' : ''}`);
   else if (hasPlacePhoto) parts.push('Match the place in the reference photo.');
   if (hasProductPhoto) parts.push('Show the product exactly as in the reference photo: same shape, colours and label.');
-  if (lang && spokenLine) parts.push(`A person says clearly in ${lang}: "${clip(spokenLine, 240)}" with natural pauses; lips match the words. Soft music under the voice.`);
+  if (lang && spokenLine) parts.push(`A person says clearly in ${lang}, saying exactly these words, word for word, without adding, dropping or changing any word: "${clip(spokenLine, 240)}" with natural pauses; lips match the words. Soft music under the voice.`);
   else parts.push('No spoken words. Music and natural ambient sound only.');
   if (brandName) parts.push(`Brand: ${clip(brandName, 60)}. Show brand text only where it appears in a reference photo; do not invent logos, prices or other text.`);
   parts.push('No subtitles, no watermarks, no gibberish text.');

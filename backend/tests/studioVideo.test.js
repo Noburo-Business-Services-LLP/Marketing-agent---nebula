@@ -14,9 +14,15 @@ test('the prompt carries the owner words, the spoken line and the reference rule
   const p = sv.assemblePrompt({ concept: 'Shop owner shows a gift box.', beats: ['close up', 'smile'], spokenLine: 'Fresh sweets daily.', style: 'product', language: 'tamil', aspectRatio: '9:16', hasProductPhoto: true, hasPersonPhoto: true, brandName: 'Sri Lakshmi' });
   assert.match(p, /Vertical 9:16/);
   assert.match(p, /Shop owner shows a gift box\./);
-  assert.match(p, /says clearly in Tamil: "Fresh sweets daily\."/);
+  assert.match(p, /says clearly in Tamil, saying exactly these words, word for word, without adding, dropping or changing any word: "Fresh sweets daily\."/);
   assert.match(p, /reference photo/);
   assert.match(p, /do not invent logos, prices or other text/);
+});
+
+test('the planner is told to keep dialogue the owner wrote word for word', () => {
+  const q = sv.buildConceptPrompt({ idea: 'Owner says "Fresh sweets, made this morning, free delivery above 500 rupees in Adyar."', style: 'natural', language: 'english', brand: {} });
+  assert.match(q, /MUST be exactly those words, copied unchanged/);
+  assert.match(q, /exact words from the idea if it gives any/);
 });
 
 test('no language means music only, whatever line is passed', () => {
