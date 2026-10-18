@@ -35,7 +35,7 @@ export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh" && cd "/Users/dineshkannaa/Do
    Do this:
    1. Open the link in your browser.
    2. Check the amount on the page is the one printed.
-   3. Pay with the TEST card: number `4111 1111 1111 1111`, any future expiry (for example 12/34), any 3-digit CVV (for example 123), any name. If a bank page asks for an OTP, choose **Success** or type any OTP.
+   3. Pay in TEST mode. A subscription is a **recurring** payment, so the usual test card `4111 1111 1111 1111` is refused with "This card is not eligible for recurring payments" (seen on 2026-10-18). Click **Try again** and use a card from the recurring/subscription part of Razorpay's test-card page, or UPI with the test id `success@razorpay`, or the **EMandate** option with a test bank and "Success". For a card use any future expiry (for example 12/34), any 3-digit CVV and any name. If a bank page asks for an OTP, choose **Success** or type any OTP.
    4. Wait until the page says the payment worked.
    5. Go back to Terminal and press **Enter**.
 
