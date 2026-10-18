@@ -15,6 +15,7 @@ The Agency plan and the extra client slot are two monthly Razorpay plans.
 
 The preview refuses payment, so neither checkout has ever been run for real.
 
+- A guided script now does this for you: follow `razorpay-test-check.md` (about 15 minutes, two TEST card payments, cleans up after itself). What follows is the manual version.
 - Use Razorpay test keys on a dev or staging copy. Buy the Agency plan, then add an extra client slot.
 - Check: the plan becomes Agency, the slot count goes up, the clients stay open, the invoice looks right, and cancelling the plan pauses all clients (nothing deleted).
 - Check that a refused payment shows in staff Money failures. Those need a manual Razorpay refund; they are not retried.
