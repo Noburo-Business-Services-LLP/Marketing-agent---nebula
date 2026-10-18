@@ -55,14 +55,37 @@ function concatArgs(files, aspectRatio, out) {
   return [...inputs, '-filter_complex', graph, '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out];
 }
 
-async function concat(buffers, aspectRatio, io = {}) {
-  if (buffers.length === 1) return buffers[0];
+/**
+ * Joins the clips. transition: 'fade' (default), 'zoom' or 'cut'. Returns { buffer, starts, durations, seconds }:
+ * where each clip starts in the joined video and its real length after the overlaps (used to time subtitles).
+ * Without a working probe the join is a plain cut, which never fails because of a transition.
+ */
+async function concat(buffers, aspectRatio, io = {}, transition = 'fade') {
+  const finish = require('./studioVideoFinish');
+  if (buffers.length === 1) return { buffer: buffers[0], starts: [0], durations: null, seconds: null };
   const run = io.ffmpeg || runFfmpeg;
   return withTemp(async (dir) => {
     const files = buffers.map((b, i) => { const f = path.join(dir, `c${i}.mp4`); fs.writeFileSync(f, b); return f; });
     const out = path.join(dir, 'all.mp4');
+    const spec = finish.TRANSITION_SPEC[transition] || finish.TRANSITION_SPEC.fade;
+    let durations = null;
+    if (spec.seconds > 0) {
+      try {
+        const probe = io.probe || ((f) => require('./heroVideoFinish').probeMedia(f));
+        const metas = await Promise.all(files.map((f) => probe(f)));
+        const d = metas.map((m) => m && m.videoDurationSeconds);
+        if (d.every((x) => Number.isFinite(x) && x > spec.seconds * 2 + 0.5)) durations = d;
+      } catch (_) { durations = null; }
+    }
+    if (durations) {
+      try {
+        await run(finish.xfadeArgs(files, aspectRatio, out, durations, transition));
+        const tl = finish.clipTimeline(durations, spec.seconds);
+        return { buffer: fs.readFileSync(out), starts: tl.starts, durations, seconds: tl.total };
+      } catch (e) { /* fall back to a plain cut below */ }
+    }
     await run(concatArgs(files, aspectRatio, out));
-    return fs.readFileSync(out);
+    return { buffer: fs.readFileSync(out), starts: null, durations: null, seconds: null };
   });
 }
 
@@ -74,14 +97,14 @@ const frameFailure = (e) => (e && e.code === 'NO_FFMPEG' ? NO_FFMPEG : 'The next
  *   io.generate({ prompt, references, aspectRatio }) -> { ok, buffer, message, retryable }
  *   io.lastFrame(buffer) -> PNG buffer     io.concat(buffers, aspectRatio) -> buffer
  *   io.onClip(done)  called after each clip is made
- * Result: { ok:true, buffer, made, total, message } or { ok:false, made:0, message }.
+ * Result: { ok:true, buffer, made, total, message, timing } or { ok:false, made:0, message }.
  * made < total means a shorter video is returned and the caller refunds the rest.
  */
-async function makeChain({ prompts, references = [], aspectRatio = '9:16' }, io = {}) {
+async function makeChain({ prompts, references = [], aspectRatio = '9:16', transition = 'fade' }, io = {}) {
   const total = prompts.length;
   const generate = io.generate;
   const frameOf = io.lastFrame || ((b) => lastFrame(b));
-  const join = io.concat || ((bufs, ar) => concat(bufs, ar));
+  const join = io.concat || ((bufs, ar, tr) => concat(bufs, ar, {}, tr));
   const made = [];
   let stopMessage = '';
   for (let k = 0; k < total; k += 1) {
@@ -106,14 +129,19 @@ async function makeChain({ prompts, references = [], aspectRatio = '9:16' }, io 
     if (io.onClip) { try { await io.onClip(made.length); } catch (_) { /* progress is best effort */ } }
   }
   if (!made.length) return { ok: false, made: 0, total, message: stopMessage || 'The video could not be made this time.' };
-  let buffer = made[0]; let count = made.length;
+  let buffer = made[0]; let count = made.length; let timing = null;
   if (made.length > 1) {
-    try { buffer = await join(made, aspectRatio); } catch (e) {
+    try {
+      const joined = await join(made, aspectRatio, transition);
+      // io.concat may return the bare buffer (older callers and tests) or { buffer, starts, durations, seconds }.
+      if (Buffer.isBuffer(joined)) buffer = joined;
+      else { buffer = joined.buffer; timing = { starts: joined.starts || null, durations: joined.durations || null, seconds: joined.seconds || null }; }
+    } catch (e) {
       // The pieces could not be joined: keep the first one rather than nothing.
       buffer = made[0]; count = 1; stopMessage = stopMessage || 'The clips could not be joined.';
     }
   }
-  return { ok: true, buffer, made: count, total, message: count < total ? stopMessage : '' };
+  return { ok: true, buffer, made: count, total, message: count < total ? stopMessage : '', timing };
 }
 
 module.exports = { makeChain, lastFrame, concat, concatArgs, runFfmpeg, ffmpegPath, CLIP_SECONDS, NO_FFMPEG };
