@@ -70,6 +70,7 @@ const CreateVideo: React.FC = () => {
   const [idea, setIdea] = useState('');
   const [style, setStyle] = useState('natural');
   const [language, setLanguage] = useState('english');
+  const [shape, setShape] = useState<'9:16' | '16:9'>('9:16');
   const [fromPlan, setFromPlan] = useState(false);
   const planLanguage = useRef<string | null>(null);
   const [who, setWho] = useState('');
@@ -208,7 +209,7 @@ const CreateVideo: React.FC = () => {
     setError(''); setPlanning(true);
     try {
       const c = await choices();
-      const r = await studioVideosAPI.create({ ...c, title, concept: conceptText, beats: concept?.beats || [], spokenLine: language === 'none' ? '' : spoken, aspectRatio: '9:16' });
+      const r = await studioVideosAPI.create({ ...c, title, concept: conceptText, beats: concept?.beats || [], spokenLine: language === 'none' ? '' : spoken, aspectRatio: shape });
       if (!r?.success || !r.video) { setError(r?.message || 'We could not start the video. Please try again.'); return; }
       setCurrent(r.video); refreshBalance();
       // Tell the week card this one is made (best effort, once).
@@ -310,6 +311,18 @@ const CreateVideo: React.FC = () => {
           </div>
 
           <div>
+            <div className="gravity-label mb-2">Shape</div>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Video shape">
+              {([['9:16', 'Vertical', 'Reels, Shorts, Stories'], ['16:9', 'Wide', 'YouTube, websites, Facebook']] as const).map(([v, label, hint]) => (
+                <button key={v} type="button" role="radio" aria-checked={shape === v} onClick={() => setShape(v)} className={`${tile(shape === v)} !py-2`}>
+                  <span className="block text-[14px] font-semibold">{label}</span>
+                  <span className="block text-[12.5px] opacity-80">{hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <div className="gravity-label mb-2">Spoken language</div>
             <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Spoken language">
               {langs.map((l) => (
@@ -393,14 +406,14 @@ const CreateVideo: React.FC = () => {
           <GravityPanel>
             <div className="flex flex-col items-center gap-4">
               {processing && (
-                <div className="flex aspect-[9/16] w-full max-w-[300px] flex-col items-center justify-center gap-3 rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-2)] p-6 text-center" role="status">
+                <div className={`flex ${current?.aspectRatio === '16:9' ? 'aspect-video max-w-[560px]' : 'aspect-[9/16] max-w-[300px]'} w-full flex-col items-center justify-center gap-3 rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-2)] p-6 text-center`} role="status">
                   <Loader2 className="h-7 w-7 animate-spin text-[var(--gv-accent)]" />
                   <div className="text-[14px] font-semibold text-[var(--gv-text-primary)]">{waitMessage(waited)}</div>
                   <div className="text-[12.5px] text-[var(--gv-text-secondary)]">This takes 1 to 4 minutes. You can leave this page: your video will be in this list when you come back.</div>
                 </div>
               )}
               {current.status === 'completed' && current.videoUrl && (
-                <video src={current.videoUrl} controls playsInline className="w-full max-w-[300px] rounded-2xl bg-black" />
+                <video src={current.videoUrl} controls playsInline className={`w-full ${current.aspectRatio === '16:9' ? 'max-w-[560px]' : 'max-w-[300px]'} rounded-2xl bg-black`} />
               )}
               {current.status === 'failed' && (
                 <div className="w-full max-w-[420px] rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-2)] p-5 text-center text-[13.5px] text-[var(--gv-text-primary)]" role="alert">{current.error}</div>
@@ -444,7 +457,7 @@ const CreateVideo: React.FC = () => {
             {history.slice(0, 8).map((v) => (
               <div key={v.id} className="group relative overflow-hidden rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
                 <button type="button" onClick={() => setCurrent(v)} className="block w-full text-left">
-                  <div className="aspect-[9/16] w-full bg-[var(--gv-surface-2)]">
+                  <div className={`${v.aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[9/16]'} w-full bg-[var(--gv-surface-2)]`}>
                     {v.status === 'completed' && v.videoUrl
                       ? <video src={`${v.videoUrl}#t=0.5`} className="h-full w-full object-cover" muted playsInline preload="metadata" />
                       : <div className="flex h-full items-center justify-center p-3 text-center text-[12px] text-[var(--gv-text-secondary)]">{v.status === 'processing' ? 'Being made…' : 'Not made'}</div>}
