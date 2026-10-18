@@ -29,4 +29,7 @@ const videoJobSchema = new mongoose.Schema(
   { collection: 'video_jobs', timestamps: true }
 );
 
+// Indexes for the staff Usage page. Skipped by automatic index builds; created on purpose by scripts/create-staff-indexes.js.
+require('../config/staffIndexes').declareStaffIndexes(videoJobSchema, 'VideoJob');
+
 module.exports = mongoose.model('VideoJob', videoJobSchema);

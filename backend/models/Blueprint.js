@@ -47,4 +47,7 @@ blueprintSchema.index({ ipHash: 1, createdAt: -1 });
 blueprintSchema.index({ emailKey: 1 }, { unique: true, partialFilterExpression: { freeSlot: true }, name: 'one_free_per_email' });
 blueprintSchema.index({ businessKeys: 1 }, { unique: true, partialFilterExpression: { freeSlot: true }, name: 'one_free_per_business' });
 
+// Indexes for the staff Usage page. Skipped by automatic index builds; created on purpose by scripts/create-staff-indexes.js.
+require('../config/staffIndexes').declareStaffIndexes(blueprintSchema, 'Blueprint');
+
 module.exports = mongoose.models.Blueprint || mongoose.model('Blueprint', blueprintSchema, 'blueprints');

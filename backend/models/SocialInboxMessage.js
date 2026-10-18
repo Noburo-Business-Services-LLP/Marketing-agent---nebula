@@ -73,5 +73,8 @@ socialInboxMessageSchema.index(
 socialInboxMessageSchema.index({ conversationId: 1, createdAt: 1 });
 socialInboxMessageSchema.index({ userId: 1, messageType: 1, direction: 1, createdAt: -1 });
 
+// Indexes for the staff Usage page. Skipped by automatic index builds; created on purpose by scripts/create-staff-indexes.js.
+require('../config/staffIndexes').declareStaffIndexes(socialInboxMessageSchema, 'SocialInboxMessage');
+
 module.exports = mongoose.models.SocialInboxMessage ||
   mongoose.model('SocialInboxMessage', socialInboxMessageSchema);

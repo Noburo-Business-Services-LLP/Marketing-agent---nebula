@@ -186,4 +186,7 @@ draftSchema.index(
   { unique: true, partialFilterExpression: { languageVariantOf: { $type: 'objectId' } } }
 );
 
+// Indexes for the staff Usage page. Skipped by automatic index builds; created on purpose by scripts/create-staff-indexes.js.
+require('../config/staffIndexes').declareStaffIndexes(draftSchema, 'Draft');
+
 module.exports = mongoose.model('Draft', draftSchema);

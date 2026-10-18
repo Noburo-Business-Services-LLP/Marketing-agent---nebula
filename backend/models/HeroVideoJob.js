@@ -35,4 +35,7 @@ const heroVideoJobSchema = new mongoose.Schema(
 // Monthly quota count and the history list both filter by user and sort/range on createdAt.
 heroVideoJobSchema.index({ userId: 1, createdAt: -1 });
 
+// Indexes for the staff Usage page. Skipped by automatic index builds; created on purpose by scripts/create-staff-indexes.js.
+require('../config/staffIndexes').declareStaffIndexes(heroVideoJobSchema, 'HeroVideoJob');
+
 module.exports = mongoose.models.HeroVideoJob || mongoose.model('HeroVideoJob', heroVideoJobSchema);
