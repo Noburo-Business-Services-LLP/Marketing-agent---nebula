@@ -40,6 +40,10 @@ const PROVIDER_RATES = {
   listening_input_per_mtok: 0.15,
   listening_output_per_mtok: 0.60,
 
+  // OpenAI pricing, per minute of audio, about USD 0.006 (checked from the owner's earlier real run 2026-10-18).
+  // whisper-1 times the subtitles of a finished video. Billed per second of audio but estimated here in 6 second blocks.
+  whisper_per_minute: 0.006,
+
   // Google Nano Banana Pro (nano-banana-pro-preview) — flat per generated
   // image up to 2K. This is our PRIMARY image model, so it is the one that
   // sets the price; gemini-2.5-flash-image (~$0.039) is only a fallback and
@@ -121,6 +125,8 @@ const HERO_CLIP_SECONDS = 15;
 
 // A Videos clip made with Gemini Omni: the model returns 10 seconds, with speech, sound and music.
 const STUDIO_CLIP_SECONDS = 10;
+// Subtitle timing is estimated per block of audio this long (the video length is rounded UP to the next block).
+const STUDIO_TRANSCRIBE_BLOCK_SECONDS = 6;
 
 // ---------------------------------------------------------------------------
 // 1b. Infrastructure we pay for whether or not a model is involved
@@ -314,6 +320,11 @@ const ACTION_USD = {
     (PROVIDER_RATES.omni_video_per_sec * STUDIO_CLIP_SECONDS) +
     assetCost(INFRA.mb_per_scene_clip),
 
+  // Subtitle timing: whisper-1 listens to the finished video once. ONE UNIT is one 6 second block of audio, so the
+  // caller records ceil(video seconds / 6) units. An internal cost like the other finishing steps: never charged in
+  // Quarks, but it counts toward the daily AI ceiling and has its own staff switch.
+  studio_transcription: (PROVIDER_RATES.whisper_per_minute * STUDIO_TRANSCRIBE_BLOCK_SECONDS) / 60,
+
   // A person or a place made for a video before it is filmed: one medium quality picture, no proofreading (it
   // carries no text). The customer approves it, or asks for another.
   studio_reference: PROVIDER_RATES.gpt_image_2_per_picture.medium + assetCost(INFRA.mb_per_image)
@@ -385,6 +396,8 @@ const QUARK_COSTS = Object.fromEntries(
 QUARK_COSTS.competitor_scrape = 0;
 // Comment scoring is a cost to us inside the Inbox add-on and is never charged in Quarks.
 QUARK_COSTS.listening_score = 0;
+// Subtitle timing is an internal cost of the finishing pass and is never charged to the customer.
+QUARK_COSTS.studio_transcription = 0;
 
 // What one unit MEANS, so the UI can say "5 per slide" instead of a bare "5"
 // next to the word "Carousel" — the exact ambiguity that made the old price
@@ -410,6 +423,7 @@ const ACTION_UNITS = {
   studio_reference: 'per person or place',
   competitor_scrape: 'free',
   listening_score: 'per batch of comments',
+  studio_transcription: 'per 6 seconds of video',
   blueprint: 'per blueprint',
   blueprint_pdf: 'per designed Blueprint PDF'
 };
@@ -699,7 +713,7 @@ const ADDONS = {
 
 module.exports = {
   listeningCost,
-  PROVIDER_RATES, HERO_CLIP_SECONDS, STUDIO_CLIP_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
+  PROVIDER_RATES, HERO_CLIP_SECONDS, STUDIO_CLIP_SECONDS, STUDIO_TRANSCRIBE_BLOCK_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
   assertPlanAllowance, TOPUP_PACKS, TOPUP_INR_PER_QUARK, outputsFor, GST_RATE, gstPaise, chargePaise, ADDONS, AGENCY,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,

@@ -14,7 +14,8 @@ const WHAT: Record<string, string> = {
   google_video: 'The Videos flow',
   fal_video: 'The older step-by-step video maker and Hero video',
   apify_scrape: 'All competitor checks: the weekly checks, a staff Check now, and the ones customers start on the Competitors page (public profile reads)',
-  listening_score: 'Comment scoring: the weekly reading of customers\' own comments and messages for the What people say about you card. Switching it off stops the scoring. It also needs ENABLE_LISTENING=on and a LISTENING_MODEL in the server settings, otherwise it never starts.'
+  listening_score: 'Comment scoring: the weekly reading of customers\' own comments and messages for the What people say about you card. Switching it off stops the scoring. It also needs ENABLE_LISTENING=on and a LISTENING_MODEL in the server settings, otherwise it never starts.',
+  studio_transcription: 'Subtitle timing: when a customer asks for subtitles on a video, the finished video is listened to once (OpenAI Whisper, about a cent) so the subtitles appear exactly when the words are spoken. Switching it off means videos made with subtitles on come out without subtitles and with a plain note saying so. Nothing extra is charged to the customer.'
 };
 
 /** Owner only: what the AI providers have cost today against the daily ceiling, and an on/off switch for each. */

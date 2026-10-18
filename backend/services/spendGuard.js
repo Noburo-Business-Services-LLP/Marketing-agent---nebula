@@ -19,9 +19,10 @@ const PROVIDER_OF = {
   hero_video_clip: 'fal_video', video_base: 'fal_video', video_generated: 'fal_video', video_scene_image: 'fal_video',
   video_scene_clip: 'fal_video', video_character_portrait: 'fal_video',
   competitor_scrape: 'apify_scrape',
-  listening_score: 'listening_score'
+  listening_score: 'listening_score',
+  studio_transcription: 'studio_transcription'
 };
-const LABELS = { openai_image: 'Pictures', openai_text: 'Writing', google_video: 'Videos', fal_video: 'Older video maker', apify_scrape: 'Competitor checks', listening_score: 'Comment scoring' };
+const LABELS = { openai_image: 'Pictures', openai_text: 'Writing', google_video: 'Videos', fal_video: 'Older video maker', apify_scrape: 'Competitor checks', listening_score: 'Comment scoring', studio_transcription: 'Subtitle timing' };
 const PROVIDERS = Object.keys(LABELS);
 const BUSY = 'Making things is very busy right now. Please try again in a little while. Nothing was charged.';
 
