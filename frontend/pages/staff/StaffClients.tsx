@@ -10,6 +10,7 @@ import { FILTER_LABEL, TIER_LABEL, ACCESS_LABEL, whenLabel, attentionText } from
 import { useConfirm } from '../../context/ConfirmContext';
 import { bulkChoices, bulkRequest, bulkSummary, bulkResultNote, PLAN_CHOICES, FEATURE_CHOICES, type BulkChoice } from '../../utils/staffBulk';
 import StaffAddClient from './StaffAddClient';
+import { LastUpdated, SlowNotice, useSlowNotice } from './StaffFreshness';
 
 type Row = {
   id: string; name: string; email: string; tier: string; addons: string[]; paying: boolean; trial: boolean;
@@ -56,10 +57,11 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
 
   useEffect(() => { const t = setTimeout(() => { setSearch(q); setPage(1); }, 300); return () => clearTimeout(t); }, [q]);
 
-  const load = useCallback(() => {
+  const slow = useSlowNotice(loading);
+  const load = useCallback((refresh = false) => {
     setLoading(true);
     setError('');
-    apiService.getStaffClients({ filter, q: search, sort, dir, page, pageSize: 25 })
+    apiService.getStaffClients({ filter, q: search, sort, dir, page, pageSize: 25, refresh })
       .then((res) => setData(res))
       .catch((e) => setError(customerMessage(e)))
       .finally(() => setLoading(false));
@@ -124,6 +126,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, email, company or phone" className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm bg-white" />
         </div>
+        <LastUpdated freshness={data?.freshness} onRefresh={() => load(true)} busy={loading} />
         {can.export_csv && (
           <button onClick={exportCsv} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700"><Download className="w-4 h-4" /> Export CSV</button>
         )}
@@ -169,6 +172,7 @@ const StaffClients: React.FC<{ can: Record<string, boolean> }> = ({ can }) => {
         </div>
       )}
       {note && <p className="text-sm text-slate-700">{note}</p>}
+      {loading && <SlowNotice show={slow} />}
       {error && <p className="text-sm text-red-600">{error} <button onClick={() => load()} className="underline font-semibold">Try again</button></p>}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">

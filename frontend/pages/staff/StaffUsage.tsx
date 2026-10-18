@@ -4,6 +4,7 @@ import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
 import { WINDOWS, barPercent, shownWindow, featureSummary, funnelSummary, percentText, quarksSummary, shapeFeatures } from '../../utils/staffUsage';
 import type { FeatureItem, FunnelStep, QuarkCategory } from '../../utils/staffUsage';
+import { LastUpdated, SlowNotice, useSlowNotice } from './StaffFreshness';
 
 const LOAD_ERROR = 'We could not load the Usage numbers. Please try again.';
 
@@ -103,17 +104,18 @@ const StaffUsage: React.FC = () => {
   const dataRef = useRef<any>(null);
   useEffect(() => { dataRef.current = data; }, [data]);
 
-  const load = useCallback((d: number, quiet = false) => {
-    if (!quiet) setLoading(true);
+  const slow = useSlowNotice(loading);
+  const load = useCallback((d: number, quiet = false, refresh = false) => {
+    if (!quiet || refresh) setLoading(true);
     setError('');
-    return apiService.getStaffUsage(d)
+    return apiService.getStaffUsage(d, refresh)
       .then((res) => { if (res && res.success === false) throw new Error(res.message); setData(res); })
       .catch((e) => { setError(customerMessage(e, LOAD_ERROR)); setDays((cur) => (cur === d ? shownWindow(dataRef.current, d) : cur)); })
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { load(days, !!data); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [days, load]);
 
-  if (loading && !data) return <div className="flex justify-center py-20" role="status" aria-label="Loading"><Loader2 className="h-6 w-6 animate-spin text-[#F5A623]" /></div>;
+  if (loading && !data) return <div className="py-20"><div className="flex justify-center" role="status" aria-label="Loading"><Loader2 className="h-6 w-6 animate-spin text-[#F5A623]" /></div><SlowNotice show={slow} /></div>;
   if (error && !data) {
     return (
       <div className="mx-auto max-w-md rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-6 text-center" role="alert">
@@ -142,10 +144,9 @@ const StaffUsage: React.FC = () => {
             <button key={w.days} onClick={() => setDays(w.days)} aria-pressed={days === w.days} className={`px-3 py-2 text-sm font-semibold ${days === w.days ? 'bg-[#F5A623] text-black' : 'bg-[var(--gv-panel)] text-[var(--gv-text-secondary)]'}`}>{w.label}</button>
           ))}
         </div>
-        <button onClick={() => load(days, true)} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 py-2 text-sm font-semibold text-[var(--gv-text-secondary)] disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Refresh
-        </button>
+        <LastUpdated freshness={data.freshness} onRefresh={() => load(days, true, true)} busy={loading} />
       </div>
+      {loading && <SlowNotice show={slow} />}
       {data.level === 'summary' && <p className="mb-4 text-xs text-[var(--gv-text-tertiary)]">This is the summary view. Quark spending is shown to the Owner only.</p>}
 
       {none ? (

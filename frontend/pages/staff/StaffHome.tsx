@@ -7,6 +7,7 @@ import { attentionText, whenLabel } from './staffLabels';
 import { formatChange, healthSummary, niceMax, orderAttention, seriesSummary, shapeSeries, sinceLabel, STATUS_TEXT } from '../../utils/staffHome';
 import type { ShapedSeries } from '../../utils/staffHome';
 import StaffAiSpend from './StaffAiSpend';
+import { LastUpdated, SlowNotice, useSlowNotice } from './StaffFreshness';
 
 type HealthCard = { key: string; label: string; status: 'green' | 'amber' | 'red'; note: string; lastHour: number; lastDay: number; latest: Array<{ at: string; detail: string }> };
 type AttentionRow = { id: string; name: string; email: string; quarks: number; reasons: string[]; csm: { id: string; name: string } | null; lastActiveAt: string | null };
@@ -133,10 +134,12 @@ const StaffHome: React.FC<{ role: 'owner' | 'admin' | 'csm'; can?: Record<string
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ id: string; text: string } | null>(null);
 
-  const load = useCallback((quiet = false) => {
+  const slow = useSlowNotice(loading);
+  const load = useCallback((quiet = false, refresh = false) => {
     if (!quiet) setLoading(true);
+    else if (refresh) setLoading(true);
     setError('');
-    return apiService.getStaffHome()
+    return apiService.getStaffHome(refresh)
       .then((res) => { if (res && res.success === false) throw new Error(res.message); setData(res); })
       .catch((e) => setError(customerMessage(e && e.message, LOAD_ERROR)))
       .finally(() => setLoading(false));
@@ -163,7 +166,7 @@ const StaffHome: React.FC<{ role: 'owner' | 'admin' | 'csm'; can?: Record<string
     setBusy(null);
   };
 
-  if (loading && !data) return <div className="flex justify-center py-20" role="status" aria-label="Loading"><Loader2 className="h-6 w-6 animate-spin text-[#F5A623]" /></div>;
+  if (loading && !data) return <div className="py-20"><div className="flex justify-center" role="status" aria-label="Loading"><Loader2 className="h-6 w-6 animate-spin text-[#F5A623]" /></div><SlowNotice show={slow} /></div>;
   if (error && !data) {
     return (
       <div className="mx-auto max-w-md rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] p-6 text-center" role="alert">
@@ -187,10 +190,9 @@ const StaffHome: React.FC<{ role: 'owner' | 'admin' | 'csm'; can?: Record<string
     <div>
       {error && <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="alert">{error}</p>}
       <div className="mb-6 flex justify-end">
-        <button onClick={() => load(true)} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 py-2 text-sm font-semibold text-[var(--gv-text-secondary)] disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Refresh
-        </button>
+        <LastUpdated freshness={data.freshness} onRefresh={() => load(true, true)} busy={loading} />
       </div>
+      {loading && <SlowNotice show={slow} />}
 
       {can.manage_ai_switches && <StaffAiSpend />}
 

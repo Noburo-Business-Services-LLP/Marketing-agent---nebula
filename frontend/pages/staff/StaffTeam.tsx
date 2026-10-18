@@ -3,6 +3,7 @@ import { Loader2, UserPlus, RefreshCw, X } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
 import { whenLabel } from './staffLabels';
+import { LastUpdated, SlowNotice, useSlowNotice } from './StaffFreshness';
 import {
   ROLE_HELP, changeableRoles, removalCheck, removeConfirmText, roleLabel, statusLabel,
   unassignedNote, validateAddForm, workloadShare, workloadText
@@ -20,7 +21,7 @@ const FIELD = 'w-full rounded-lg border border-[var(--gv-border-subtle)] bg-[var
 const BTN = 'inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] px-3 py-2 text-sm font-semibold text-[var(--gv-text-primary)] disabled:opacity-50';
 const BTN_MAIN = 'inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5A623] px-4 py-2 text-sm font-bold text-black disabled:opacity-50';
 
-type Team = { me: string; grantable: string[]; rows: TeamRow[]; maxClients: number; owners: number; can?: Record<string, boolean> };
+type Team = { me: string; grantable: string[]; rows: TeamRow[]; maxClients: number; owners: number; can?: Record<string, boolean>; freshness?: { updatedAt: string; fromCache: boolean; stale?: boolean } };
 
 /** A plain dialog: Escape closes it, focus starts inside it, and the page behind stays put. */
 const Dialog: React.FC<{ title: string; onClose: () => void; children: React.ReactNode }> = ({ title, onClose, children }) => {
@@ -162,10 +163,11 @@ const StaffTeam: React.FC = () => {
   const noteRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => { if (note && noteRef.current) noteRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [note]);
 
-  const load = useCallback((quiet = false) => {
-    if (!quiet) setLoading(true);
+  const slow = useSlowNotice(loading);
+  const load = useCallback((quiet = false, refresh = false) => {
+    if (!quiet || refresh) setLoading(true);
     setError('');
-    return apiService.getStaffTeam()
+    return apiService.getStaffTeam(refresh)
       .then((res) => { if (res && res.success === false) throw new Error(res.message); setTeam(res); })
       .catch((e) => setError(customerMessage(e && e.message, LOAD_ERROR)))
       .finally(() => setLoading(false));
@@ -195,7 +197,7 @@ const StaffTeam: React.FC = () => {
 
   const done = (text: string) => { setAdding(false); setPending(null); setNote(text); load(true); };
 
-  if (loading && !team) return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-[#F5A623]" aria-label="Loading the team" /></div>;
+  if (loading && !team) return <div className="py-16"><div className="flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-[#F5A623]" aria-label="Loading the team" /></div><SlowNotice show={slow} /></div>;
   if (error && !team) {
     return (
       <div className="py-12 text-center">
@@ -212,8 +214,12 @@ const StaffTeam: React.FC = () => {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-[var(--gv-text-secondary)]">{rows.length} {rows.length === 1 ? 'person has' : 'people have'} staff access.</p>
-        <button type="button" onClick={() => { setNote(''); setAdding(true); }} className={BTN_MAIN}><UserPlus className="h-4 w-4" /> Add team member</button>
+        <div className="flex flex-wrap items-center gap-3">
+          <LastUpdated freshness={team.freshness} onRefresh={() => load(true, true)} busy={loading} />
+          <button type="button" onClick={() => { setNote(''); setAdding(true); }} className={BTN_MAIN}><UserPlus className="h-4 w-4" /> Add team member</button>
+        </div>
       </div>
+      {loading && <SlowNotice show={slow} />}
 
       {note && <p ref={noteRef} role="status" aria-live="polite" className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{note}</p>}
       {error && <p role="alert" className="mb-4 text-sm text-red-700">{error}</p>}

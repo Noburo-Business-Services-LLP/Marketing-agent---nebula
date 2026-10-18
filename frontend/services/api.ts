@@ -1412,21 +1412,21 @@ export const apiService = {
   },
 
   // ---- Staff area: clients ----
-  getStaffClients: async (params: { filter?: string; q?: string; sort?: string; dir?: string; page?: number; pageSize?: number }): Promise<any> => {
+  getStaffClients: async (params: { filter?: string; q?: string; sort?: string; dir?: string; page?: number; pageSize?: number; refresh?: boolean }): Promise<any> => {
     const qs = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') qs.set(k, String(v)); });
+    Object.entries(params).forEach(([k, v]) => { if (k === 'refresh') { if (v === true) qs.set('refresh', '1'); } else if (v !== undefined && v !== '') qs.set(k, String(v)); });
     return apiCall(`/staff/clients?${qs.toString()}`, { method: 'GET' }, true);
   },
-  getStaffHome: async (): Promise<any> => apiCall('/staff/home', { method: 'GET' }, true),
+  getStaffHome: async (refresh = false): Promise<any> => apiCall(`/staff/home${refresh ? '?refresh=1' : ''}`, { method: 'GET' }, true),
   getAiSpend: async (): Promise<any> => apiCall('/staff/ai-spend', { method: 'GET' }, true),
   setAiSwitch: async (provider: string, disabled: boolean): Promise<any> => apiCall('/staff/ai-switches', { method: 'POST', body: JSON.stringify({ provider, disabled }) }, true),
   // ---- Staff area: money (Owner only) ----
   getStaffMoney: async (): Promise<any> => apiCall('/staff/money', { method: 'GET' }, true),
   getStaffPayments: async (page: number): Promise<any> => apiCall(`/staff/money/payments?page=${encodeURIComponent(String(page))}`, { method: 'GET' }, true),
   // ---- Staff area: usage (Owner full, Admin summary) ----
-  getStaffUsage: async (days: number): Promise<any> => apiCall(`/staff/usage?window=${encodeURIComponent(String(days))}`, { method: 'GET' }, true),
+  getStaffUsage: async (days: number, refresh = false): Promise<any> => apiCall(`/staff/usage?window=${encodeURIComponent(String(days))}${refresh ? '&refresh=1' : ''}`, { method: 'GET' }, true),
   // ---- Staff area: team ----
-  getStaffTeam: async (): Promise<any> => apiCall('/staff/team', { method: 'GET' }, true),
+  getStaffTeam: async (refresh = false): Promise<any> => apiCall(`/staff/team${refresh ? '?refresh=1' : ''}`, { method: 'GET' }, true),
   staffAddTeamMember: async (body: { email: string; firstName: string; lastName?: string; role: string }): Promise<any> => apiCall('/staff/team', { method: 'POST', body: JSON.stringify(body) }, true),
   staffChangeRole: async (id: string, role: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'PATCH', body: JSON.stringify({ role }) }, true),
   staffRemoveTeamMember: async (id: string): Promise<any> => apiCall(`/staff/team/${id}`, { method: 'DELETE' }, true),
