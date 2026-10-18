@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Check, Loader2, Shield, Plus, AlertCircle } from 'lucide-react';
 import { apiService, PlansResponse } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import PlanArt from '../components/PlanArt';
 import { PLANS_INTRO, addonBlurb, currentPlanLine, formatInr, formatPaise, leftText, orderedPlans, planLines, plainMessage, renewalText, topupLine } from '../utils/plans';
 import {
   AGENCY_BADGE, AGENCY_BADGE_LINE, agencyCardNote, agencyCardState, showsAgencyHint, agencyExtraClientLine, agencyFeatureLines, agencyHeadline, canCancelExtraClient, extraClientEndingNote, insideClientBillingNotice, poolText, slotAvailability,
@@ -283,8 +284,9 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ insideClient }) => {
                   tabIndex={isAgencyCard ? -1 : undefined}
                   aria-labelledby={`plan-${plan.id}`}
                   data-plan={plan.id}
-                  className={`${CARD} flex min-w-0 flex-col p-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-text-primary)] sm:p-6 ${suggested ? '!border-2 !border-[var(--gv-accent)]' : ''}`}
+                  className={`${CARD} flex min-w-0 flex-col overflow-hidden p-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-text-primary)] sm:p-6 ${suggested ? '!border-2 !border-[var(--gv-accent)]' : ''}`}
                 >
+                  <PlanArt id={plan.id} className="-mx-5 -mt-5 mb-4 h-32 sm:-mx-6 sm:-mt-6" />
                   {suggested && <span className="mb-3 self-start rounded-full px-3 py-1 text-[12.5px] font-semibold" style={{ background: 'var(--gv-accent)', color: 'var(--gv-accent-ink)' }}>{AGENCY_BADGE}</span>}
                   <h3 id={`plan-${plan.id}`} className="text-[22px] font-semibold leading-tight" style={INK}>{plan.name}</h3>
                   {suggested && <p className="mt-1 text-[13.5px]" style={QUIET}>{AGENCY_BADGE_LINE}</p>}
@@ -324,7 +326,8 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ insideClient }) => {
               const blocked = !onPaidPlan || !!missing;
               const why = !onPaidPlan ? 'Choose a plan first.' : missing ? `Needs ${catalogue.addons.find((x) => x.id === missing)?.label || 'another add-on'}.` : '';
               return (
-                <div key={a.id} className={`${CARD} flex min-w-0 flex-col p-5`} aria-labelledby={`addon-${a.id}`}>
+                <div key={a.id} className={`${CARD} flex min-w-0 flex-col overflow-hidden p-5`} aria-labelledby={`addon-${a.id}`}>
+                  <PlanArt id={a.id} className="-mx-5 -mt-5 mb-4 h-24" />
                   <h3 id={`addon-${a.id}`} className="text-[17px] font-semibold leading-snug" style={INK}>{a.label}</h3>
                   <p className="mt-1 flex-1 text-[14px] leading-relaxed" style={QUIET}>{addonBlurb(a.id)}</p>
                   <p className="mt-4 text-[26px] font-semibold leading-none tabular-nums" style={INK}>{formatInr(a.inr)}<span className="mt-1 block text-[13px] font-normal leading-snug" style={QUIET}>a month plus GST</span></p>
