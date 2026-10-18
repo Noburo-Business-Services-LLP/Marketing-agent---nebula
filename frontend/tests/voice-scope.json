@@ -60,5 +60,9 @@
   "utils/setup.ts",
   "utils/tour.ts",
   "components/GuidedTour.tsx",
-  "components/HelpMenu.tsx"
+  "components/HelpMenu.tsx",
+  "components/Tile.tsx",
+  "components/TileGrid.tsx",
+  "components/DarkPanel.tsx",
+  "utils/tiles.ts"
 ]
