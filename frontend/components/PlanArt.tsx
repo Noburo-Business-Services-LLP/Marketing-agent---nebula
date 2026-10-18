@@ -114,8 +114,30 @@ const ART: Record<string, Art> = {
   },
 };
 
-const PlanArt: React.FC<{ id: string; className?: string }> = ({ id, className = '' }) => {
-  const art = ART[id] || ART.starter;
+/** A top-up pack: a stack of post cards that grows with the size of the pack (level 1 to 5), with one play-button card. */
+const topupArt = (level: number): Art => {
+  const n = Math.min(5, Math.max(1, Math.round(level)));
+  const tints = ['#FFE3D0', '#DDF2E6', '#ECE6FB', '#FFF0C7', '#DCEBFA'];
+  const x0 = 200 - (n * 26 + 34) / 2;
+  return {
+    bg: ['#FFF0C7', '#FFE0A0'],
+    draw: (
+      <>
+        {Array.from({ length: n }, (_, i) => (
+          <g key={i} transform={`translate(${x0 + i * 26} ${58 - i * 6})`}>
+            {tile(0, 0, 54, 50, i === n - 1 ? CREAM : tints[i % tints.length], 9)}
+            <rect x="8" y="9" width="38" height="20" rx="5" fill={i === n - 1 ? '#FFB88A' : GOLD} opacity={i === n - 1 ? 1 : 0.5} />
+            <rect x="8" y="35" width="26" height="5" rx="2.5" fill={INK} opacity="0.35" />
+          </g>
+        ))}
+        <circle cx="318" cy="30" r="14" fill={SUN} />
+      </>
+    ),
+  };
+};
+
+const PlanArt: React.FC<{ id: string; level?: number; className?: string }> = ({ id, level = 1, className = '' }) => {
+  const art = id === 'topup' ? topupArt(level) : (ART[id] || ART.starter);
   return (
     <div
       className={`overflow-hidden ${className}`}

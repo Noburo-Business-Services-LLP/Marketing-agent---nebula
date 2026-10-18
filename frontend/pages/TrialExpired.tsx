@@ -348,10 +348,11 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ insideClient }) => {
           hint={`${isAgencyPlan ? 'Extra posts and videos go into the shared pool. ' : ''}They stay valid for 60 days from the purchase and are used after your monthly ones. Prices are before GST.`}
         >Add more posts and videos</Heading>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {catalogue.topups.map((t) => {
+          {catalogue.topups.map((t, ti) => {
             const what = topupLine(t.outputs) || 'More posts and videos';
             return (
-              <div key={t.inr} className={`${CARD} flex min-w-0 flex-col p-4`}>
+              <div key={t.inr} className={`${CARD} flex min-w-0 flex-col overflow-hidden p-4`}>
+                <PlanArt id="topup" level={ti + 1} className="-mx-4 -mt-4 mb-3 h-20" />
                 <p className="text-[17px] font-semibold leading-snug" style={INK}>{what}</p>
                 <p className="mb-4 mt-2 flex-1 text-[13px] leading-relaxed" style={QUIET}>{formatInr(t.inr)} plus GST ({formatPaise(t.chargePaise)} including GST)</p>
                 <button type="button" className={`${BTN} !px-2`} disabled={!!busy} onClick={() => buyTopup(t.inr, what)}>

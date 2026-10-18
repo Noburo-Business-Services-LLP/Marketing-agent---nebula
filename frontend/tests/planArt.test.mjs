@@ -13,5 +13,5 @@ test('every plan and add-on has cover art, and the Plans page uses it', () => {
   }
   assert.ok(art.includes('aria-hidden="true"'), 'decorative only');
   const page = fs.readFileSync(path.join(ROOT, 'pages/TrialExpired.tsx'), 'utf8');
-  assert.ok(page.includes('<PlanArt id={plan.id}') && page.includes('<PlanArt id={a.id}'));
+  assert.ok(page.includes('<PlanArt id={plan.id}') && page.includes('<PlanArt id={a.id}') && page.includes('<PlanArt id="topup"'));
 });
