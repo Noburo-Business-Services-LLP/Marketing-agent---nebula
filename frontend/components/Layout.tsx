@@ -222,6 +222,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   const resolveTopBarMeta = (pathname: string) => {
     if (pathname.startsWith('/campaigns')) return { title: 'Create content', crumb: 'New campaign' };
     if (pathname.startsWith('/plan')) return { title: 'My plan', crumb: '' };
+    if (pathname.startsWith('/trial-expired')) return { title: 'Plans', crumb: '' };
     if (pathname.startsWith('/content-calendar')) return { title: 'Calendar', crumb: '' };
     if (pathname.startsWith('/reels')) return { title: 'Videos', crumb: '' };
     if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };
@@ -374,7 +375,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
 
         {/* ================= MAIN COLUMN ================= */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {needsPlan && !location.pathname.startsWith('/blueprint') && (
+          {needsPlan && !location.pathname.startsWith('/blueprint') && !location.pathname.startsWith('/trial-expired') && (
             <div className="shrink-0 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-accent-fill)] px-4 md:px-8 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <p className="text-[13px] text-[var(--gv-text-primary)]">You are looking around. Choose a plan to start making posts and videos. Your Growth Blueprint is free.</p>
               <div className="flex gap-2">

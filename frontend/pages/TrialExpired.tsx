@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { CreditCard, CheckCircle, Loader2, Shield, Check, Plus } from 'lucide-react';
+import { CheckCircle, Check, Loader2, Shield, Plus, AlertCircle } from 'lucide-react';
 import { apiService, PlansResponse } from '../services/api';
-import { formatInr, formatPaise, tierLabel } from '../utils/plans';
+import { useQuarkCosts } from '../hooks/useQuarkCosts';
+import { PLANS_INTRO, addonBlurb, currentPlanLine, formatInr, formatPaise, leftText, orderedPlans, planLines, plainMessage, renewalText, topupLine } from '../utils/plans';
 import {
   AGENCY_BADGE, AGENCY_BADGE_LINE, agencyCardNote, agencyCardState, showsAgencyHint, agencyExtraClientLine, agencyFeatureLines, agencyHeadline, canCancelExtraClient, extraClientEndingNote, insideClientBillingNotice, poolText, slotAvailability,
 } from '../utils/agencyPlan';
@@ -18,7 +19,7 @@ declare global {
   }
 }
 
-// The plans page. It is also the screen shown when an account has no Quarks left.
+// The plans page. It sits inside the app shell like every other page. Customers see posts and videos here, never Quarks.
 // (The file keeps its old name so that the /trial-expired route does not change.)
 interface TrialExpiredProps {
   reason?: 'time' | 'credits' | 'migrated';
@@ -26,140 +27,40 @@ interface TrialExpiredProps {
   creditsUsed?: number;
   /** Working inside one of an agency's clients: plans and payments belong to the agency account. */
   insideClient?: boolean;
-  onLogout: () => void;
+  onLogout?: () => void;
 }
 
-const PRIMARY_BTN = 'w-full py-3 rounded-2xl font-bold text-[14px] text-[#070A12] bg-[#ffcc29] hover:bg-[#e6b825] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
-const SECONDARY_BTN = 'w-full py-3 rounded-2xl font-semibold text-[14px] text-white bg-white/10 hover:bg-white/15 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
+const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gv-text-primary)]';
+const BTN_MAIN = `w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--gv-accent)] px-4 min-h-[44px] text-[14px] font-semibold text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
+const BTN = `w-full inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--gv-border-strong)] bg-[var(--gv-panel)] px-4 min-h-[44px] text-[14px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS}`;
+const LINK = `text-[14px] font-medium text-[var(--gv-text-primary)] underline underline-offset-2 hover:text-[var(--gv-accent-text)] rounded-sm ${FOCUS}`;
+const CARD = 'rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] shadow-[var(--gv-shadow-card)]';
+const INK = { color: 'var(--gv-text-primary)' } as const;
+const QUIET = { color: 'var(--gv-text-secondary)' } as const;
 
-/* ───── Starfield Canvas ───── */
-const StarfieldCanvas: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let animId: number;
-    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
-    resize();
-    window.addEventListener('resize', resize);
-
-    const stars = Array.from({ length: 220 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      r: Math.random() * 1.5 + 0.3,
-      speed: Math.random() * 0.15 + 0.02,
-      twinkle: Math.random() * Math.PI * 2,
-      twinkleSpeed: Math.random() * 0.02 + 0.005,
-    }));
-
-    const shootingStars: { x: number; y: number; len: number; speed: number; opacity: number; angle: number }[] = [];
-    const maybeSpawn = () => {
-      if (Math.random() < 0.003 && shootingStars.length < 2) {
-        shootingStars.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height * 0.4,
-          len: Math.random() * 80 + 40,
-          speed: Math.random() * 6 + 4,
-          opacity: 1,
-          angle: Math.PI / 4 + (Math.random() - 0.5) * 0.3,
-        });
-      }
-    };
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (const s of stars) {
-        s.twinkle += s.twinkleSpeed;
-        const alpha = 0.4 + Math.sin(s.twinkle) * 0.35;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 245, 225, ${alpha})`;
-        ctx.fill();
-        s.y += s.speed;
-        if (s.y > canvas.height + 2) { s.y = -2; s.x = Math.random() * canvas.width; }
-      }
-      maybeSpawn();
-      for (let i = shootingStars.length - 1; i >= 0; i--) {
-        const ss = shootingStars[i];
-        const dx = Math.cos(ss.angle) * ss.len;
-        const dy = Math.sin(ss.angle) * ss.len;
-        const grad = ctx.createLinearGradient(ss.x, ss.y, ss.x - dx, ss.y - dy);
-        grad.addColorStop(0, `rgba(255, 204, 41, ${ss.opacity})`);
-        grad.addColorStop(1, 'rgba(255, 204, 41, 0)');
-        ctx.beginPath();
-        ctx.moveTo(ss.x, ss.y);
-        ctx.lineTo(ss.x - dx, ss.y - dy);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ss.x += Math.cos(ss.angle) * ss.speed;
-        ss.y += Math.sin(ss.angle) * ss.speed;
-        ss.opacity -= 0.008;
-        if (ss.opacity <= 0) shootingStars.splice(i, 1);
-      }
-      animId = requestAnimationFrame(draw);
-    };
-    draw();
-    return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize); };
-  }, []);
-
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
-};
-
-/* ───── Glass Card ───── */
-const GlassCard: React.FC<{ children: React.ReactNode; highlighted?: boolean; className?: string }> = ({ children, highlighted, className = '' }) => (
-  <div className={`
-    relative rounded-3xl p-[1px] transition-all duration-500
-    ${highlighted
-      ? 'bg-gradient-to-b from-[#ffcc29]/50 via-[#ffcc29]/15 to-transparent shadow-2xl shadow-[#ffcc29]/10'
-      : 'bg-gradient-to-b from-white/10 via-white/5 to-transparent'
-    }
-    ${className}
-  `}>
-    <div className={`
-      rounded-3xl h-full
-      ${highlighted
-        ? 'bg-gradient-to-b from-[#0f1520] via-[#0a0e18] to-[#060910]'
-        : 'bg-gradient-to-b from-[#0d1219] via-[#080c14] to-[#060910]'
-      }
-      backdrop-blur-xl
-    `}>
-      {children}
-    </div>
+const Heading: React.FC<{ id: string; children: React.ReactNode; hint?: React.ReactNode }> = ({ id, children, hint }) => (
+  <div className="mb-4">
+    <h2 id={id} className="text-[20px] font-semibold leading-snug" style={INK}>{children}</h2>
+    {hint && <p className="mt-1 text-[14px] leading-relaxed" style={QUIET}>{hint}</p>}
   </div>
 );
 
-const SpaceBg: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="min-h-screen relative overflow-hidden" style={{ background: 'radial-gradient(ellipse at 50% 0%, #0d1525 0%, #070a12 50%, #030507 100%)' }}>
-    <StarfieldCanvas />
-    <div className="absolute inset-0 pointer-events-none">
-      <div className="absolute top-[-10%] left-[20%] w-[600px] h-[600px] rounded-full opacity-[0.06]" style={{ background: 'radial-gradient(circle, #5b3cc4, transparent 70%)' }} />
-      <div className="absolute top-[10%] right-[5%] w-[500px] h-[500px] rounded-full opacity-[0.04]" style={{ background: 'radial-gradient(circle, #ffcc29, transparent 70%)' }} />
-      <div className="absolute bottom-[5%] left-[10%] w-[700px] h-[500px] rounded-full opacity-[0.03]" style={{ background: 'radial-gradient(circle, #1e6091, transparent 65%)' }} />
-      <div className="absolute bottom-[-15%] right-[20%] w-[550px] h-[550px] rounded-full opacity-[0.04]" style={{ background: 'radial-gradient(circle, #8b3a62, transparent 70%)' }} />
-    </div>
-    <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(3,5,7,0.7) 100%)' }} />
-    <div className="relative z-10 flex items-start justify-center min-h-screen p-4 md:p-8 py-12">
-      {children}
-    </div>
-  </div>
+const Spinner: React.FC<{ label: string }> = ({ label }) => (
+  <div className="flex justify-center py-16" role="status" aria-label={label}><Loader2 className="h-6 w-6 animate-spin motion-reduce:animate-none text-[var(--gv-accent-text)]" aria-hidden="true" /></div>
 );
 
-const muted = 'text-[#ededed]/75';
-
-const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLogout }) => {
+const TrialExpired: React.FC<TrialExpiredProps> = ({ insideClient }) => {
   const navigate = useNavigate();
   const routerLocation = useLocation();
+  const costs = useQuarkCosts();
   const [catalogue, setCatalogue] = useState<PlansResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [tier, setTier] = useState<string>('free');
   const [held, setHeld] = useState<string[]>([]);
   const [balance, setBalance] = useState<number | null>(null);
+  const [renewsAt, setRenewsAt] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -168,6 +69,8 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
   const [agencyNow, setAgencyNow] = useState<{ limit: number; used: number; poolPosts?: number; poolVideos?: number; extraSlots?: number; slotsEnding?: number; slotsEndAt?: string | null } | null>(null);
   const [slotOpen, setSlotOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [showGst, setShowGst] = useState(false);
+  const agencyCardRef = useRef<HTMLDivElement>(null);
 
   const loadAgency = async () => {
     try {
@@ -182,6 +85,8 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
       if (b?.plan?.tier) setTier(b.plan.tier);
       setHeld(Array.isArray(b?.plan?.addons) ? b.plan.addons : []);
       if (typeof b?.credits?.balance === 'number') setBalance(b.credits.balance);
+      setRenewsAt(typeof b?.subscription?.endsAt === 'string' ? b.subscription.endsAt : null);
+      setCancelling(!!b?.subscription?.cancelAtPeriodEnd);
       if (b?.plan?.tier === 'agency' && !insideClient) await loadAgency();
     } catch { /* the catalogue is still useful without the account details */ }
     setAccountLoaded(true);
@@ -200,44 +105,54 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
   const onPaidPlan = tier === 'starter' || tier === 'professional';
   const isAgencyPlan = tier === 'agency';
   const agencyState = agencyCardState(tier);
-  // Arrived from sign-up after saying they manage several brands: the Agency plan comes first.
+  // Arrived from sign-up after saying they manage several brands: the Agency card carries a small "Suggested for you" badge.
+  // The card order never changes.
   const agencyHint = showsAgencyHint(routerLocation.search, agencyState);
   const isManaged = tier === 'managed';
-  const [showGst, setShowGst] = useState(false);
-  // A new account that has not paid yet: no Quarks, and the free Blueprint is the one thing it can use.
-  const isNewAccount = tier === 'free' && reason === 'credits';
+  const isFree = tier === 'free';
+  const ready = !insideClient && !loading && accountLoaded && !loadError && !!catalogue;
 
-  // One checkout runner for the three purchases. `afterPay` verifies the payment on the server.
+  // ?for=agency: bring the Agency card into view and move focus to it, once the cards are on screen.
+  useEffect(() => {
+    if (!ready || !agencyHint) return;
+    const el = agencyCardRef.current;
+    if (!el) return;
+    const calm = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+    el.focus({ preventScroll: true });
+  }, [ready, agencyHint]);
+
+  // One checkout runner for the three purchases. `verify` confirms the payment on the server.
   const checkout = async (key: string, create: () => Promise<any>, build: (d: any) => any, verify: (r: any) => Promise<any>) => {
     setBusy(key); setError(''); setNotice('');
     try {
       const data = await create();
-      if (!data?.success) throw new Error(data?.message || 'The payment could not be started. Please try again.');
+      if (!data?.success) throw new Error(plainMessage(data?.message, 'The payment could not be started. Please try again.'));
       const rzp = new window.Razorpay({
         ...build(data),
         name: 'Nebulaa',
         prefill: data.prefill,
-        theme: { color: '#ffcc29', backdrop_color: 'rgba(7, 10, 18, 0.9)' },
+        theme: { color: '#F5A623', backdrop_color: 'rgba(20, 32, 58, 0.6)' },
         handler: async (response: any) => {
           try {
             const result = await verify(response);
-            if (!result?.success) throw new Error(result?.message || 'The payment could not be confirmed.');
-            setNotice(result.message || 'Your payment is confirmed.');
+            if (!result?.success) throw new Error(plainMessage(result?.message, 'The payment could not be confirmed.'));
+            setNotice(plainMessage(result.message, 'Your payment is confirmed.'));
             if (typeof result.balance === 'number') {
               window.dispatchEvent(new CustomEvent('credits-updated', { detail: { creditsRemaining: result.balance } }));
             }
             await loadAccount();
           } catch (err: any) {
-            setError(err?.message || 'The payment was received but could not be confirmed. Please contact support.');
+            setError(plainMessage(err?.message, 'The payment was received but could not be confirmed. Please contact support.'));
           } finally { setBusy(null); }
         },
         modal: { ondismiss: () => setBusy(null) },
       });
-      rzp.on('payment.failed', (r: any) => { setBusy(null); setError(r?.error?.description || 'The payment failed. Please try again.'); });
+      rzp.on('payment.failed', (r: any) => { setBusy(null); setError(plainMessage(r?.error?.description, 'The payment failed. Please try again.')); });
       rzp.open();
     } catch (err: any) {
       setBusy(null);
-      setError(err?.message || 'The payment could not be started. Please try again.');
+      setError(plainMessage(err?.message, 'The payment could not be started. Please try again.'));
     }
   };
 
@@ -251,228 +166,225 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
       (d) => ({ key: d.key, subscription_id: d.subscription_id, description: `${label}, monthly, ${formatPaise(charge)} including GST` }),
       (r) => apiService.verifySubscription({ razorpay_payment_id: r.razorpay_payment_id, razorpay_subscription_id: r.razorpay_subscription_id, razorpay_signature: r.razorpay_signature }));
 
-  const buyTopup = (inr: number) =>
+  const buyTopup = (inr: number, what: string) =>
     checkout(`topup:${inr}`, () => apiService.createPaymentOrder(inr),
-      (d) => ({ key: d.key, order_id: d.order.id, amount: d.order.amount, currency: d.order.currency, description: d.description }),
+      (d) => ({ key: d.key, order_id: d.order.id, amount: d.order.amount, currency: d.order.currency, description: `More posts and videos: ${what.toLowerCase()}` }),
       (r) => apiService.verifyPayment({ razorpay_order_id: r.razorpay_order_id, razorpay_payment_id: r.razorpay_payment_id, razorpay_signature: r.razorpay_signature }));
 
   if (insideClient) {
     const n = insideClientBillingNotice();
     return (
-      <SpaceBg>
-        <div className="max-w-md w-full">
-          <GlassCard>
-            <div className="p-8 text-center">
-              <h1 className="text-xl font-bold text-white mb-2">{n.title}</h1>
-              <p className={`${muted} text-sm mb-5`}>{n.body}</p>
-              <button className={PRIMARY_BTN} onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}>{n.action}</button>
-            </div>
-          </GlassCard>
+      <div className="mx-auto max-w-xl">
+        <h1 className="sr-only">Plans</h1>
+        <div className={`${CARD} p-6 text-center sm:p-8`}>
+          <h2 className="mb-2 text-[20px] font-semibold" style={INK}>{n.title}</h2>
+          <p className="mb-5 text-[14px] leading-relaxed" style={QUIET}>{n.body}</p>
+          <button type="button" className={`${BTN_MAIN} sm:max-w-xs sm:mx-auto`} onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}>{n.action}</button>
         </div>
-      </SpaceBg>
+      </div>
     );
   }
-  // Wait for the account too, so an agency never sees the "Choose a plan" page for a moment.
-  if (loading || !accountLoaded) {
-    return <SpaceBg><Loader2 className="w-10 h-10 animate-spin text-[#ffcc29]" /></SpaceBg>;
-  }
+  // Wait for the account too, so an agency never sees the plan cards of a new account for a moment.
+  if (loading || !accountLoaded) return <Spinner label="Loading the plans" />;
   if (loadError || !catalogue) {
     return (
-      <SpaceBg>
-        <div className="max-w-md w-full">
-          <GlassCard><div className="p-8 text-center text-red-300">{loadError || 'The plans could not be loaded. Please try again.'}</div></GlassCard>
-        </div>
-      </SpaceBg>
+      <div className="mx-auto max-w-xl">
+        <h1 className="sr-only">Plans</h1>
+        <div className={`${CARD} p-6 text-center`}><p role="alert" className="text-[14px]" style={INK}>{loadError || 'The plans could not be loaded. Please try again.'}</p></div>
+      </div>
     );
   }
 
-  const h2 = 'text-xl md:text-2xl font-bold text-white mb-4';
-  const agencyPoolEmpty = isAgencyPlan && reason === 'credits';
-  const headline = agencyHeadline(agencyPoolEmpty);
-  const openClients = () => { window.location.hash = '#/agency/clients'; window.location.reload(); };
+  const clientsLink = () => { window.location.hash = '#/agency/clients'; window.location.reload(); };
   const slotRoom = slotAvailability({ limit: agencyNow?.limit, used: agencyNow?.used, maxClients: catalogue.agency?.maxClients });
+  const poolEmpty = isAgencyPlan && agencyNow?.poolPosts === 0 && !(agencyNow?.poolVideos);
+  const poolNotice = agencyHeadline(true);
+  const left = isAgencyPlan ? '' : leftText(balance, costs);
+  const planLine = currentPlanLine({ tier, left, renews: renewalText(renewsAt), ending: cancelling });
+  const cards = orderedPlans(catalogue.plans).filter((plan) => !isAgencyPlan || plan.id === 'agency');
+  const showAddons = !isManaged && !isAgencyPlan;
 
   return (
-    <SpaceBg>
-      <div className="max-w-6xl w-full">
-        <div className="text-center mb-10 rounded-3xl bg-[#070a12] px-6 py-6">
-          <img src="/assets/nebulaa-gold.png" alt="Nebulaa" className="w-16 h-16 mx-auto mb-4" onError={(e) => (e.currentTarget.style.display = 'none')} />
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3 tracking-tight">
-            {isAgencyPlan ? headline.title : isNewAccount ? 'Choose a plan to start creating' : reason === 'credits' ? 'You have used all of your Quarks' : 'Plans and Quarks'}
-          </h1>
-          <p className={`${muted} text-base max-w-2xl mx-auto`}>
-            {isAgencyPlan
-              ? headline.body
-              : isNewAccount
-              ? 'Posts, campaigns and videos start with a plan. Your Growth Blueprint is free: make it now, then pick a plan when you are ready to create.'
-              : reason === 'credits'
-              ? 'Please upgrade your plan, or buy an add-on pack or Quarks, to continue.'
-              : 'Choose a monthly plan, add the features you need, or buy extra Quarks at any time. Prices are shown before GST; 18 percent GST is added at checkout.'}
-          </p>
-          <p className={`${muted} text-sm mt-3`}>
-            Current plan: <span className="text-white font-semibold">{tierLabel(tier)}</span>
-            {!isAgencyPlan && balance !== null && <> · <span className="text-white font-semibold">{balance.toLocaleString('en-IN')}</span> Quarks remaining</>}
-          </p>
-        </div>
+    <div className="mx-auto w-full max-w-6xl space-y-10 pb-10">
+      <header>
+        <h1 className="text-[28px] font-semibold leading-tight" style={INK}>Plans</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed" style={QUIET}>{PLANS_INTRO}</p>
+        <p className="mt-3 text-[15px] font-medium leading-relaxed" style={INK} data-testid="current-plan-line">{planLine}</p>
+      </header>
 
-        {isNewAccount && (
-          <div className="mb-10 max-w-2xl mx-auto rounded-3xl border border-[#ffcc29]/40 bg-[#0f1520] px-6 py-6 text-center">
-            <p className="text-xs font-semibold tracking-[0.14em] text-[#ffcc29] mb-2">FREE FOR YOU</p>
-            <h2 className="text-xl font-bold text-white mb-2">Your Brand Growth Blueprint</h2>
-            <p className={`${muted} text-sm mb-4`}>A plan for your business: who to reach, what to post and where to start. It takes a few minutes and costs nothing.</p>
-            <button className={PRIMARY_BTN + ' max-w-xs mx-auto'} onClick={() => navigate('/blueprint')}>Make my free Blueprint</button>
-          </div>
-        )}
+      {notice && <p role="status" className="flex items-start gap-2 rounded-xl border border-[var(--gv-border-default)] px-4 py-3 text-[14px]" style={{ background: 'var(--gv-mint)', color: 'var(--gv-text-primary)' }}><CheckCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{notice}</p>}
+      {error && <p role="alert" className="flex items-start gap-2 rounded-xl border border-[var(--gv-coral)] px-4 py-3 text-[14px]" style={{ background: 'var(--gv-peach)', color: 'var(--gv-text-primary)' }}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{error}</p>}
 
-        {notice && <div className="mb-6 max-w-xl mx-auto rounded-2xl bg-green-500/10 border border-green-500/30 px-5 py-3 text-green-300 text-sm text-center flex items-center justify-center gap-2"><CheckCircle className="w-4 h-4" />{notice}</div>}
-        {error && <div className="mb-6 max-w-xl mx-auto rounded-2xl bg-red-500/10 border border-red-500/30 px-5 py-3 text-red-300 text-sm text-center">{error}</div>}
+      {isFree && (
+        <section className={`${CARD} p-5 sm:p-6`} aria-labelledby="free-blueprint">
+          <h2 id="free-blueprint" className="text-[18px] font-semibold" style={INK}>Your Brand Growth Blueprint is free</h2>
+          <p className="mt-1 text-[14px] leading-relaxed" style={QUIET}>A plan for your business: who to reach, what to post and where to start. It takes a few minutes and costs nothing. Posts, campaigns and videos start with a plan below.</p>
+          <button type="button" className={`${BTN} mt-4 sm:max-w-xs`} onClick={() => navigate('/blueprint')}>Make my free Blueprint</button>
+        </section>
+      )}
 
-        {isAgencyPlan && (
-          <div className="mb-10 rounded-3xl bg-[#070a12] px-6 py-6" aria-labelledby="your-agency-plan">
-            <h2 id="your-agency-plan" className="text-xl font-bold text-white mb-3">Your clients and shared pool</h2>
-            {agencyNow ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-3xl font-extrabold text-white">{agencyNow.used} of {agencyNow.limit}<span className={`${muted} text-base font-normal`}> clients</span></p>
-                  {poolText(agencyNow.poolPosts, agencyNow.poolVideos) && <p className={`${muted} text-sm mt-2`}>{poolText(agencyNow.poolPosts, agencyNow.poolVideos)}</p>}
-                  <button type="button" onClick={openClients} className="mt-4 text-sm text-[#ffcc29] underline underline-offset-2 hover:text-white">Go to my clients</button>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-white mb-1">Extra clients</h3>
-                  <p className={`${muted} text-sm mb-1`}>{agencyExtraClientLine(catalogue.agency, catalogue.slot)}</p>
-                  {slotRoom.hint && <p className={`${muted} text-sm mb-1`}>{slotRoom.hint}</p>}
-                  {!slotRoom.canBuy && <p className={`${muted} text-sm mb-3`} role="status">{slotRoom.message}</p>}
-                  <button type="button" className={PRIMARY_BTN + ' md:max-w-xs mt-2'} disabled={!slotRoom.canBuy || !!busy} onClick={() => { setNotice(''); setError(''); setSlotOpen(true); }}>
-                    <Plus className="w-4 h-4" /> Add an extra client
-                  </button>
-                  {extraClientEndingNote(agencyNow) && <p className={`${muted} text-sm mt-3`} role="status">{extraClientEndingNote(agencyNow)}</p>}
-                  {canCancelExtraClient(agencyNow) && (
-                    <button type="button" disabled={!!busy} onClick={() => { setNotice(''); setError(''); setCancelOpen(true); }} className={`${muted} block text-sm mt-3 underline underline-offset-2 hover:text-white`}>Cancel an extra client</button>
-                  )}
-                </div>
+      {poolEmpty && (
+        <p role="status" className="rounded-xl border border-[var(--gv-coral)] px-4 py-3 text-[14px]" style={{ background: 'var(--gv-peach)', color: 'var(--gv-text-primary)' }}><strong className="font-semibold">{poolNotice.title}.</strong> {poolNotice.body}</p>
+      )}
+
+      {isAgencyPlan && (
+        <section className={`${CARD} p-5 sm:p-6`} aria-labelledby="your-agency-plan">
+          <h2 id="your-agency-plan" className="mb-3 text-[20px] font-semibold" style={INK}>Your clients and shared pool</h2>
+          {agencyNow ? (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <p className="text-[32px] font-semibold leading-none" style={INK}>{agencyNow.used} of {agencyNow.limit}<span className="text-[15px] font-normal" style={QUIET}> clients</span></p>
+                {poolText(agencyNow.poolPosts, agencyNow.poolVideos) && <p className="mt-2 text-[14px]" style={QUIET}>{poolText(agencyNow.poolPosts, agencyNow.poolVideos)}</p>}
+                <button type="button" onClick={clientsLink} className={`${LINK} mt-4`}>Go to my clients</button>
               </div>
-            ) : (
-              <p className={`${muted} text-sm`} role="status">{accountLoaded ? 'Your client count could not be loaded just now. Please reload the page.' : 'Loading your clients'}</p>
-            )}
-          </div>
-        )}
+              <div>
+                <h3 className="mb-1 text-[16px] font-semibold" style={INK}>Extra clients</h3>
+                <p className="mb-1 text-[14px]" style={QUIET}>{agencyExtraClientLine(catalogue.agency, catalogue.slot)}</p>
+                {slotRoom.hint && <p className="mb-1 text-[14px]" style={QUIET}>{slotRoom.hint}</p>}
+                {!slotRoom.canBuy && <p className="mb-3 text-[14px]" style={QUIET} role="status">{slotRoom.message}</p>}
+                <button type="button" className={`${BTN_MAIN} mt-2 md:max-w-xs`} disabled={!slotRoom.canBuy || !!busy} onClick={() => { setNotice(''); setError(''); setSlotOpen(true); }}>
+                  <Plus className="h-4 w-4" aria-hidden="true" /> Add an extra client
+                </button>
+                {extraClientEndingNote(agencyNow) && <p className="mt-3 text-[14px]" style={QUIET} role="status">{extraClientEndingNote(agencyNow)}</p>}
+                {canCancelExtraClient(agencyNow) && (
+                  <button type="button" disabled={!!busy} onClick={() => { setNotice(''); setError(''); setCancelOpen(true); }} className={`${LINK} mt-3 block`}>Cancel an extra client</button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[14px]" style={QUIET} role="status">Your client count could not be loaded just now. Please reload the page.</p>
+          )}
+        </section>
+      )}
 
-        {isManaged && (
-          <div className="mb-12 rounded-3xl bg-[#070a12] px-6 py-6 text-center">
-            <h2 className="text-xl font-bold text-white mb-2">Your plan is managed by Nebulaa</h2>
-            <p className={`${muted} text-sm max-w-xl mx-auto`}>Your account is set up and looked after by Nebulaa, so you do not need to choose a plan or add-ons. You can buy extra Quarks below at any time.</p>
-          </div>
-        )}
+      {isManaged && (
+        <section className={`${CARD} p-5 sm:p-6`} aria-labelledby="managed-plan">
+          <h2 id="managed-plan" className="mb-1 text-[20px] font-semibold" style={INK}>Your plan is managed by Nebulaa</h2>
+          <p className="max-w-2xl text-[14px] leading-relaxed" style={QUIET}>Your account is set up and looked after by Nebulaa, so you do not need to choose a plan or add-ons. You can add more posts and videos below at any time.</p>
+        </section>
+      )}
 
+      {!isManaged && (
+        <section aria-labelledby="monthly-plans">
+          <Heading id="monthly-plans">{isAgencyPlan ? 'Your plan' : 'Monthly plans'}</Heading>
+          <div className={isAgencyPlan ? 'grid max-w-md grid-cols-1 gap-5' : 'grid grid-cols-1 gap-5 lg:grid-cols-3'}>
+            {cards.map((plan) => {
+              const current = tier === plan.id;
+              const isAgencyCard = plan.id === 'agency';
+              const features = isAgencyCard ? agencyFeatureLines(plan, catalogue.agency) : planLines(plan.features);
+              const note = isAgencyCard ? agencyCardNote(agencyState) : (onPaidPlan && !current ? 'You already have an active plan.' : '');
+              const locked = isAgencyCard ? agencyState !== 'available' : (onPaidPlan && !current);
+              const extraLine = isAgencyCard ? agencyExtraClientLine(catalogue.agency, catalogue.slot) : '';
+              const suggested = isAgencyCard && agencyHint;
+              return (
+                <div
+                  key={plan.id}
+                  ref={isAgencyCard ? agencyCardRef : undefined}
+                  tabIndex={isAgencyCard ? -1 : undefined}
+                  aria-labelledby={`plan-${plan.id}`}
+                  data-plan={plan.id}
+                  className={`${CARD} flex min-w-0 flex-col p-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-text-primary)] sm:p-6 ${suggested ? '!border-2 !border-[var(--gv-accent)]' : ''}`}
+                >
+                  {suggested && <span className="mb-3 self-start rounded-full px-3 py-1 text-[12.5px] font-semibold" style={{ background: 'var(--gv-accent)', color: 'var(--gv-accent-ink)' }}>{AGENCY_BADGE}</span>}
+                  <h3 id={`plan-${plan.id}`} className="text-[22px] font-semibold leading-tight" style={INK}>{plan.name}</h3>
+                  {suggested && <p className="mt-1 text-[13.5px]" style={QUIET}>{AGENCY_BADGE_LINE}</p>}
+                  <p className="mt-1 text-[14px] leading-relaxed" style={QUIET}>{plan.description}</p>
+                  <p className="mt-5 text-[34px] font-semibold leading-none tabular-nums" style={INK}>{formatInr(plan.inr)}<span className="text-[14px] font-normal" style={QUIET}> a month plus GST</span></p>
+                  <p className="mb-5 mt-2 text-[13px] leading-relaxed" style={QUIET}>{formatPaise(plan.chargePaise)} including 18 percent GST. Renews monthly and can be cancelled at any time.</p>
+                  <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide" style={QUIET}>What you get</p>
+                  <ul className="mb-5 flex-1 space-y-2.5">
+                    {features.map((f, i) => (
+                      <li key={i} className="flex items-start gap-2.5 text-[14px] leading-snug" style={INK}>
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--gv-accent-text)]" aria-hidden="true" /><span className="min-w-0 break-words">{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {extraLine && <p className="mb-4 text-[13px] leading-relaxed" style={QUIET}>{extraLine}</p>}
+                  <button type="button" className={BTN_MAIN} disabled={!!busy || !accountLoaded || current || locked} onClick={() => buyPlan(plan.id, plan.name, plan.chargePaise)}>
+                    {busy === `plan:${plan.id}` ? <><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Processing</> : current ? (isAgencyCard ? 'Your plan' : 'Your current plan') : `Choose ${plan.name}`}
+                  </button>
+                  {note && <p className="mt-2 text-center text-[13px]" style={QUIET}>{note}</p>}
+                </div>
+              );
+            })}
+          </div>
+          {isAgencyPlan && (
+            <p className="mt-4 text-[14px]" style={QUIET}>Publishing, inbox and competitor insights are included in your Agency plan, so there are no add-ons to buy.</p>
+          )}
+        </section>
+      )}
+
+      {showAddons && (
+        <section aria-labelledby="add-ons">
+          <Heading id="add-ons" hint="Add-ons are available with the Starter and Growth plans and renew monthly. Prices are before GST.">Add-ons</Heading>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {catalogue.addons.map((a) => {
+              const owned = ownsAddon(a.id);
+              const missing = a.requires.find((r) => !ownsAddon(r));
+              const blocked = !onPaidPlan || !!missing;
+              const why = !onPaidPlan ? 'Choose a plan first.' : missing ? `Needs ${catalogue.addons.find((x) => x.id === missing)?.label || 'another add-on'}.` : '';
+              return (
+                <div key={a.id} className={`${CARD} flex min-w-0 flex-col p-5`} aria-labelledby={`addon-${a.id}`}>
+                  <h3 id={`addon-${a.id}`} className="text-[17px] font-semibold leading-snug" style={INK}>{a.label}</h3>
+                  <p className="mt-1 flex-1 text-[14px] leading-relaxed" style={QUIET}>{addonBlurb(a.id)}</p>
+                  <p className="mt-4 text-[26px] font-semibold leading-none tabular-nums" style={INK}>{formatInr(a.inr)}<span className="mt-1 block text-[13px] font-normal leading-snug" style={QUIET}>a month plus GST</span></p>
+                  <p className="mb-4 mt-1.5 text-[13px] leading-relaxed" style={QUIET}>{formatPaise(a.chargePaise)} including GST.{why ? ` ${why}` : ''}</p>
+                  <button type="button" className={BTN} disabled={!!busy || owned || blocked} onClick={() => buyAddon(a.id, a.label, a.chargePaise)}>
+                    {busy === `addon:${a.id}` ? <><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Processing</> : owned ? 'Active' : 'Add to my plan'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section aria-labelledby="more-posts">
+        <Heading
+          id="more-posts"
+          hint={`${isAgencyPlan ? 'Extra posts and videos go into the shared pool. ' : ''}They stay valid for 60 days from the purchase and are used after your monthly ones. Prices are before GST.`}
+        >Add more posts and videos</Heading>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {catalogue.topups.map((t) => {
+            const what = topupLine(t.outputs) || 'More posts and videos';
+            return (
+              <div key={t.inr} className={`${CARD} flex min-w-0 flex-col p-4`}>
+                <p className="text-[17px] font-semibold leading-snug" style={INK}>{what}</p>
+                <p className="mb-4 mt-2 flex-1 text-[13px] leading-relaxed" style={QUIET}>{formatInr(t.inr)} plus GST ({formatPaise(t.chargePaise)} including GST)</p>
+                <button type="button" className={`${BTN} !px-2`} disabled={!!busy} onClick={() => buyTopup(t.inr, what)}>
+                  {busy === `topup:${t.inr}` ? <><Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Processing</> : `Add for ${formatInr(t.inr)}`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <footer className="space-y-3">
         {!isManaged && (
-          <div className="mb-8 max-w-2xl mx-auto text-center">
-            <button type="button" onClick={() => setShowGst((v) => !v)} aria-expanded={showGst} className={`${muted} text-sm underline underline-offset-2 hover:text-white`}>
+          <div>
+            <button type="button" onClick={() => setShowGst((v) => !v)} aria-expanded={showGst} aria-controls="gst-details" className={LINK}>
               {showGst ? 'Hide GST details' : 'Need a GST invoice in your business name? Add your GSTIN'}
             </button>
             {showGst && (
-              <div className="mt-4 rounded-2xl p-5 text-left" style={{ background: '#fffdf8', color: '#14203A' }}>
+              <div id="gst-details" className={`${CARD} mt-3 max-w-2xl p-5`}>
                 <BillingDetailsForm compact />
               </div>
             )}
           </div>
         )}
-
-        {!isManaged && <h2 className={h2}>{isAgencyPlan ? 'Your plan' : 'Monthly plans'}</h2>}
-        {!isManaged && <div className={isAgencyPlan ? 'grid grid-cols-1 gap-6 mb-12 max-w-md' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12'}>
-          {catalogue.plans.filter((plan) => !isAgencyPlan || plan.id === 'agency').map((plan) => {
-            const current = tier === plan.id;
-            const isAgencyCard = plan.id === 'agency';
-            const features = isAgencyCard ? agencyFeatureLines(plan, catalogue.agency) : plan.features;
-            const note = isAgencyCard ? agencyCardNote(agencyState) : (onPaidPlan && !current ? 'You already have an active plan.' : '');
-            const locked = isAgencyCard ? agencyState !== 'available' : (onPaidPlan && !current);
-            const extraLine = isAgencyCard ? agencyExtraClientLine(catalogue.agency, catalogue.slot) : '';
-            return (
-              <GlassCard key={plan.id} highlighted={agencyHint ? plan.id === 'agency' : plan.id === 'professional'}>
-                <div className="p-7 flex flex-col h-full">
-                  {isAgencyCard && agencyHint && <span className="self-start mb-2 rounded-full bg-[#ffcc29] px-3 py-1 text-xs font-bold text-[#070A12]">{AGENCY_BADGE}</span>}
-                  <h3 className="text-2xl font-bold text-white mb-1">{plan.name}</h3>
-                  {isAgencyCard && agencyHint && <p className={`${muted} text-sm mb-1`}>{AGENCY_BADGE_LINE}</p>}
-                  <p className={`${muted} text-sm mb-5`}>{plan.description}</p>
-                  <p className="text-4xl font-extrabold text-white">{formatInr(plan.inr)}<span className={`${muted} text-base font-normal`}> a month plus GST</span></p>
-                  <p className={`${muted} text-xs mt-1 mb-5`}>{formatPaise(plan.chargePaise)} including 18 percent GST. Renews monthly and can be cancelled at any time.</p>
-                  <ul className="space-y-2.5 mb-7 flex-1">
-                    {features.map((f, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-[13px]">
-                        <Check className="w-4 h-4 text-[#ffcc29]/80 flex-shrink-0 mt-0.5" /><span className="text-[#ededed]/85">{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {extraLine && <p className={`${muted} text-xs mb-5 -mt-3`}>{extraLine}</p>}
-                  <button className={PRIMARY_BTN} disabled={!!busy || !accountLoaded || current || locked} onClick={() => buyPlan(plan.id, plan.name, plan.chargePaise)}>
-                    {busy === `plan:${plan.id}` ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing</> : current ? (isAgencyCard ? 'Your plan' : 'Your current plan') : <><CreditCard className="w-4 h-4" /> Choose {plan.name}</>}
-                  </button>
-                  {note && <p className={`${muted} text-xs mt-2 text-center`}>{note}</p>}
-                </div>
-              </GlassCard>
-            );
-          })}
-        </div>}
-
-        {isAgencyPlan && (
-          <p className={`${muted} text-sm mb-12`}>Publishing, inbox and competitor insights are included in your Agency plan, so there are no add-ons to buy.</p>
+        {(onPaidPlan || isAgencyPlan) && (
+          <p className="text-[14px]" style={QUIET}>
+            To change or cancel your plan, open <button type="button" className={LINK} onClick={() => navigate('/settings')}>Settings</button> and choose Billing.
+          </p>
         )}
+        <p className="flex items-center gap-2 text-[13px]" style={QUIET}>
+          <Shield className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>Secured by Razorpay. UPI, cards and net banking are accepted.</span>
+        </p>
+        <LegalLinks className="text-[13px] text-[var(--gv-text-tertiary)]" linkClassName="underline underline-offset-2 hover:text-[var(--gv-text-primary)]" />
+      </footer>
 
-        {!isManaged && !isAgencyPlan && <>
-        <h2 className={h2}>Add-ons</h2>
-        <p className={`${muted} text-sm -mt-2 mb-4`}>Add-ons are available with the Starter and Growth plans and renew monthly. Prices are before GST.</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
-          {catalogue.addons.map((a) => {
-            const owned = ownsAddon(a.id);
-            const missing = a.requires.find((r) => !ownsAddon(r));
-            const blocked = !onPaidPlan || !!missing;
-            const why = !onPaidPlan ? 'Choose a plan first.' : missing ? `Needs ${catalogue.addons.find((x) => x.id === missing)?.label || 'another add-on'}.` : '';
-            return (
-              <GlassCard key={a.id}>
-                <div className="p-6 flex flex-col h-full">
-                  <h3 className="text-lg font-bold text-white mb-1">{a.label}</h3>
-                  <p className="text-2xl font-extrabold text-white">{formatInr(a.inr)}<span className={`${muted} text-sm font-normal`}> a month plus GST</span></p>
-                  <p className={`${muted} text-xs mt-1 mb-4 flex-1`}>{formatPaise(a.chargePaise)} including GST.{why ? ` ${why}` : ''}</p>
-                  <button className={SECONDARY_BTN} disabled={!!busy || owned || blocked} onClick={() => buyAddon(a.id, a.label, a.chargePaise)}>
-                    {busy === `addon:${a.id}` ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing</> : owned ? 'Active' : 'Add to my plan'}
-                  </button>
-                </div>
-              </GlassCard>
-            );
-          })}
-        </div>
-        </>}
-
-        <h2 className={h2}>{isAgencyPlan ? 'Top up the shared pool' : 'Extra Quarks'}</h2>
-        <p className={`${muted} text-sm -mt-2 mb-4`}>{isAgencyPlan ? 'Extra posts and videos stay valid for 60 days from the purchase and are used after your monthly ones. Prices are before GST.' : 'Extra Quarks stay valid for 60 days from the purchase and are used after your monthly ones. Prices are before GST.'}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
-          {catalogue.topups.map((t) => (
-            <GlassCard key={t.inr}>
-              <div className="p-6 flex flex-col h-full">
-                <p className="text-xl font-extrabold text-white">
-                  {t.outputs ? <>{t.outputs.posts.toLocaleString('en-IN')} posts</> : isAgencyPlan ? <>More posts and videos</> : <>{t.quarks.toLocaleString('en-IN')} Quarks</>}
-                </p>
-                {t.outputs && <p className={`${muted} text-sm`}>or {t.outputs.videos.toLocaleString('en-IN')} video{t.outputs.videos === 1 ? '' : 's'}</p>}
-                <p className={`${muted} text-xs mt-2 mb-4 flex-1`}>{formatInr(t.inr)} plus GST ({formatPaise(t.chargePaise)} including GST)</p>
-                <button className={SECONDARY_BTN} disabled={!!busy} onClick={() => buyTopup(t.inr)}>
-                  {busy === `topup:${t.inr}` ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing</> : `Add for ${formatInr(t.inr)}`}
-                </button>
-              </div>
-            </GlassCard>
-          ))}
-        </div>
-
-        <div className="text-center mt-10 space-y-3 rounded-3xl bg-[#070a12] px-6 py-5">
-          <div className={`flex items-center justify-center gap-2 ${muted} text-xs`}>
-            <Shield className="w-3.5 h-3.5" />
-            <span>Secured by Razorpay. UPI, cards and net banking are accepted.</span>
-          </div>
-          {reason !== 'credits' && (
-            <button onClick={() => navigate('/dashboard')} className="block mx-auto text-[#ededed]/75 hover:text-[#ededed] text-sm underline">Back to Nebulaa</button>
-          )}
-          <button onClick={onLogout} className="text-[#ededed]/75 hover:text-[#ededed] text-sm transition-colors underline">Log out</button>
-          <LegalLinks className="pt-1 text-xs text-[#ededed]/60" linkClassName="hover:text-[#ededed] underline underline-offset-2" />
-        </div>
-      </div>
       {cancelOpen && (
         <CancelExtraClientDialog
           limit={agencyNow?.limit ?? 0}
@@ -489,7 +401,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
           onAdded={() => { loadAgency(); }}
         />
       )}
-    </SpaceBg>
+    </div>
   );
 };
 

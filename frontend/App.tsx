@@ -89,6 +89,12 @@ const VideosEntry: React.FC = () => {
   return params.get('jobId') ? <ReelGenerator /> : <CreateVideo />;
 };
 
+/** The "choose a plan" prompt would sit on top of the plans page itself, so it is left out there. */
+const HiddenOnPlansPage: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { pathname } = useLocation();
+  return pathname.startsWith('/trial-expired') ? null : <>{children}</>;
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -260,24 +266,6 @@ const App: React.FC = () => {
             }
         />
 
-        {/* Upgrade / Payment page — accessible even if trial isn't expired */}
-        <Route
-          path="/trial-expired"
-          element={
-            user ? (
-              <TrialExpired
-                reason={'time'}
-                daysUsed={7 - (user.trial?.expiresAt ? Math.max(0, Math.ceil((new Date(user.trial.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0)}
-                creditsUsed={user.credits?.totalUsed ?? 0}
-                insideClient={isInsideClient(user)}
-                onLogout={handleLogout}
-              />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-
         {/* Protected Routes wrapped in Layout */}
         <Route
           path="/*"
@@ -288,6 +276,8 @@ const App: React.FC = () => {
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome user={user} />} />
                     <Route path="/plan" element={<MyPlan />} />
+                    {/* The plans page sits inside the app shell like every other page. The route name is kept for old links. */}
+                    <Route path="/trial-expired" element={<TrialExpired insideClient={isInsideClient(user)} />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
                     {/* Two tabs on one page: Plan (AI month strategy, the PDF-able
                         view) and Schedule (real month grid, thumbnails on the day
@@ -341,14 +331,14 @@ const App: React.FC = () => {
                     {/* Persists across navigation while a Smart Calendar reel renders. */}
                     <BackgroundReelIndicator />
                     {trialExpired.expired && (
-                      <NeedPlanModal
+                      <HiddenOnPlansPage><NeedPlanModal
                         hasPlan={!needsPlan}
                         onSeePlans={() => { clearCreditsPaywall(); window.location.hash = '#/trial-expired'; }}
                         onDismiss={clearCreditsPaywall}
                         insideClient={isInsideClient(user)}
                         agency={isAgencyUser(user)}
                         onBackToAgency={() => { clearCreditsPaywall(); const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}
-                      />
+                      /></HiddenOnPlansPage>
                     )}
                 </Layout>
               ) : (
