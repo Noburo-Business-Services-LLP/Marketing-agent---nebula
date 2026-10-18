@@ -32,7 +32,7 @@ test('no language means music only, whatever line is passed', () => {
 });
 
 test('unknown style and language fall back to safe values', () => {
-  assert.strictEqual(sv.styleOf('weird'), 'natural');
+  assert.strictEqual(sv.styleOf('weird'), sv.DEFAULT_STYLE);
   assert.strictEqual(sv.languageOf('klingon'), 'english');
 });
 

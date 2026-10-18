@@ -65,10 +65,10 @@ async function interact(input, { aspectRatio = '9:16' } = {}, io = {}) {
   return buffer ? { ok: true, buffer } : { ok: false, retryable: true, message: 'The video could not be made this time. Your Quarks were returned. Please try again.' };
 }
 
-/** references: [{ mimeType, data(base64) }] up to 3. */
+/** references: [{ mimeType, data(base64) }] up to 3 (4 when the first is the last frame of the previous clip). */
 function generate({ prompt, references = [], aspectRatio }, io) {
   const input = [
-    ...references.slice(0, 3).map((r) => ({ type: 'image', data: r.data, mime_type: r.mimeType })),
+    ...references.slice(0, 4).map((r) => ({ type: 'image', data: r.data, mime_type: r.mimeType })),
     { type: 'text', text: String(prompt || '').slice(0, 6000) }
   ];
   return interact(input, { aspectRatio }, io);
