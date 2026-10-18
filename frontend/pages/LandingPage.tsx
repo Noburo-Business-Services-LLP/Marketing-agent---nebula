@@ -98,14 +98,27 @@ const TOOLS = [
   { icon: ImageIcon, tint: '#DCEBFA', title: 'Images and posters', text: 'For offers, festivals and new products. Your name, colours and style on every one.' },
   { icon: Clapperboard, tint: '#ECE6FB', title: 'Reels and videos', text: 'Short videos for Instagram and Facebook, made from a one-line idea.' },
   { icon: CalendarDays, tint: '#DDF2E6', title: 'A plan for the whole month', text: 'Every post on a calendar, built around your festivals and offers.' },
-  { icon: MessageCircle, tint: '#DDF2E6', title: 'Replies to customers (add-on)', text: 'Reply drafts for WhatsApp, email and SMS enquiries, ready in minutes. Available as an add-on.' },
+  { icon: MessageCircle, tint: '#DDF2E6', title: 'One inbox for replies (add-on)', text: 'Comments and messages from your Instagram and Facebook pages in one list, with a reply drafted for you to approve. Available as an add-on.' },
   { icon: Radar, tint: '#FFE3D0', title: 'What others are posting (add-on)', text: 'See what businesses like yours post, and what works for them. Available as an add-on.' },
 ];
 
-const STEPS = [
-  { title: 'Sign up', text: 'It takes one minute.' },
-  { title: 'Answer a few simple questions', text: 'Add your website if you have one and Nebulaa fills in most of it. Pick your language.' },
-  { title: 'Approve your month', text: 'Check each post on your phone, change what you like, and post.' },
+const WORKFLOW = [
+  { title: 'Tell us about your business', text: 'Answer a few simple questions and add your website and social pages. Nebulaa reads them and fills in most of it. You also get a free Brand Growth Blueprint.' },
+  { title: 'Get your plan', text: 'See who your ideal customer is and a simple strategy to reach them, in My plan.' },
+  { title: 'Every week, posts and videos made for you', text: 'Captions, images and short videos for the week appear in This week and Create, and are laid out on your calendar.' },
+  { title: 'Review and approve', text: 'Check each post on your phone, change what you like, and approve it. Nothing goes out without you.' },
+  { title: 'Publish and schedule', text: 'Connect your Instagram and Facebook pages and send approved posts out now or at a time you pick.', addon: 'Add-on' },
+  { title: 'Reply from one inbox', text: 'Comments and messages from your connected pages arrive in one list, each with a reply drafted for you to read, change and approve. Nothing is sent for you unless you choose to switch automatic sending on.', addon: 'Add-on' },
+  { title: 'See what competitors do and what your audience says', text: 'Look at what businesses like yours post and what works for them, and see what your own audience says in the comments on your posts.', addon: 'Add-ons' },
+];
+
+const AUDIENCE = [
+  'Small business owners',
+  'Shops and retail',
+  'Clinics',
+  'Hotels and stays',
+  'Restaurants and food brands',
+  'Coaches and trainers',
 ];
 
 const PLANS = [
@@ -122,15 +135,31 @@ const PLANS = [
     popular: true,
     features: ['Up to 181 posts a month, or', 'up to 12 short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Up to 5 team members'],
   },
+  {
+    name: 'Agency',
+    price: 6999,
+    note: 'For agencies and freelancers who run several client brands',
+    features: [
+      'Up to 545 posts a month, or',
+      'up to 37 short videos with voice and music',
+      'One shared pool of posts and videos for all clients',
+      '5 client brands included, extra client brand ₹1,499/month + GST',
+      'Publishing, inbox and competitor insights included',
+      'A usage report for each client',
+    ],
+  },
 ];
+
+const ADDON_LINE = 'Add-ons, per month plus GST: Publish and schedule ₹1,000, Competitor insights ₹500, Inbox ₹500, or all three together for ₹1,800.';
 
 const FAQS = [
   { q: 'Do I need design or writing skills?', a: 'No. Nebulaa writes the captions and makes the images and videos. You only check them and press approve.' },
   { q: 'Which languages does it write in?', a: 'English, Tamil, Hindi, Telugu, Kannada, Malayalam and more. You choose when you sign up and can change it any time.' },
   { q: 'Do I need a website?', a: 'No. If you have one, add it and Nebulaa fills in most of your details. If you do not, answer a few simple questions.' },
   { q: 'Where do my posts go?', a: 'You connect your Instagram, Facebook and other pages with the Publish and schedule add-on. A post goes out only after you approve it.' },
-  { q: 'What are Quarks?', a: 'Quarks are what the app spends each time it makes something for you. You never need to count them: every plan shows how many posts or videos it makes, and the price is shown before you make anything. Running low? Add more any time from inside the app.' },
-  { q: 'Do Quarks expire?', a: 'Your monthly Quarks are for that month and are renewed when your plan renews. Quarks you buy as a top-up stay valid for 60 days from the purchase. Both can be used while your plan is active. Prices are shown without GST, and 18% GST is added at checkout.' },
+  { q: 'Will replies go out without my approval?', a: 'No. With the Inbox add-on, Nebulaa drafts a reply and you read it, change it and approve it. Automatic sending is off until you switch it on yourself.' },
+  { q: 'What if I run out of posts or videos?', a: 'Running low? Add more posts and videos any time from inside the app. Top-ups stay valid for 60 days. Prices are shown without GST; 18% GST is added at checkout.' },
+  { q: 'Can I run several clients from one account?', a: 'Yes, on the Agency plan. You get 5 client brands, one shared pool of posts and videos, and a usage report for each client. Extra client brands are ₹1,499 a month plus GST.' },
 ];
 
 const CtaButton: React.FC<{ onClick: () => void; children: React.ReactNode; className?: string }> = ({ onClick, children, className = '' }) => (
@@ -396,26 +425,68 @@ const LandingPage: React.FC = () => {
       {/* How it works */}
       <section id="how-it-works" className="py-[72px] md:py-[96px]" style={{ background: SURFACE2 }}>
         <div className="max-w-6xl mx-auto px-5 md:px-6">
-          <div className="max-w-[720px] mb-11">
+          <div className="max-w-[760px] mb-11">
             <Label>How it works</Label>
             <h2 style={display} className="text-[32px] md:text-[48px]">
-              Start in <Swash>three steps.</Swash>
+              The whole job, <Swash>start to finish.</Swash>
             </h2>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {STEPS.map((s, i) => (
-              <div key={s.title} className="flex gap-4">
+          <ol className="grid md:grid-cols-2 gap-5 list-none p-0 m-0">
+            {WORKFLOW.map((s, i) => (
+              <li
+                key={s.title}
+                className={`flex gap-4 rounded-[22px] p-6 ${i === WORKFLOW.length - 1 ? 'md:col-span-2' : ''}`}
+                style={{ background: SURFACE, border: `1px solid ${RULE}` }}
+              >
                 <span className="flex-shrink-0 w-10 h-10 rounded-full text-[16px] font-extrabold flex items-center justify-center" style={{ background: INK, color: GROUND }}>
                   {i + 1}
                 </span>
-                <div>
-                  <h3 className="text-[19px] font-bold leading-tight mb-1.5">{s.title}</h3>
+                <div className="min-w-0">
+                  <h3 className="text-[19px] font-bold leading-tight mb-1.5">
+                    {s.title}
+                    {s.addon && (
+                      <span className="ml-2 align-middle inline-block rounded-full px-2.5 py-0.5 text-[11.5px] font-bold" style={{ background: SURFACE2, border: `1px solid ${RULE}`, color: INK2 }}>
+                        {s.addon}
+                      </span>
+                    )}
+                  </h3>
                   <p className="text-[15px] leading-[1.6]" style={{ color: INK2 }}>{s.text}</p>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ol>
           <div className="mt-10"><CtaButton onClick={signUp} className="px-6 sm:px-8 py-4 text-[15.5px]">Start for ₹999</CtaButton></div>
+        </div>
+      </section>
+
+      {/* Who it is for */}
+      <section id="who-its-for" className="py-[64px] md:py-[88px]">
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="max-w-[720px] mb-9">
+            <Label>Who it is for</Label>
+            <h2 style={display} className="text-[32px] md:text-[48px]">
+              Made for <Swash>people who run a business.</Swash>
+            </h2>
+          </div>
+          <ul className="flex flex-wrap gap-3 list-none p-0 m-0">
+            {AUDIENCE.map(a => (
+              <li key={a} className="rounded-full px-5 py-2.5 text-[15px] font-semibold" style={{ background: SURFACE, border: `1px solid ${RULE}`, color: INK }}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* Agencies */}
+      <section id="agencies" className="pb-[72px] md:pb-[96px]">
+        <div className="max-w-6xl mx-auto px-5 md:px-6">
+          <div className="rounded-[28px] md:rounded-[36px] px-6 md:px-12 py-10 md:py-12" style={{ background: SURFACE2, border: `1px solid ${RULE}` }}>
+            <Label>For agencies</Label>
+            <h2 style={display} className="text-[28px] md:text-[40px] mb-4 max-w-[720px]">Several client brands, <Swash>one account.</Swash></h2>
+            <p className="text-[16.5px] leading-[1.6] max-w-[640px] mb-5" style={{ color: INK2 }}>
+              The Agency plan lets you run several client brands from one account. All clients draw on one shared pool of posts and videos, and you get a usage report for each client.
+            </p>
+            <CtaButton onClick={() => { window.location.hash = '#pricing'; }} className="px-6 sm:px-8 py-4 text-[15.5px]">See the Agency plan</CtaButton>
+          </div>
         </div>
       </section>
 
@@ -425,17 +496,18 @@ const LandingPage: React.FC = () => {
           <div className="max-w-[720px] mb-11">
             <Label>Pricing</Label>
             <h2 style={display} className="text-[32px] md:text-[48px] mb-5">
-              Two plans. <Swash>Start from ₹999.</Swash>
+              Three plans. <Swash>Start from ₹999.</Swash>
             </h2>
             <p className="text-[16.5px] leading-[1.6]" style={{ color: INK2 }}>
-              Prices are per month plus GST. Both plans do the same things. The bigger plan gives you more Quarks each month. Publishing, competitor insights and replies are add-ons.
+              Prices are per month plus GST. Starter and Growth do the same things, and Growth makes over three times as much. Agency is for running several client brands. Publishing, competitor insights and the inbox are add-ons on Starter and Growth, and are included in Agency.
             </p>
+            <p className="text-[14.5px] leading-[1.6] mt-3" style={{ color: MUTED }}>{ADDON_LINE}</p>
           </div>
-          <div className="grid md:grid-cols-2 gap-6 max-w-[860px]">
+          <div className="grid md:grid-cols-3 gap-6 max-w-[1100px]">
             {PLANS.map(plan => (
               <div
                 key={plan.name}
-                className="rounded-[26px] p-8 flex flex-col"
+                className="rounded-[26px] p-7 lg:p-8 flex flex-col"
                 style={{ background: SURFACE, border: plan.popular ? `2px solid ${GOLD}` : `1px solid ${RULE}`, boxShadow: '0 14px 34px rgba(20,32,58,0.08)' }}
               >
                 <p style={{ color: CORAL_TEXT, letterSpacing: '0.14em' }} className="text-[12px] font-bold uppercase mb-3">

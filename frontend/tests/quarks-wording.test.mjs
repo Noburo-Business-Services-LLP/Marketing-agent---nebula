@@ -106,6 +106,15 @@ test('landing page plan figures come from the backend PLANS config', async () =>
     assert.ok(land.includes(`Up to ${o.posts} posts a month`), `landing shows ${o.posts} posts for ${id}`);
     assert.ok(land.includes(`up to ${o.videos} short videos`), `landing shows ${o.videos} videos for ${id}`);
   }
+  // The Agency card: the figures come from the same config (plan allowance, price, client slot, included clients).
+  const A = PLANS.agency;
+  const oa = outputsFor(A.quarks);
+  assert.ok(land.includes(`Up to ${oa.posts} posts a month`), `landing shows ${oa.posts} posts for agency`);
+  assert.ok(land.includes(`up to ${oa.videos} short videos`), `landing shows ${oa.videos} videos for agency`);
+  assert.ok(new RegExp(`price: ${A.inr}\\b`).test(land), 'landing shows the agency price');
+  const AG = (cfg.default || cfg).AGENCY;
+  assert.ok(land.includes(`${AG.includedClients} client brands included`), 'landing shows the included client brands');
+  assert.ok(land.includes(`₹${AG.slot.inr.toLocaleString('en-IN')}/month`), 'landing shows the extra client price');
   assert.ok(!/7 days free|free for 7 days|no card needed/i.test(land));
 });
 
