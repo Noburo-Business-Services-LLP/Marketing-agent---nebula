@@ -3,7 +3,7 @@ import { priceWithWorth } from '../utils/plans';
 import PlatformIcon from '../components/PlatformIcon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, Linkedin, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, GalleryHorizontalEnd, Package, Globe } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, Package, Globe } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
@@ -12,6 +12,10 @@ import { takePrefill, nearestLanguage } from '../utils/prefill';
 import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 import PostDesignPanel from '../components/PostDesignPanel';
 import ModeExplainer from '../components/ModeExplainer';
+import Tile from '../components/Tile';
+import TileGrid from '../components/TileGrid';
+import { SinglePostArt, CampaignArt, CarouselArt, LinkedInArt } from '../components/art';
+import { CREATE_TILES, actionCostKey, createTileCost } from '../utils/createTiles';
 import IdeaBoxTools, { ReadUpload } from '../components/IdeaBoxTools';
 import { appendText, mergeDetails } from '../utils/ideaFiles';
 import { DEFAULT_DESIGN, PostDesign, designRequestFields } from '../utils/postDesign';
@@ -44,6 +48,10 @@ const getToken = () =>
 // /drafts (Approve) so the user sees what got produced.
 
 type CreateMode = 'campaign' | 'single' | 'carousel' | 'linkedin';
+// Created once, so the tiles do not rebuild their pictures on every keystroke in the form.
+const ART_FOR_MODE: Record<CreateMode, React.ReactNode> = {
+  single: <SinglePostArt />, campaign: <CampaignArt />, carousel: <CarouselArt />, linkedin: <LinkedInArt />,
+};
 
 const DURATIONS = ['1 week', '2 weeks', '3 weeks', '4 weeks'];
 const CADENCES = ['2 posts / week', '3 posts / week', '5 posts / week', 'Daily'];
@@ -635,10 +643,7 @@ const GravityCreate: React.FC = () => {
   // Campaign charges per post, carousel charges per slide — both scale with
   // how much is actually generated, matching how the backend deducts each.
   // Single post is the one true flat rate: it always makes exactly one image.
-  const currentActionCost =
-    mode === 'campaign' ? (quarkCosts.campaign_full || 0)
-    : mode === 'carousel' ? (quarkCosts.carousel_generated || 0)
-    : (quarkCosts.image_generated || 0);
+  const currentActionCost = quarkCosts[actionCostKey(mode)] || 0;
 
   const estimate = useMemo(() => {
     const weeks = parseInt(duration, 10) || 1;
@@ -1121,46 +1126,22 @@ const GravityCreate: React.FC = () => {
 
   return (
     <div className="max-w-[900px] mx-auto pb-24">
-      {/* Mode toggle */}
-      <div className="flex items-center justify-center mb-5 mt-1">
-        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--gv-surface-1)] border border-[var(--gv-border-subtle)]">
-          <button
-            onClick={() => setMode('single')}
-            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              mode === 'single' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Single post
-          </button>
-          <button
-            onClick={() => setMode('campaign')}
-            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              mode === 'campaign' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            Campaign
-          </button>
-          <button
-            onClick={() => setMode('carousel')}
-            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              mode === 'carousel' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
-            }`}
-          >
-            <GalleryHorizontalEnd className="w-3.5 h-3.5" />
-            Carousel
-          </button>
-          <button
-            onClick={() => setMode('linkedin')}
-            className={`flex items-center gap-2 h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-              mode === 'linkedin' ? 'bg-[var(--gv-surface-3)] text-[var(--gv-text-primary)]' : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-secondary)]'
-            }`}
-          >
-            <Linkedin className="w-3.5 h-3.5" />
-            LinkedIn
-          </button>
-        </div>
+      {/* Mode tiles: the same four choices as before (they only set the mode), now with a picture, a one-line description and the price. */}
+      <div className="mb-5 mt-1">
+        <TileGrid columns={4} phone="row" label="What do you want to create?">
+          {CREATE_TILES.map((t) => (
+            <Tile
+              key={t.key}
+              title={t.title}
+              subtitle={t.subtitle}
+              footer={createTileCost(t.key, quarkCosts) || undefined}
+              accent={t.accent}
+              art={ART_FOR_MODE[t.key]}
+              selected={mode === t.key}
+              onClick={() => setMode(t.key)}
+            />
+          ))}
+        </TileGrid>
       </div>
 
       <ModeExplainer mode={mode} />

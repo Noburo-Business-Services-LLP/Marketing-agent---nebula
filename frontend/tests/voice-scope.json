@@ -64,5 +64,6 @@
   "components/Tile.tsx",
   "components/TileGrid.tsx",
   "components/DarkPanel.tsx",
-  "utils/tiles.ts"
+  "utils/tiles.ts",
+  "utils/createTiles.ts"
 ]
