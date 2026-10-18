@@ -835,9 +835,10 @@ async function createAyrshareProfile(title, options = {}) {
 /**
  * Register Webhook URL with Ayrshare
  * @param {string} profileKey - The user's Ayrshare Profile Key
- * @param {string} webhookUrl - The webhook URL to receive events
+ * @param {string} webhookUrl - The webhook URL to receive events (may carry a private token, so it is never logged)
+ * @param {string} action - Ayrshare webhook action: 'social', 'messages', 'comments' ...
  */
-async function setAyrshareWebhook(profileKey, webhookUrl) {
+async function setAyrshareWebhook(profileKey, webhookUrl, action = 'social') {
   if (!AYRSHARE_API_KEY) return { success: false, error: 'API not configured' };
   try {
     const response = await makeRequest('https://app.ayrshare.com/api/hook/webhook', {
@@ -847,13 +848,85 @@ async function setAyrshareWebhook(profileKey, webhookUrl) {
         'Profile-Key': profileKey,
         'Content-Type': 'application/json'
       },
-      body: { action: 'social', url: webhookUrl }
+      body: { action, url: webhookUrl }
     });
-    console.log('Ayrshare set webhook response:', response.status, response.data);
-    return { success: response.status === 200, data: response.data };
+    // Ayrshare echoes the url back, and the url carries a private token: log the status only.
+    console.log('Ayrshare set webhook response:', action, response.status, response.data?.status || '');
+    return { success: response.status === 200, data: { status: response.data?.status, action: response.data?.action, refId: response.data?.refId } };
   } catch (error) {
-    console.error('Ayrshare set webhook error:', error);
+    console.error('Ayrshare set webhook error:', error.message);
     return { success: false, error: error.message };
+  }
+}
+
+function ayrshareProfileHeaders(profileKey) {
+  const headers = {
+    'Authorization': `Bearer ${AYRSHARE_API_KEY}`,
+    'Content-Type': 'application/json'
+  };
+  if (profileKey && profileKey !== 'primary') headers['Profile-Key'] = profileKey;
+  return headers;
+}
+
+function ayrshareFailure(response) {
+  const data = response?.data || {};
+  const perPlatform = Object.values(data).find((value) => value && typeof value === 'object' && String(value.status || '').toLowerCase() === 'error');
+  return {
+    success: false,
+    code: Number(data.code || perPlatform?.code || 0) || 0,
+    error: data.message || perPlatform?.message || `Ayrshare failed with status ${response?.status}`,
+    status: response?.status,
+    data
+  };
+}
+
+/**
+ * Reply to a comment (Ayrshare "Reply to Comment").
+ * POST https://api.ayrshare.com/api/comments/reply/{commentId}  body { comment, platforms: [platform], searchPlatformId: true }
+ * The id from an incoming comment webhook is the social network's comment id, hence searchPlatformId: true.
+ * Docs: Instagram and Facebook can only be replied to on the account's own posts; needs the Premium plan or higher.
+ */
+async function replyToAyrshareComment({ profileKey, platform, commentId, text }) {
+  if (!AYRSHARE_API_KEY) return { success: false, code: 0, error: 'API not configured' };
+  if (!commentId) return { success: false, code: 0, error: 'No comment id' };
+  try {
+    // UNVERIFIED against live API: searchPlatformId with the id taken from the incoming comments webhook, and the success shape below.
+    const response = await makeRequest(`https://api.ayrshare.com/api/comments/reply/${encodeURIComponent(commentId)}`, {
+      method: 'POST',
+      headers: ayrshareProfileHeaders(profileKey),
+      body: { comment: text, platforms: [platform], searchPlatformId: true }
+    });
+    const data = response.data || {};
+    const platformResult = data[platform];
+    const failed = response.status !== 200 || String(data.status || '').toLowerCase() === 'error' || String(platformResult?.status || '').toLowerCase() === 'error';
+    if (failed) return ayrshareFailure(response);
+    return { success: true, data, replyId: platformResult?.commentId || data.commentId || '' };
+  } catch (error) {
+    console.error('Ayrshare reply to comment error:', error.message);
+    return { success: false, code: 0, error: error.message };
+  }
+}
+
+/**
+ * Send a direct message (Ayrshare "Send Message").
+ * POST https://api.ayrshare.com/api/messages/{platform}  body { recipientId, message }  (platform: facebook | instagram)
+ * Docs: needs the Messaging add-on; the person must have written first, and we can reply within 7 days of their last message.
+ */
+async function sendAyrshareDirectMessage({ profileKey, platform, recipientId, text }) {
+  if (!AYRSHARE_API_KEY) return { success: false, code: 0, error: 'API not configured' };
+  if (!recipientId) return { success: false, code: 0, error: 'No recipient id' };
+  try {
+    const response = await makeRequest(`https://api.ayrshare.com/api/messages/${encodeURIComponent(platform)}`, {
+      method: 'POST',
+      headers: ayrshareProfileHeaders(profileKey),
+      body: { recipientId, message: text }
+    });
+    const data = response.data || {};
+    if (response.status !== 200 || String(data.status || '').toLowerCase() !== 'success') return ayrshareFailure(response);
+    return { success: true, data, messageId: data.messageId || '' };
+  } catch (error) {
+    console.error('Ayrshare send message error:', error.message);
+    return { success: false, code: 0, error: error.message };
   }
 }
 
@@ -2608,6 +2681,8 @@ module.exports = {
   getAyrshareUserProfile,
   deleteAyrshareProfile,
   setAyrshareWebhook,
+  replyToAyrshareComment,
+  sendAyrshareDirectMessage,
   // Ayrshare Analytics (detailed)
   getPostAnalytics,
   getSocialAnalyticsDetailed,

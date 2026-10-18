@@ -271,7 +271,9 @@ const userSchema = new mongoose.Schema({
     activeSocialAccounts: { type: [String], default: [] },
     displayNames: { type: mongoose.Schema.Types.Mixed, default: [] },
     lastCheckedAt: { type: Date, default: null },
-    lastError: { type: String, default: '' }
+    lastError: { type: String, default: '' },
+    // Private token carried in the inbox webhook address. Hidden from normal reads: ask for it with select('+ayrshare.webhookToken').
+    webhookToken: { type: String, default: '', select: false }
   },
   // ICP & Channel Strategy (AI-generated, stored per user)
   icpStrategy: {
