@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, Paperclip, Square, Loader2, X, FileText, Image as ImageIcon } from 'lucide-react';
 import { apiService } from '../services/api';
-import { ACCEPT, fileProblem, speechLanguage, referenceOfferFor, referenceOfferText, referenceAddedText } from '../utils/ideaFiles';
+import { ACCEPT, fileProblem, speechLanguage, referenceOfferFor, referenceOfferText, referenceAddedText, micProblemText } from '../utils/ideaFiles';
 
 export interface ReadUpload { id: string; name: string; kind: string; url: string; summary: string; brief: string; details: Record<string, string>; notes: string }
 
@@ -98,8 +98,8 @@ const IdeaBoxTools: React.FC<{
       rec.start();
       setRecording(true);
       timerRef.current = setTimeout(stopRecording, MAX_RECORD_SECONDS * 1000);
-    } catch {
-      setNote('The microphone is not available. Please allow it in your browser, or type your idea.');
+    } catch (e: any) {
+      setNote(micProblemText(e?.name, typeof window === 'undefined' || window.isSecureContext !== false));
     }
   };
 

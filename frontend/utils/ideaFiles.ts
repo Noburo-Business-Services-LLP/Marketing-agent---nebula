@@ -52,3 +52,21 @@ export function referenceOfferFor(a: { file: { type?: string } | null | undefine
 
 export const referenceOfferText = (name: string) => `${name} is a photo with no text to read. Use it as a reference instead:`;
 export const referenceAddedText = (label: string) => `Added as ${label.charAt(0).toLowerCase()}${label.slice(1)} reference`;
+
+/** A plain reason and next step for a microphone that would not start, from the browser's error name. */
+export function micProblemText(errorName?: string, secure: boolean = true): string {
+  if (!secure) return 'The microphone only works on a secure (https) page. Please type your idea instead.';
+  switch (errorName) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'The microphone is blocked for this site. Click the small icon at the left of the address bar, set Microphone to Allow, then press the button again. Or type your idea.';
+    case 'NotFoundError':
+    case 'OverconstrainedError':
+      return 'No microphone was found on this device. Please connect one, or type your idea.';
+    case 'NotReadableError':
+    case 'AbortError':
+      return 'Another app or tab is using the microphone. Close it and try again, or type your idea.';
+    default:
+      return 'The microphone could not start in this browser. Please try Chrome, or type your idea.';
+  }
+}

@@ -49,3 +49,12 @@ test('wording guard: no money or trial words in the offer text', async () => {
   const all = [referenceOfferText('x.png'), referenceAddedText('A person'), NEW_MSG].join(' ');
   assert.doesNotMatch(all, /quark|credit|trial|7 days/i);
 });
+
+test('a microphone problem says the real reason and the next step', async () => {
+  const { micProblemText } = await import('../utils/ideaFiles.ts');
+  assert.match(micProblemText('NotAllowedError'), /blocked.*Allow/);
+  assert.match(micProblemText('NotFoundError'), /No microphone was found/);
+  assert.match(micProblemText('NotReadableError'), /Another app/);
+  assert.match(micProblemText('Weird'), /try Chrome/);
+  assert.match(micProblemText('NotAllowedError', false), /secure/);
+});
