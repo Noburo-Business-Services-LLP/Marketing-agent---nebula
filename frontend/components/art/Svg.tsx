@@ -5,7 +5,7 @@ export interface ArtProps { title?: string }
 /** Shared frame for the illustration set: a 160 by 120 canvas with a soft background blob. Decorative unless a title is given. */
 export const Svg: React.FC<ArtProps & { tint: string; children: React.ReactNode }> = ({ title, tint, children }) => (
   <svg
-    viewBox="0 0 160 120" width="160" height="120" preserveAspectRatio="xMidYMid slice"
+    viewBox="0 0 160 120" width="160" height="120" preserveAspectRatio="xMidYMid meet"
     {...(title ? { role: 'img', 'aria-label': title } : { 'aria-hidden': true, focusable: 'false' })}
   >
     {title && <title>{title}</title>}

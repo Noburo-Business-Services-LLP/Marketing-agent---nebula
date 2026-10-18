@@ -258,6 +258,13 @@
       .nb-tile[data-variant="compact"] .nb-tile-body { justify-content: center; padding: 10px 14px; }
       .nb-tile[data-variant="compact"] .nb-tile-title { font-size: 15px; }
       .nb-tile[data-variant="compact"] .nb-tile-go { display: none; }
+      /* Phone rows: on a narrow screen a grid marked data-phone="row" shows each standard or idea tile as a row (picture left, text right), so a choice of four does not fill four screens. */
+      @media (max-width: 639px) {
+        .nb-tile-grid[data-phone="row"] > .nb-tile[data-variant="standard"], .nb-tile-grid[data-phone="row"] > .nb-tile[data-variant="idea"] { flex-direction: row; }
+        .nb-tile-grid[data-phone="row"] > .nb-tile[data-variant="standard"] .nb-tile-art, .nb-tile-grid[data-phone="row"] > .nb-tile[data-variant="idea"] .nb-tile-art { flex: 0 0 40%; max-width: 160px; aspect-ratio: auto; min-height: 120px; }
+        .nb-tile-grid[data-phone="row"] > .nb-tile .nb-tile-go { display: none; }
+        .nb-tile-grid[data-phone="row"] > .nb-tile .nb-tile-body { justify-content: center; padding: 12px 14px; }
+      }
       .nb-tile[data-variant="idea"] .nb-tile-art { aspect-ratio: 3 / 2; }
       .nb-tile[data-variant="idea"] .nb-tile-title { font-size: 15px; }
       .nb-tile[data-variant="idea"] .nb-tile-foot { padding-top: 6px; }
