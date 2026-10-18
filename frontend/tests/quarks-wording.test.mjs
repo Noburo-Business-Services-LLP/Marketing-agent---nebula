@@ -108,3 +108,40 @@ test('landing page plan figures come from the backend PLANS config', async () =>
   }
   assert.ok(!/7 days free|free for 7 days|no card needed/i.test(land));
 });
+
+/*
+ * The plans page is for customers, who see posts and videos and never Quarks. Quark stays in code identifiers and API
+ * field names only. The same rule covers the pure helpers the page prints, and the page must stay in the light theme.
+ */
+const QUARK = /\bquarks?\b/i;
+const PLANS_PAGE_FILES = ['pages/TrialExpired.tsx', 'utils/agencyPlan.ts', 'components/ExtraClientDialog.tsx', 'components/CancelExtraClientDialog.tsx', 'components/AgencyDialog.tsx'];
+
+test('the plans page and its helpers show no Quarks, credits, trial or 7 days to customers', () => {
+  const bad = [];
+  for (const rel of PLANS_PAGE_FILES) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    for (const h of findWordingViolations(src)) bad.push(`${rel}:${h.line}  ${h.text.slice(0, 90)}`);
+    let inBlock = false;
+    src.split('\n').forEach((raw, i) => {
+      let line = raw;
+      if (inBlock) { const e = line.indexOf('*/'); if (e < 0) return; line = line.slice(e + 2); inBlock = false; }
+      line = line.replace(/\/\*.*?\*\//g, '');
+      const o = line.indexOf('/*'); if (o >= 0) { inBlock = true; line = line.slice(0, o); }
+      line = line.replace(/(^|\s)\/\/.*$/, '$1');
+      if (/^\s*\*/.test(line)) return;
+      for (const t of visibleText(line)) if (QUARK.test(t)) bad.push(`${rel}:${i + 1}  ${t.trim().slice(0, 90)}`);
+    });
+  }
+  // utils/plans.ts is not listed: its upgrade messages are shared with other pages (UpgradePrompt) and still name Quarks; the new plans-page helpers in it are covered by plansPage.test.mjs.
+  assert.deepEqual(bad, []);
+});
+
+test('the plans page is light: no starfield, no hard-coded dark backgrounds', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'pages/TrialExpired.tsx'), 'utf8');
+  assert.doesNotMatch(src, /Starfield|SpaceBg|GlassCard|nebulaa-gold|backdrop-blur|#070a12|#0d1219|#060910/i);
+  assert.doesNotMatch(src, /text-white|bg-white\/|text-\[#ededed\]/);
+  // The page renders inside the app shell (which carries the new logo), not as a separate dark screen.
+  const app = fs.readFileSync(path.join(ROOT, 'App.tsx'), 'utf8');
+  assert.ok(app.indexOf('<Layout ') > 0 && app.indexOf('path="/trial-expired"') > app.indexOf('<Layout '), 'the /trial-expired route is inside Layout');
+  assert.equal((app.match(/path="\/trial-expired"/g) || []).length, 1);
+});

@@ -78,3 +78,77 @@ export function apiErrorFrom(data: any, status: number, fallback: string): Error
   err.data = d;
   return err;
 }
+
+// ---------------- the plans page: posts and videos, never Quarks ----------------
+
+export const PLANS_INTRO = 'Choose a monthly plan, add the features you need, or add more posts and videos at any time. Prices are shown before GST; 18 percent GST is added at checkout.';
+
+const PLAN_ORDER = ['starter', 'professional', 'agency'];
+
+/** The cards are always Starter, Growth, Agency, whatever order the server sends. An unknown plan goes last. */
+export function orderedPlans<T extends { id: string }>(plans: T[] | null | undefined): T[] {
+  const rank = (id: string) => { const i = PLAN_ORDER.indexOf(id); return i < 0 ? PLAN_ORDER.length : i; };
+  return (Array.isArray(plans) ? [...plans] : []).sort((a, b) => rank(a.id) - rank(b.id));
+}
+
+const count = (n: number): string => n.toLocaleString('en-IN');
+const noun = (n: number, one: string, many: string): string => `${count(n)} ${n === 1 ? one : many}`;
+const wholeCost = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+
+/** What a balance still buys, from the per-post and per-video costs the server reports. Empty when the costs are unknown. */
+export function leftText(balance: number | null | undefined, costs: Record<string, number> | null | undefined): string {
+  const post = wholeCost(costs?.image_generated);
+  const video = wholeCost(costs?.studio_video);
+  if (typeof balance !== 'number' || !Number.isFinite(balance) || !post || !video) return '';
+  const posts = Math.floor(Math.max(0, balance) / post);
+  const videos = Math.floor(Math.max(0, balance) / video);
+  if (!posts) return 'No posts or videos left. Add more below.';
+  if (!videos) return `About ${noun(posts, 'post', 'posts')} left.`;
+  return `About ${noun(posts, 'post', 'posts')} or ${noun(videos, 'short video', 'short videos')} left, in any mix.`;
+}
+
+/** One top-up pack, in the posts and videos it adds. */
+export function topupLine(outputs: { posts?: number; videos?: number } | null | undefined): string {
+  const posts = Math.floor(wholeCost(outputs?.posts));
+  const videos = Math.floor(wholeCost(outputs?.videos));
+  if (!posts) return '';
+  return videos ? `About ${noun(posts, 'post', 'posts')} or ${noun(videos, 'short video', 'short videos')}` : `About ${noun(posts, 'post', 'posts')}`;
+}
+
+/** A message from the server, unless it names Quarks (customers never see them): then the plain fallback. */
+export function plainMessage(message: unknown, fallback: string): string {
+  const m = typeof message === 'string' ? message.trim() : '';
+  return m && !/quark|credit/i.test(m) ? m : fallback;
+}
+
+/** The server sends "Up to N posts a month, or" and "up to M short videos..." as two lines; show them as one. */
+export function planLines(features: string[] | null | undefined): string[] {
+  const list = Array.isArray(features) ? features.filter((f) => typeof f === 'string' && f.trim()) : [];
+  if (list.length >= 2 && /,\s*or$/i.test(list[0].trim())) return [`${list[0].trim()} ${list[1].trim()}`, ...list.slice(2)];
+  return list;
+}
+
+/** 12 November 2026, in India time. Empty for anything that is not a date. */
+export function renewalText(value: unknown): string {
+  if (typeof value !== 'string' || !value) return '';
+  const d = new Date(value);
+  if (!Number.isFinite(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
+}
+
+/** The line under the heading: the plan, what is left, and when it renews. */
+export function currentPlanLine(i: { tier?: string; left: string; renews: string; ending?: boolean }): string {
+  if (!i.tier || i.tier === 'free') return 'You do not have a plan yet.';
+  return [`Your plan: ${tierLabel(i.tier)}.`, i.left, i.renews ? `${i.ending ? 'Ends' : 'Renews'} on ${i.renews}.` : ''].filter(Boolean).join(' ');
+}
+
+const ADDON_BLURBS: Record<string, string> = {
+  publish: 'Post to your connected accounts straight from Nebulaa, or schedule posts for later.',
+  competitors: 'Follow the competitors you choose and see what they post, so you can plan your own.',
+  inbox: 'Read comments and messages in one place. Replies are drafted for you to approve, and are sent automatically only when you switch them on.',
+  bundle: 'All three add-ons together, for less than buying them one by one.',
+};
+
+export function addonBlurb(id: string): string {
+  return ADDON_BLURBS[id] || '';
+}
