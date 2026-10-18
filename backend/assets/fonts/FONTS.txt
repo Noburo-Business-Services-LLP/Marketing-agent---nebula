@@ -2,3 +2,9 @@ Fonts used for the Hero video end card. All are under the SIL Open Font License 
 - Inter Bold: The Inter Project Authors (https://github.com/rsms/inter)
 - Poppins Bold: The Poppins Project Authors (https://github.com/itfoundry/Poppins)
 - Playfair Display: The Playfair Project Authors (https://github.com/clauseggers/Playfair-Display)
+
+Fonts used for subtitles and the closing line on customer Videos (services/studioVideoFinish.js, drawn by ffmpeg/libass).
+All are Noto Sans Bold (static TrueType, "googlefonts" build) under the SIL Open Font License 1.1 (see NOTO-OFL.txt):
+- NotoSans-Bold.ttf (Latin), NotoSansDevanagari-Bold.ttf (Hindi), NotoSansTamil-Bold.ttf, NotoSansTelugu-Bold.ttf, NotoSansKannada-Bold.ttf, NotoSansMalayalam-Bold.ttf
+Source: https://github.com/notofonts/notofonts.github.io (fonts/<Family>/googlefonts/ttf), the official Noto build repository.
+Copyright 2022 The Noto Project Authors. The font files are unmodified.
