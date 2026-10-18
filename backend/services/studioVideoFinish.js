@@ -9,15 +9,19 @@
  * vowel signs came out in the wrong place), while canvas shapes all six scripts correctly. User text never enters
  * a filter string; only fixed numbers and server-made paths do.
  *
- * LIMITATION: the video model gives no word timing. Subtitle timing is ESTIMATED: each clip's spoken line is
- * assumed to start about 1 second into the clip and to last speechSeconds(line); it is cut into short chunks that
- * share that window in proportion to their length. The words are right; the exact moment each appears can be
- * off by a fraction of a second.
+ * TIMING comes from the real audio, never from a guess. Before captions are burned in, the audio of the joined video
+ * is transcribed once (services/studioTranscribe.js, behind the spend guard, the spend row written BEFORE the call)
+ * and only the times are used (services/studioSubtitleTiming.js): each clip's intended line is spread over the real
+ * speech window of that clip. The words shown are always OUR intended line. If the timing cannot be had (a failure,
+ * a timeout, no speech, a switch or the daily ceiling) or the spoken words do not match the line, the video gets NO
+ * subtitles and a plain notice; finishing never fails or refunds a video. Logs hold counts only, never text.
  */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { speechSeconds } = require('./studioVideo');
+const timing = require('./studioSubtitleTiming');
+const { cleanText, chunkLine } = timing;
+const { STUDIO_TRANSCRIBE_BLOCK_SECONDS } = require('../config/apiCosts');
 
 const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
 const TRANSITIONS = [
@@ -29,11 +33,10 @@ const TRANSITIONS = [
 const TRANSITION_SPEC = { fade: { name: 'fade', seconds: 0.3 }, zoom: { name: 'zoomin', seconds: 0.4 }, cut: { name: '', seconds: 0 } };
 const END_LINE_MAX = 60;
 const END_CARD_SECONDS = 2;
-const SPEECH_START_S = 1; // the prompt asks for the line to start about one second in
-const CHUNK_WORDS = 6;
-const CHUNK_CHARS = 42;
 const CLIP_NOMINAL_S = 10;
 const FINISH_TIMEOUT_MS = 180000;
+const AUDIO_TIMEOUT_MS = 60000;
+const TRANSCRIBE_WAIT_MS = 75000; // a little over the request's own 60 s timeout
 
 // Script -> font family inside the bundled file. Order matters only for detection of the first non-Latin script.
 const SCRIPTS = {
@@ -51,15 +54,13 @@ const NOTICE = {
   logo: 'We could not add your logo, so this video has none.',
   endLine: 'We could not add the closing line, so this video has none.',
   noLogo: 'We could not find your logo in Brand assets, so this video has none.',
-  noWords: 'This video has no spoken words, so there are no subtitles.'
+  noWords: 'This video has no spoken words, so there are no subtitles.',
+  timing: 'We could not time the subtitles, so this video has none.',
+  mismatch: 'The spoken words did not match the line, so this video has no subtitles.'
 };
 
 // ---- options ----
 
-const cleanText = (v, max) => {
-  const s = typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim() : '';
-  return Array.from(s).slice(0, max).join('').trim();
-};
 const truthy = (v) => v === true || v === 'true' || v === 1 || v === '1';
 
 /** The four finishing choices, safe whatever the request held. Subtitles need a spoken language. */
@@ -109,58 +110,7 @@ function xfadeArgs(files, aspectRatio, out, durations, transition) {
   return [...inputs, '-filter_complex', parts.join(';'), '-map', `[${v}]`, '-map', `[${a}]`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out];
 }
 
-// ---- captions ----
-
-/** Splits a spoken line into short caption chunks: at most about 6 words and 42 characters, of similar length. */
-function chunkLine(line) {
-  const words = cleanText(line, 400).split(' ').filter(Boolean);
-  if (!words.length) return [];
-  const len = (arr) => Array.from(arr.join(' ')).length;
-  for (let n = Math.max(1, Math.ceil(words.length / CHUNK_WORDS)); n <= words.length; n += 1) {
-    // Balanced split: walk the words and close a chunk once it has its share of the characters.
-    const total = len(words);
-    const chunks = []; let cur = [];
-    words.forEach((w, i) => {
-      cur.push(w);
-      const left = words.length - i - 1; const need = n - chunks.length - 1;
-      const share = (total * (chunks.length + 1)) / n;
-      const used = len(chunks.flat().concat(cur));
-      if (need > 0 && left >= need && (used >= share || left === need || cur.length >= CHUNK_WORDS)) { chunks.push(cur); cur = []; }
-    });
-    if (cur.length) chunks.push(cur);
-    if (chunks.every((c) => c.length <= CHUNK_WORDS && len(c) <= CHUNK_CHARS) || n === words.length) return chunks.map((c) => c.join(' '));
-  }
-  return [words.join(' ')];
-}
-
-/**
- * Caption cues for the whole video (ESTIMATED timing, see the note at the top of this file).
- * parts[k].spokenLine is clip k's line; starts[k] and durations[k] place clip k in the joined video.
- * Cues stop before `stopAt` (the closing line) when one is given.
- */
-function buildCues(parts, { starts = [], durations = [], stopAt = Infinity } = {}) {
-  const cues = [];
-  (Array.isArray(parts) ? parts : []).forEach((p, k) => {
-    const line = cleanText(p && p.spokenLine, 400);
-    if (!line) return;
-    const chunks = chunkLine(line);
-    if (!chunks.length) return;
-    const clipStart = Number.isFinite(starts[k]) ? starts[k] : k * CLIP_NOMINAL_S;
-    const clipLen = Number.isFinite(durations[k]) ? durations[k] : CLIP_NOMINAL_S;
-    const begin = clipStart + SPEECH_START_S;
-    const span = Math.max(0.5, Math.min(speechSeconds(line), clipLen - SPEECH_START_S - 0.2));
-    const weights = chunks.map((c) => Array.from(c).length + 4);
-    const sum = weights.reduce((x, y) => x + y, 0);
-    let t = begin;
-    chunks.forEach((text, i) => {
-      const d = (span * weights[i]) / sum;
-      const end = Math.min(t + d, stopAt - 0.05);
-      if (end - t > 0.15) cues.push({ start: t, end, text });
-      t += d;
-    });
-  });
-  return cues;
-}
+// ---- captions (the chunker and the timing maths live in studioSubtitleTiming.js) ----
 
 // ---- text plates (canvas) ----
 
@@ -304,7 +254,11 @@ const defaultIo = () => {
     fetchLogo: async (url) => {
       const raw = await hero.fetchLogoBuffer(url);
       return raw ? hero.normalizeLogo(raw) : null;
-    }
+    },
+    // Mono 16 kHz AAC in an m4a: small, and what the transcription wants.
+    extractAudio: (src, out) => hero.runFfmpeg(['-y', '-nostdin', '-hide_banner', '-i', src, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'aac', '-b:a', '32k', out], { timeoutMs: AUDIO_TIMEOUT_MS }),
+    transcribe: (file, lang) => require('./studioTranscribe').transcribe(file, lang),
+    spend: require('./spendGuard')
   };
 };
 
@@ -313,11 +267,66 @@ async function withTemp(fn) {
   try { return await fn(dir); } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) { /* temp */ } }
 }
 
+/** Estimated billing units: the video length in seconds rounded UP to the next 6 seconds (never below one). */
+function transcriptionUnits(seconds) {
+  const n = Number(seconds);
+  return Number.isFinite(n) && n > 0 ? Math.max(1, Math.ceil(n / STUDIO_TRANSCRIBE_BLOCK_SECONDS - 1e-9)) : 1;
+}
+
+const withDeadline = (promise, ms) => new Promise((resolve, reject) => {
+  const t = setTimeout(() => reject(new Error('timed out')), ms);
+  Promise.resolve(promise).then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+});
+
+/**
+ * Real caption timing for a joined video. Never throws. Result: { cues, notice }; empty cues come with the plain notice.
+ * Order matters: free checks first (switch and ceiling, audio extraction), then the spend row is written, and only if it
+ * was saved is the one paid call made. There is exactly one attempt per video.
+ * Logs: counts only.
+ */
+async function timeSubtitles({ buffer, parts, language, join, endLine }, io) {
+  const none = (notice, why) => { console.warn(`[videos] subtitle timing: none (${why})`); return { cues: [], notice }; };
+  try {
+    return await withTemp(async (dir) => {
+      const input = path.join(dir, 'in.mp4'); const audio = path.join(dir, 'audio.m4a');
+      fs.writeFileSync(input, buffer);
+      let meta;
+      try { meta = await io.probe(input); } catch (_) { return none(NOTICE.timing, 'unreadable video'); }
+      const total = meta.videoDurationSeconds || meta.durationSeconds || 0;
+      if (!(total > 1)) return none(NOTICE.timing, 'video too short');
+      if (meta.hasAudio === false) return none(NOTICE.timing, 'no audio track');
+      let verdict;
+      try { verdict = await io.spend.check('studio_transcription'); } catch (_) { verdict = { ok: false }; }
+      if (!verdict || verdict.ok === false) return none(NOTICE.timing, 'switched off or ceiling reached');
+      try { await io.extractAudio(input, audio); } catch (_) { return none(NOTICE.timing, 'audio could not be extracted'); }
+      const units = transcriptionUnits(total);
+      // The spend row is written BEFORE the paid call. If it cannot be saved, no call is made (fail closed).
+      let saved = null;
+      try { saved = await io.spend.record('studio_transcription', units); } catch (_) { saved = null; }
+      if (!saved) return none(NOTICE.timing, 'spend row not saved, no call made');
+      let transcript;
+      try {
+        transcript = await withDeadline(io.transcribe(audio, timing.whisperLanguage(language)), io.transcribeTimeoutMs || TRANSCRIBE_WAIT_MS);
+      } catch (e) { const code = /HTTP (\d{3})/.exec(e && e.message ? String(e.message) : ''); return none(NOTICE.timing, `transcription failed${code ? ` (HTTP ${code[1]})` : ''}`); }
+      const n = (parts || []).length;
+      const durations = join && Array.isArray(join.durations) && join.durations.length === n ? join.durations : (n <= 1 ? [total] : Array.from({ length: n }, () => CLIP_NOMINAL_S));
+      const starts = join && Array.isArray(join.starts) && join.starts.length === n ? join.starts : (n <= 1 ? [0] : durations.map((_, i) => i * CLIP_NOMINAL_S));
+      const stopAt = endLine ? Math.max(0, total - END_CARD_SECONDS) : Infinity;
+      const r = timing.buildTimedCues({ parts, transcript, starts, durations, total, stopAt });
+      console.log(`[videos] subtitle timing: ${r.status}, ${r.cues.length} cues, ${(transcript && transcript.segments && transcript.segments.length) || 0} segments, ${n} clips, ${units} units`);
+      if (r.status === 'ok' && r.cues.length) return { cues: r.cues, notice: '' };
+      return { cues: [], notice: r.status === 'mismatch' ? NOTICE.mismatch : NOTICE.timing };
+    });
+  } catch (_) {
+    return none(NOTICE.timing, 'unexpected error');
+  }
+}
+
 /**
  * One finishing run with the given features. Throws on any problem (the caller decides what to drop).
  * Returns { buffer, seconds, applied }.
  */
-async function finishOnce({ buffer, features, parts, language, join, logoPng }, io) {
+async function finishOnce({ buffer, features, cues: timedCues = [], language, logoPng }, io) {
   const inFeatures = features;
   return withTemp(async (dir) => {
     const input = path.join(dir, 'in.mp4'); const out = path.join(dir, 'out.mp4');
@@ -326,12 +335,9 @@ async function finishOnce({ buffer, features, parts, language, join, logoPng }, 
     const W = even(meta.width || 720); const H = even(meta.height || 1280);
     const total = meta.videoDurationSeconds || meta.durationSeconds || 0;
     if (!(total > 1)) throw new Error('video too short or unreadable');
-    const n = (parts || []).length;
-    const durations = join && Array.isArray(join.durations) && join.durations.length === n ? join.durations : (n <= 1 ? [total] : Array.from({ length: n }, () => CLIP_NOMINAL_S));
-    const starts = join && Array.isArray(join.starts) && join.starts.length === n ? join.starts : (n <= 1 ? [0] : durations.map((_, i) => i * CLIP_NOMINAL_S));
     const endStart = Math.max(0, total - END_CARD_SECONDS);
     const endLine = inFeatures.endLine || '';
-    const cues = inFeatures.subtitles ? buildCues(parts, { starts, durations, stopAt: endLine ? endStart : Infinity }) : [];
+    const cues = inFeatures.subtitles ? timedCues : [];
     const used = new Set();
     cues.forEach((c) => used.add(scriptOf(c.text, language)));
     if (endLine) used.add(scriptOf(endLine, language));
@@ -379,6 +385,13 @@ async function finishVideo(args, ioIn = {}) {
     notes.push(NOTICE.noWords);
   }
   if (!asked.subtitles && !asked.logo && !asked.endLine) return { buffer, notice: notes.join(' '), applied: [], seconds: null };
+  let cues = [];
+  if (asked.subtitles) {
+    const timed = await timeSubtitles({ buffer, parts, language, join, endLine: asked.endLine }, io);
+    cues = timed.cues;
+    if (!cues.length) { asked.subtitles = false; notes.push(timed.notice); }
+  }
+  if (!asked.subtitles && !asked.logo && !asked.endLine) return { buffer, notice: notes.join(' '), applied: [], seconds: null };
   let logoPng = null;
   if (asked.logo) {
     try { logoPng = logoUrl ? await io.fetchLogo(logoUrl) : null; } catch (_) { logoPng = null; }
@@ -392,7 +405,7 @@ async function finishVideo(args, ioIn = {}) {
     const t = tiers[i];
     if (!t.subtitles && !t.endLine && !t.logo) break;
     try {
-      const r = await finishOnce({ buffer, features: t, parts, language, join, logoPng: t.logo ? logoPng : null }, io);
+      const r = await finishOnce({ buffer, features: t, cues, language, logoPng: t.logo ? logoPng : null }, io);
       const missing = [];
       if (asked.endLine && !t.endLine) missing.push(NOTICE.endLine);
       if (asked.subtitles && !t.subtitles) missing.push(NOTICE.subtitles);
@@ -407,5 +420,5 @@ async function finishVideo(args, ioIn = {}) {
 
 module.exports = {
   TRANSITIONS, TRANSITION_SPEC, END_LINE_MAX, FONT_DIR, SCRIPTS, NOTICE,
-  normalizeFinish, wantsFinish, clipTimeline, xfadeArgs, chunkLine, buildCues, renderTextPlate, buildFinishGraph, scriptOf, finishVideo, finishOnce, cleanText
+  normalizeFinish, wantsFinish, clipTimeline, xfadeArgs, chunkLine, transcriptionUnits, timeSubtitles, renderTextPlate, buildFinishGraph, scriptOf, finishVideo, finishOnce, cleanText
 };

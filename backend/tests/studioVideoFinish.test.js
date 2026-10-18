@@ -64,6 +64,15 @@ test('makeChain passes the transition to the join and returns its timing; a bare
   assert.strictEqual(b.timing, null);
 });
 
+test('chunks only ever break at spaces, so a Tamil or Hindi combined character is never split', () => {
+  for (const line of ['இன்றே ஆர்டர் செய்யுங்கள் ஆயிரம் ரூபாய்க்கு மேல் வீட்டிலேயே இலவச டெலிவரி கிடைக்கும் இன்று மட்டும்', 'आज ही ऑर्डर करें हज़ार रुपये से ऊपर घर पर मुफ़्त डिलीवरी पाएं और बचत करें']) {
+    const c = fin.chunkLine(line);
+    assert.ok(c.length >= 2);
+    assert.strictEqual(c.join(' '), line);
+    for (const x of c) assert.ok(!/^\p{M}/u.test(x) && x === x.trim(), x);
+  }
+});
+
 test('a spoken line is cut into short chunks of at most 6 words and 42 characters', () => {
   const line = 'Fresh cashew katli and Mysore pak made this morning are in our Diwali gift box today.';
   const c = fin.chunkLine(line);
@@ -74,20 +83,6 @@ test('a spoken line is cut into short chunks of at most 6 words and 42 character
   assert.deepStrictEqual(fin.chunkLine('   '), []);
   const long = fin.chunkLine('Supercalifragilistic expialidocious wonderfulness unbelievable extraordinary');
   for (const x of long) assert.ok(x.length <= 42 || x.split(' ').length === 1, x);
-});
-
-test('caption timing: each line starts a second into its clip, lasts the speech time, follows the overlaps and stops before the closing line', () => {
-  const parts = [{ spokenLine: 'One two three four five six seven eight nine ten.' }, { spokenLine: '' }, { spokenLine: 'Last words here.' }];
-  const cues = fin.buildCues(parts, { starts: [0, 9.7, 19.4], durations: [10, 10, 10] });
-  assert.ok(Math.abs(cues[0].start - 1) < 1e-9);
-  const first = cues.filter((c) => c.end <= 9);
-  assert.ok(first.length >= 2);
-  for (let i = 1; i < cues.length; i += 1) assert.ok(cues[i].start >= cues[i - 1].end - 1e-9);
-  const last = cues[cues.length - 1];
-  assert.ok(last.start >= 20.4 - 1e-9 && last.end <= 29.4);
-  assert.ok(!cues.some((c) => c.start >= 9.7 && c.end <= 19.4));
-  const stopped = fin.buildCues(parts, { starts: [0, 9.7, 19.4], durations: [10, 10, 10], stopAt: 21.5 });
-  assert.ok(stopped.every((c) => c.end <= 21.5));
 });
 
 test('the script of a line picks the right Noto font, and every font file is bundled with its licence', () => {
@@ -118,7 +113,14 @@ test('the finishing graph places the corner logo, the closing logo and the text 
 });
 
 const tinyVideo = () => Buffer.from('video');
+// Timing is faked everywhere: no network, no paid call (see studioSubtitleFinish.test.js for the timing paths).
+const fakeTiming = (line = 'Hello there friends.') => ({
+  extractAudio: async (src, out) => { fs.writeFileSync(out, 'audio'); },
+  spend: { check: async () => ({ ok: true }), record: async () => ({ totalUsd: 1 }) },
+  transcribe: async () => ({ segments: [{ start: 1, end: 4, text: line }], words: [] })
+});
 const goodIo = (log = []) => ({
+  ...fakeTiming(),
   probe: async () => ({ width: 720, height: 1280, videoDurationSeconds: 10, durationSeconds: 10 }),
   fetchLogo: async () => Buffer.from('png'),
   ffmpeg: async (args) => { log.push(args); fs.writeFileSync(args[args.length - 1], 'finished'); }
@@ -178,7 +180,7 @@ test('subtitles with no spoken words are skipped with a plain notice', async () 
   assert.match(r.notice, /no spoken words/);
 });
 
-// One real ffmpeg run on a tiny generated video (5 s: captions start 1 s in and stop before the closing line): proves the filter graph is valid, fonts included.
+// One real ffmpeg run on a tiny generated video (5 s: captions follow the faked speech window and stop before the closing line): proves the filter graph is valid, fonts included.
 let ffmpegBin = null;
 try { ffmpegBin = require('ffmpeg-static'); if (ffmpegBin && !fs.existsSync(ffmpegBin)) ffmpegBin = null; } catch (_) { ffmpegBin = null; }
 test('real ffmpeg: the finishing pass works on a tiny 5 second generated video with Tamil subtitles, a logo and a closing line', { skip: !ffmpegBin && 'ffmpeg-static is not installed' }, async () => {
@@ -193,7 +195,7 @@ test('real ffmpeg: the finishing pass works on a tiny 5 second generated video w
     const r = await fin.finishVideo({
       buffer: fs.readFileSync(src), features: { subtitles: true, logo: true, endLine: 'தீபாவளி நல்வாழ்த்துகள்!' },
       parts: [{ spokenLine: 'எங்கள் தீபாவளி இனிப்பு பெட்டியில் இன்று புதிய காஜு கட்லி இருக்கிறது.' }], language: 'tamil', logoUrl: 'x'
-    }, { fetchLogo: async () => fs.readFileSync(logo), probe: async (f) => ({ width: 360, height: 640, videoDurationSeconds: 5, durationSeconds: 5 }) });
+    }, { ...fakeTiming('எங்கள் தீபாவளி இனிப்பு பெட்டியில் இன்று புதிய காஜு கட்லி இருக்கிறது.'), fetchLogo: async () => fs.readFileSync(logo), probe: async (f) => ({ width: 360, height: 640, videoDurationSeconds: 5, durationSeconds: 5 }) });
     assert.strictEqual(r.notice, '');
     assert.deepStrictEqual(r.applied, ['subtitles', 'logo', 'endLine']);
     assert.ok(r.buffer.length > 1000);
