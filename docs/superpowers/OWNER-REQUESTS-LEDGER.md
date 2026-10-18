@@ -22,9 +22,10 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [DECISION NEEDED] Whether to add offline channels (hoardings, local events, WhatsApp, referrals) to the plan model and prompts (a planner change).
 
 ## Area: CREATE CONTENT
-- [NOT STARTED] Tiles with a picture for Single post, Campaign, Carousel and LinkedIn so people understand at a glance. (2026-10-18)
-- [NOT STARTED] Photoshoot option in Images and on Home: ready-made packs (product photoshoot, model photoshoot, marketplace pack, festival pack): states how many photos, which styles, how long and what it costs. Uses the products and environment photos already uploaded. (2026-10-18)
-- [NOT STARTED] Templates and ready-made packs available from the dashboard. (2026-10-18)
+- [DONE, NOT RELEASED] Tiles with a picture for Single post, Campaign, Carousel and LinkedIn so people understand at a glance (one-line description and the price under each; rows on a phone). (2026-10-18) Also fixed: the LinkedIn price now reads the action the server really charges for a LinkedIn post.
+- [NOT STARTED] "Video" entry tile on Create content: the design draft lists it; the Videos page exists, so it can be added with the Home tiles (kept out of the first proof so the four modes stay one choice). (2026-10-18)
+- [NOT STARTED, Photoshoot page does not exist yet, so no Create content tile yet] Photoshoot option in Images and on Home: ready-made packs (product photoshoot, model photoshoot, marketplace pack, festival pack): states how many photos, which styles, how long and what it costs. Uses the products and environment photos already uploaded. (2026-10-18)
+- [NOT STARTED] Templates and ready-made packs available from the dashboard (remaining for Create content together with Photoshoot). (2026-10-18)
 
 ## Area: VIDEOS
 - [DONE, NOT RELEASED] 22-style photo grid on the new Videos screen (the owner saw only 4 old styles because production is on the old build). Release fixes it. (diagnosis 2026-10-18)
@@ -76,6 +77,6 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [OWNER STEPS] Release (everything since `bc514a9` is unreleased); staff indexes; Inbox live test; Razorpay live webhook; switches (`ENABLE_COMPETITOR_TRACKER`, `LISTENING_MODEL`, `ENABLE_LISTENING`); close terminals holding keys; AWS root keys to a limited user; ECR lifecycle policy.
 
 ## Cross-cutting
-- [NOT STARTED] Tile system and illustration set with a size budget (design draft). (2026-10-18)
+- [PARTLY] Tile system and illustration set with a size budget (design draft). Foundation DONE, NOT RELEASED (2026-10-18): Tile, TileGrid and DarkPanel, signature glow tokens, 22 inline SVG illustrations, art budget script and test, developer showcase page; how to use it: `docs/superpowers/ops/tile-system.md`. Remaining: roll the tiles out to the other areas (each area's own item), photo tiles, templates.
 - [RULE] Customer wording: no vendor names, raw errors, "Gravity/Pulsar/Orbit", no "credit"/"trial"/"7 days"; plain professional sentences.
 - [RULE] No paid generation or provider call without the owner's OK for that run; real runs only on dev databases.
