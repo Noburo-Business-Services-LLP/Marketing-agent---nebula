@@ -98,3 +98,45 @@ test('server sentences with Quarks are put in plain words', () => {
   assert.equal(v.plainMessage('Plan the video first.'), 'Plan the video first.');
   assert.doesNotMatch(v.plainMessage('This needs 100 Quarks. Please top up.'), /quark/i);
 });
+
+test('transition choice only matters with more than one part, and unknown values mean a fade', () => {
+  assert.equal(v.showTransitions(1), false);
+  assert.equal(v.showTransitions(2), true);
+  assert.equal(v.transitionOf('zoom'), 'zoom');
+  assert.equal(v.transitionOf('cut'), 'cut');
+  assert.equal(v.transitionOf('wipe'), 'fade');
+  assert.equal(v.transitionOf(undefined), 'fade');
+  assert.deepEqual(v.FALLBACK_TRANSITIONS.map((t) => t.label), ['Smooth fade', 'Quick zoom', 'Cut']);
+});
+
+test('subtitles are offered only when someone speaks', () => {
+  assert.equal(v.showSubtitles('tamil'), true);
+  assert.equal(v.showSubtitles('none'), false);
+});
+
+test('the closing line is cleaned and held to 60 characters', () => {
+  assert.equal(v.cleanEndLine('  Hello \u0007  world\n'), 'Hello world');
+  assert.equal(Array.from(v.cleanEndLine('x'.repeat(90))).length, 60);
+  assert.equal(v.cleanEndLine('தீபாவளி நல்வாழ்த்துகள்!'), 'தீபாவளி நல்வாழ்த்துகள்!');
+  assert.equal(v.cleanEndLine(undefined), '');
+});
+
+test('the finishing choices sent to the server drop whatever does not apply', () => {
+  const base = { clips: 3, language: 'tamil', transition: 'zoom', subtitles: true, logo: true, hasLogo: true, endLine: ' Thank you ' };
+  assert.deepEqual(v.finishPayload(base), { transition: 'zoom', subtitles: true, logo: true, endLine: 'Thank you' });
+  assert.deepEqual(v.finishPayload({ ...base, clips: 1 }), { transition: 'fade', subtitles: true, logo: true, endLine: 'Thank you' });
+  assert.deepEqual(v.finishPayload({ ...base, language: 'none' }), { transition: 'zoom', subtitles: false, logo: true, endLine: 'Thank you' });
+  assert.deepEqual(v.finishPayload({ ...base, hasLogo: false }), { transition: 'zoom', subtitles: true, logo: false, endLine: '' });
+  assert.deepEqual(v.finishPayload({ ...base, logo: false }), { transition: 'zoom', subtitles: true, logo: false, endLine: '' });
+});
+
+test('remembered choices round-trip the new switches and survive blocked storage', () => {
+  const store = {};
+  globalThis.window = { localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, x) => { store[k] = x; } } };
+  v.saveChoices({ style: 'storytelling', transition: 'cut', subtitles: true, logo: true });
+  assert.deepEqual(v.readChoices(), { style: 'storytelling', transition: 'cut', subtitles: true, logo: true });
+  globalThis.window = { localStorage: { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } } };
+  assert.deepEqual(v.readChoices(), {});
+  assert.doesNotThrow(() => v.saveChoices({ logo: true }));
+  delete globalThis.window;
+});

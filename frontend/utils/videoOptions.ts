@@ -119,7 +119,7 @@ export const NO_CHANGE_NOTE = 'Changes are available for 10-second videos. For a
 
 /** Remembered choices: read and write are safe when storage is blocked. */
 const KEY = 'nb_video_choices';
-export interface Remembered { style?: string; language?: string; voice?: string }
+export interface Remembered { style?: string; language?: string; voice?: string; transition?: string; subtitles?: boolean; logo?: boolean }
 export function readChoices(): Remembered {
   try { return JSON.parse(window.localStorage.getItem(KEY) || '{}') || {}; } catch { return {}; }
 }
@@ -134,4 +134,34 @@ export function plainMessage(m: string): string {
   if (/needs? \d+ quarks/i.test(t)) return 'You do not have enough left for this. Please top up or choose a plan.';
   if (/returned/i.test(t)) return 'The video could not be made. You were not charged.';
   return t.replace(/\s*(?:your\s+)?quarks\b/gi, ' allowance').replace(/\s+/g, ' ').trim();
+}
+
+/** How the parts are joined (only matters with more than one part). */
+export type Transition = 'fade' | 'zoom' | 'cut';
+export const END_LINE_MAX = 60;
+export const FALLBACK_TRANSITIONS: Array<{ key: Transition; label: string }> = [
+  { key: 'fade', label: 'Smooth fade' }, { key: 'zoom', label: 'Quick zoom' }, { key: 'cut', label: 'Cut' }
+];
+export const NO_LOGO_HINT = 'Add your logo in Brand assets first';
+export const SUBTITLES_HINT = 'Words appear on screen in the spoken language';
+
+export function transitionOf(v: unknown): Transition {
+  return v === 'zoom' || v === 'cut' ? v : 'fade';
+}
+/** The closing line as it will be sent: control characters out, spaces tidied, at most 60 characters. */
+export function cleanEndLine(v: string): string {
+  const t = String(v || '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/\s+/g, ' ').trim();
+  return Array.from(t).slice(0, END_LINE_MAX).join('').trim();
+}
+export const showTransitions = (clips: number): boolean => clips > 1;
+export const showSubtitles = (language: string): boolean => language !== 'none';
+/** What the screen sends to /create for the finishing choices. Choices that do not apply are switched off. */
+export function finishPayload(o: { clips: number; language: string; transition: string; subtitles: boolean; logo: boolean; hasLogo: boolean; endLine: string }): { transition: Transition; subtitles: boolean; logo: boolean; endLine: string } {
+  const logo = !!o.logo && !!o.hasLogo;
+  return {
+    transition: o.clips > 1 ? transitionOf(o.transition) : 'fade',
+    subtitles: !!o.subtitles && showSubtitles(o.language),
+    logo,
+    endLine: logo ? cleanEndLine(o.endLine) : ''
+  };
 }

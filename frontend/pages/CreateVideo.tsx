@@ -11,7 +11,8 @@ import { apiService, brandAssetsAPI, studioVideosAPI, StudioVideo, StudioConcept
 import {
   DEFAULT_STYLE, Shape, Part, StyleOption, LengthOption, isNewSpeech, NEW_SPEECH_NOTE, shapeForPlatforms, suggestionHint, orderStyles, visibleStyles,
   styleImageFallback, lengthLine, priceLine as buildPriceLine, shortBalanceMessage, padParts, editPartLine, editPartBeats, partsToText, partLabel,
-  progressLabel, canChange, NO_CHANGE_NOTE, plainMessage, readChoices, saveChoices, SHOW_FIRST_STYLES
+  progressLabel, canChange, NO_CHANGE_NOTE, plainMessage, readChoices, saveChoices, SHOW_FIRST_STYLES,
+  FALLBACK_TRANSITIONS, transitionOf, cleanEndLine, showTransitions, showSubtitles, finishPayload, END_LINE_MAX, NO_LOGO_HINT, SUBTITLES_HINT
 } from '../utils/videoOptions';
 import { choicesFor, platformLabel } from '../utils/platforms';
 import { appendText, referenceAssetFromFile } from '../utils/ideaFiles';
@@ -103,6 +104,12 @@ const CreateVideo: React.FC = () => {
   const shapeByHand = useRef(false);
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [clips, setClips] = useState(1);
+  const [transitions, setTransitions] = useState<Array<{ key: string; label: string }>>(FALLBACK_TRANSITIONS);
+  const [transition, setTransition] = useState(transitionOf(remembered.current.transition));
+  const [subtitles, setSubtitles] = useState(remembered.current.subtitles === true);
+  const [wantLogo, setWantLogo] = useState(remembered.current.logo === true);
+  const [hasLogo, setHasLogo] = useState(false);
+  const [endLine, setEndLine] = useState('');
   const [stylesOpen, setStylesOpen] = useState(false);
   const [parts, setParts] = useState<Part[]>([]);
   const [fromPlan, setFromPlan] = useState(false);
@@ -139,7 +146,7 @@ const CreateVideo: React.FC = () => {
     apiService.getCredits().then((r) => { if (r?.success) setBalance(Number(r.credits?.balance ?? 0)); }).catch(() => undefined);
   }, []);
 
-  useEffect(() => { saveChoices({ style, language, voice }); }, [style, language, voice]);
+  useEffect(() => { saveChoices({ style, language, voice, transition, subtitles, logo: wantLogo }); }, [style, language, voice, transition, subtitles, wantLogo]);
 
   const weekMark = useRef<{ itemId: string; weekId?: string } | null>(null);
 
@@ -169,6 +176,8 @@ const CreateVideo: React.FC = () => {
       if (r.styles?.length) setStyles(r.styles);
       if (r.voices?.length) setVoices(r.voices);
       if (r.lengths?.length) setLengths(r.lengths);
+      if (r.transitions?.length) setTransitions(r.transitions);
+      setHasLogo(r.hasLogo === true);
       if (r.platformShapes) setShapes(r.platformShapes);
       if (r.platforms?.length) setPlatformIds(r.platforms);
       if (r.clipSeconds || r.seconds) setClipSeconds(r.clipSeconds || r.seconds);
@@ -265,7 +274,7 @@ const CreateVideo: React.FC = () => {
       const quiet = language === 'none';
       const outParts = clips > 1 ? parts.map((p) => ({ beats: p.beats, spokenLine: quiet ? '' : p.spokenLine })) : undefined;
       const spokenAll = quiet ? '' : outParts ? outParts.map((p) => p.spokenLine).filter(Boolean).join(' ') : spoken;
-      const r = await studioVideosAPI.create({ ...c, title, concept: conceptText, beats: concept?.beats || [], spokenLine: spokenAll, aspectRatio: shape, voice: quiet ? undefined : voice, parts: outParts, platforms: platforms.length ? platforms : undefined });
+      const r = await studioVideosAPI.create({ ...c, title, concept: conceptText, beats: concept?.beats || [], spokenLine: spokenAll, aspectRatio: shape, voice: quiet ? undefined : voice, parts: outParts, platforms: platforms.length ? platforms : undefined, ...finishPayload({ clips, language, transition, subtitles, logo: wantLogo, hasLogo, endLine }) });
       if (!r?.success || !r.video) { setError(plainMessage(r?.message) || 'We could not start the video. Please try again.'); return; }
       setCurrent(r.video); refreshBalance();
       // Tell the week card this one is made (best effort, once).
@@ -446,6 +455,47 @@ const CreateVideo: React.FC = () => {
             <p className="mt-2 text-[12.5px] text-[var(--gv-text-secondary)]">{lengthLine(seconds, clips)}</p>
             {priceLine && <p className="text-[12px] text-[var(--gv-text-tertiary)]">{priceLine}</p>}
             {shortMsg && <p role="status" className="mt-1 text-[12.5px] font-medium text-[var(--gv-text-primary)]">{shortMsg}</p>}
+          </div>
+
+          {showTransitions(clips) && (
+            <div>
+              <div className="gravity-label mb-2">Between parts</div>
+              <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-xl border border-[var(--gv-border-default)]" role="radiogroup" aria-label="How the parts are joined">
+                {transitions.map((t) => (
+                  <button key={t.key} type="button" role="radio" aria-checked={transition === t.key} onClick={() => setTransition(transitionOf(t.key))}
+                    className={`px-3.5 py-2 text-[14px] font-semibold transition-colors ${transition === t.key ? 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]' : 'bg-[var(--gv-surface-1)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {showSubtitles(language) && (
+            <label className="flex cursor-pointer items-start gap-3">
+              <input type="checkbox" role="switch" checked={subtitles} onChange={(e) => setSubtitles(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--gv-accent-fill)]" />
+              <span>
+                <span className="block text-[14px] font-semibold text-[var(--gv-text-primary)]">Subtitles</span>
+                <span className="block text-[12.5px] text-[var(--gv-text-secondary)]">{SUBTITLES_HINT}</span>
+              </span>
+            </label>
+          )}
+
+          <div>
+            <label className={`flex items-start gap-3 ${hasLogo ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
+              <input type="checkbox" role="switch" checked={wantLogo && hasLogo} disabled={!hasLogo} onChange={(e) => setWantLogo(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--gv-accent-fill)]" />
+              <span>
+                <span className="block text-[14px] font-semibold text-[var(--gv-text-primary)]">Add my logo</span>
+                <span className="block text-[12.5px] text-[var(--gv-text-secondary)]">{hasLogo ? 'Your logo sits in a corner of the video' : NO_LOGO_HINT}</span>
+              </span>
+            </label>
+            {wantLogo && hasLogo && (
+              <div className="mt-3">
+                <label className="gravity-label mb-2 block" htmlFor="end-line">Closing line <span className="font-normal normal-case text-[var(--gv-text-tertiary)]">· optional</span></label>
+                <input id="end-line" value={endLine} onChange={(e) => setEndLine(cleanEndLine(e.target.value.slice(0, END_LINE_MAX + 20)))} className={field} maxLength={END_LINE_MAX} placeholder="For example: Order today, free delivery" />
+                <p className="mt-1 text-[12px] text-[var(--gv-text-tertiary)]">Shown with your logo over the last 2 seconds</p>
+              </div>
+            )}
           </div>
 
           <p className="text-center text-[13.5px] text-[var(--gv-text-secondary)]">Add your own people, place and products so the video looks like your business. Skip any of these and we will choose something believable.</p>
