@@ -130,6 +130,7 @@ test('the same answers give an identical payload in English, Tamil and Hindi', (
       targetGender: c.genders[3].value,
       marketingGoals: [c.goals[0].value, c.goals[2].value],
       contentLanguage: c.contentLanguages[13].value,
+      accountKind: c.accountKinds[1].value,
     });
   };
   const english = payloadFor('en');
@@ -137,7 +138,7 @@ test('the same answers give an identical payload in English, Tamil and Hindi', (
   assert.equal(payloadFor('hi'), english);
   assert.equal(english, JSON.stringify({
     industry: 'Food & Beverage', brandVoice: ['Friendly', 'Bold'], targetGender: 'families',
-    marketingGoals: ['Brand Awareness', 'Direct Sales'], contentLanguage: 'telugu_english_mix',
+    marketingGoals: ['Brand Awareness', 'Direct Sales'], contentLanguage: 'telugu_english_mix', accountKind: 'several',
   }));
 });
 
@@ -210,4 +211,26 @@ test('the language choice is remembered, and never breaks when storage is blocke
   assert.equal(m.getOnboardingLang(), 'hi');
   delete globalThis.localStorage;
   assert.doesNotThrow(() => m.setOnboardingLang('en'));
+});
+
+test('the account kind question: values stay English, labels in every language, never required', async () => {
+  const { ACCOUNT_KIND_VALUES } = await import('../components/onboarding/onboardingStrings.ts');
+  assert.deepEqual([...ACCOUNT_KIND_VALUES], ['one', 'several']);
+  for (const lang of ONBOARDING_LANGS) {
+    const s = ONBOARDING_STRINGS[lang];
+    assert.deepEqual(Object.keys(s.accountKindLabels).sort(), ['one', 'several'], lang);
+    assert.deepEqual(getChoices(lang).accountKinds.map((o) => o.value), ['one', 'several'], lang);
+  }
+  assert.equal(en.accountKindQuestion, 'Do you run one business or manage several brands for clients?');
+  assert.equal(en.accountKindLabels.one, 'One business');
+  assert.equal(en.accountKindLabels.several, 'Several brands for clients');
+  const src = fs.readFileSync(path.join(ROOT, 'pages/Onboarding.tsx'), 'utf8');
+  assert.match(src, /handleChange\('accountKind', option\.value/);
+  assert.match(src, /accountKind: 'one'/, 'default is one');
+  const block = src.slice(src.indexOf('const validateStep'), src.indexOf('const handleNext'));
+  assert.doesNotMatch(block, /accountKind/, 'it must never block a step');
+});
+
+test('the account kind answer is the same value in English, Tamil and Hindi', () => {
+  for (const lang of ONBOARDING_LANGS) assert.equal(getChoices(lang).accountKinds[1].value, 'several');
 });

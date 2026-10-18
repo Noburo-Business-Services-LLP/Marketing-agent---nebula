@@ -98,12 +98,13 @@ async function scrapeLinkedInPosts(linkedinUrl) {
 }
 
 const { sanitizeAdditionalLanguages } = require('../services/languageSupport');
+const { cleanAccountKind } = require('../services/accountKind');
 
 // Keep the extra post languages to the allowed base codes, deduplicated,
 // at most three, and never the same language as the primary one.
 function withCleanLanguages(profile) {
   if (!profile || typeof profile !== 'object') return profile;
-  return { ...profile, additionalLanguages: sanitizeAdditionalLanguages(profile.additionalLanguages, profile.contentLanguage) };
+  return cleanAccountKind({ ...profile, additionalLanguages: sanitizeAdditionalLanguages(profile.additionalLanguages, profile.contentLanguage) });
 }
 
 // The public profile, with a client workspace's Quarks replaced by the agency pool balance (no history).

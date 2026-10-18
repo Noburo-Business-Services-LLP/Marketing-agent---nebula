@@ -120,6 +120,8 @@ const userSchema = new mongoose.Schema({
         message: 'At most three extra languages can be added.'
       }
     },
+    // Optional sign-up answer: one business, or several brands run for clients. Empty for every older account.
+    accountKind: { type: String, enum: ['one', 'several', ''], default: '' },
     contentRestrictions: { type: String, default: '' },
     firstMonthContentAngles: { type: String, default: '' },
 

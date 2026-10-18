@@ -31,6 +31,8 @@ export const VOICE_VALUES = ['Professional', 'Friendly', 'Witty', 'Empathetic', 
 
 export const GENDER_VALUES = ['mostly_men', 'mostly_women', 'both_equally', 'families'] as const;
 
+export const ACCOUNT_KIND_VALUES = ['one', 'several'] as const;
+
 export const GOAL_VALUES = [
   'Brand Awareness', 'Lead Generation', 'Direct Sales', 'Community Engagement', 'Website Traffic',
 ] as const;
@@ -89,6 +91,7 @@ export interface OnboardingStrings {
   whoBuys: string;
   whoBuysPlaceholder: string;
   whoBuysMore: string;
+  accountKindQuestion: string;
   // Step 3
   step3Heading: string;
   pickOneOrMore: string;
@@ -163,6 +166,7 @@ export interface OnboardingStrings {
   voiceLabels: Record<(typeof VOICE_VALUES)[number], string>;
   genderLabels: Record<(typeof GENDER_VALUES)[number], string>;
   goalLabels: Record<(typeof GOAL_VALUES)[number], string>;
+  accountKindLabels: Record<(typeof ACCOUNT_KIND_VALUES)[number], string>;
   languageNames: Record<(typeof CONTENT_LANGUAGE_BASES)[number], string>;
   languageMix: string;            // {lang}
 }
@@ -213,6 +217,7 @@ const en: OnboardingStrings = {
   whoBuys: 'Who buys from you?',
   whoBuysPlaceholder: 'e.g. Families in Cuddalore, women 25 to 45, small shop owners',
   whoBuysMore: 'Who buys more?',
+  accountKindQuestion: 'Do you run one business or manage several brands for clients?',
 
   step3Heading: 'What do you want most?',
   pickOneOrMore: 'Pick one or more.',
@@ -325,6 +330,7 @@ const en: OnboardingStrings = {
   genderLabels: {
     mostly_men: 'Mostly men', mostly_women: 'Mostly women', both_equally: 'Everyone', families: 'Families',
   },
+  accountKindLabels: { one: 'One business', several: 'Several brands for clients' },
   goalLabels: {
     'Brand Awareness': 'More people know about my business',
     'Lead Generation': 'More enquiries and calls',
@@ -386,6 +392,7 @@ const ta: OnboardingStrings = {
   whoBuys: 'உங்களிடம் யார் வாங்குகிறார்கள்?',
   whoBuysPlaceholder: 'எ.கா. கடலூரில் உள்ள குடும்பங்கள், 25 முதல் 45 வயது பெண்கள், சிறு கடைக்காரர்கள்',
   whoBuysMore: 'யார் அதிகம் வாங்குகிறார்கள்?',
+  accountKindQuestion: 'நீங்கள் ஒரு தொழிலை நடத்துகிறீர்களா, அல்லது வாடிக்கையாளர்களுக்காக பல பிராண்டுகளை நிர்வகிக்கிறீர்களா?',
 
   step3Heading: 'உங்களுக்கு மிகவும் வேண்டியது என்ன?',
   pickOneOrMore: 'ஒன்று அல்லது அதற்கு மேல் தேர்ந்தெடுங்கள்.',
@@ -499,6 +506,7 @@ const ta: OnboardingStrings = {
   genderLabels: {
     mostly_men: 'பெரும்பாலும் ஆண்கள்', mostly_women: 'பெரும்பாலும் பெண்கள்', both_equally: 'அனைவரும்', families: 'குடும்பங்கள்',
   },
+  accountKindLabels: { one: 'ஒரு தொழில்', several: 'வாடிக்கையாளர்களுக்கான பல பிராண்டுகள்' },
   goalLabels: {
     'Brand Awareness': 'என் வணிகம் அதிகம் பேருக்குத் தெரிய வேண்டும்',
     'Lead Generation': 'அதிக விசாரணைகளும் அழைப்புகளும்',
@@ -560,6 +568,7 @@ const hi: OnboardingStrings = {
   whoBuys: 'आपसे कौन खरीदता है?',
   whoBuysPlaceholder: 'जैसे: कुड्डालोर के परिवार, 25 से 45 साल की महिलाएँ, छोटे दुकानदार',
   whoBuysMore: 'कौन ज़्यादा खरीदता है?',
+  accountKindQuestion: 'क्या आप एक व्यवसाय चलाते हैं या ग्राहकों के लिए कई ब्रांड संभालते हैं?',
 
   step3Heading: 'आपको सबसे ज़्यादा क्या चाहिए?',
   pickOneOrMore: 'एक या ज़्यादा चुनें।',
@@ -673,6 +682,7 @@ const hi: OnboardingStrings = {
   genderLabels: {
     mostly_men: 'ज़्यादातर पुरुष', mostly_women: 'ज़्यादातर महिलाएँ', both_equally: 'सभी', families: 'परिवार',
   },
+  accountKindLabels: { one: 'एक व्यवसाय', several: 'ग्राहकों के कई ब्रांड' },
   goalLabels: {
     'Brand Awareness': 'ज़्यादा लोग मेरे बिज़नेस को जानें',
     'Lead Generation': 'ज़्यादा पूछताछ और कॉल',
@@ -717,6 +727,7 @@ export function getChoices(lang: OnboardingLang) {
     industries: INDUSTRY_VALUES.map((value): Choice => ({ value, label: s.industryLabels[value] })),
     voices: VOICE_VALUES.map((value): Choice => ({ value, label: s.voiceLabels[value] })),
     genders: GENDER_VALUES.map((value): Choice => ({ value, label: s.genderLabels[value] })),
+    accountKinds: ACCOUNT_KIND_VALUES.map((value): Choice => ({ value, label: s.accountKindLabels[value] })),
     goals: GOAL_VALUES.map((value): Choice => ({ value, label: s.goalLabels[value] })),
     baseLanguageNames: s.languageNames as Record<string, string>,
     contentLanguages: CONTENT_LANGUAGE_BASES.flatMap((base): Choice[] => [

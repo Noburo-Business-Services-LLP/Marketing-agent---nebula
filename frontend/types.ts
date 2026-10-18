@@ -41,6 +41,8 @@ export interface BusinessProfile {
   brandStory?: string;
   heroProduct?: string;
   contentLanguage?: ContentLanguage;
+  /** Optional sign-up answer: one business, or several brands run for clients. */
+  accountKind?: 'one' | 'several' | '';
   // Extra languages (base codes only, at most three) a post can also be turned into.
   additionalLanguages?: string[];
   contentRestrictions?: string;

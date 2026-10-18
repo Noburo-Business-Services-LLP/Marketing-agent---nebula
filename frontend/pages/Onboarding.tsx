@@ -98,6 +98,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         keyDifferentiator: '',
         brandStory: '',
         contentLanguage: 'english',
+        accountKind: 'one',
         additionalLanguages: [] as string[],
         contentRestrictions: '',
         firstMonthContentAngles: '',
@@ -758,6 +759,27 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
                                         {t.cityHint}
                                     </p>
+                                </div>
+                                <div>
+                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.accountKindQuestion} <span className="text-xs font-normal text-gray-400">{t.optional}</span></label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {choices.accountKinds.map(option => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => handleChange('accountKind', option.value as any)}
+                                                className={`p-3 rounded-lg border text-center text-sm transition-all ${
+                                                    formData.accountKind === option.value
+                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
+                                                        : theme === 'dark'
+                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
+                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         )}

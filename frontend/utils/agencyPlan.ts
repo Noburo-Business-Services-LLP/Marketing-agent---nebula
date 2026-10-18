@@ -261,3 +261,19 @@ export function agencyHeadline(poolEmpty: boolean): { title: string; body: strin
     ? { title: 'Your shared pool is used up', body: 'Add more posts and videos to the shared pool below, or add an extra client, to keep going.' }
     : { title: 'Your Agency plan', body: 'See your plan, add an extra client or add more posts and videos to the shared pool. Prices are shown before GST; 18 percent GST is added at checkout.' };
 }
+
+// ---------------- sign-up answer: several brands for clients ----------------
+
+export const AGENCY_BADGE = 'Suggested for you';
+export const AGENCY_BADGE_LINE = 'For managing several client brands.';
+
+/** Where to land after sign-up. Only a new account that said it manages several brands goes to the plans page. */
+export function afterOnboardingHash(user: { plan?: { tier?: string | null } | null; businessProfile?: { accountKind?: string } | null } | null | undefined): string | null {
+  if (!user || user.businessProfile?.accountKind !== 'several') return null;
+  return user.plan?.tier === 'free' ? '#/trial-expired?for=agency' : null;
+}
+
+/** The plans page marks the Agency card as suggested only when asked for, and only when the plan can be bought. The card order never changes. */
+export function showsAgencyHint(search: string, state: AgencyCardState): boolean {
+  return state === 'available' && new URLSearchParams(search).get('for') === 'agency';
+}

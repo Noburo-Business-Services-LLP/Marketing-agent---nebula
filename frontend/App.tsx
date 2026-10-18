@@ -30,6 +30,7 @@ import AgencyClients from './pages/AgencyClients';
 import StaffLayout from './pages/staff/StaffLayout';
 import { landingPath, returnHashAfterActing } from './utils/staffHome';
 import { isAgencyUser, isInsideClient } from './utils/agency';
+import { afterOnboardingHash } from './utils/agencyPlan';
 import ReelGenerator from './pages/ReelGenerator';
 import HeroVideo from './pages/HeroVideo';
 import AdCampaigns from './pages/AdCampaigns';
@@ -180,6 +181,9 @@ const App: React.FC = () => {
 
   const handleOnboardingComplete = (updatedUser: User) => {
       setUser(updatedUser);
+      // Someone who said they manage several brands lands on the plans page with the Agency plan first.
+      const landing = afterOnboardingHash(updatedUser);
+      if (landing) window.location.hash = landing;
   };
 
   if (loading) {

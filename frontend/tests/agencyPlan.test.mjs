@@ -1,4 +1,5 @@
 import test from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   agencyFeatureLines, agencyExtraClientLine, agencyCardState, agencyCardNote, slotPrice, slotAvailability,
@@ -269,4 +270,41 @@ test('the done text uses the date when the server gave one', () => {
   assert.match(cancelExtraDoneText({ endsAt: '2026-11-20T00:00:00.000Z' }), /20 November 2026/);
   assert.match(cancelExtraDoneText({}), /end of the month/i);
   assert.match(cancelExtraDoneText(null), /end of the month/i);
+});
+
+import { AGENCY_BADGE, AGENCY_BADGE_LINE, afterOnboardingHash, showsAgencyHint } from '../utils/agencyPlan.ts';
+
+test('after sign-up: "several" goes to the plans page with the Agency plan in view', () => {
+  const several = (tier) => ({ plan: { tier }, businessProfile: { accountKind: 'several' } });
+  assert.equal(afterOnboardingHash(several('free')), '#/trial-expired?for=agency');
+  assert.equal(afterOnboardingHash(several(null)), null, 'a managed account is looked after by Nebulaa');
+  assert.equal(afterOnboardingHash(several('agency')), null);
+  assert.equal(afterOnboardingHash(several('starter')), null, 'already on a plan');
+});
+
+test('after sign-up: "one", empty or missing changes nothing', () => {
+  assert.equal(afterOnboardingHash({ plan: { tier: 'free' }, businessProfile: { accountKind: 'one' } }), null);
+  assert.equal(afterOnboardingHash({ plan: { tier: 'free' }, businessProfile: { accountKind: '' } }), null);
+  assert.equal(afterOnboardingHash({ plan: { tier: 'free' }, businessProfile: {} }), null);
+  assert.equal(afterOnboardingHash({ plan: { tier: 'free' } }), null);
+  assert.equal(afterOnboardingHash(null), null);
+});
+
+test('the Agency hint shows only when asked for and the card can be bought', () => {
+  assert.equal(showsAgencyHint('?for=agency', 'available'), true);
+  assert.equal(showsAgencyHint('?for=agency', 'current'), false);
+  assert.equal(showsAgencyHint('?for=agency', 'other-plan'), false);
+  assert.equal(showsAgencyHint('', 'available'), false);
+  assert.equal(showsAgencyHint('?for=other', 'available'), false);
+});
+
+test('the suggested badge and sentence are plain: no price, Quarks, trial or exclamation', () => {
+  assert.equal(AGENCY_BADGE, 'Suggested for you');
+  assert.equal(AGENCY_BADGE_LINE, 'For managing several client brands.');
+  assert.doesNotMatch(AGENCY_BADGE + AGENCY_BADGE_LINE, /[0-9₹!—]|Quark|trial|credit/i);
+});
+
+test('the plans page never moves the Agency card: no reordering helper, no banner line', () => {
+  const src = fs.readFileSync(new URL('../pages/TrialExpired.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /plansForDisplay|AGENCY_HINT_LINE/);
 });

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { CreditCard, CheckCircle, Loader2, Shield, Check, Plus } from 'lucide-react';
 import { apiService, PlansResponse } from '../services/api';
 import { formatInr, formatPaise, tierLabel } from '../utils/plans';
 import {
-  agencyCardNote, agencyCardState, agencyExtraClientLine, agencyFeatureLines, agencyHeadline, canCancelExtraClient, extraClientEndingNote, insideClientBillingNotice, poolText, slotAvailability,
+  AGENCY_BADGE, AGENCY_BADGE_LINE, agencyCardNote, agencyCardState, showsAgencyHint, agencyExtraClientLine, agencyFeatureLines, agencyHeadline, canCancelExtraClient, extraClientEndingNote, insideClientBillingNotice, poolText, slotAvailability,
 } from '../utils/agencyPlan';
 import BillingDetailsForm from '../components/BillingDetailsForm';
 import ExtraClientDialog from '../components/ExtraClientDialog';
@@ -153,6 +153,7 @@ const muted = 'text-[#ededed]/75';
 
 const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLogout }) => {
   const navigate = useNavigate();
+  const routerLocation = useLocation();
   const [catalogue, setCatalogue] = useState<PlansResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -199,6 +200,8 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
   const onPaidPlan = tier === 'starter' || tier === 'professional';
   const isAgencyPlan = tier === 'agency';
   const agencyState = agencyCardState(tier);
+  // Arrived from sign-up after saying they manage several brands: the Agency plan comes first.
+  const agencyHint = showsAgencyHint(routerLocation.search, agencyState);
   const isManaged = tier === 'managed';
   const [showGst, setShowGst] = useState(false);
   // A new account that has not paid yet: no Quarks, and the free Blueprint is the one thing it can use.
@@ -384,9 +387,11 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ reason, insideClient, onLog
             const locked = isAgencyCard ? agencyState !== 'available' : (onPaidPlan && !current);
             const extraLine = isAgencyCard ? agencyExtraClientLine(catalogue.agency, catalogue.slot) : '';
             return (
-              <GlassCard key={plan.id} highlighted={plan.id === 'professional'}>
+              <GlassCard key={plan.id} highlighted={agencyHint ? plan.id === 'agency' : plan.id === 'professional'}>
                 <div className="p-7 flex flex-col h-full">
+                  {isAgencyCard && agencyHint && <span className="self-start mb-2 rounded-full bg-[#ffcc29] px-3 py-1 text-xs font-bold text-[#070A12]">{AGENCY_BADGE}</span>}
                   <h3 className="text-2xl font-bold text-white mb-1">{plan.name}</h3>
+                  {isAgencyCard && agencyHint && <p className={`${muted} text-sm mb-1`}>{AGENCY_BADGE_LINE}</p>}
                   <p className={`${muted} text-sm mb-5`}>{plan.description}</p>
                   <p className="text-4xl font-extrabold text-white">{formatInr(plan.inr)}<span className={`${muted} text-base font-normal`}> a month plus GST</span></p>
                   <p className={`${muted} text-xs mt-1 mb-5`}>{formatPaise(plan.chargePaise)} including 18 percent GST. Renews monthly and can be cancelled at any time.</p>
