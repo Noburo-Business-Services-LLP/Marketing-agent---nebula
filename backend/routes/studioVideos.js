@@ -13,6 +13,7 @@ const { callTextLLM } = require('../services/openAI');
 const omni = require('../services/omniVideo');
 const sv = require('../services/studioVideo');
 const quarkBuckets = require('../services/quarkBuckets');
+const chain = require('../services/studioVideoChain');
 const { QUARK_COSTS, STUDIO_CLIP_SECONDS } = require('../config/apiCosts');
 const { generateOpenAIImage } = require('../services/openaiImage');
 
@@ -41,8 +42,9 @@ function allowed(kind, userId, max, windowMs = 3600000, now = Date.now()) {
 
 const shape = (v) => ({
   id: String(v._id), status: v.status, title: v.title, concept: v.concept, spokenLine: v.spokenLine,
-  style: v.style, language: v.language, aspectRatio: v.aspectRatio, videoUrl: v.videoUrl,
-  seconds: v.seconds, parent: v.parent ? String(v.parent) : null, change: v.change,
+  style: v.style, language: v.language, voice: v.voice || 'female', aspectRatio: v.aspectRatio, videoUrl: v.videoUrl,
+  clips: v.clips || 1, clipsDone: v.clipsDone || 0, platforms: Array.isArray(v.platforms) ? v.platforms : [], parts: Array.isArray(v.parts) ? v.parts.map((p) => ({ beats: p.beats || [], spokenLine: p.spokenLine || '' })) : [],
+  notice: v.notice || '', seconds: v.seconds, parent: v.parent ? String(v.parent) : null, change: v.change,
   quarks: v.quarks, error: v.status === 'failed' ? (v.error || 'The video could not be made. Your Quarks were returned.') : '',
   createdAt: v.createdAt, completedAt: v.completedAt
 });
@@ -83,8 +85,15 @@ async function resolveReferences(userId, { characterIds = [], placeIds = [], pro
 }
 
 router.get('/options', protect, async (req, res) => {
-  const styles = Object.entries(sv.STYLES).map(([key, s]) => ({ key, label: s.label, hint: s.hint }));
-  res.json({ success: true, styles, languages: [{ key: 'english', label: 'English' }, { key: 'tamil', label: 'Tamil' }, { key: 'none', label: 'No speech, music only' }], quarks: COST(), referenceQuarks: QUARK_COSTS.studio_reference, seconds: STUDIO_CLIP_SECONDS });
+  const styles = Object.entries(sv.STYLES).map(([key, x]) => ({ key, label: x.label, hint: x.hint, image: x.image }));
+  const languages = Object.keys(sv.LANGUAGES).map((key) => ({ key, label: sv.LANGUAGE_LABELS[key] }));
+  const voices = sv.VOICES.map((key) => ({ key, label: key === 'male' ? 'Male voice' : 'Female voice' }));
+  const lengths = Array.from({ length: sv.MAX_CLIPS }, (_, i) => ({ clips: i + 1, seconds: (i + 1) * STUDIO_CLIP_SECONDS, quarks: (i + 1) * COST() }));
+  res.json({
+    success: true, styles, languages, voices, lengths, aspectRatios: sv.ASPECT_RATIOS, platformShapes: sv.platformShapes(), platforms: sv.PLATFORM_IDS,
+    // quarks is the price of one clip (kept for older screens); costPerClip is the same number, named for what it is.
+    quarks: COST(), costPerClip: COST(), max: sv.MAX_CLIPS, referenceQuarks: QUARK_COSTS.studio_reference, seconds: STUDIO_CLIP_SECONDS, clipSeconds: STUDIO_CLIP_SECONDS
+  });
 });
 
 // Step 2 -> 3: turn the idea and choices into a concept the owner can read and edit. Free.
@@ -97,16 +106,17 @@ router.post('/concept', protect, async (req, res) => {
     const refs = await resolveReferences(userId, b);
     const names = (kind) => refs.filter((r) => r.kind === kind).map((r) => r.name).filter(Boolean).join(', ');
     const language = sv.languageOf(b.language);
+    const clips = sv.clipsOf(b.clips);
     const prompt = sv.buildConceptPrompt({
-      idea: b.idea, style: b.style, language, brand,
+      idea: b.idea, style: b.style, language, brand, clips, aspectRatio: sv.aspectOf(b.aspectRatio),
       who: [sv.clip(b.who, 200), names('person') && `the person in the saved photo "${names('person')}"`].filter(Boolean).join('; '),
       where: [sv.clip(b.where, 200), names('place') && `the place in the saved photo "${names('place')}"`].filter(Boolean).join('; '),
       products: names('product')
     });
-    const raw = await callTextLLM(prompt, { jsonMode: true, maxTokens: 900, language: language === 'tamil' ? 'tamil' : 'english', purpose: 'plan' });
-    const c = sv.parseConcept(raw);
+    const raw = await callTextLLM(prompt, { jsonMode: true, maxTokens: 900 + 350 * (clips - 1), language: language === 'none' ? 'english' : language, purpose: 'plan' });
+    const c = sv.parseConcept(raw, clips);
     if (!c.concept) return res.status(502).json({ success: false, message: 'We could not plan this video. Please try again.' });
-    res.json({ success: true, ...c, references: refs.map((r) => ({ kind: r.kind, name: r.name, url: r.url })), quarks: COST() });
+    res.json({ success: true, ...c, references: refs.map((r) => ({ kind: r.kind, name: r.name, url: r.url })), clips, seconds: clips * STUDIO_CLIP_SECONDS, quarks: clips * COST() });
   } catch (e) {
     console.error('[videos] concept failed:', e.message);
     res.status(500).json({ success: false, message: 'We could not plan this video. Please try again.' });
@@ -150,11 +160,73 @@ async function fail(doc, message) {
   }
 }
 
-async function charge(userId, id) {
+async function charge(userId, id, amount = COST()) {
   await quarkBuckets.settleWallet(userId).catch(() => null);
-  const r = await quarkBuckets.spend(userId, COST(), { action: 'studio_video', description: 'Video', ref: id });
+  const r = await quarkBuckets.spend(userId, amount, { action: 'studio_video', description: 'Video', ref: id });
   if (r.success) await StudioVideo.updateOne({ _id: id }, { $set: { payer: r.payerId } }).catch(() => null);
   return r.success;
+}
+
+// Hooks for tests: fakes for the network and ffmpeg steps of a background run. Empty in production.
+const testIo = {};
+
+/**
+ * Runs a longer video in the background: clips one after another, joined into one file. Clip 1 failing returns
+ * everything (as a single clip does); a later clip failing after a retry delivers the shorter video and returns
+ * the Quarks for the clips not made.
+ */
+async function runChain(doc, work, io = {}) {
+  const total = work.prompts.length;
+  try {
+    const references = io.loadRefs ? await io.loadRefs() : await work.loadRefs();
+    const out = await chain.makeChain({ prompts: work.prompts, references, aspectRatio: work.aspectRatio }, {
+      generate: io.generate || ((a) => omni.generate(a)),
+      lastFrame: io.lastFrame, concat: io.concat,
+      onClip: (done) => StudioVideo.updateOne({ _id: doc._id }, { $set: { clipsDone: done } })
+    });
+    if (!out.ok) {
+      const m = String(out.message || '');
+      throw Object.assign(new Error(m), { friendly: true, shown: /returned/i.test(m) ? m : `${m.replace(/\s*$/, '')} Your Quarks were returned.`.trim() });
+    }
+    const url = await (io.store || store)(out.buffer);
+    if (!url) throw Object.assign(new Error('The video could not be saved. Your Quarks were returned. Please try again.'), { friendly: true });
+    if (out.made >= total) {
+      await StudioVideo.updateOne({ _id: doc._id }, { $set: { status: 'completed', videoUrl: url, clipsDone: total, seconds: total * STUDIO_CLIP_SECONDS, completedAt: new Date() } });
+    } else {
+      await finishShort(doc, out.made, total, url);
+    }
+  } catch (e) {
+    console.error('[videos] failed:', e.message);
+    await fail(doc, e.friendly ? (e.shown || e.message) : 'The video could not be made this time. Your Quarks were returned. Please try again.');
+  }
+}
+
+/** Keeps the clips that were made as a shorter video and returns the Quarks for the ones that were not. Once only. */
+async function finishShort(doc, made, total, url) {
+  const secs = made * STUDIO_CLIP_SECONDS;
+  const notice = `Only ${made} of ${total} parts could be made, so this video is ${secs} seconds instead of ${total * STUDIO_CLIP_SECONDS}. You were not charged for the missing ${total - made === 1 ? 'part' : 'parts'}.`;
+  const before = await StudioVideo.findOneAndUpdate(
+    { _id: doc._id, refunded: false },
+    { $set: { status: 'completed', videoUrl: url, clipsDone: made, seconds: secs, notice, refunded: true, completedAt: new Date() } },
+    { new: false }
+  );
+  if (!before) return;
+  const per = Math.round((before.quarks || 0) / (before.clips || total));
+  const back = (before.quarks || 0) - per * made;
+  await StudioVideo.updateOne({ _id: doc._id }, { $set: { quarks: per * made } }).catch(() => null);
+  if (back > 0) {
+    const r = await quarkBuckets.refundTo(doc.user, back, { action: 'studio_video_refund', ref: String(doc._id), payerId: before.payer });
+    if (!r.ok) console.error('[videos] could not return Quarks for', String(doc._id), '- no wallet to return them to');
+  }
+}
+
+/** The per-clip plan: what the owner edited, padded or cut to the number of clips. */
+function partsFrom(b, clips) {
+  const src = Array.isArray(b.parts) ? b.parts : [];
+  return Array.from({ length: clips }, (_, i) => {
+    const p = src[i] || (i === 0 ? { beats: b.beats, spokenLine: b.spokenLine } : {});
+    return { beats: Array.isArray(p.beats) ? p.beats.map((x) => sv.clip(x, 160)).filter(Boolean).slice(0, 4) : [], spokenLine: sv.clip(p.spokenLine, 240) };
+  });
 }
 
 router.post('/create', protect, async (req, res) => {
@@ -162,35 +234,42 @@ router.post('/create', protect, async (req, res) => {
     const userId = userIdOf(req);
     if (!allowed('create', userId, 30)) return res.status(429).json({ success: false, message: 'Please wait a little before making another video.' });
     if (await busy(res, 'studio_video')) return;
-    const active = await StudioVideo.countDocuments({ user: userId, status: 'processing', startedAt: { $gt: new Date(Date.now() - STALE_MS) } });
+    const active = await StudioVideo.countDocuments({ user: userId, status: 'processing', startedAt: { $gt: new Date(Date.now() - STALE_MS * sv.MAX_CLIPS) } });
     if (active >= 2) return res.status(429).json({ success: false, message: 'Two videos are already being made. Please wait for one to finish.' });
     const b = req.body || {};
     const concept = sv.clip(b.concept, 700);
     if (!concept) return res.status(400).json({ success: false, message: 'Plan the video first.' });
     const style = sv.styleOf(b.style); const language = sv.languageOf(b.language);
-    const aspectRatio = b.aspectRatio === '16:9' ? '16:9' : '9:16';
+    const voice = sv.voiceOf(b.voice); const clips = sv.clipsOf(b.clips);
+    const aspectRatio = sv.aspectOf(b.aspectRatio); const platforms = sv.platformsOf(b.platforms);
     const refs = await resolveReferences(userId, b);
     const brand = await brandOf(userId);
-    const prompt = sv.assemblePrompt({
-      concept, beats: Array.isArray(b.beats) ? b.beats.map((x) => sv.clip(x, 160)).slice(0, 4) : [],
-      spokenLine: language === 'none' ? '' : sv.clip(b.spokenLine, 240), style, language, aspectRatio,
-      who: sv.clip(b.who, 300), where: sv.clip(b.where, 300),
+    const parts = partsFrom(b, clips).map((p) => (language === 'none' ? { ...p, spokenLine: '' } : p));
+    const base = {
+      concept, style, language, voice, aspectRatio, who: sv.clip(b.who, 300), where: sv.clip(b.where, 300),
       hasPersonPhoto: refs.some((r) => r.kind === 'person'), hasPlacePhoto: refs.some((r) => r.kind === 'place'), hasProductPhoto: refs.some((r) => r.kind === 'product'),
       brandName: brand.name
-    });
+    };
+    const prompts = parts.map((p, k) => sv.assemblePrompt({ ...base, beats: p.beats, spokenLine: p.spokenLine, continuation: k > 0 }));
+    const total = clips * COST();
     const doc = await StudioVideo.create({
-      user: userId, title: sv.clip(b.title, 60) || 'My video', idea: sv.clip(b.idea, 1200), concept, spokenLine: sv.clip(b.spokenLine, 240),
-      style, language, aspectRatio, prompt, references: refs, quarks: COST(), seconds: STUDIO_CLIP_SECONDS
+      user: userId, title: sv.clip(b.title, 60) || 'My video', idea: sv.clip(b.idea, 1200), concept,
+      spokenLine: parts.map((p) => p.spokenLine).filter(Boolean).join(' ').slice(0, 1200), style, language, voice, aspectRatio, clips, clipsDone: 0,
+      parts: clips > 1 ? parts : [], platforms, prompt: prompts.join('\n---\n'), references: refs, quarks: total, seconds: clips * STUDIO_CLIP_SECONDS
     });
-    if (!(await charge(userId, String(doc._id)))) {
+    // The whole price is taken in one charge, before anything is made: it either covers every clip or nothing starts.
+    if (!(await charge(userId, String(doc._id), total))) {
       await StudioVideo.deleteOne({ _id: doc._id });
-      return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `A video needs ${COST()} Quarks. Please top up or choose a plan.` });
+      return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `${clips > 1 ? `A ${clips * STUDIO_CLIP_SECONDS} second video` : 'A video'} needs ${total} Quarks. Please top up or choose a plan.` });
     }
     res.status(202).json({ success: true, video: shape(doc) });
-    setImmediate(() => run(doc, async () => {
-      const loaded = (await Promise.all(refs.map((r) => toRef(r.url)))).filter(Boolean);
-      return omni.generate({ prompt, references: loaded, aspectRatio });
-    }));
+    const loadRefs = async () => (await Promise.all(refs.map((r) => toRef(r.url)))).filter(Boolean);
+    setImmediate(() => {
+      if (clips === 1) {
+        return run(doc, async () => omni.generate({ prompt: prompts[0], references: await loadRefs(), aspectRatio }), testIo);
+      }
+      return runChain(doc, { prompts, aspectRatio, loadRefs }, testIo);
+    });
   } catch (e) {
     console.error('[videos] create failed:', e.message);
     res.status(500).json({ success: false, message: 'We could not start the video. Please try again.' });
@@ -276,9 +355,10 @@ router.post('/:id/change', protect, async (req, res) => {
     if (!instruction) return res.status(400).json({ success: false, message: 'Say what to change.' });
     const base = await StudioVideo.findOne({ _id: req.params.id, user: userId, status: 'completed' });
     if (!base || !base.videoUrl) return res.status(404).json({ success: false, message: 'That video is not ready yet.' });
+    if ((base.clips || 1) > 1 && (base.seconds || 0) > STUDIO_CLIP_SECONDS) return res.status(400).json({ success: false, message: 'Changes are available for 10-second videos. For a longer video, make a new version.' });
     const doc = await StudioVideo.create({
       user: userId, title: base.title, idea: base.idea, concept: base.concept, spokenLine: base.spokenLine, style: base.style,
-      language: base.language, aspectRatio: base.aspectRatio, prompt: instruction, parent: base._id, change: instruction,
+      language: base.language, voice: base.voice || 'female', platforms: base.platforms || [], aspectRatio: base.aspectRatio, prompt: instruction, parent: base._id, change: instruction,
       references: base.references, quarks: COST(), seconds: STUDIO_CLIP_SECONDS
     });
     if (!(await charge(userId, String(doc._id)))) {
@@ -306,7 +386,7 @@ router.get('/:id', protect, async (req, res) => {
   const v = await StudioVideo.findOne({ _id: req.params.id, user: userIdOf(req) });
   if (!v) return res.status(404).json({ success: false, message: 'Video not found.' });
   // A job that has been running far too long was lost (a restart, a crash): finish it as failed and return the Quarks.
-  if (v.status === 'processing' && Date.now() - new Date(v.startedAt).getTime() > STALE_MS) {
+  if (v.status === 'processing' && Date.now() - new Date(v.startedAt).getTime() > STALE_MS * (v.clips || 1)) {
     await fail(v, 'The video took too long and was stopped. Your Quarks were returned. Please try again.');
     const again = await StudioVideo.findById(v._id);
     return res.json({ success: true, video: shape(again) });
@@ -321,4 +401,6 @@ router.delete('/:id', protect, async (req, res) => {
 
 module.exports = router;
 module.exports.run = run;
+module.exports.runChain = runChain;
+module.exports._io = testIo;
 module.exports._money = { charge, fail }; // for tests: the two places the Videos flow moves Quarks
