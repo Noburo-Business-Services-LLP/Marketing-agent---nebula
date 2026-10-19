@@ -6,9 +6,11 @@ import HandleEditor, { SavedHandle } from './HandleEditor';
 import { setPrefill } from '../utils/prefill';
 import { handleSavedNote } from '../utils/competitorInsights';
 import {
-  boardNote, boardState, homeCards, isBestPostsResponse, sectionsToShow, tileView, trendHandoff, trendView, workingView,
+  boardNote, boardState, draftSourceTitle, homeCards, isBestPostsResponse, sectionsToShow, tileView, trendHandoff, trendView, workingView,
   type BestPostsResponse, type BoardState, type CompetitorCard, type MakeAction, type PostKind, type TrendSource,
 } from '../utils/competitorsHome';
+import { draftsAvailable, isDraftOptions, type DraftKind, type DraftOptions, type DraftSource } from '../utils/homeDrafts';
+import { DraftActions, DraftSheet } from './home/DraftSheet';
 import './CompetitorTiles.css';
 
 // Competitor tiles, "What's working for your competitors" and "Trending for you", from GET /api/competitors/best-posts
@@ -43,6 +45,33 @@ export function useBestPosts(enabled = true) {
   return { res, setRes, failed, reload, state: boardState(res, failed) as BoardState };
 }
 
+/** The Home drafts options (prices, switch, entitlement), read once the board has data. A failure only hides the actions. */
+export function useDraftOptions(enabled: boolean) {
+  const [opts, setOpts] = useState<DraftOptions | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    apiService.getHomeDraftOptions().then((o) => { if (alive) setOpts(isDraftOptions(o) ? o : null); }).catch(() => { if (alive) setOpts(null); });
+    return () => { alive = false; };
+  }, [enabled, tick]);
+  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  return { opts, refresh };
+}
+
+type OnDraft = (kind: DraftKind, source: DraftSource) => void;
+interface DraftsProps { drafts?: DraftOptions | null; postsOnly?: boolean; onDraft?: OnDraft }
+
+/** The sheet for one draft, and the opener the tiles and rows call. */
+function useDraftSheet(drafts: DraftOptions | null, postsOnly: boolean, refresh: () => void) {
+  const [open, setOpen] = useState<{ kind: DraftKind; source: DraftSource } | null>(null);
+  const onDraft = useCallback<OnDraft>((kind, source) => setOpen({ kind, source }), []);
+  const sheet = open && drafts
+    ? <DraftSheet kind={open.kind} source={open.source} options={drafts} postsOnly={postsOnly} onClose={() => setOpen(null)} onDone={refresh} />
+    : null;
+  return { onDraft, sheet };
+}
+
 function useMake(language?: string | null) {
   const navigate = useNavigate();
   return (a: MakeAction) => {
@@ -53,8 +82,10 @@ function useMake(language?: string | null) {
   };
 }
 
-export const CompetitorTile: React.FC<{ card: CompetitorCard; editable?: boolean; savedNote?: string; onSaved?: (s: SavedHandle) => void; onLocked?: () => void }> = ({ card, editable = false, savedNote, onSaved, onLocked }) => {
+export const CompetitorTile: React.FC<{ card: CompetitorCard; editable?: boolean; savedNote?: string; onSaved?: (s: SavedHandle) => void; onLocked?: () => void } & DraftsProps> = ({ card, editable = false, savedNote, onSaved, onLocked, drafts, postsOnly = false, onDraft }) => {
   const v = tileView(card);
+  const ref = card.bestPost?.ref || '';
+  const canDraft = Boolean(v.best && onDraft && draftsAvailable(drafts, ref));
   const BestIcon = v.best ? KIND_ICON[v.best.kind] || ImageIcon : null;
   return (
     <article className="nb-ct-tile" data-status={card.status} aria-label={`${v.name}${v.handleText ? ` ${v.handleText}` : ''}: ${v.chip.text}`}>
@@ -92,6 +123,9 @@ export const CompetitorTile: React.FC<{ card: CompetitorCard; editable?: boolean
         </p>
       )}
       {v.worked && <p className="nb-ct-worked" data-quiet={v.workedIsQuiet ? 'true' : undefined}><Sparkles aria-hidden="true" /><span>{v.worked}</span></p>}
+      {canDraft && drafts && v.best && (
+        <DraftActions options={drafts} postsOnly={postsOnly} onPick={(k) => onDraft!(k, { ref, title: draftSourceTitle(card.name, card.bestPost?.type), url: v.best!.url })} />
+      )}
       {savedNote && <p role="status" className="nb-ct-saved">{savedNote}</p>}
       {editable && v.handleAction && onSaved && (
         <div className="nb-ct-editor">
@@ -106,7 +140,7 @@ const TileSkeleton: React.FC<{ count: number }> = ({ count }) => (
   <ul className="nb-ct-grid" aria-hidden="true">{Array.from({ length: count }, (_, i) => <li key={i}><div className="nb-ct-skel" /></li>)}</ul>
 );
 
-export const WorkingList: React.FC<{ res: BestPostsResponse; language?: string | null }> = ({ res, language }) => {
+export const WorkingList: React.FC<{ res: BestPostsResponse; language?: string | null } & DraftsProps> = ({ res, language, drafts, postsOnly = false, onDraft }) => {
   const make = useMake(language);
   const rows = res.working.map(workingView);
   return (
@@ -127,6 +161,9 @@ export const WorkingList: React.FC<{ res: BestPostsResponse; language?: string |
                   {r.reason}
                   {r.url && <a className="nb-ct-link" href={r.url} target="_blank" rel="noopener noreferrer">Open the post<ExternalLink aria-hidden="true" /></a>}
                 </p>
+                {onDraft && drafts && draftsAvailable(drafts, r.ref) && (
+                  <div className="nb-ct-drafts"><DraftActions compact options={drafts} postsOnly={postsOnly} onPick={(k) => onDraft(k, { ref: r.ref, title: draftSourceTitle(r.title, r.kind), url: r.url })} /></div>
+                )}
               </div>
               <button type="button" className="nb-ct-btn" onClick={() => make(r.action)} aria-label={`${r.action.label}: ${r.title}`}>
                 <Sparkles aria-hidden="true" />{r.action.label}
@@ -170,21 +207,23 @@ export const TrendingList: React.FC<{ res: BestPostsResponse; language?: string 
   );
 };
 
-const Lists: React.FC<{ res: BestPostsResponse | null; state: BoardState; language?: string | null }> = ({ res, state, language }) => {
+const Lists: React.FC<{ res: BestPostsResponse | null; state: BoardState; language?: string | null } & DraftsProps> = ({ res, state, language, drafts, postsOnly, onDraft }) => {
   const show = sectionsToShow(res, state);
   if (!res || (!show.working && !show.trending)) return null;
   const count = (show.working ? 1 : 0) + (show.trending ? 1 : 0);
   return (
     <div className="nb-ct-lists" data-count={count}>
-      {show.working && <WorkingList res={res} language={language} />}
+      {show.working && <WorkingList res={res} language={language} drafts={drafts} postsOnly={postsOnly} onDraft={onDraft} />}
       {show.trending && <TrendingList res={res} language={language} />}
     </div>
   );
 };
 
 /** Home: "Your competitors" with up to three compact tiles, then What's working and Trending for you. */
-export const HomeCompetitors: React.FC<{ enabled: boolean; language?: string | null; noPlanLinks?: boolean }> = ({ enabled, language, noPlanLinks = false }) => {
+export const HomeCompetitors: React.FC<{ enabled: boolean; language?: string | null; noPlanLinks?: boolean; postsOnly?: boolean }> = ({ enabled, language, noPlanLinks = false, postsOnly = false }) => {
   const { res, state, reload } = useBestPosts(enabled);
+  const { opts: drafts, refresh } = useDraftOptions(enabled && state === 'ready');
+  const { onDraft, sheet } = useDraftSheet(drafts, postsOnly, refresh);
   const show = sectionsToShow(res, state);
   if (!enabled || !show.competitors) return null;
   const note = boardNote(state, { clientWorkspace: noPlanLinks });
@@ -207,19 +246,22 @@ export const HomeCompetitors: React.FC<{ enabled: boolean; language?: string | n
         )}
         {cards.length > 0 && (
           <ul className="nb-ct-grid" data-home="true" aria-label="Competitors">
-            {cards.map((c) => <li key={c.id}><CompetitorTile card={c} /></li>)}
+            {cards.map((c) => <li key={c.id}><CompetitorTile card={c} drafts={drafts} postsOnly={postsOnly} onDraft={onDraft} /></li>)}
           </ul>
         )}
       </section>
-      <Lists res={res} state={state} language={language} />
+      <Lists res={res} state={state} language={language} drafts={drafts} postsOnly={postsOnly} onDraft={onDraft} />
+      {sheet}
     </>
   );
 };
 
 /** The Competitors page: every tracked competitor as a tile (with Confirm or Edit handle), then the two lists. When the
  *  account has no add-on the page shows its own note, so only Trending for you appears here. */
-export const CompetitorBoard: React.FC<{ language?: string | null; onLocked?: () => void }> = ({ language, onLocked }) => {
+export const CompetitorBoard: React.FC<{ language?: string | null; onLocked?: () => void; postsOnly?: boolean }> = ({ language, onLocked, postsOnly = false }) => {
   const { res, setRes, state, reload } = useBestPosts(true);
+  const { opts: drafts, refresh } = useDraftOptions(state === 'ready');
+  const { onDraft, sheet } = useDraftSheet(drafts, postsOnly, refresh);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const told = useRef(false);
   useEffect(() => { if (state === 'locked' && onLocked && !told.current) { told.current = true; onLocked(); } }, [state, onLocked]);
@@ -248,12 +290,13 @@ export const CompetitorBoard: React.FC<{ language?: string | null; onLocked?: ()
           {state === 'none' && <p className="nb-ct-quiet"><span>Add the competitors you want to follow below. We look at their public posts each week.</span></p>}
           {cards.length > 0 && (
             <ul className="nb-ct-grid" aria-label="Competitors">
-              {cards.map((c) => <li key={c.id}><CompetitorTile card={c} editable savedNote={notes[c.id]} onSaved={onSaved} onLocked={onLocked} /></li>)}
+              {cards.map((c) => <li key={c.id}><CompetitorTile card={c} editable savedNote={notes[c.id]} onSaved={onSaved} onLocked={onLocked} drafts={drafts} postsOnly={postsOnly} onDraft={onDraft} /></li>)}
             </ul>
           )}
         </section>
       )}
-      <Lists res={res} state={state} language={language} />
+      <Lists res={res} state={state} language={language} drafts={drafts} postsOnly={postsOnly} onDraft={onDraft} />
+      {sheet}
     </div>
   );
 };

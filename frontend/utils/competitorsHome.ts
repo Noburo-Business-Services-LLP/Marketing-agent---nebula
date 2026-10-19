@@ -6,7 +6,7 @@ import type { Handoff } from './homeLayout.ts';
 
 export type BoardStatus = 'tracking' | 'no_handle' | 'unconfirmed' | 'waiting' | 'failed' | 'private' | 'paused';
 export type PostKind = 'video' | 'image' | 'carousel';
-export interface BestPost { period: 'week' | 'month'; type: PostKind; likes: number; comments: number | null; at: string; url: string }
+export interface BestPost { period: 'week' | 'month'; type: PostKind; likes: number; comments: number | null; at: string; url: string; ref?: string }
 export interface WorkedLine { kind: 'format' | 'day' | 'time'; best: string; ratio: number; text: string }
 export interface CompetitorCard {
   id: string; name: string; handle: string; status: BoardStatus; profileUrl: string | null;
@@ -18,7 +18,7 @@ export interface CompetitorCard {
 export interface MakeAction { label: string; kind: 'post' | 'video'; mode: 'single' | 'carousel' | null; brief: string }
 export interface WorkingPost {
   competitorId: string; name: string; handle: string; period: 'week' | 'month'; type: PostKind; likes: number; comments: number | null;
-  at: string; url: string; reason: string; worked: string | null; action: MakeAction;
+  at: string; url: string; ref?: string; reason: string; worked: string | null; action: MakeAction;
 }
 export type TrendSource = 'competitor' | 'own' | 'festival' | 'plan';
 export interface TrendItem { id: string; source: TrendSource; label: string; title: string; reason: string; action: MakeAction }
@@ -164,9 +164,15 @@ export function trendHandoff(a: MakeAction | null | undefined, language: string 
   return { target: 'carousel', route: '/campaigns', data: { mode: a.mode === 'carousel' ? 'carousel' : 'single', topic: brief, ...(lang ? { language: lang } : {}), source: 'home' } };
 }
 
-export interface WorkingRow { key: string; title: string; reason: string; worked: string | null; kind: PostKind; url: string | null; action: MakeAction }
+export interface WorkingRow { key: string; title: string; reason: string; worked: string | null; kind: PostKind; url: string | null; ref: string; action: MakeAction }
 export function workingView(w: WorkingPost): WorkingRow {
-  return { key: `${w.competitorId}:${w.at}`, title: w.name, reason: w.reason, worked: w.worked, kind: w.type, url: POST_LINK.test(String(w.url || '')) ? w.url : null, action: w.action };
+  return { key: `${w.competitorId}:${w.at}`, title: w.name, reason: w.reason, worked: w.worked, kind: w.type, url: POST_LINK.test(String(w.url || '')) ? w.url : null, ref: String(w.ref || ''), action: w.action };
+}
+
+/** How a draft names the post it starts from: "Sweet Co Bakery's reel". */
+export function draftSourceTitle(name: string | null | undefined, kind: PostKind | null | undefined): string {
+  const n = String(name || '').trim() || 'A competitor';
+  return `${n}'s ${NOUN[kind as PostKind] || 'post'}`;
 }
 
 export interface TrendRow { key: string; tone: TrendSource; label: string; title: string; reason: string; action: MakeAction }

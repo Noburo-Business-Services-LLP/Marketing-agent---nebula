@@ -69,6 +69,11 @@
   // handle state without data, few = one competitor with too few posts for a pattern. all = the default mix with data.
   if (params.get('compstate')) sessionStorage.setItem('audit-comp-state', params.get('compstate'));
   var CSTATE = sessionStorage.getItem('audit-comp-state') || 'all';
+  // ?draftstate= ok | blocked | error | limit | busy | balance | off | locked | slow picks the Home drafts answer
+  // ("Make a post in response" and "Draft a witty comment" on a competitor's best post; kept for the tab). off = the switch
+  // is off (no actions show), locked = no add-on (no actions show), slow = the draft takes 4 seconds. ok is the default.
+  if (params.get('draftstate')) sessionStorage.setItem('audit-draft-state', params.get('draftstate'));
+  var DSTATE = sessionStorage.getItem('audit-draft-state') || 'ok';
   // ?tier= free | starter | professional gives the normal account that plan tier (kept for the tab); used to look at the Competitors menu entry.
   if (params.get('tier')) sessionStorage.setItem('audit-tier', params.get('tier'));
   var TIERQ = sessionStorage.getItem('audit-tier') || '';
@@ -319,12 +324,12 @@
     var make = function (kind, mode, brief) { return { label: 'Make a post like this', kind: kind, mode: mode, brief: brief }; };
     var sweet = bpCard('cmp-1', 'Sweet Co Bakery', 'sweetco', 'tracking', {
       followers: { value: 5400, change: 120 }, postsThisWeek: { value: 5, atLeast: false },
-      bestPost: { period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/' },
+      bestPost: { period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/', ref: 'cmp-1.p-AuditReel1' },
       worked: { kind: 'format', best: 'video', ratio: 3.4, text: 'Reels got 3 times the likes of photos on average this month.' },
       weekOf: week, isCurrentWeek: true, lastCheckedOn: istDay(new Date(now.getTime() - 2 * 36e5)) });
     var crumb = bpCard('cmp-6', 'Crumb and Co', 'crumbandco', 'tracking', {
       followers: { value: 128450, change: -35 }, postsThisWeek: { value: 12, atLeast: true },
-      bestPost: { period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/' },
+      bestPost: { period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/', ref: 'cmp-6.p-AuditCarousel2' },
       worked: { kind: 'day', best: 'weekend', ratio: 2.1, text: 'Weekend posts got 2.1 times the likes of weekday posts on average this month.' },
       weekOf: week, isCurrentWeek: true, lastCheckedOn: istDay(new Date(now.getTime() - 2 * 36e5)) });
     var green = bpCard('cmp-2', 'Green Leaf Cafe', 'greenleafcafe', 'tracking', { followers: { value: 2310, change: null }, weekOf: '2026-09-14', lastCheckedOn: '2026-09-15' });
@@ -332,10 +337,10 @@
     var studio = bpCard('cmp-5', 'Studio Nine Salon', 'studionine', 'private', { lastCheckedOn: istDay(new Date(now.getTime() - DAYMS)) });
     var meera = bpCard('cmp-4', 'Meera Jewellers With A Very Long Business Name That Has To Wrap', '', 'no_handle');
     var working = [
-      { competitorId: 'cmp-1', name: 'Sweet Co Bakery', handle: 'sweetco', period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/',
+      { competitorId: 'cmp-1', name: 'Sweet Co Bakery', handle: 'sweetco', period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/', ref: 'cmp-1.p-AuditReel1',
         reason: 'A reel on ' + longDayM(reelAt) + ' with 1,240 likes and 86 comments, their best this week.', worked: sweet.worked.text,
         action: make('video', null, 'A reel about Fresh bakes, in the style that works: reels are getting the most likes this month.') },
-      { competitorId: 'cmp-6', name: 'Crumb and Co', handle: 'crumbandco', period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/',
+      { competitorId: 'cmp-6', name: 'Crumb and Co', handle: 'crumbandco', period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/', ref: 'cmp-6.p-AuditCarousel2',
         reason: 'A carousel on ' + longDayM(carAt) + ' with 310 likes and 12 comments, their best this week.', worked: crumb.worked.text,
         action: make('post', 'carousel', 'A carousel about Fresh bakes, in the style that works: posted at the weekend.') }
     ];
@@ -361,9 +366,9 @@
     }
     if (CSTATE === 'few') {
       var few = bpCard('cmp-1', 'Sweet Co Bakery', 'sweetco', 'tracking', { followers: { value: 640, change: 4 }, postsThisWeek: { value: 0, atLeast: false },
-        bestPost: { period: 'month', type: 'image', likes: 38, comments: 2, at: hoursAgo(9 * 24), url: 'https://www.instagram.com/p/AuditPhoto3/' },
+        bestPost: { period: 'month', type: 'image', likes: 38, comments: 2, at: hoursAgo(9 * 24), url: 'https://www.instagram.com/p/AuditPhoto3/', ref: 'cmp-1.p-AuditPhoto3' },
         weekOf: week, isCurrentWeek: true, lastCheckedOn: istDay(now) });
-      return Object.assign(base, { competitors: [few], working: [{ competitorId: 'cmp-1', name: 'Sweet Co Bakery', handle: 'sweetco', period: 'month', type: 'image', likes: 38, comments: 2, at: few.bestPost.at, url: few.bestPost.url,
+      return Object.assign(base, { competitors: [few], working: [{ competitorId: 'cmp-1', name: 'Sweet Co Bakery', handle: 'sweetco', period: 'month', type: 'image', likes: 38, comments: 2, at: few.bestPost.at, url: few.bestPost.url, ref: few.bestPost.ref,
         reason: 'A photo on ' + longDayM(few.bestPost.at) + ' with 38 likes and 2 comments, their best this month.', worked: null,
         action: make('post', 'single', 'A photo post about Fresh bakes, in the style of the best recent posts in your market.') }], trending: only([festival]) });
     }
@@ -815,6 +820,29 @@
     ['GET', /^\/competitors\/best-posts/, function () {
       if (CSTATE === 'error') return { __status: 500, body: { success: false, message: 'We could not load your competitors just now. Please try again.' } };
       return ok(bestPostsAnswer());
+    }],
+    // ---- Home drafts from a competitor's best post, shaped like backend/services/homeDrafts/service.js ----
+    ['GET', /^\/home\/drafts\/options/, function () {
+      var agencyish = AGENCY;
+      return ok({ enabled: DSTATE !== 'off', entitled: DSTATE !== 'locked' && CSTATE !== 'locked', locked: DSTATE === 'locked' ? 'addon' : null, postsOnly: agencyish,
+        prices: { response_post: { quarks: 8, price: "8 Quarks (about 1 post's worth)", worth: "about 1 post's worth" }, witty_comment: { quarks: 6, price: "6 Quarks (about 1 post's worth)", worth: "about 1 post's worth" } },
+        tones: ['friendly', 'witty'], languages: [{ key: 'english', label: 'English' }, { key: 'tamil', label: 'Tamil' }, { key: 'hindi', label: 'Hindi' }, { key: 'telugu', label: 'Telugu' }, { key: 'kannada', label: 'Kannada' }, { key: 'malayalam', label: 'Malayalam' }],
+        language: 'english', perDay: 20, left: DSTATE === 'limit' ? 0 : 17, maxComment: 220, maxCaption: 600 });
+    }],
+    ['POST', /^\/home\/(response-post|witty-comment)$/, function (req) {
+      var post = /response-post/.test(req.path);
+      if (DSTATE === 'blocked') return { __status: 422, body: { success: false, blocked: true, refunded: true, message: 'We could not write a draft we are happy with. Nothing was charged.' } };
+      if (DSTATE === 'error') return { __status: 502, body: { success: false, refunded: true, message: 'We could not write a draft just now. Nothing was charged. Please try again.' } };
+      if (DSTATE === 'limit') return { __status: 429, body: { success: false, limit: 'day', message: "You have made today's 20 drafts. You can make more tomorrow." } };
+      if (DSTATE === 'busy') return { __status: 503, body: { success: false, serviceBusy: true, message: 'Making things is very busy right now. Please try again in a little while. Nothing was charged.' } };
+      if (DSTATE === 'balance') return { __status: 403, body: { success: false, creditsExhausted: true, message: "This draft needs 6 Quarks (about 1 post's worth). Please top up or choose a plan." } };
+      var lang = ''; try { lang = JSON.parse(req.body || '{}').language || ''; } catch (e) { lang = ''; }
+      var comment = lang === 'tamil' ? 'ரொம்ப அழகான ரீல், பார்த்தாலே பசிக்குது. ஒரு பேக்கர் குடும்பத்திலிருந்து வாழ்த்துகள்.' : lang === 'hindi' ? 'बहुत सुंदर रील, देखकर ही भूख लग गई। एक बेकरी परिवार की ओर से शुभकामनाएँ।' : 'That slow pour of chocolate deserves its own fan club. Lovely reel, from one bakery family to another.';
+      var draft = post
+        ? { caption: 'Fresh from our oven this evening: warm brownies, baked slowly and shared with the people we love. Come hungry, leave happy. #brownies #homebaker #freshbakes', imageIdea: 'A close photo of a warm brownie tray on a wooden table by a sunny window, steam rising.' }
+        : { comment: comment };
+      var body = { success: true, kind: post ? 'response_post' : 'witty_comment', draft: draft, quarks: post ? 8 : 6, price: post ? "8 Quarks (about 1 post's worth)" : "6 Quarks (about 1 post's worth)", language: lang || 'english' };
+      return DSTATE === 'slow' ? { __status: 200, __delay: 4000, body: body } : body;
     }],
     // ---- Social listening (Stage 5): the "What people say about you" card on My plan and the Inbox page ----
     ['GET', /^\/listening$/, function () {

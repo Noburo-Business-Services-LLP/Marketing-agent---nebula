@@ -75,5 +75,7 @@
   "components/StrategyFunnel.tsx",
   "utils/strategyLevels.ts",
   "components/CompetitorTiles.tsx",
-  "utils/competitorsHome.ts"
+  "utils/competitorsHome.ts",
+  "utils/homeDrafts.ts",
+  "components/home/DraftSheet.tsx"
 ]

@@ -4,6 +4,7 @@ import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
 import type { BlueprintView } from '../utils/blueprint';
 import type { BestPostsResponse } from '../utils/competitorsHome';
+import type { DraftAnswer, DraftKind, DraftOptions } from '../utils/homeDrafts';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -1408,6 +1409,11 @@ export const apiService = {
   },
   /** Competitor tiles, what is working and Trending for you, from stored data only (no add-on: entitled false, never a 403). */
   getCompetitorBestPosts: async (): Promise<BestPostsResponse> => apiCall<BestPostsResponse>('/competitors/best-posts', { method: 'GET' }, true),
+  /** Home drafts from a competitor's stored post: prices, switch, entitlement and languages. */
+  getHomeDraftOptions: async (): Promise<DraftOptions> => apiCall<DraftOptions>('/home/drafts/options', { method: 'GET' }, true),
+  /** One draft. Sends only the stored post's reference and the one-press key; a failed request throws with the answer on `data`. */
+  makeHomeDraft: async (kind: DraftKind, body: { ref: string; key: string; tone?: string; language?: string }): Promise<DraftAnswer> =>
+    apiCall<DraftAnswer>(kind === 'response_post' ? '/home/response-post' : '/home/witty-comment', { method: 'POST', body: JSON.stringify(body) }, true),
   /** What people say about the account: scored comments and messages. A 403 (no Inbox add-on) comes back as `{ locked: true }`, not an error. */
   getListening: async (): Promise<ListeningResponse> => {
     try { return await apiCall<ListeningResponse>('/listening', { method: 'GET' }, true); }

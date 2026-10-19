@@ -4,7 +4,7 @@ import { HomeSummary, User } from '../types';
 import AgencyUsage from '../components/AgencyUsage';
 import SetupCard from '../components/SetupCard';
 import ThisWeekCard from '../components/ThisWeekCard';
-import { isAgencyUser } from '../utils/agency';
+import { isAgencyUser, showsPostsNotQuarks } from '../utils/agency';
 import { isHomeSummary, readCachedSummary, writeCachedSummary } from '../utils/home';
 import { actionRows, greeting, headline, isNewAccount, planBanner, blockFailed } from '../utils/homeLayout';
 import { BalanceChip, CreateToday, DoThisNext, NumbersStrip, Skeleton, PlanBanner, TodayPlan } from '../components/home/HomeBlocks';
@@ -115,7 +115,7 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
       </div>
 
       {/* Competitors and trends: read after the summary so the first paint keeps to three calls. No plan links inside a pass. */}
-      <HomeCompetitors enabled={showWeek && Boolean(summary || failed)} language={language} noPlanLinks={Boolean(summary?.account?.clientWorkspace || summary?.account?.pass || user?.actingAgency || csmPass)} />
+      <HomeCompetitors enabled={showWeek && Boolean(summary || failed)} language={language} noPlanLinks={Boolean(summary?.account?.clientWorkspace || summary?.account?.pass || user?.actingAgency || csmPass)} postsOnly={showsPostsNotQuarks(user as any)} />
 
       {summary && isNew && <NumbersStrip summary={summary} />}
     </div>
