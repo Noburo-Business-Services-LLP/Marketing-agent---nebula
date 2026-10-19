@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, ChevronDown, Download, Loader2, Package, Image as ImageIcon, User as UserIcon, Wand2, Trash2, Sparkles, Music } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, ChevronDown, Download, Loader2, Package, Image as ImageIcon, User as UserIcon, Wand2, Trash2, Sparkles, Music, RotateCcw } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import ItemActions, { ItemAction } from '../components/ItemActions';
+import { MEDIA_LABELS, STUDIO_HINTS, studioAgainQuarks, studioDeleteConfirm, studioVideoActionKeys } from '../utils/itemActions';
 import { GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 import PageHeader from '../components/PageHeader';
 import IdeaBoxTools from '../components/IdeaBoxTools';
@@ -297,6 +300,55 @@ const CreateVideo: React.FC = () => {
   }, [step, idea, castFor]);
 
   const startOver = () => { setCurrent(null); setConcept(null); setStep('idea'); setError(''); };
+
+  // Make again: the plan of an earlier video opens again (same idea, look, voice, length and finish), so the person
+  // checks it and presses Make my video, which shows the price. Nothing is charged by this button.
+  const makeAgain = (v: StudioVideo) => {
+    const n = Math.max(1, v.clips || 1);
+    setIdea(v.concept || v.title || ''); setStyle(v.style || DEFAULT_STYLE); setLanguage(v.language || 'english');
+    setVoice(v.voice === 'male' ? 'male' : 'female');
+    if (v.aspectRatio === '9:16' || v.aspectRatio === '16:9') { setShape(v.aspectRatio as Shape); shapeByHand.current = true; }
+    setClips(n); setPlatforms(Array.isArray(v.platforms) ? v.platforms : []);
+    setTransition(transitionOf(v.transition)); setSubtitles(v.subtitles === true); setWantLogo(v.logo === true); setEndLine(v.endLine || '');
+    const beats = (v.parts && v.parts[0] && v.parts[0].beats) || [];
+    setTitle(v.title || 'My video'); setConceptText(v.concept || ''); setSpoken(v.spokenLine || '');
+    setParts(n > 1 ? padParts(v.parts, n, { beats, spokenLine: v.spokenLine || '' }) : []);
+    setConcept({ title: v.title || 'My video', concept: v.concept || '', beats, spokenLine: v.spokenLine || '', quarks: 0, references: [] });
+    setCurrent(null); setError(''); setStep('check');
+  };
+
+  const removeVideo = async (v: StudioVideo) => {
+    try {
+      const r: any = await studioVideosAPI.remove(v.id);
+      if (r && r.success === false) throw new Error(r.message || '');
+      setHistory((h) => h.filter((x) => x.id !== v.id));
+      if (current?.id === v.id) startOver();
+    } catch (e: any) { setError(plainMessage(e?.message) || 'We could not delete this video. Please try again.'); }
+  };
+
+  // The same buttons, in the same order and style as a post (components/ItemActions.tsx). Studio videos cannot be
+  // posted from Nebulaa, so there is no Schedule or Post now: Download, Make again (with its price), Delete.
+  const videoActions = (v: StudioVideo): ItemAction[] => {
+    const quarks = studioAgainQuarks(v, lengths, cost);
+    return studioVideoActionKeys(v).map((k): ItemAction => {
+      if (k === 'download') return { key: k, label: MEDIA_LABELS.download, hint: STUDIO_HINTS.download, icon: Download, primary: true, onRun: () => downloadImage(v.videoUrl, v.title || 'video') };
+      if (k === 'makeAgain') return { key: k, label: MEDIA_LABELS.makeAgain, hint: STUDIO_HINTS.makeAgain(quarks), icon: RotateCcw, quarks: quarks || undefined, primary: v.status !== 'completed', onRun: () => makeAgain(v) };
+      return { key: k, label: MEDIA_LABELS.delete, hint: STUDIO_HINTS.delete, icon: Trash2, danger: true, confirm: studioDeleteConfirm(v.title), onRun: () => removeVideo(v) };
+    });
+  };
+
+  // Opened from the Library: ?again=<video id> opens that video's plan again, ?open=<video id> shows it.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const again = params.get('again'); const open = params.get('open');
+    const id = again || open;
+    if (!id || !history.length) return;
+    const v = history.find((x) => x.id === id);
+    if (!v) return;
+    const next = new URLSearchParams(params); next.delete('again'); next.delete('open'); setParams(next, { replace: true });
+    if (again) makeAgain(v); else { setCurrent(v); setStep('result'); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history, params]);
   const stepIndex = STEPS.findIndex((s) => s.key === step);
   const total = (lengths.find((l) => l.clips === clips)?.quarks) || cost * clips;
   const seconds = (lengths.find((l) => l.clips === clips)?.seconds) || clipSeconds * clips;
@@ -622,14 +674,13 @@ const CreateVideo: React.FC = () => {
                 {current.change && <div className="text-[12.5px] text-[var(--gv-text-tertiary)]">Change: {current.change}</div>}
                 {current.notice && <div role="status" className="mx-auto mt-2 max-w-[420px] text-[12.5px] text-[var(--gv-text-secondary)]">{current.notice}</div>}
               </div>
-              {current.status === 'completed' && (
-                <div className="flex flex-wrap justify-center gap-2">
-                  <GravityButton onClick={() => downloadImage(current.videoUrl, current.title || 'video')}><Download className="h-4 w-4" /> Download</GravityButton>
-                  <GravityButton variant="ghost" onClick={startOver}>Make another video</GravityButton>
+              {current.status !== 'processing' && (
+                <div className="flex flex-col items-center gap-2">
+                  <ItemActions items={videoActions(current)} variant="row" name={current.title || 'this video'} className="items-center" />
+                  <button type="button" onClick={startOver} className="text-[12.5px] font-medium text-[var(--gv-accent-text)] underline underline-offset-2">Make a new video</button>
                 </div>
               )}
               {processing && <GravityButton variant="ghost" onClick={startOver}>Make another video while you wait</GravityButton>}
-              {current.status === 'failed' && <GravityButton onClick={startOver}>Try again</GravityButton>}
             </div>
           </GravityPanel>
 
@@ -668,9 +719,11 @@ const CreateVideo: React.FC = () => {
                   </div>
                   <div className="truncate px-2.5 py-2 text-[12.5px] font-medium text-[var(--gv-text-primary)]">{v.title}</div>
                 </button>
-                {v.status !== 'processing' && (
-                  <button type="button" aria-label={`Delete ${v.title}`} onClick={async () => { await studioVideosAPI.remove(v.id); setHistory((h) => h.filter((x) => x.id !== v.id)); if (current?.id === v.id) startOver(); }} className="absolute right-1.5 top-1.5 rounded-md bg-black/55 p-1.5 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
-                )}
+                <div className="px-2 pb-2">
+                  {v.status === 'processing'
+                    ? <div className="flex h-[34px] items-center text-[12px] text-[var(--gv-text-tertiary)]">Being made</div>
+                    : <ItemActions items={videoActions(v)} variant="compact" name={v.title || 'this video'} className="nb-pa-tight" />}
+                </div>
               </div>
             ))}
           </div>

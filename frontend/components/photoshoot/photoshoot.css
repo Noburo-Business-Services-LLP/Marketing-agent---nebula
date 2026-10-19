@@ -123,6 +123,9 @@
 .nb-ps-photo-body { display: flex; flex-direction: column; gap: 8px; padding: 9px 10px 10px; }
 .nb-ps-photo-name { font-size: 12.5px; font-weight: 650; color: var(--gv-text-primary); overflow-wrap: anywhere; }
 .nb-ps-photo-actions { display: flex; gap: 6px; }
+/* The same footer on every photo: the actions (or a line of the same height while it is made), then one status line. */
+.nb-ps-photo-actions .nb-pa-row { width: 100%; }
+.nb-ps-photo-wait-line { display: flex; align-items: center; height: 34px; font-size: 12px; color: #6B5233; }
 .nb-ps-btn[data-grow="true"] { flex: 1 1 auto; min-width: 0; }
 .nb-ps-btn[data-icon="true"] { flex: 0 0 auto; width: 32px; padding: 0; }
 .nb-ps-btn[aria-pressed="true"][data-icon="true"] { background: #FFF4D9; border-color: #F5A623; color: #6B3F00; }

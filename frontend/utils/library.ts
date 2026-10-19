@@ -1,11 +1,12 @@
 import { needsApproval } from './draftStatus.ts';
 
 /**
- * The Library merges four lists (post and image drafts, step-by-step video drafts, Hero videos, Photoshoot photos) into one
+ * The Library merges five lists (post and image drafts, step-by-step video drafts, Hero videos, videos from the Videos page,
+ * Photoshoot photos) into one
  * card shape, so one page can browse, filter and open all of them. Pure functions only.
  */
 export type LibraryKind = 'image' | 'video';
-export type LibrarySource = 'post' | 'reel' | 'video-draft' | 'hero' | 'photoshoot';
+export type LibrarySource = 'post' | 'reel' | 'video-draft' | 'hero' | 'photoshoot' | 'studio';
 export type LibraryStatus = 'creating' | 'draft' | 'ready' | 'approved' | 'scheduled' | 'posted' | 'archived' | 'binned' | 'failed';
 
 export interface LibraryItem {
@@ -35,6 +36,8 @@ export interface LibraryItem {
   needsApproval?: boolean;
   /** posts in the Bin: when they went there */
   binnedAt?: number;
+  /** videos from the Videos page: how many 10 second parts (its Make again price) */
+  clips?: number;
 }
 
 const ms = (v: any): number => {
@@ -109,6 +112,24 @@ export function fromHeroJob(j: any): LibraryItem | null {
     caption: '', platforms: list(j.publish && j.publish.platforms), createdAt: ms(j.createdAt),
     finish: j.finish,
     ...(j.prompt ? { heroSource: { prompt: String(j.prompt), tweak: j.tweak } } : {}),
+  };
+}
+
+/**
+ * A video made on the Videos page (GET /api/videos, backend/routes/studioVideos.js). It cannot be posted from Nebulaa
+ * (there is no posting route for these), so its tile offers Open, Download and Make again, never Schedule or Post now.
+ */
+export function fromStudioVideo(v: any): LibraryItem | null {
+  if (!v || !v.id) return null;
+  const s = String(v.status || '').toLowerCase();
+  const media = String(v.videoUrl || '');
+  const status: LibraryStatus = s === 'processing' ? 'creating' : s === 'failed' ? 'failed' : 'ready';
+  return {
+    id: String(v.id), kind: 'video', source: 'studio',
+    title: text(v.title) || 'Video', status,
+    thumbnailUrl: stillFor(media), mediaUrl: status === 'ready' ? media : '',
+    caption: text(v.concept, 600), platforms: list(v.platforms), createdAt: ms(v.createdAt || v.completedAt),
+    clips: Math.max(1, Math.round(Number(v.clips) || 1)),
   };
 }
 
@@ -188,17 +209,19 @@ export function inView(i: Pick<LibraryItem, 'status' | 'needsApproval'>, view: L
 
 /** Where an item came from, in words, for the source chip on its tile. */
 export const SOURCE_WORD: Record<LibrarySource, string> = {
-  post: 'Post', reel: 'Reel from your plan', 'video-draft': 'Video', hero: 'Video', photoshoot: 'Photoshoot',
+  post: 'Post', reel: 'Reel from your plan', 'video-draft': 'Video', hero: 'Video', photoshoot: 'Photoshoot', studio: 'Video',
 };
 
-export type LibraryAction = 'open' | 'edit' | 'download';
+export type LibraryAction = 'open' | 'edit' | 'download' | 'again';
 
 /** The actions a tile offers on hover and focus. Nothing while it is still being made. */
 export function libraryTileActions(i: Pick<LibraryItem, 'status' | 'mediaUrl' | 'source'>): LibraryAction[] {
   if (i.status === 'creating') return [];
   const out: LibraryAction[] = ['open'];
-  if (i.status === 'draft' || i.status === 'failed') out.push('edit');
+  if ((i.status === 'draft' || i.status === 'failed') && i.source !== 'studio') out.push('edit');
   if (i.mediaUrl && i.source !== 'post') out.push('download');
+  // Videos from the Videos page are made again there (their plan opens again; the price shows before making).
+  if (i.source === 'studio') out.push('again');
   return out;
 }
 

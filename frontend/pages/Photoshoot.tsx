@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { BookmarkPlus, Camera, Check, Download, ImagePlus, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { BookmarkMinus, BookmarkPlus, Camera, Check, Download, ImagePlus, Loader2, RefreshCw, Sparkles, Wand2 } from 'lucide-react';
+import ItemActions, { ItemAction } from '../components/ItemActions';
+import { MEDIA_LABELS, photoActionKeys, photoMakeAgainConfirm } from '../utils/itemActions';
+import { downloadImage } from '../utils/download';
 import CoverTile from '../components/CoverTile';
 import { PackProductArt, PackMarketplaceArt, PackFestivalArt, PackLifestyleArt, PackFlatLayArt, PackWhiteArt } from '../components/art/packs';
 import { photoshootAPI } from '../services/api';
@@ -8,7 +11,7 @@ import { setPrefill } from '../utils/prefill';
 import { packPhoto } from '../utils/samplePhotos';
 import {
   PACK_PALETTE, createState, isFinished, lockedNote, minutesFor, minutesText, newKey, packTileLines, photoAlt, photoTotal,
-  photosLine, priceLine, progressText, redoLabel, resultNotice, selectionFor, toggleProduct, uploadProblem, versionOf,
+  photosLine, priceLine, progressText, resultNotice, selectionFor, toggleProduct, uploadProblem, versionOf,
   type PhotoshootJob, type PhotoshootOptions, type PhotoshootPack, type PhotoshootPhoto, type PhotoshootSelection,
 } from '../utils/photoshoot';
 import '../components/photoshoot/photoshoot.css';
@@ -163,8 +166,19 @@ const Photoshoot: React.FC = () => {
     finally { setUpBusy(false); }
   };
 
+  // The same buttons, order and style as a post (components/ItemActions.tsx): Use in Create, Download, Make again (with
+  // its price, asked first), Save to Library or Remove from Library. Photos are ingredients: no Schedule or Post now.
+  const photoActions = (p: PhotoshootPhoto, shown: { url: string; inLibrary: boolean; id: string; idx: number; version: boolean }, canRedo: boolean): ItemAction[] =>
+    photoActionKeys({ hasPhoto: Boolean(shown.url), inLibrary: shown.inLibrary, canRedo }).map((k): ItemAction => {
+      const n = p.index + 1;
+      if (k === 'useInCreate') return { key: k, label: MEDIA_LABELS.useInCreate, hint: 'Make a post with this photo.', icon: Wand2, primary: true, onRun: () => openInCreate(shown.url, p.product) };
+      if (k === 'download') return { key: k, label: MEDIA_LABELS.download, hint: 'Save the photo to your device.', icon: Download, pin: true, onRun: () => downloadImage(shown.url, `${p.product || 'photo'} ${n}`) };
+      if (k === 'makeAgain') return { key: k, label: MEDIA_LABELS.makeAgain, hint: 'Make a new version of this photo. The one you have stays.', icon: RefreshCw, quarks: perPhoto || undefined, primary: !shown.url, disabled: busyJob, reason: busyJob ? 'Wait for the photos being made' : '', confirm: photoMakeAgainConfirm(perPhoto), onRun: () => redo(p) };
+      if (k === 'save') return { key: k, label: MEDIA_LABELS.save, hint: 'Keep this photo in your Library.', icon: BookmarkPlus, onRun: () => toggleLibrary(shown.id, shown.idx, true, shown.version) };
+      return { key: k, label: 'Remove from Library', hint: 'Take this photo out of your Library. It stays in this photoshoot.', icon: BookmarkMinus, onRun: () => toggleLibrary(shown.id, shown.idx, false, shown.version) };
+    });
+
   const priceOf = (q: number) => priceLine(q, costs, postsOnly);
-  const redoText = redoLabel(perPhoto, costs, postsOnly);
   const summaryWhat = sel.pack
     ? `${photosLine(sel.count, Math.max(1, sel.productIds.length))} of ${chosenNames.length ? chosenNames.join(', ') : 'your products'}, ${sel.pack.aspectRatios.find((a) => a.key === sel.aspectRatio)?.label.toLowerCase() || 'square'}${sel.background ? `, ${sel.pack.backgrounds.find((b) => b.key === sel.background)?.label.toLowerCase()}` : ''}${sel.placeId ? `, in ${places.find((p) => p.id === sel.placeId)?.name || 'your space'}` : ''}`
     : 'Choose a pack to see what you get';
@@ -342,21 +356,14 @@ const Photoshoot: React.FC = () => {
                   <div className="nb-ps-photo-body">
                     <span className="nb-ps-photo-name">{p.product}</span>
                     {v.failed && !v.running && <span className="nb-ps-meta">The new version could not be made. You were not charged for it.</span>}
-                    {done && (
-                      <div className="nb-ps-photo-actions">
-                        <button type="button" className="nb-ps-btn" data-small="true" data-grow="true" onClick={() => openInCreate(shown.url, p.product)}>Use in Create</button>
-                        <a className="nb-ps-btn" data-small="true" data-icon="true" href={shown.url} download target="_blank" rel="noreferrer" aria-label={`Download photo ${p.index + 1}`} title="Download"><Download size={14} aria-hidden="true" /></a>
-                        <button type="button" className="nb-ps-btn" data-small="true" data-icon="true" aria-pressed={shown.inLibrary} aria-label={shown.inLibrary ? `Saved to Library: photo ${p.index + 1}` : `Save to Library: photo ${p.index + 1}`} title={shown.inLibrary ? 'Saved to Library' : 'Save to Library'} onClick={() => toggleLibrary(shown.id, shown.idx, !shown.inLibrary, shown.version)}>
-                          {shown.inLibrary ? <Check size={14} aria-hidden="true" /> : <BookmarkPlus size={14} aria-hidden="true" />}
-                        </button>
-                      </div>
-                    )}
-                    {done && <span className="nb-ps-meta">{shown.inLibrary ? 'Saved to Library' : 'Not in your Library'}</span>}
-                    {isFinished(job) && !v.running && opts.entitled !== false && opts.enabled !== false && (
-                      <button type="button" className="nb-ps-link" onClick={() => redo(p)} disabled={busyJob} style={{ alignSelf: 'flex-start' }}>
-                        <RefreshCw size={12} aria-hidden="true" style={{ display: 'inline', marginRight: 4 }} />{redoText}
-                      </button>
-                    )}
+                    {(() => {
+                      const canRedo = isFinished(job) && !v.running && opts.entitled !== false && opts.enabled !== false;
+                      const items = photoActions(p, shown, canRedo);
+                      return items.length
+                        ? <ItemActions items={items} variant="compact" name={`photo ${p.index + 1}`} className="nb-ps-photo-actions nb-pa-tight nb-pa-stack" />
+                        : <span className="nb-ps-photo-wait-line">{v.running || p.status === 'making' ? 'Being made' : p.status === 'failed' ? 'Not made' : 'Waiting its turn'}</span>;
+                    })()}
+                    <span className="nb-ps-meta">{done ? (shown.inLibrary ? 'Saved to Library' : 'Not in your Library') : '\u00a0'}</span>
                   </div>
                 </li>
               );

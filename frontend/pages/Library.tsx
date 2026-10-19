@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, Search, Trash2, X } from 'lucide-react';
+import { Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import { GravityButton } from '../components/gravity';
 import { useConfirm } from '../context/ConfirmContext';
 import GenerationTimer from '../components/GenerationTimer';
@@ -9,14 +9,14 @@ import HeroEdit from '../components/HeroEdit';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import { orderForViewing } from '../utils/postOrder';
 import PlatformIcon from '../components/PlatformIcon';
-import { draftsAPI, videoGenerationAPI, heroVideoAPI, photoshootAPI, DraftCounts } from '../services/api';
+import { draftsAPI, videoGenerationAPI, heroVideoAPI, photoshootAPI, studioVideosAPI, DraftCounts } from '../services/api';
 import PostActions, { PostNotice, PostNoticeValue } from '../components/PostActions';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { binDaysLeft, BIN_DAYS } from '../utils/postActions';
 import { platformLabel } from '../utils/platforms';
 import {
   LibraryItem, LibraryFilters, LibraryView, DEFAULT_FILTERS, STATUS_WORD, LIBRARY_VIEWS,
-  fromPostDraft, fromVideoDraft, fromHeroJob, fromPhotoshootPhoto, applyFilters, inView, defaultView, statusWordOf,
+  fromPostDraft, fromVideoDraft, fromHeroJob, fromPhotoshootPhoto, fromStudioVideo, applyFilters, inView, defaultView, statusWordOf,
   SOURCE_WORD, libraryTileActions, libraryColumns,
 } from '../utils/library';
 import { fillRows } from '../utils/rowSpans';
@@ -28,7 +28,7 @@ const KINDS: Array<{ key: LibraryFilters['kind']; label: string }> = [
 ];
 const SOURCES: Array<{ key: LibraryFilters['source']; label: string }> = [
   { key: 'all', label: 'Everything' }, { key: 'video-draft', label: 'Videos' }, { key: 'post', label: 'Posts and images' },
-  { key: 'reel', label: 'Reels from your plan' }, { key: 'photoshoot', label: 'Photoshoots' },
+  { key: 'studio', label: 'Short videos' }, { key: 'reel', label: 'Reels from your plan' }, { key: 'photoshoot', label: 'Photoshoots' },
 ];
 
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--gv-bg,transparent)]';
@@ -76,11 +76,12 @@ const Library: React.FC = () => {
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
-    const [posts, videos, heroes, shoots] = await Promise.allSettled([
+    const [posts, videos, heroes, shoots, studio] = await Promise.allSettled([
       draftsAPI.getDrafts(),
       videoGenerationAPI.getDrafts(),
       heroVideoAPI.list(),
       photoshootAPI.library(),
+      studioVideosAPI.list(),
     ]);
     const bad: string[] = [];
     const all: LibraryItem[] = [];
@@ -92,6 +93,8 @@ const Library: React.FC = () => {
     if (videos.status === 'fulfilled') (videos.value?.drafts || []).forEach((d: any) => { const c = fromVideoDraft(d); if (c) all.push(c); });
     else bad.push('videos');
     if (heroes.status === 'fulfilled') ((heroes.value as any)?.jobs || []).forEach((j: any) => { const c = fromHeroJob(j); if (c) all.push(c); });
+    else if (!bad.includes('videos')) bad.push('videos');
+    if (studio.status === 'fulfilled') ((studio.value as any)?.videos || []).forEach((v: any) => { const c = fromStudioVideo(v); if (c) all.push(c); });
     else if (!bad.includes('videos')) bad.push('videos');
     if (shoots.status === 'fulfilled') ((shoots.value as any)?.photos || []).forEach((p: any) => { const c = fromPhotoshootPhoto(p); if (c) all.push(c); });
     else bad.push('photoshoots');
@@ -137,22 +140,26 @@ const Library: React.FC = () => {
     else if (i.source === 'video-draft') navigate(`/reels?jobId=${encodeURIComponent(i.id)}`);
     else if (i.source === 'reel' && i.jobId) navigate(`/reels?jobId=${encodeURIComponent(i.jobId)}`);
     else if (i.source === 'photoshoot') navigate('/photoshoot');
+    else if (i.source === 'studio') navigate(`/reels?open=${encodeURIComponent(i.id)}`);
     // A post opens its own sheet, where it can be edited.
     else setOpen(i);
   };
 
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState('');
-  const canRemove = (i: LibraryItem) => i.source === 'hero' || i.source === 'video-draft' || i.source === 'reel';
+  const canRemove = (i: LibraryItem) => i.source === 'hero' || i.source === 'video-draft' || i.source === 'reel' || i.source === 'studio';
+  // A video from the Videos page is made again there: its plan opens again and the price shows before anything is made.
+  const makeVideoAgain = (i: LibraryItem) => navigate(`/reels?again=${encodeURIComponent(i.id)}`);
+  const studioQuarks = (i: LibraryItem) => Math.round((quarkCosts.studio_video || 0) * (i.clips || 1));
   const remove = async (i: LibraryItem) => {
     if (removing) return;
     const ok = i.source === 'reel'
       ? await confirmDialog(`It stays in the Bin for ${BIN_DAYS} days, so you can restore it. After that it is removed for good.`, { title: 'Move this to the Bin?', confirmLabel: 'Move to the Bin', danger: true })
-      : await confirmDialog(i.source === 'hero' ? 'This removes the video from your library. Quarks already spent are not returned.' : 'This removes it and its files. This cannot be undone.', { title: `Delete "${i.title}"?`, confirmLabel: 'Delete', danger: true });
+      : await confirmDialog(i.source === 'hero' || i.source === 'studio' ? 'This removes the video for good. Quarks already spent are not returned.' : 'This removes it and its files. This cannot be undone.', { title: `Delete "${i.title}"?`, confirmLabel: 'Delete', danger: true });
     if (!ok) return;
     setRemoving(true); setRemoveError('');
     try {
-      const r: any = i.source === 'hero' ? await heroVideoAPI.remove(i.id) : i.source === 'video-draft' ? await videoGenerationAPI.deleteDraft(i.id) : await draftsAPI.deleteDraft(i.id);
+      const r: any = i.source === 'hero' ? await heroVideoAPI.remove(i.id) : i.source === 'video-draft' ? await videoGenerationAPI.deleteDraft(i.id) : i.source === 'studio' ? await studioVideosAPI.remove(i.id) : await draftsAPI.deleteDraft(i.id);
       if (r && r.success === false) throw new Error(r.message || 'We could not delete this.');
       setOpen(null); refresh();
     } catch (e: any) {
@@ -292,6 +299,7 @@ const Library: React.FC = () => {
                           {actions.includes('open') && <button type="button" className="nb-pa-btn" data-primary="true" onClick={() => setOpen(i)} aria-label={`Open ${i.title}`}><Eye className="nb-pa-ico" aria-hidden="true" /><span className="nb-pa-word">Open</span></button>}
                           {actions.includes('edit') && <button type="button" className="nb-pa-btn" onClick={() => goEdit(i)} aria-label={`Edit ${i.title}`} title="Edit"><Pencil className="nb-pa-ico" aria-hidden="true" /></button>}
                           {actions.includes('download') && <a className="nb-pa-btn" href={i.mediaUrl} download target="_blank" rel="noreferrer" aria-label={`Download ${i.title}`} title="Download"><Download className="nb-pa-ico" aria-hidden="true" /></a>}
+                          {actions.includes('again') && <button type="button" className="nb-pa-btn" onClick={() => makeVideoAgain(i)} aria-label={`Make ${i.title} again`} title="Make again: the plan opens on the Videos page, with the price"><RotateCcw className="nb-pa-ico" aria-hidden="true" /></button>}
                         </div>
                       </div>
                     </div>
@@ -342,7 +350,8 @@ const Library: React.FC = () => {
             {open.caption && <p className="text-[13.5px] text-[var(--gv-text-secondary)] whitespace-pre-wrap">{open.caption}</p>}
             <div className="flex flex-wrap items-center gap-4">
               {open.mediaUrl && <a href={open.mediaUrl} download target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)] hover:underline"><Download className="w-4 h-4" />Download</a>}
-              {open.source !== 'hero' && <GravityButton variant="ghost" onClick={() => goEdit(open)}>{open.status === 'draft' ? 'Edit' : 'Open'}</GravityButton>}
+              {open.source === 'studio' ? <GravityButton variant="ghost" onClick={() => makeVideoAgain(open)}><RotateCcw className="w-4 h-4" />Make again{studioQuarks(open) ? <span className="nb-pa-price">{studioQuarks(open).toLocaleString('en-IN')} Quarks</span> : null}</GravityButton>
+                : open.source !== 'hero' && <GravityButton variant="ghost" onClick={() => goEdit(open)}>{open.status === 'draft' ? 'Edit' : 'Open'}</GravityButton>}
               {canRemove(open) && (
                 <button type="button" onClick={() => remove(open)} disabled={removing} className="ml-auto inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-coral-text)] disabled:opacity-60">
                   {removing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}Delete
