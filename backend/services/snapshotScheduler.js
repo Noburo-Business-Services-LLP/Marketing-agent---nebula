@@ -182,6 +182,8 @@ class SnapshotScheduler {
       },
       { upsert: true, new: true }
     );
+    // The Performance view caches each account's answer for a minute: forget it now that new numbers are stored.
+    require('./performance/cache').forgetAccount(userId);
 
     console.log(`📊 Snapshot saved for user ${userId}: ${Object.keys(platforms).length} platforms`);
   }

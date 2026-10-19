@@ -166,6 +166,8 @@ async function runPerformanceTrackerOnce({ now = new Date(), limit = MAX_CHECKS_
       { _id: campaign._id },
       { $push: { performanceChecks: { checkpoint, checkedAt: now } } }
     );
+    // New post numbers may have been stored: the Performance view should not show the old ones for a minute.
+    require('./performance/cache').forgetAccount(campaign.userId);
   }
 
   return { checked, candidateCount: candidates.length };

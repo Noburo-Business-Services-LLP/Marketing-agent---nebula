@@ -5,6 +5,8 @@
 
 const express = require('express');
 const router = express.Router();
+// GET /performance (the Performance page view) is mounted first so the GET /:id route below never takes it.
+router.use(require('./performanceView'));
 const { protect } = require('../middleware/auth');
 const AnalyticsSnapshot = require('../models/AnalyticsSnapshot');
 const SocialSnapshot = require('../models/SocialSnapshot');
