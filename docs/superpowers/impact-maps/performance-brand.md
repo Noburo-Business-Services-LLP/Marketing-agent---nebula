@@ -82,3 +82,10 @@ Nothing is removed from behaviour except the two dead Filter and Export buttons 
 - `frontend/tests/brandTiles.test.mjs`: statuses for each brand tile from real rows (placeholder colours count as missing, failed source gives "Could not check"), Blueprint start tiles from the form, Blueprint result tiles from the stored pages, row filling.
 - Existing suites stay green (`node --test tests/*.test.mjs`), `tsc` (only the old Influencers error), brand audit, voice audit, art budget.
 - Look: audit preview on port 3102, `?perfstate=` and `?brandstate=` mock states, rows measured with `getBoundingClientRect` at 1280 and 375.
+
+## Addendum (2026-10-19): per-platform Performance view
+
+- New read `GET /api/analytics/performance` replaces the page's three calls (Home summary, history, campaigns); Home is untouched. Reads `SocialSnapshot`, `AIContentPerformance`, `Campaign` only, bounded and cached 60 s per account, range and platform; the snapshot and post measuring jobs clear the cache. No money, Quark or entitlement change; free accounts see the paid plan reason, client workspaces see the client's own data and no plan links.
+- Edge cases covered by `backend/tests/performanceView.test.js` and `backend/scripts/performance-view-check.js`: nothing connected (free and paid), connected without numbers, old numbers of a disconnected platform hidden, X without account reach, Google without followers, posts published but not measured, too few posts for findings, a failed source, another account never visible, agency pass.
+- Look: `?perfstate=full|oneplatform|empty|notconnected|error` at 1280 and 375. Details in `docs/superpowers/ops/performance-view.md`.
+- The old `utils/performanceView.ts` KPI builders (`buildKpis`, `bestPostOfMonth`, `reachDays`, `chartPaths`, `heroLine`) are no longer used by the page; kept with their tests for now (only `sparkPath`, `reasonLink` and the KPI types are still imported).
