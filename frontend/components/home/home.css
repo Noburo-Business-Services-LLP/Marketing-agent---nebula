@@ -9,6 +9,14 @@
   /* brown ink instead of the app's navy ink, for Home only */
   --gv-text-primary: #2B1D0E; --gv-text-secondary: #4F3F2B;
   position: relative; max-width: 1180px; margin: 0 auto; padding-bottom: 48px; display: flex; flex-direction: column; gap: 18px; }
+/* The greeting glow runs edge to edge of the scrolling area (the owner saw a gap of about half an inch each side on
+   2026-10-19): the area becomes a size container so the glow can be as wide as its padding box (100cqw plus the
+   area's own padding, 16px on a phone and 32px from 768px), centred on the page column. The content keeps its
+   column, so the greeting still lines up with the cards below. Without container support it falls back to the
+   column width. The area's container width counts the scrollbar gutter, so the few pixels under the scrollbar are
+   clipped (overflow-x hidden) instead of making the page scroll sideways. */
+main:has(> .nb-home) { container-type: inline-size; --nb-area-pad: 16px; overflow-x: hidden; }
+@media (min-width: 768px) { main:has(> .nb-home) { --nb-area-pad: 32px; } }
 .nb-home::before {
   content: ""; position: absolute; z-index: 0; pointer-events: none; left: 0; right: 0; top: -40px; height: 360px;
   background:
@@ -16,6 +24,9 @@
     radial-gradient(35% 60% at 88% 0%, var(--gv-glow-amber), transparent 70%),
     radial-gradient(30% 50% at 60% 40%, var(--gv-glow-cool), transparent 75%);
   opacity: 0.75;
+}
+@supports (width: 1cqw) {
+  .nb-home::before { right: auto; left: 50%; width: calc(100cqw + 2 * var(--nb-area-pad, 0px)); transform: translateX(-50%); }
 }
 .nb-home > * { position: relative; z-index: 1; }
 .nb-home h2, .nb-home h3 { margin: 0; }
