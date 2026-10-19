@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   BrainCircuit,
@@ -28,6 +28,7 @@ import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logo
 import InventoryPanel from './Inventory';
 import EnvironmentPanel from './EnvironmentAssets';
 import FramesManager from '../components/FramesManager';
+import BrandGlance from '../components/brand/BrandGlance';
 import {
   GravityHero,
   GravityEmphasis,
@@ -177,6 +178,12 @@ const BrandAssets: React.FC = () => {
   const [chosenSwatch, setChosenSwatch] = useState<string | null>(null);
   const [canPickFromScreen] = useState(() => typeof window !== 'undefined' && 'EyeDropper' in window);
   const [otherImageUrls, setOtherImageUrls] = useState<string[]>([]);
+  // For the at-a-glance tiles: every asset row (null when the call failed) and which loads failed.
+  const [allAssets, setAllAssets] = useState<any[] | null>([]);
+  const [logosFailed, setLogosFailed] = useState(false);
+  const [profileFailed, setProfileFailed] = useState(false);
+  const [loadCount, setLoadCount] = useState(0);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const savedColorsRef = React.useRef<{ primary: string; secondary: string }>({ primary: '', secondary: '' });
   const [fontType, setFontType] = useState('');
   const [enforcementMode, setEnforcementMode] = useState<'strict' | 'adaptive' | 'off'>('strict');
@@ -232,14 +239,19 @@ const BrandAssets: React.FC = () => {
       if (logosRes?.success) {
         setLogos(Array.isArray(logosRes.logos) ? logosRes.logos : []);
       }
+      setLogosFailed(!logosRes?.success);
 
       if (profileRes?.success && profileRes.profile) {
         setProfile(profileRes.profile);
         hydrateFormFromProfile(profileRes.profile);
       }
+      setProfileFailed(!profileRes?.success);
     } catch (err: any) {
       setError(err?.message || 'Brand data could not be loaded.');
+      setLogosFailed(true);
+      setProfileFailed(true);
     } finally {
+      setLoadCount((n) => n + 1);
       setLoading(false);
       setRefreshing(false);
     }
@@ -258,11 +270,13 @@ const BrandAssets: React.FC = () => {
   useEffect(() => {
     let live = true;
     brandAssetsAPI.getAll().then((res: any) => {
-      if (!live || !Array.isArray(res?.assets)) return;
+      if (!live) return;
+      if (!Array.isArray(res?.assets)) { setAllAssets(null); return; }
+      setAllAssets(res.assets);
       setOtherImageUrls(res.assets.filter((a: any) => a?.type !== 'logo' && a?.url).slice(0, 6).map((a: any) => a.url));
-    }).catch(() => {});
+    }).catch(() => { if (live) setAllAssets(null); });
     return () => { live = false; };
-  }, []);
+  }, [loadCount > 1 ? loadCount : 0]);
 
   // Colours found in the logos and in the other uploaded brand images. Images that cannot be read are skipped.
   const paletteSourceKey = [...logos.map((l) => l.url), ...otherImageUrls].join('|');
@@ -680,9 +694,21 @@ const BrandAssets: React.FC = () => {
           </div>
         )}
 
+        <BrandGlance
+          logos={logosFailed ? null : logos}
+          profile={profile}
+          profileFailed={profileFailed}
+          assets={allAssets}
+          refreshKey={`${loadCount}:${activeTab}`}
+          onOpenTab={(tab) => {
+            setActiveTab(tab);
+            requestAnimationFrame(() => tabsRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }));
+          }}
+        />
+
         {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
             toggle — the one tab control style the whole app should share. */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scroll-mt-4" ref={tabsRef}>
           <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
             {([
               { id: 'brand', label: 'Brand' },

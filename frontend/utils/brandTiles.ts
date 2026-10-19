@@ -123,9 +123,17 @@ export function fontLabel(font: string): string {
 }
 
 /** How many brand tiles say "Added" (or partly), for the header line. */
-export function brandProgress(tiles: StatusTile[]): { done: number; total: number } {
+export function brandProgress(tiles: StatusTile[]): { done: number; total: number; unknown: number; text: string } {
   const known = tiles.filter((t) => t.key !== 'memory');
-  return { done: known.filter((t) => t.state === 'added' || t.state === 'partly').length, total: known.length };
+  const done = known.filter((t) => t.state === 'added' || t.state === 'partly').length;
+  const unknown = known.filter((t) => t.state === 'unknown').length;
+  const total = known.length;
+  const text = unknown === total
+    ? 'We could not check your brand just now. Please refresh in a moment.'
+    : unknown > 0
+      ? `${done} of ${total} set up. ${unknown} could not be checked just now.`
+      : `${done} of ${total} set up. Open a tile to add or change it.`;
+  return { done, total, unknown, text };
 }
 
 /** Column spans that fill every row (owner's symmetry rule). */

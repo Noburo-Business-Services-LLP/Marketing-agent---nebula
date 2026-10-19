@@ -11,6 +11,7 @@ import {
 } from '../utils/blueprint';
 import { BLUEPRINT_COPY } from '../constants/blueprintCopy';
 import type { User } from '../types';
+import { BlueprintPartTiles } from '../components/brand/BlueprintTiles';
 
 const C = BLUEPRINT_COPY.view;
 
@@ -208,6 +209,7 @@ const BlueprintView: React.FC<{ user?: User | null }> = ({ user }) => {
       {ended && (
         <Link to="/blueprint/new" className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg text-[13px] font-semibold bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)]">{C.changeAnswers}</Link>
       )}
+      {view.status === 'completed' && <BlueprintPartTiles result={view.result} />}
       {view.status === 'completed' && <DesignedEdition view={view} onStarted={() => { setView((v) => (v ? { ...v, designed: { status: 'queued', total: 11, done: 0, pages: [], pdfUrl: '', refunded: false, error: null } } : v)); startPolling(); }} />}
       {view.status === 'completed' && <BlueprintDocument view={view} user={user} />}
     </div>

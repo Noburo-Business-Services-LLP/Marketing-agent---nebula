@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, X as XIcon } from 'lucide-react';
@@ -12,6 +12,7 @@ import {
 } from '../utils/blueprint';
 import { BLUEPRINT_COPY } from '../constants/blueprintCopy';
 import type { User } from '../types';
+import { BlueprintFormTiles } from '../components/brand/BlueprintTiles';
 
 const C = BLUEPRINT_COPY.form;
 
@@ -40,6 +41,20 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
   const quarkCosts = useQuarkCosts();
   const [cost, setCost] = useState<number | undefined>(undefined);
   const allowMode = canChooseMode(user as any);
+  const moreRef = useRef<HTMLDetailsElement>(null);
+
+  // A status tile moves to the first gap in its part of the form (opening "More detail" when the field is inside it).
+  const goTo = (field: string) => {
+    const el = document.getElementById(field);
+    if (!el) return;
+    if (moreRef.current && moreRef.current.contains(el)) moreRef.current.open = true;
+    requestAnimationFrame(() => {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+      const target = el.matches('input, textarea, select, button') ? el : (el.querySelector('input, textarea, select, button') as HTMLElement | null);
+      (target || el).focus({ preventScroll: true });
+    });
+  };
 
   useEffect(() => {
     let live = true;
@@ -108,6 +123,8 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
         <p className="mt-2 text-[14.5px] leading-relaxed text-[var(--gv-text-secondary)]">{C.intro}</p>
       </div>
 
+      <BlueprintFormTiles form={form} onGo={goTo} />
+
       {already && (
         <GravityPanel padding="p-4" contentClassName="space-y-3">
           <p role="status" className="text-[14px] text-[var(--gv-text-primary)]">{already.message}</p>
@@ -140,7 +157,7 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
           <div className="grid grid-cols-2 gap-2">
             {GOALS.map((g) => (
               <label key={g.value} className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-[14px] cursor-pointer text-[var(--gv-text-primary)] ${form.goal === g.value ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)]'}`}>
-                <input type="radio" name="bp-goal" value={g.value} checked={form.goal === g.value} onChange={() => set('goal', g.value)} className="accent-[var(--gv-accent)]" />
+                <input type="radio" id={g.value === GOALS[0].value ? 'bp-goal' : undefined} name="bp-goal" value={g.value} checked={form.goal === g.value} onChange={() => set('goal', g.value)} className="accent-[var(--gv-accent)]" />
                 {g.label}
               </label>
             ))}
@@ -148,7 +165,7 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
           {errors.goal && <p role="alert" className="text-[12.5px] font-medium text-[var(--gv-coral-text)]">{errors.goal}</p>}
         </fieldset>
 
-        <details className="group rounded-xl border border-[var(--gv-border-subtle)] px-4 py-3">
+        <details ref={moreRef} className="group rounded-xl border border-[var(--gv-border-subtle)] px-4 py-3">
           <summary className="cursor-pointer text-[14px] font-semibold text-[var(--gv-text-primary)]">{C.moreDetail}</summary>
           <div className="mt-4 space-y-5">
             <Field id="bp-city" label={C.city}>
@@ -159,7 +176,7 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
               <p className="text-[13px] font-semibold text-[var(--gv-text-primary)]">{C.competitors}</p>
               {competitorRows.map((c, i) => (
                 <div key={i} className="grid sm:grid-cols-2 gap-2">
-                  <input aria-label={`${C.competitorName} ${i + 1}`} className={inputCls} placeholder={C.competitorName} value={c.name} maxLength={80} onChange={(e) => setCompetitor(i, 'name', e.target.value)} />
+                  <input id={i === 0 ? 'bp-competitors' : undefined} aria-label={`${C.competitorName} ${i + 1}`} className={inputCls} placeholder={C.competitorName} value={c.name} maxLength={80} onChange={(e) => setCompetitor(i, 'name', e.target.value)} />
                   <input aria-label={`${C.competitorUrl} ${i + 1}`} className={inputCls} placeholder={C.competitorUrl} value={c.url} inputMode="url" autoCapitalize="none" onChange={(e) => setCompetitor(i, 'url', e.target.value)} />
                 </div>
               ))}
@@ -174,7 +191,7 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
               <p className="text-[13px] font-semibold text-[var(--gv-text-primary)]">{C.offers}</p>
               {offerRows.map((o, i) => (
                 <div key={i} className="grid sm:grid-cols-2 gap-2">
-                  <input aria-label={`${C.offerName} ${i + 1}`} className={inputCls} placeholder={C.offerName} value={o.name} maxLength={80} onChange={(e) => setOffer(i, 'name', e.target.value)} />
+                  <input id={i === 0 ? 'bp-offers' : undefined} aria-label={`${C.offerName} ${i + 1}`} className={inputCls} placeholder={C.offerName} value={o.name} maxLength={80} onChange={(e) => setOffer(i, 'name', e.target.value)} />
                   <input aria-label={`${C.offerPrice} ${i + 1}`} className={inputCls} placeholder={C.offerPrice} value={o.price} maxLength={60} onChange={(e) => setOffer(i, 'price', e.target.value)} />
                 </div>
               ))}
@@ -187,7 +204,7 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
 
             <div className="space-y-2">
               <p className="text-[13px] font-semibold text-[var(--gv-text-primary)]">{C.colours}</p>
-              <div className="flex flex-wrap items-center gap-3">
+              <div id="bp-colours" className="flex flex-wrap items-center gap-3">
                 {form.colours.map((c, i) => (
                   <span key={i} className="inline-flex items-center gap-1.5">
                     <input type="color" aria-label={`${C.colours} ${i + 1}`} value={c} className="h-10 w-12 rounded-md border border-[var(--gv-border-default)] bg-transparent p-0.5" onChange={(e) => set('colours', form.colours.map((x, j) => (j === i ? e.target.value : x)))} />
@@ -202,7 +219,7 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
 
             <div className="space-y-2">
               <p className="text-[13px] font-semibold text-[var(--gv-text-primary)]">{C.logo}</p>
-              <div className="flex items-center gap-3 flex-wrap">
+              <div id="bp-logo" className="flex items-center gap-3 flex-wrap">
                 <GravityFileInput accept="image/png,image/jpeg,image/webp" buttonText={C.logoButton} onFile={onLogo} fileName={form.logoDataUrl ? 'Logo selected' : (form.logoUrl ? 'Saved logo' : undefined)} />
                 {(form.logoDataUrl || form.logoUrl) && (
                   <>

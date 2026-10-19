@@ -1,0 +1,82 @@
+/* Compact status tiles (components/brand/StatusTiles.tsx) for Brand assets and the Blueprint pages. Plain CSS, light
+   only: cream tiles, one soft tint per tile, the status in words on a small chip (colour is never the only signal).
+   Symmetry rule: spans from fillRows() fill every row; tiles of a row stretch to one height. Wide and short (about 84
+   to 100 px). Motion only without reduced motion. */
+
+.nb-stile-wrap { container-type: inline-size; }
+.nb-brand-glance { display: flex; flex-direction: column; gap: 10px; }
+.nb-brand-glance-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 0 2px; }
+.nb-brand-glance-head h2 { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.3; color: var(--gv-text-primary); }
+.nb-brand-glance-head p { margin: 0; font-size: 13px; color: var(--gv-text-secondary); }
+.nb-stile-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.nb-stile-cell { display: flex; min-width: 0; }
+@container (min-width: 520px) {
+  .nb-stile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nb-stile-cell[data-span2="2"] { grid-column: 1 / -1; }
+}
+@container (min-width: 700px) {
+  .nb-stile-grid[data-wide="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nb-stile-grid[data-wide="3"] .nb-stile-cell[data-span2="2"] { grid-column: auto; }
+  .nb-stile-grid[data-wide="3"] .nb-stile-cell[data-span3="2"] { grid-column: span 2; }
+  .nb-stile-grid[data-wide="3"] .nb-stile-cell[data-span3="3"] { grid-column: 1 / -1; }
+}
+@container (min-width: 880px) {
+  .nb-stile-grid { gap: 12px; }
+  .nb-stile-grid[data-wide="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .nb-stile-grid[data-wide="4"] .nb-stile-cell[data-span2="2"] { grid-column: auto; }
+  .nb-stile-grid[data-wide="4"] .nb-stile-cell[data-span4="2"] { grid-column: span 2; }
+  .nb-stile-grid[data-wide="4"] .nb-stile-cell[data-span4="3"] { grid-column: span 3; }
+  .nb-stile-grid[data-wide="4"] .nb-stile-cell[data-span4="4"] { grid-column: 1 / -1; }
+}
+/* Dense grids (above a form): two columns even on a phone; the art steps aside when the room is short. */
+.nb-stile-grid[data-dense] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container (max-width: 519px) {
+  .nb-stile-grid[data-dense] .nb-stile-art { display: none; }
+  .nb-stile-grid[data-dense] .nb-stile { padding: 9px 10px; }
+}
+
+.nb-stile[data-tone="pink"]  { --t-soft: #FBDCE5; --t-text: #9E2F55; --t-deep: #D8527A; }
+.nb-stile[data-tone="gold"]  { --t-soft: #FFF0C7; --t-text: #8A5000; --t-deep: #F5A623; }
+.nb-stile[data-tone="lilac"] { --t-soft: #ECE6FB; --t-text: #5B3FA6; --t-deep: #7B5CC4; }
+.nb-stile[data-tone="teal"]  { --t-soft: #D6F1EF; --t-text: #0F6866; --t-deep: #1F9D9A; }
+.nb-stile[data-tone="coral"] { --t-soft: #FFE3D0; --t-text: #B23F14; --t-deep: #EE6330; }
+.nb-stile[data-tone="sage"]  { --t-soft: #E3EFD9; --t-text: #44692C; --t-deep: #6E9B4E; }
+.nb-stile[data-tone="blue"]  { --t-soft: #DCEBFA; --t-text: #1F5F99; --t-deep: #3B82C4; }
+
+.nb-stile {
+  position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 10px; border-radius: 16px;
+  text-align: left; text-decoration: none; cursor: pointer; font: inherit; color: var(--gv-text-primary);
+  background: linear-gradient(110deg, color-mix(in srgb, var(--t-soft) 70%, #FFFDF8) 0, #FFFDF8 46%);
+  border: 1px solid var(--gv-border-subtle); box-shadow: 0 1px 2px rgb(20 32 58 / 0.04), 0 6px 18px rgb(20 32 58 / 0.05);
+}
+.nb-stile:focus-visible { outline: 3px solid var(--gv-text-primary); outline-offset: 2px; }
+.nb-stile-art { flex: 0 0 auto; display: block; width: 50px; height: 44px; }
+.nb-stile-art svg { display: block; width: 100%; height: 100%; }
+.nb-stile-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-right: 14px; }
+.nb-stile-top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 3px 6px; min-width: 0; }
+.nb-stile-title { flex: 1 1 auto; font-size: 14px; font-weight: 650; line-height: 1.3; color: var(--gv-text-primary); overflow-wrap: break-word; }
+.nb-stile-status { flex: 0 0 auto; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; font-weight: 700; line-height: 1.5; white-space: nowrap; }
+.nb-stile-status[data-state="added"]   { background: #DDF2E6; color: #23633A; }
+.nb-stile-status[data-state="partly"]  { background: #FFF0C7; color: #7A4600; }
+.nb-stile-status[data-state="missing"] { background: #FFE3D0; color: #A33A12; }
+.nb-stile-status[data-state="unknown"] { background: #F1ECE2; color: #5E4A31; }
+.nb-stile-line { font-size: 12.5px; line-height: 1.4; color: var(--gv-text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.nb-stile-extra { display: flex; align-items: center; gap: 5px; margin-top: 2px; min-width: 0; }
+.nb-stile-swatch { width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(20 32 58 / 0.18); }
+.nb-stile-font { font-size: 18px; line-height: 1; font-weight: 600; color: var(--t-text); }
+.nb-stile-thumb { width: 26px; height: 26px; border-radius: 7px; object-fit: cover; background: var(--t-soft); box-shadow: 0 0 0 2px #FFFDF8, 0 1px 3px rgb(20 32 58 / 0.18); }
+.nb-stile-go { position: absolute; right: 10px; bottom: 10px; width: 15px; height: 15px; color: var(--t-text); opacity: 0.7; }
+.nb-stile[data-key="logo"] .nb-stile-thumb { object-fit: contain; background: #FFFFFF; }
+
+@media (max-width: 639px) {
+  .nb-stile { padding: 8px 12px 8px 8px; gap: 10px; }
+  .nb-stile-art { width: 46px; height: 40px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nb-stile { animation: nb-stile-rise 0.45s cubic-bezier(.2, .7, .2, 1) backwards; animation-delay: calc(var(--i, 0) * 50ms); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  @keyframes nb-stile-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .nb-stile:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgb(20 32 58 / 0.05), 0 14px 30px rgb(20 32 58 / 0.09); }
+  .nb-stile:hover .nb-stile-go { transform: translateX(2px); }
+  .nb-stile-go { transition: transform 0.2s ease; }
+}

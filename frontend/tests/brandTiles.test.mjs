@@ -30,7 +30,7 @@ test('every brand tile gets its status from stored rows', () => {
   assert.equal(t.products.line, '1 without a photo');
   assert.equal(t.memory.status, '5 learned');
   assert.equal(t.memory.to, '/ai-memory');
-  assert.deepEqual(brandProgress(brandTiles(full)), { done: 6, total: 6 });
+  assert.deepEqual(brandProgress(brandTiles(full)), { done: 6, total: 6, unknown: 0, text: '6 of 6 set up. Open a tile to add or change it.' });
 });
 
 test('a new account sees Missing everywhere; placeholder colours do not count', () => {
@@ -44,6 +44,8 @@ test('a new account sees Missing everywhere; placeholder colours do not count', 
 test('a failed source says Could not check, never Missing', () => {
   const t = brandTiles({ logos: null, profile: null, profileFailed: true, assets: null, products: null, memory: null });
   for (const x of t) { assert.equal(x.status, 'Could not check'); assert.equal(x.state, 'unknown'); }
+  assert.match(brandProgress(t).text, /could not check your brand/);
+  assert.equal(brandProgress(brandTiles({ ...full, products: null })).text, '5 of 6 set up. 1 could not be checked just now.');
 });
 
 test('spans fill every row for seven tiles on four and two columns', () => {
