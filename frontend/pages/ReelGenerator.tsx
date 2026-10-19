@@ -57,6 +57,8 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { updateBackgroundReel } from '../utils/backgroundReel';
 import IdeaBoxTools from '../components/IdeaBoxTools';
 import { appendText } from '../utils/ideaFiles';
+import { VideoStyleTile, VideoStyleChips } from '../components/video/VideoStyleTile';
+import { StyleFilter, groupOf, groupLabel, safeFilter } from '../utils/videoStyleGroups';
 
 type AudioMode = 'off' | 'auto' | 'upload';
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
@@ -88,6 +90,8 @@ const VIDEO_STYLES: { value: string; slug: string; blurb: string }[] = [
   { value: 'Myth Busting Q&A', slug: 'myth-busting', blurb: 'One common question, answered plainly' },
   { value: 'Comedy Skit', slug: 'comedy-skit', blurb: 'A relatable moment with a funny turn' }
 ];
+
+const VIDEO_STYLE_KEYS = VIDEO_STYLES.map((s) => ({ key: s.slug }));
 
 const FINAL_OUTPUT_STEP = 13;
 
@@ -578,6 +582,7 @@ const ReelGenerator: React.FC = () => {
   const [characterArtStyle, setCharacterArtStyle] = useState('Realistic / Photography');
   const [characterHairStyle, setCharacterHairStyle] = useState('');
   const [videoStyle, setVideoStyle] = useState('Cinematic Commercial');
+  const [studioStyleFilter, setStudioStyleFilter] = useState<StyleFilter>('all');
   const [preserveIdentity, setPreserveIdentity] = useState(true);
   const [useLogo, setUseLogo] = useState(true);
   const [characterUsage, setCharacterUsage] = useState('Main Character in all scenes');
@@ -3586,59 +3591,27 @@ setCharacterAge(nextDraft?.characterAge || '');
                   <label className={`block text-sm font-medium ${theme.textMuted}`}>Video Style</label>
                   <span className={`text-[11px] ${theme.textSecondary}`}>{videoStyle}</span>
                 </div>
-                <div
-                  role="radiogroup"
-                  aria-label="Video Style"
-                  className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
-                >
-                  {VIDEO_STYLES.map((s) => {
-                    const isSelected = videoStyle === s.value;
-                    return (
-                      <button
-                        key={s.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={isSelected}
-                        title={s.blurb}
-                        onClick={() => {
-                          setVideoStyle(s.value);
-                          if (s.value === 'Storytelling' && characterConsistencyStrength !== 'Strict') {
-                            setCharacterConsistencyStrength('Strict');
-                          }
-                        }}
-                        className={`group relative text-left rounded-xl overflow-hidden border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F5A623] ${
-                          isSelected
-                            ? 'border-[#F5A623] shadow-lg shadow-[#F5A623]/20'
-                            : 'border-transparent hover:border-slate-500'
-                        }`}
-                      >
-                        <div className="relative">
-                          <img
-                            src={`/assets/video-styles/${s.slug}.jpg`}
-                            onError={(e) => { const img = e.currentTarget; if (!img.src.endsWith('.svg')) img.src = `/assets/video-styles/${s.slug}.svg`; }}
-                            alt=""
-                            loading="lazy"
-                            className={`w-full aspect-video object-cover transition-transform duration-300 ${
-                              isSelected ? 'scale-[1.03]' : 'group-hover:scale-[1.03]'
-                            }`}
-                          />
-                          {isSelected && (
-                            <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#F5A623] text-black text-[11px] font-bold flex items-center justify-center shadow">
-                              ✓
-                            </span>
-                          )}
-                        </div>
-                        <div className={`px-2.5 py-2 ${isSelected ? 'bg-[#F5A623]/10' : 'bg-black/25'}`}>
-                          <div className={`text-[12px] font-semibold leading-tight ${isSelected ? 'text-[#F5A623]' : theme.text}`}>
-                            {s.value}
-                          </div>
-                          <div className={`text-[10px] leading-snug mt-0.5 line-clamp-2 ${theme.textSecondary}`}>
-                            {s.blurb}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                <VideoStyleChips styles={VIDEO_STYLE_KEYS} value={safeFilter(VIDEO_STYLE_KEYS, studioStyleFilter)} onChange={setStudioStyleFilter} />
+                <div className="nb-vstyle-wrap">
+                  <div role="radiogroup" aria-label="Video Style" className="nb-vstyle-grid">
+                    {VIDEO_STYLES.filter((s) => { const f = safeFilter(VIDEO_STYLE_KEYS, studioStyleFilter); return f === 'all' || groupOf(s.slug) === f; }).map((s) => (
+                      <div key={s.value} className="nb-vstyle-cell">
+                        <VideoStyleTile
+                          label={s.value}
+                          hint={s.blurb}
+                          image={`/assets/video-styles/${s.slug}.jpg`}
+                          group={safeFilter(VIDEO_STYLE_KEYS, studioStyleFilter) === 'all' ? groupLabel(s.slug) : undefined}
+                          selected={videoStyle === s.value}
+                          onSelect={() => {
+                            setVideoStyle(s.value);
+                            if (s.value === 'Storytelling' && characterConsistencyStrength !== 'Strict') {
+                              setCharacterConsistencyStrength('Strict');
+                            }
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

@@ -10,7 +10,7 @@ import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import { apiService, brandAssetsAPI, studioVideosAPI, StudioVideo, StudioConcept } from '../services/api';
 import {
   DEFAULT_STYLE, Shape, Part, StyleOption, LengthOption, isNewSpeech, NEW_SPEECH_NOTE, shapeForPlatforms, suggestionHint, orderStyles, visibleStyles,
-  styleImageFallback, lengthLine, priceLine as buildPriceLine, shortBalanceMessage, padParts, editPartLine, editPartBeats, partsToText, partLabel,
+  lengthLine, priceLine as buildPriceLine, shortBalanceMessage, padParts, editPartLine, editPartBeats, partsToText, partLabel,
   progressLabel, canChange, NO_CHANGE_NOTE, plainMessage, readChoices, saveChoices, SHOW_FIRST_STYLES,
   FALLBACK_TRANSITIONS, transitionOf, cleanEndLine, showTransitions, showSubtitles, finishPayload, END_LINE_MAX, NO_LOGO_HINT, SUBTITLES_HINT
 } from '../utils/videoOptions';
@@ -19,6 +19,8 @@ import { appendText, referenceAssetFromFile } from '../utils/ideaFiles';
 import { canPlan, waitMessage, CHANGE_IDEAS, StepKey } from '../utils/studioVideo';
 import { downloadImage } from '../utils/download';
 import { takePrefill, nearestLanguage } from '../utils/prefill';
+import { VideoStyleTile, VideoStyleChips } from '../components/video/VideoStyleTile';
+import { StyleFilter, filterStyles, groupLabel, safeFilter } from '../utils/videoStyleGroups';
 
 type Option = { key: string; label: string; hint?: string };
 const FALLBACK_STYLES: Option[] = [
@@ -39,21 +41,6 @@ const tile = (on: boolean) => `text-left rounded-xl border px-4 py-3 transition-
   ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
   : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`;
 const field = 'w-full rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-4 py-3 text-[14px] text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)] outline-none focus:border-[var(--gv-accent)]';
-
-const StyleTile: React.FC<{ s: StyleOption; on: boolean; pick: () => void }> = ({ s, on, pick }) => (
-  <button type="button" role="radio" aria-checked={on} onClick={pick}
-    className={`group relative block w-full min-w-0 overflow-hidden rounded-xl border text-left transition-colors ${on ? 'border-[var(--gv-accent)] ring-1 ring-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'} bg-[var(--gv-surface-1)]`}>
-    <div className="relative aspect-video w-full bg-[var(--gv-surface-2)]">
-      {s.image && <img src={s.image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover"
-        onError={(e) => { const img = e.currentTarget; const f = styleImageFallback(img.getAttribute('src') || ''); if (f) img.src = f; }} />}
-      {on && <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--gv-accent)] text-[var(--gv-accent-ink)]"><Check className="h-3 w-3" /></span>}
-    </div>
-    <div className={`px-2.5 py-2 ${on ? 'bg-[var(--gv-accent-fill)]' : ''}`}>
-      <span className="block text-[13px] font-semibold leading-tight text-[var(--gv-text-primary)]">{s.label}</span>
-      {s.hint && <span className="mt-0.5 block truncate text-[11.5px] text-[var(--gv-text-secondary)]" title={s.hint}>{s.hint}</span>}
-    </div>
-  </button>
-);
 
 const PickRow: React.FC<{
   Icon: React.ComponentType<{ className?: string }>; title: string; hint: string; picked: PickedAsset[];
@@ -111,6 +98,7 @@ const CreateVideo: React.FC = () => {
   const [hasLogo, setHasLogo] = useState(false);
   const [endLine, setEndLine] = useState('');
   const [stylesOpen, setStylesOpen] = useState(false);
+  const [styleFilter, setStyleFilter] = useState<StyleFilter>('all');
   const [parts, setParts] = useState<Part[]>([]);
   const [fromPlan, setFromPlan] = useState(false);
   const planLanguage = useRef<string | null>(null);
@@ -312,7 +300,11 @@ const CreateVideo: React.FC = () => {
   const shortMsg = cost ? shortBalanceMessage({ balance, perClip: cost, clips, clipSeconds }) : '';
   const lengthChoices: LengthOption[] = lengths.length ? lengths : [{ clips: 1, seconds: clipSeconds, quarks: cost }];
   const orderedStyles = useMemo(() => orderStyles(styles), [styles]);
-  const shownStyles = visibleStyles(orderedStyles, style, stylesOpen);
+  const activeFilter = safeFilter(orderedStyles, styleFilter);
+  const filteredStyles = useMemo(() => filterStyles(orderedStyles, activeFilter), [orderedStyles, activeFilter]);
+  // The phone shows the first few of All with "Show all"; a chosen category shows all of its styles.
+  const shownStyles = activeFilter === 'all' ? visibleStyles(orderedStyles, style, stylesOpen) : filteredStyles;
+  const chosenStyle = orderedStyles.find((s) => s.key === style);
   const platformItems = useMemo(() => choicesFor('video').filter((p) => !platformIds || platformIds.includes(p.key)).map((p) => ({ key: p.key, label: p.label })), [platformIds]);
   const pickShape = (v: Shape) => { shapeByHand.current = true; setShape(v); };
   const togglePlatform = (k: string) => {
@@ -385,13 +377,24 @@ const CreateVideo: React.FC = () => {
       {step === 'yours' && (
         <div className="space-y-5">
           <div>
-            <div className="gravity-label mb-2">Look</div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Look of the video">
-              {orderedStyles.map((st) => (
-                <div key={st.key} className={`min-w-0 ${shownStyles.includes(st) ? '' : 'hidden sm:block'}`}><StyleTile s={st} on={style === st.key} pick={() => setStyle(st.key)} /></div>
-              ))}
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <div className="gravity-label">Look</div>
+              {chosenStyle && !filteredStyles.includes(chosenStyle) && (
+                <span className="truncate text-[12px] text-[var(--gv-text-secondary)]">Chosen: {chosenStyle.label}</span>
+              )}
             </div>
-            {orderedStyles.length > SHOW_FIRST_STYLES && (
+            <VideoStyleChips styles={orderedStyles} value={activeFilter} onChange={(f) => { setStyleFilter(f); setStylesOpen(false); }} />
+            <div className="nb-vstyle-wrap">
+              <div className="nb-vstyle-grid" role="radiogroup" aria-label="Look of the video">
+                {filteredStyles.map((st) => (
+                  <div key={st.key} className={`nb-vstyle-cell${shownStyles.includes(st) ? '' : ' nb-vstyle-more'}`}>
+                    <VideoStyleTile label={st.label} hint={st.hint} image={st.image} group={activeFilter === 'all' ? groupLabel(st.key) : undefined}
+                      selected={style === st.key} onSelect={() => setStyle(st.key)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            {activeFilter === 'all' && orderedStyles.length > SHOW_FIRST_STYLES && (
               <button type="button" onClick={() => setStylesOpen((o) => !o)} aria-expanded={stylesOpen} className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-medium text-[var(--gv-accent-text)] sm:hidden">
                 {stylesOpen ? 'Show fewer' : `Show all ${orderedStyles.length}`} <ChevronDown className={`h-3.5 w-3.5 transition-transform ${stylesOpen ? 'rotate-180' : ''}`} />
               </button>
