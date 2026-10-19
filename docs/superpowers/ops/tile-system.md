@@ -79,6 +79,10 @@ The owner: "I want everything symmetrical and properly filling the width or the 
 - Prefer a container query over a screen-width media query for the column count of a tile grid inside the page, so the side menu does not leave narrow, tall tiles.
 - Check with measurements, not only by eye: for each row, `getBoundingClientRect()` on the tiles gives the same height, and the row's left and right edges meet the container, at 1280, 1024, 768 and 375 wide.
 
+## Left menu (navigation phases 3 to 5, 2026-10-19)
+
+Home, Plan, Create, Library, Inbox, Insights, then the folded Setup group (Brand assets, Connected accounts, Settings, Help). Role entries (Staff area, My clients, Clients) stay first. The model is `utils/navMenu.ts` (tested in `tests/navMenu.test.mjs`); styles in `components/nav.css`. The open category shows its parts indented under it (a thin rule, a gold dot and a soft gold fill on the current one); its arrow button opens or closes them (`aria-expanded`, `aria-controls`), one category at a time. The Library entry carries the gold count of posts waiting for approval (`GET /drafts/counts`, reloaded every minute, on each page change and after every post action through the `nebulaa-posts-changed` event); nothing is drawn for 0 or an unknown count.
+
 ## Accent map (one colour per area)
 
 | Accent | Area | Bar | Tint |
@@ -185,9 +189,20 @@ The owner saw big titles on Videos and Review and approve and small ones on Dash
 - **Description.** Optional, one or two plain sentences, 14 px, line height 1.5, secondary ink, at most 640 px wide, 6 px under the title.
 - **Actions.** Optional, right-aligned on the same line, aligned to the bottom of the text; under the text, left-aligned, on a phone.
 - **Spacing.** No top margin (the page area's own padding is the top margin; pages no longer add their own top padding above the header), 24 px below (20 px on a phone). Pages laid out as a flex column with an 18 px gap set `margin-bottom: 6px` on `> .nb-page-head`.
-- **Rules.** One header per page, left-aligned, never inside a card. Pages made of tabs (Create content, Calendar) get their header from `PAGE_HEADERS` in `App.tsx` through `PageTabs` (`header`, `frame`), above the tab bar. Titles further down the page are section headings (h2, 22 to 24 px serif); `GravityHero size="md"` is now an h2 at 22 px for wizard steps. `GravityHero` at full size is kept only until the last pages move.
+- **Rules.** One header per page, left-aligned, never inside a card. Pages made of tabs get their header through `PageTabs` (`header`), above the tab bar: Create content and Upload from `PAGE_HEADERS` in `App.tsx`, Plan from `PLAN_HEADERS` in `pages/PlanHub.tsx` (eyebrow "Plan"), Insights from `INSIGHTS_HEADERS` in `pages/InsightsHub.tsx` (eyebrow "Insights"). A page drawn as a tab body takes `embedded` and draws no header of its own (`MyPlan`, `GravityInsights`, `Competitors`, `AIMemory`, `GravityApprove` inside the Library). Titles further down the page are section headings (h2, 22 to 24 px serif); `GravityHero size="md"` is now an h2 at 22 px for wizard steps. `GravityHero` at full size is kept only until the last pages move.
 - **Home** keeps its greeting band (date eyebrow, greeting with the business name in the emphasis, the day's line, the balance chip as the action) on the same component.
 - **Not yet on it** (another change adopts it): Inbox (`SocialInbox.tsx`), Performance (`GravityInsights.tsx`), Competitors (`Competitors.tsx`). Staff pages, sign-in, legal pages, the landing page, onboarding and the hidden classic pages keep their own look.
+
+## Tab bar (navigation phases 3 to 5, 2026-10-19)
+
+`components/PageTabs.tsx` with `components/pageTabs.css`: one pill row from 640 px; on a phone a grid of equal pills, two a row, an odd last one across the whole row, so the bar never scrolls sideways. The tab is kept in the address (`?tab=`, the first tab has none), a click adds a history entry (the back button returns to the previous tab), the arrow keys, Home and End move between tabs, the body is a `tabpanel`. A tab with `hidden` is not listed unless its address is open (Insights, Competitors for free accounts: an old link still opens it, as the old page did).
+
+## Page width and background (owner, 2026-10-19)
+
+- **One width.** Every page sits in the one page frame in `components/Layout.tsx` (`.nb-page-frame` in `components/nav.css`): the full content area, up to 1600 px and centred beyond that, inside the area's own padding (16 px on a phone, 32 px from 768 px). A page adds no narrowing wrapper of its own (no `max-w-[...] mx-auto` page column, no `max-width` on its root class) and no side padding of its own. Inside the full width, content stays symmetrical: tile rows fill the width, forms use two or more columns (Settings, Brand assets, the Blueprint form), not a narrow centred column. Narrow text inside a page (a description line, an empty-state paragraph up to about 560 px) is fine.
+- **Exceptions (reading screens).** The finished Growth Blueprint (`pages/BlueprintView.tsx`, 720 to 858 px): a document read and printed page by page. The Blueprint form keeps its 720 px column only on the bare page before onboarding (no app frame).
+- **One background.** Every page uses the same plain cream (`--gv-bg`). No glow behind the page: the body's ambient gold glow, the Home greeting glow and the page glows of My plan, Inbox, Performance, What Nebulaa learned and Photoshoot are removed, and the hero blocks (My plan, Performance, What Nebulaa learned) are plain cards. Colour stays on cards, tiles, covers and chips (the gold "Do this next" card, cover tiles, status tiles, the Create idea box halo).
+- **Guard.** `frontend/tests/pageFrame.test.mjs` scans the menu pages for page-column wrappers, the page stylesheets for a root width or a `::before` glow, the hero blocks for gradients, and `index.html` for the body glow.
 
 ## Create options rows (owner, 2026-10-19)
 
