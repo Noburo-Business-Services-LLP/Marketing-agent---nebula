@@ -1,31 +1,40 @@
 import PlatformIcon from './PlatformIcon';
-import { priceWithWorth } from '../utils/plans';
 import { choicesFor } from '../utils/platforms';
-import React, { useState, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, Save, Download, Calendar, Send, Trash2, Loader2, Instagram, Facebook, Linkedin, Twitter, Check, RotateCcw, Pencil } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { X, ChevronLeft, ChevronRight, Save, Loader2, RotateCcw, Pencil, AlertCircle } from 'lucide-react';
 import { Draft } from '../types';
-import { downloadImage, downloadAll } from '../utils/download';
 import { draftsAPI } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
+import PostActions, { PostActionsChange, PostNotice, PostNoticeValue } from './PostActions';
+import { postStateWord } from '../utils/postActions';
+import './draftSheet.css';
 
 interface DraftPreviewModalProps {
   draft: Draft;
   onClose: () => void;
+  /** the post changed and the sheet closes (saved, approved, scheduled, posted, archived, moved to the Bin) */
   onSuccess: () => void;
+  /** the post changed; the screen behind can refresh its list and counts */
+  onChanged?: (change: PostActionsChange) => void;
   /** other pictures in the same list (a campaign's posts, say): the arrows step to them when this one has no slides */
   onPrev?: () => void;
   onNext?: () => void;
   position?: string;
 }
 
-export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onClose, onSuccess, onPrev, onNext, position }) => {
-  // Regenerate re-runs the full generation pipeline, so it costs the same
-  // Quarks as the original — campaign-type drafts are billed through the
-  // legacy Campaigns flow already (matches backend/routes/drafts.js).
+/**
+ * The post sheet (opened from the Library, Review and approve and the Create gallery): the picture, the words, where
+ * it goes, and the shared post actions (components/PostActions.tsx) in the footer: the same buttons, in the same order,
+ * as everywhere else. Cream and gold like the rest of the app.
+ */
+export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onClose, onSuccess, onChanged, onPrev, onNext, position }) => {
+  // Make again redraws the picture, so it costs the same Quarks as the original; campaign posts are billed through
+  // the Campaigns flow already (matches backend/routes/drafts.js).
   const quarkCosts = useQuarkCosts();
   const confirm = useConfirm();
-  const regenerateCost = draft.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0);
+  const makeAgainQuarks = draft.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0);
 
   const [title, setTitle] = useState(draft.title || '');
   const [caption, setCaption] = useState(draft.caption || '');
@@ -34,7 +43,7 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
   const [cta, setCta] = useState(draft.cta || '');
   const [theme, setTheme] = useState((draft as any).theme || '');
   const [platforms, setPlatforms] = useState<string[]>(draft.platforms || []);
-  const [imageUrl, setImageUrl] = useState(draft.imageUrl || '');
+  const imageUrl = draft.imageUrl || '';
   // A carousel keeps its pictures per slide, not in one image field.
   const slideUrls: string[] = (Array.isArray((draft as any).carouselSlides) ? (draft as any).carouselSlides : [])
     .slice().sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
@@ -51,42 +60,28 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      if (document.querySelector('.nb-pa-scrim, .nb-pa-menu')) return;
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
       if (e.key === 'ArrowLeft' && canPrev) { e.preventDefault(); goPrev(); }
       if (e.key === 'ArrowRight' && canNext) { e.preventDefault(); goNext(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
-  
-  // Scheduling state
-  const [showScheduler, setShowScheduler] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState('');
-  const [scheduleTime, setScheduleTime] = useState('');
+  const closeBtn = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => { closeBtn.current?.focus(); }, []);
 
-  // Operations loading states
   const [isSaving, setIsSaving] = useState(false);
-  const [isScheduling, setIsScheduling] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [notice, setNotice] = useState<PostNoticeValue | null>(null);
+  const setErrorMsg = (text: string) => setNotice(text ? { text, tone: 'error' } : null);
+  const setSuccessMsg = (text: string) => setNotice(text ? { text, tone: 'ok' } : null);
 
   const platformChoices = choicesFor('image');
-
-  useEffect(() => {
-    if (draft.scheduledDate) {
-      const dateObj = new Date(draft.scheduledDate);
-      setScheduleDate(dateObj.toISOString().slice(0, 10));
-      setScheduleTime(dateObj.toTimeString().slice(0, 5));
-    }
-  }, [draft]);
+  const status = String(draft.status || '').toLowerCase();
+  const editable = !['published', 'archived', 'binned', 'processing'].includes(status);
 
   const togglePlatform = (platform: string) => {
-    setPlatforms(prev =>
-      prev.includes(platform)
-        ? prev.filter(p => p !== platform)
-        : [...prev, platform]
-    );
+    setPlatforms(prev => prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]);
   };
 
   const handleAddHashtag = (e: React.FormEvent) => {
@@ -98,116 +93,66 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
     }
   };
 
-  const handleRemoveHashtag = (tag: string) => {
-    setHashtags(hashtags.filter(t => t !== tag));
-  };
+  const handleRemoveHashtag = (tag: string) => setHashtags(hashtags.filter(t => t !== tag));
 
-  const getUpdatedData = () => {
-    return {
-      title,
-      caption,
+  const getUpdatedData = () => ({
+    title,
+    caption,
+    hashtags: hashtags.map(h => h.startsWith('#') ? h : `#${h}`),
+    cta,
+    theme: theme.trim(),
+    platforms,
+    imageUrl,
+    creative: {
+      ...draft.creative,
+      type: draft.creative?.type || 'image',
+      textContent: caption,
+      captions: caption,
+      imageUrls: slideUrls.length ? slideUrls : (imageUrl ? [imageUrl] : []),
       hashtags: hashtags.map(h => h.startsWith('#') ? h : `#${h}`),
-      cta,
-      theme: theme.trim(),
-      platforms,
-      imageUrl,
-      creative: {
-        ...draft.creative,
-        type: draft.creative?.type || 'image',
-        textContent: caption,
-        captions: caption,
-        imageUrls: slideUrls.length ? slideUrls : (imageUrl ? [imageUrl] : []),
-        hashtags: hashtags.map(h => h.startsWith('#') ? h : `#${h}`),
-        callToAction: cta
-      }
-    };
-  };
+      callToAction: cta
+    }
+  });
 
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [isRejecting, setIsRejecting] = useState(false);
-  const [isRetryingImage, setIsRetryingImage] = useState(false);
-  // What the model was actually told to draw this. Editable — leave it as
-  // Gravity wrote it, tweak one detail, or clear it entirely to hand the
-  // idea back to the Creative Director for a fresh concept.
+  // What the model was actually told to draw. Editable: Make again uses this exact text; empty asks for a new idea.
   const [promptDraft, setPromptDraft] = useState(draft.imagePromptResolved || '');
 
-  const handleRetryImage = async () => {
-    const confirmMsg = regenerateCost > 0
-      ? `This costs ${priceWithWorth(regenerateCost, quarkCosts)} and replaces the current image.`
-      : 'This replaces the current image.';
-    if (!(await confirm(confirmMsg, { title: 'Regenerate this image?', confirmLabel: 'Regenerate' }))) return;
-    setIsRetryingImage(true);
-    setErrorMsg('');
-    setSuccessMsg('');
-    try {
-      await draftsAPI.retryImageGeneration(draft._id, promptDraft.trim() || undefined);
-      setSuccessMsg('Re-queued image generation in background!');
-      setTimeout(() => {
-        onSuccess();
-      }, 1500);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to retry image generation.');
-    } finally {
-      setIsRetryingImage(false);
-    }
-  };
-
-  // Targeted fix — keep the image as-is, change only what the instruction
-  // asks for. Separate from Regenerate, which redraws the whole thing.
+  // A small targeted fix: keep the picture, change only what the instruction asks for.
   const [editOpen, setEditOpen] = useState(false);
   const [editInstruction, setEditInstruction] = useState('');
   const [isEditingImage, setIsEditingImage] = useState(false);
+  const editBox = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => { if (editOpen) editBox.current?.focus(); }, [editOpen]);
 
   const handleEditImage = async () => {
     if (!editInstruction.trim()) return;
     setIsEditingImage(true);
-    setErrorMsg('');
-    setSuccessMsg('');
+    setNotice(null);
     try {
       await draftsAPI.editImage(draft._id, editInstruction.trim());
-      setSuccessMsg('Edit applied!');
+      setSuccessMsg('The change is made.');
       setEditOpen(false);
       setEditInstruction('');
-      setTimeout(() => {
-        onSuccess();
-      }, 1200);
+      setTimeout(() => onSuccess(), 1200);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Could not apply that edit.');
+      setErrorMsg(err.message || 'We could not make that change. Please try again.');
     } finally {
       setIsEditingImage(false);
     }
   };
 
-  const handleReject = async () => {
-    if (await confirm('It will be archived.', { title: 'Reject this draft?', confirmLabel: 'Reject', danger: true })) {
-      setIsRejecting(true);
-      setErrorMsg('');
-      try {
-        await draftsAPI.rejectDraft(draft._id);
-        setSuccessMsg('Draft rejected successfully!');
-        setTimeout(() => {
-          onSuccess();
-        }, 1000);
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Failed to reject draft.');
-      } finally {
-        setIsRejecting(false);
-      }
-    }
-  };
-
+  // Calendar posts: a whole new post for the same day (words and picture).
   const handleRegenerate = async () => {
-    if (await confirm('This rejects the current draft and generates a brand new one for this slot.', { title: 'Regenerate a new draft?', confirmLabel: 'Regenerate' })) {
+    if (await confirm('This puts the current post away and makes a brand new one for this day.', { title: 'Make a new post for this day?', confirmLabel: 'Make a new post' })) {
       setIsRegenerating(true);
       setErrorMsg('');
       try {
         await draftsAPI.regenerateDraft(draft._id);
-        setSuccessMsg('Regeneration queued in background!');
-        setTimeout(() => {
-          onSuccess();
-        }, 1500);
+        setSuccessMsg('A new post is being made for this day.');
+        setTimeout(() => onSuccess(), 1500);
       } catch (err: any) {
-        setErrorMsg(err.message || 'Failed to regenerate draft.');
+        setErrorMsg(err.message || 'We could not start a new post. Please try again.');
       } finally {
         setIsRegenerating(false);
       }
@@ -216,382 +161,178 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
 
   const handleSave = async () => {
     setIsSaving(true);
-    setErrorMsg('');
-    setSuccessMsg('');
+    setNotice(null);
     try {
       await draftsAPI.updateDraft(draft._id, getUpdatedData());
-      setSuccessMsg('Draft saved successfully!');
-      setTimeout(() => {
-        onSuccess();
-      }, 1000);
+      setSuccessMsg('Changes saved.');
+      setTimeout(() => onSuccess(), 1000);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to save changes.');
+      setErrorMsg(err.message || 'We could not save your changes. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleSchedule = async () => {
-    if (!scheduleDate || !scheduleTime) {
-      setErrorMsg('Please select both date and time.');
-      return;
-    }
-
-    setIsScheduling(true);
-    setErrorMsg('');
-    setSuccessMsg('');
-    try {
-      const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
-      
-      // Update basic fields first to ensure no edits are lost
-      await draftsAPI.updateDraft(draft._id, getUpdatedData());
-      
-      // Call schedule API
-      await draftsAPI.scheduleDraft(draft._id, scheduledDateTime);
-      
-      setSuccessMsg('Draft scheduled successfully!');
-      setTimeout(() => {
-        onSuccess();
-      }, 1000);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to schedule draft.');
-    } finally {
-      setIsScheduling(false);
-    }
+  // Approve, Schedule and Post now save the words first, so nothing typed here is lost.
+  const saveFirst = async () => {
+    if (editable) await draftsAPI.updateDraft(draft._id, getUpdatedData());
   };
 
-  const handlePublishNow = async () => {
-    if (platforms.length === 0) {
-      setErrorMsg('Please select at least one platform to publish.');
-      return;
-    }
-
-    if (await confirm('This posts immediately to the selected social platforms.', { title: 'Publish now?', confirmLabel: 'Publish' })) {
-      setIsPublishing(true);
-      setErrorMsg('');
-      setSuccessMsg('');
-      try {
-        // Save current changes first
-        await draftsAPI.updateDraft(draft._id, getUpdatedData());
-        
-        // Call publish API
-        const response = await draftsAPI.publishDraft(draft._id, platforms);
-        
-        if (response.success) {
-          setSuccessMsg('Published successfully!');
-          setTimeout(() => {
-            onSuccess();
-          }, 1500);
-        } else {
-          setErrorMsg('Failed to publish. Campaign was saved as a draft.');
-        }
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Failed to publish draft.');
-      } finally {
-        setIsPublishing(false);
-      }
-    }
+  const changed = (c: PostActionsChange) => {
+    onChanged?.(c);
+    setSuccessMsg(c.message);
+    setTimeout(() => onSuccess(), c.key === 'makeAgain' ? 1500 : 1100);
   };
 
-  const handleDelete = async () => {
-    if (await confirm('This archives the draft — it can\'t be undone from here.', { title: 'Delete this draft?', confirmLabel: 'Delete', danger: true })) {
-      setIsDeleting(true);
-      setErrorMsg('');
-      try {
-        await draftsAPI.deleteDraft(draft._id);
-        onSuccess();
-      } catch (err: any) {
-        setErrorMsg(err.message || 'Failed to delete draft.');
-      } finally {
-        setIsDeleting(false);
-      }
-    }
-  };
+  const isCalendarPost = Boolean(draft.contentCalendarId && draft.calendarDay);
+  const stateWord = postStateWord(draft);
 
-  const statusTone = (s: string) => {
-    const v = String(s || '').toLowerCase();
-    if (v === 'published') return 'bg-emerald-500/12 text-emerald-300 border-emerald-400/25';
-    if (v === 'scheduled') return 'bg-sky-500/12 text-sky-300 border-sky-400/25';
-    if (v === 'processing') return 'bg-[#F5A623]/12 text-[#F5A623] border-[#F5A623]/30';
-    if (v === 'failed') return 'bg-red-500/12 text-red-300 border-red-400/25';
-    return 'bg-white/[0.05] text-white/55 border-white/[0.12]';
-  };
-
-  const busy = isSaving || isScheduling || isPublishing;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
-      onClick={onClose}
-    >
+  // Drawn on the page body, so the app's top bar and menu never sit over it.
+  return createPortal(
+    <div className="nb-sheet-scrim" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-6xl my-6 rounded-[22px] overflow-hidden flex flex-col max-h-[92vh]"
-        data-nb-surface="dark"
-        style={{
-          background: 'linear-gradient(180deg, #131316 0%, #0b0b0e 42%)',
-          boxShadow: '0 40px 120px rgba(0,0,0,0.75), inset 0 1px 0 0 rgba(255,255,255,0.07)',
-          border: '1px solid rgba(255,255,255,0.09)'
-        }}
+        className="nb-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="nb-sheet-title"
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 px-7 pt-6 pb-5">
+        <div className="nb-sheet-head">
           <div className="min-w-0">
-            <div className="flex items-center gap-2.5 mb-2">
-              <span className={`text-[10px] font-semibold uppercase tracking-[0.14em] px-2.5 py-1 rounded-full border ${statusTone(draft.status)}`}>
-                {draft.status}
-              </span>
-              <span className="gravity-label text-[rgba(245,244,241,0.55)]">{String(draft.sourceType || 'post')}</span>
+            <div className="nb-sheet-chips">
+              <span className="nb-sheet-chip" data-state={stateWord}>{stateWord}</span>
+              <span className="nb-sheet-kind">{draft.contentType === 'campaign' ? 'Campaign post' : 'Post'}</span>
             </div>
-            <h2 className="font-serif-display text-[30px] leading-[1.1] tracking-[-0.02em] text-[#F5F4F1] truncate">
-              {title || <span className="italic text-[#F5A623]">Untitled</span>}
-            </h2>
+            <h2 id="nb-sheet-title" className="nb-sheet-title">{title || 'Untitled post'}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="shrink-0 w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] hover:bg-white/[0.11] border border-white/[0.08] text-white/55 hover:text-white transition-colors"
-          >
-            <X className="w-4 h-4" />
+          <button ref={closeBtn} type="button" onClick={onClose} className="nb-sheet-close" aria-label="Close">
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="h-px bg-gradient-to-r from-transparent via-white/[0.10] to-transparent" />
-
-        {/* Body — artwork leads, controls follow */}
-        <div className="flex-1 overflow-y-auto px-7 py-7 grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-8">
-
-          {/* Artwork */}
+        {/* Body: the picture leads, the words follow */}
+        <div className="nb-sheet-body">
           <div>
-            <div
-              className="relative w-full rounded-2xl overflow-hidden bg-black grid place-items-center"
-              style={{ aspectRatio: '4 / 5', border: '1px solid rgba(255,255,255,0.08)' }}
-            >
+            <div className="nb-sheet-art">
               {draft.status === 'processing' ? (
-                <div className="flex flex-col items-center gap-3 text-center px-6">
-                  <Loader2 className="w-8 h-8 text-[#F5A623] animate-spin" />
-                  <span className="text-[13px] text-white/55">Generating in the background…</span>
+                <div className="nb-sheet-art-note">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#C06F00]" aria-hidden="true" />
+                  <span>Being made. It shows here when it is ready.</span>
                 </div>
               ) : draft.status === 'failed' ? (
-                <div className="flex flex-col items-center gap-3 text-center px-6">
-                  <span className="text-2xl">⚠️</span>
-                  <p className="text-[13.5px] font-semibold text-red-300">Generation failed</p>
-                  {draft.errorMessage && (
-                    <p className="text-[11.5px] text-white/40 max-w-[240px] line-clamp-2">{draft.errorMessage}</p>
-                  )}
-                  <button
-                    type="button"
-                    disabled={isRetryingImage}
-                    onClick={handleRetryImage}
-                    className="mt-1 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-50"
-                  >
-                    {isRetryingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                    Regenerate
-                  </button>
+                <div className="nb-sheet-art-note">
+                  <AlertCircle className="w-7 h-7 text-[#9A3412]" aria-hidden="true" />
+                  <strong>This picture did not finish</strong>
+                  <span>Use Make again below to try once more.</span>
                 </div>
               ) : shownUrl ? (
-                <img src={shownUrl} alt={title || 'Draft'} className="w-full h-full object-contain" />
+                <img src={shownUrl} alt={title || 'Post picture'} className="w-full h-full object-contain" />
               ) : (
-                <p className="text-[13px] text-white/30 px-8 text-center">No artwork yet.</p>
+                <div className="nb-sheet-art-note"><span>No picture yet.</span></div>
               )}
               {(canPrev || canNext) && (
                 <>
-                  <button type="button" onClick={goPrev} disabled={!canPrev} aria-label={hasSlides ? 'Previous slide' : 'Previous post'}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur disabled:opacity-25 disabled:cursor-default">
-                    <ChevronLeft className="w-5 h-5" />
+                  <button type="button" onClick={goPrev} disabled={!canPrev} aria-label={hasSlides ? 'Previous slide' : 'Previous post'} className="nb-sheet-arrow" data-side="left">
+                    <ChevronLeft className="w-5 h-5" aria-hidden="true" />
                   </button>
-                  <button type="button" onClick={goNext} disabled={!canNext} aria-label={hasSlides ? 'Next slide' : 'Next post'}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur disabled:opacity-25 disabled:cursor-default">
-                    <ChevronRight className="w-5 h-5" />
+                  <button type="button" onClick={goNext} disabled={!canNext} aria-label={hasSlides ? 'Next slide' : 'Next post'} className="nb-sheet-arrow" data-side="right">
+                    <ChevronRight className="w-5 h-5" aria-hidden="true" />
                   </button>
-                  <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-2.5 py-0.5 text-[11.5px] font-semibold text-white">
-                    {hasSlides ? `${slideIdx + 1} / ${slideUrls.length}` : (position || '')}
-                  </span>
+                  <span className="nb-sheet-pos">{hasSlides ? `${slideIdx + 1} / ${slideUrls.length}` : (position || '')}</span>
                 </>
               )}
             </div>
 
             {slideUrls.length > 1 && (
-              <div className="mt-3 flex gap-2 overflow-x-auto pb-1" aria-label="Carousel slides">
+              <div className="nb-sheet-slides" aria-label="Carousel slides">
                 {slideUrls.map((u, i) => (
-                  <button key={u} type="button" onClick={() => setSlideIdx(i)} aria-label={`Slide ${i + 1}`}
-                    className={`shrink-0 w-14 h-[70px] rounded-lg overflow-hidden border ${i === slideIdx ? 'border-[#F5A623]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
-                    <img src={u} alt="" className="w-full h-full object-cover" />
+                  <button key={u} type="button" onClick={() => setSlideIdx(i)} aria-label={`Slide ${i + 1}`} aria-pressed={i === slideIdx} data-on={i === slideIdx ? 'true' : undefined}>
+                    <img src={u} alt="" />
                   </button>
                 ))}
               </div>
             )}
 
-            {/* What was actually sent to the image model — editable, so
-                "regenerate" means "try this specific change" instead of
-                "reroll and hope." Empty box on Regenerate hands the idea
-                back to the Creative Director for a fresh concept. */}
-            {draft.status !== 'processing' && (
-              <div className="mt-3">
-                <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-1.5">Prompt</label>
-                <textarea
-                  value={promptDraft}
-                  onChange={(e) => setPromptDraft(e.target.value)}
-                  placeholder={draft.imagePromptResolved ? '' : 'No resolved prompt was recorded for this image. Leave blank to let the Creative Director choose a fresh concept, or write one to use exactly.'}
-                  rows={5}
-                  className="w-full p-3 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[12px] leading-relaxed text-white/75 font-mono outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25 placeholder:font-sans"
-                />
-                <p className="text-[10.5px] text-white/30 mt-1">
-                  {promptDraft.trim() && promptDraft.trim() !== (draft.imagePromptResolved || '').trim()
-                    ? 'Edited — Regenerate will use this exact text.'
-                    : promptDraft.trim()
-                      ? 'Regenerate will use this exact text again.'
-                      : 'Empty — Regenerate will ask the Creative Director for a new concept.'}
-                </p>
-              </div>
-            )}
-
-            {draft.status !== 'processing' && shownUrl && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => downloadImage(shownUrl, `${title || 'post'}${slideUrls.length > 1 ? `-slide-${slideIdx + 1}` : ''}`)}
-                  className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  {slideUrls.length > 1 ? 'Download this slide' : 'Download image'}
-                </button>
-                {slideUrls.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => downloadAll(slideUrls, title || 'carousel')}
-                    className="inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download all {slideUrls.length} slides
-                  </button>
-                )}
-              </div>
-            )}
-
-            {imageUrl && draft.status !== 'processing' && (
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleRetryImage}
-                  disabled={isRetryingImage}
-                  className="flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03] transition-colors disabled:opacity-40"
-                >
-                  {isRetryingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                  Regenerate
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditOpen((v) => !v)}
-                  className={`flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-xl border text-[13px] font-semibold transition-colors ${
-                    editOpen
-                      ? 'border-[#F5A623]/50 bg-[#F5A623]/10 text-[#F5A623]'
-                      : 'border-white/[0.10] text-white/70 hover:text-white hover:border-white/25 hover:bg-white/[0.03]'
-                  }`}
-                >
-                  <Pencil className="w-4 h-4" />
-                  Edit
-                </button>
-              </div>
-            )}
-
-            {/* Small targeted fix — keeps the current image, changes only
-                what the instruction describes. Distinct from Regenerate,
-                which redraws the whole image from the prompt above. */}
             {editOpen && (
-              <div className="mt-3 p-3 rounded-xl bg-[#F5A623]/[0.04] border border-[#F5A623]/20">
-                <label className="gravity-label block mb-1.5 text-[#F5A623]">Describe the change</label>
+              <div className="nb-sheet-edit">
+                <label className="nb-sheet-label" htmlFor="nb-sheet-edit-box">Describe the change</label>
                 <textarea
+                  id="nb-sheet-edit-box"
+                  ref={editBox}
                   value={editInstruction}
                   onChange={(e) => setEditInstruction(e.target.value)}
-                  placeholder="e.g. fix the spelling in the headline, make the sky darker, remove the coffee cup"
+                  placeholder="For example: fix the spelling in the headline, make the sky darker, or remove the coffee cup."
                   rows={2}
-                  className="w-full p-2.5 rounded-lg bg-black/20 border border-white/[0.08] text-[12.5px] leading-relaxed text-white/80 outline-none focus:border-[#F5A623]/40 resize-y placeholder:text-white/25"
+                  className="nb-sheet-input"
                 />
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-[10.5px] text-white/35">Keeps the rest of the image as-is.</span>
-                  <button
-                    type="button"
-                    onClick={handleEditImage}
-                    disabled={isEditingImage || !editInstruction.trim()}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#F5A623] text-black text-[12px] font-semibold hover:bg-[#ffb833] disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {isEditingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pencil className="w-3.5 h-3.5" />}
-                    Apply edit
+                <div className="nb-sheet-edit-foot">
+                  <span>The rest of the picture stays the same.</span>
+                  <button type="button" onClick={handleEditImage} disabled={isEditingImage || !editInstruction.trim()} className="nb-pa-btn" data-primary="true">
+                    {isEditingImage ? <Loader2 className="nb-pa-ico animate-spin" aria-hidden="true" /> : <Pencil className="nb-pa-ico" aria-hidden="true" />}
+                    Make this change
                   </button>
                 </div>
               </div>
             )}
+
+            {draft.status !== 'processing' && editable && (
+              <div className="mt-3">
+                <label className="nb-sheet-label" htmlFor="nb-sheet-prompt">Picture description</label>
+                <textarea
+                  id="nb-sheet-prompt"
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  placeholder={draft.imagePromptResolved ? '' : 'Leave this empty and Nebulaa picks a new idea, or describe the picture you want.'}
+                  rows={4}
+                  className="nb-sheet-input nb-sheet-mono"
+                />
+                <p className="nb-sheet-help">
+                  {promptDraft.trim() && promptDraft.trim() !== (draft.imagePromptResolved || '').trim()
+                    ? 'You changed it. Make again uses this exact text.'
+                    : promptDraft.trim()
+                      ? 'Make again uses this text again.'
+                      : 'Empty: Make again asks Nebulaa for a new idea.'}
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Controls */}
-          <div className="flex flex-col gap-6">
+          {/* The words and where it goes */}
+          <div className="nb-sheet-fields">
             <div>
-              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Title</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Give it a name…"
-                className="w-full px-0 py-2 bg-transparent border-0 border-b border-white/[0.12] text-[19px] font-semibold text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623] transition-colors"
-              />
+              <label className="nb-sheet-label" htmlFor="nb-sheet-name">Title</label>
+              <input id="nb-sheet-name" type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Give it a name" className="nb-sheet-input" disabled={!editable} />
             </div>
 
             <div>
-              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2" htmlFor="draft-theme">Theme or festival <span className="normal-case text-white/30">· groups posts together</span></label>
-              <input
-                id="draft-theme"
-                type="text"
-                value={theme}
-                maxLength={60}
-                onChange={(e) => setTheme(e.target.value)}
-                placeholder="For example Diwali, Monsoon sale"
-                className="w-full px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.08] text-[13.5px] text-[#F5F4F1] placeholder:text-white/25 focus:outline-none focus:border-[#F5A623]/50"
-              />
+              <label className="nb-sheet-label" htmlFor="draft-theme">Theme or festival <span className="nb-sheet-label-note">groups posts together</span></label>
+              <input id="draft-theme" type="text" value={theme} maxLength={60} onChange={(e) => setTheme(e.target.value)} placeholder="For example Diwali, Monsoon sale" className="nb-sheet-input" disabled={!editable} />
             </div>
 
             <div>
-              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Caption</label>
-              <textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                rows={5}
-                placeholder="What should this say?"
-                className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/[0.09] text-[14px] leading-relaxed text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623]/60 transition-colors resize-none"
-              />
+              <label className="nb-sheet-label" htmlFor="nb-sheet-caption">Caption</label>
+              <textarea id="nb-sheet-caption" value={caption} onChange={(e) => setCaption(e.target.value)} rows={5} placeholder="What should this say?" className="nb-sheet-input" disabled={!editable} />
             </div>
 
             <div>
-              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Hashtags</label>
-              <form onSubmit={handleAddHashtag} className="flex gap-2">
-                <input
-                  type="text"
-                  value={newHashtag}
-                  onChange={(e) => setNewHashtag(e.target.value)}
-                  placeholder="add a tag…"
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-black/40 border border-white/[0.09] text-[13px] text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623]/60 transition-colors"
-                />
-                <button
-                  type="submit"
-                  className="px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.09] text-[13px] font-semibold text-white/80 transition-colors"
-                >
-                  Add
-                </button>
-              </form>
+              <label className="nb-sheet-label" htmlFor="nb-sheet-tag">Hashtags</label>
+              {editable && (
+                <form onSubmit={handleAddHashtag} className="flex gap-2">
+                  <input id="nb-sheet-tag" type="text" value={newHashtag} onChange={(e) => setNewHashtag(e.target.value)} placeholder="Add a tag" className="nb-sheet-input flex-1" />
+                  <button type="submit" className="nb-pa-btn">Add</button>
+                </form>
+              )}
               {hashtags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                <div className="nb-sheet-tags">
                   {hashtags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="group inline-flex items-center gap-1.5 text-[12px] bg-[#F5A623]/[0.10] text-[#F5A623] border border-[#F5A623]/25 pl-2.5 pr-1.5 py-1 rounded-full"
-                    >
+                    <span key={tag} className="nb-sheet-tagchip">
                       #{tag.replace(/^#/, '')}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveHashtag(tag)}
-                        className="w-4 h-4 grid place-items-center rounded-full text-[#F5A623]/60 hover:text-black hover:bg-[#F5A623] transition-colors"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
+                      {editable && (
+                        <button type="button" onClick={() => handleRemoveHashtag(tag)} aria-label={`Remove ${tag.replace(/^#/, '')}`}>
+                          <X className="w-2.5 h-2.5" aria-hidden="true" />
+                        </button>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -599,137 +340,61 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             </div>
 
             <div>
-              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Call to action</label>
-              <input
-                type="text"
-                value={cta}
-                onChange={(e) => setCta(e.target.value)}
-                placeholder="Shop now, Learn more…"
-                className="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/[0.09] text-[13.5px] text-[#F5F4F1] placeholder:text-white/20 focus:outline-none focus:border-[#F5A623]/60 transition-colors"
-              />
+              <label className="nb-sheet-label" htmlFor="nb-sheet-cta">Call to action</label>
+              <input id="nb-sheet-cta" type="text" value={cta} onChange={(e) => setCta(e.target.value)} placeholder="Shop now, Learn more" className="nb-sheet-input" disabled={!editable} />
             </div>
 
             <div>
-              <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Posting to</label>
-              <div className="flex flex-wrap gap-2">
+              <span className="nb-sheet-label" id="nb-sheet-where">Posting to</span>
+              <div className="nb-sheet-platforms" role="group" aria-labelledby="nb-sheet-where">
                 {platformChoices.map(({ key: platform, label }) => {
                   const active = platforms.includes(platform);
                   return (
-                    <button
-                      key={platform}
-                      type="button"
-                      onClick={() => togglePlatform(platform)}
-                      className={`inline-flex items-center gap-2 h-10 pl-3 pr-3.5 rounded-full border text-[12.5px] font-semibold transition-all ${
-                        active
-                          ? 'bg-[#F5A623] border-[#F5A623] text-black'
-                          : 'bg-white/[0.03] border-white/[0.10] text-white/55 hover:text-white/85 hover:border-white/25'
-                      }`}
-                    >
+                    <button key={platform} type="button" onClick={() => togglePlatform(platform)} aria-pressed={active} data-on={active ? 'true' : undefined} disabled={!editable}>
                       <PlatformIcon platform={platform} />
                       {label}
                     </button>
                   );
                 })}
               </div>
-              {platforms.length === 0 && (
-                <p className="text-[11.5px] text-white/30 mt-2">Pick at least one to publish.</p>
-              )}
+              {platforms.length === 0 && editable && <p className="nb-sheet-help">Pick at least one to post it.</p>}
             </div>
 
-            {showScheduler && (
-              <div className="rounded-xl border border-[#F5A623]/25 bg-[#F5A623]/[0.05] p-4">
-                <label className="gravity-label block mb-2.5 text-[#F5A623]">When should it go out?</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="date"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg bg-black/50 border border-white/[0.10] text-[13px] text-[#F5F4F1] focus:outline-none focus:border-[#F5A623]/60"
-                  />
-                  <input
-                    type="time"
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg bg-black/50 border border-white/[0.10] text-[13px] text-[#F5F4F1] focus:outline-none focus:border-[#F5A623]/60"
-                  />
-                </div>
-              </div>
-            )}
-
-            {errorMsg && (
-              <p className="text-[12.5px] text-red-300 bg-red-500/[0.08] border border-red-400/20 px-3.5 py-2.5 rounded-xl">{errorMsg}</p>
-            )}
-            {successMsg && (
-              <p className="text-[12.5px] text-emerald-300 bg-emerald-500/[0.08] border border-emerald-400/20 px-3.5 py-2.5 rounded-xl flex items-center gap-2">
-                <Check className="w-3.5 h-3.5" /> {successMsg}
-              </p>
-            )}
+            <PostNotice notice={notice} onClose={() => setNotice(null)} />
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="h-px bg-gradient-to-r from-transparent via-white/[0.10] to-transparent" />
-        <div className="px-7 py-5 flex flex-wrap items-center gap-3 bg-black/30">
-          <button
-            onClick={handleSave}
-            disabled={busy}
-            className="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-white/[0.06] hover:bg-white/[0.11] border border-white/[0.09] text-[13px] font-semibold text-[#F5F4F1] transition-colors disabled:opacity-40"
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save changes
-          </button>
-
-          <button
-            onClick={() => (showScheduler ? handleSchedule() : setShowScheduler(true))}
-            disabled={busy}
-            className="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-[#F5A623]/[0.10] border border-[#F5A623]/30 text-[#F5A623] hover:bg-[#F5A623]/20 text-[13px] font-semibold transition-colors disabled:opacity-40"
-          >
-            {isScheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-            {showScheduler ? 'Confirm schedule' : 'Schedule'}
-          </button>
-
-          <button
-            onClick={handlePublishNow}
-            disabled={busy}
-            className="inline-flex items-center gap-2 h-11 px-6 rounded-xl bg-[#F5A623] hover:bg-[#ffb833] text-black text-[13px] font-bold shadow-[0_8px_28px_rgba(245,166,35,0.28)] transition-colors disabled:opacity-40"
-          >
-            {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Publish now
-          </button>
-
-          <div className="ml-auto flex gap-2">
-            {draft.contentCalendarId && draft.calendarDay ? (
-              <>
-                <button
-                  onClick={handleRegenerate}
-                  disabled={isRejecting || isRegenerating}
-                  className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/60 hover:text-white hover:border-white/25 transition-colors disabled:opacity-40"
-                >
-                  {isRegenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                  Regenerate
-                </button>
-                <button
-                  onClick={handleReject}
-                  disabled={isRejecting || isRegenerating}
-                  className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/45 hover:text-red-300 hover:border-red-400/40 transition-colors disabled:opacity-40"
-                >
-                  {isRejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                  Reject
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-white/[0.10] text-[13px] font-semibold text-white/45 hover:text-red-300 hover:border-red-400/40 transition-colors disabled:opacity-40"
-              >
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                Archive
-              </button>
-            )}
-          </div>
+        {/* Footer: Save, then the shared post actions in their fixed order */}
+        <div className="nb-sheet-foot">
+          {editable && (
+            <button type="button" onClick={handleSave} disabled={isSaving} className="nb-pa-btn">
+              {isSaving ? <Loader2 className="nb-pa-ico animate-spin" aria-hidden="true" /> : <Save className="nb-pa-ico" aria-hidden="true" />}
+              Save changes
+            </button>
+          )}
+          {isCalendarPost && editable && (
+            <button type="button" onClick={handleRegenerate} disabled={isRegenerating} className="nb-pa-btn" title="Make a whole new post (words and picture) for this day">
+              {isRegenerating ? <Loader2 className="nb-pa-ico animate-spin" aria-hidden="true" /> : <RotateCcw className="nb-pa-ico" aria-hidden="true" />}
+              New post for this day
+            </button>
+          )}
+          <span className="nb-sheet-foot-gap" aria-hidden="true" />
+          <PostActions
+            draft={draft}
+            platforms={platforms}
+            label={title || 'this post'}
+            makeAgainQuarks={makeAgainQuarks}
+            makeAgainPrompt={promptDraft}
+            onEdit={editable && shownUrl ? () => setEditOpen((v) => !v) : undefined}
+            prepare={saveFirst}
+            archiveVia={isCalendarPost ? 'reject' : 'archive'}
+            onChanged={changed}
+            onMessage={(text, tone, to) => setNotice(text ? { text, tone, to } : null)}
+            className="nb-sheet-actions"
+          />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

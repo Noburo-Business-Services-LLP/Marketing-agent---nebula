@@ -1,0 +1,91 @@
+/* ============================================================
+   Post actions (components/PostActions.tsx): the same buttons in the same order on every post.
+   Cream and gold, brown ink like Home; one gold main button; quiet white buttons; locked ones keep their place
+   with a lock and their reason. Every text pair is at least 4.5 to 1. Motion only without reduced motion.
+   ============================================================ */
+.nb-pa { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nb-pa-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.nb-pa[data-variant="compact"] .nb-pa-row { flex-wrap: nowrap; }
+.nb-pa[data-variant="compact"] .nb-pa-btn[data-primary="true"] { flex: 1 1 auto; justify-content: center; min-width: 0; }
+
+.nb-pa-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid #E8D7B4; background: #FFFDF8; color: #2B1D0E; font: inherit; font-size: 12.5px; font-weight: 600;
+  line-height: 1; white-space: nowrap; cursor: pointer; text-decoration: none;
+}
+.nb-pa-btn:hover { border-color: #D9B86E; background: #FFF8EA; }
+.nb-pa-btn[data-primary="true"] { background: #F5A623; border-color: #F5A623; color: #1A1208; }
+.nb-pa-btn[data-primary="true"]:hover { background: #FFB838; border-color: #FFB838; }
+.nb-pa-btn[data-locked="true"] { background: #F6F1E7; border-color: #E5DACA; color: #5E4A31; cursor: help; }
+.nb-pa-btn[data-locked="true"]:hover { background: #F6F1E7; border-color: #D8C9B2; }
+.nb-pa-btn:disabled { opacity: 0.55; cursor: default; }
+.nb-pa-btn:focus-visible, .nb-pa-item:focus-visible, .nb-pa-note-link:focus-visible, .nb-pa-note-close:focus-visible { outline: 3px solid #7A4A00; outline-offset: 2px; }
+.nb-pa-ico { width: 15px; height: 15px; flex: 0 0 auto; }
+.nb-pa-word { overflow: hidden; text-overflow: ellipsis; }
+.nb-pa-price {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 6px; margin-left: 2px; border-radius: 999px;
+  background: #FFF1D2; color: #6B3F00; font-size: 11px; font-weight: 700;
+}
+.nb-pa-btn[data-primary="true"] .nb-pa-price { background: rgb(255 253 248 / 0.75); color: #5A3500; }
+.nb-pa-why { font-size: 11px; font-weight: 500; color: #6F5A3F; }
+.nb-pa-why::before { content: "·"; margin-right: 6px; }
+
+.nb-pa-note {
+  display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; line-height: 1.4;
+  background: #EAF5EE; border: 1px solid #BFE3CC; color: #1E5A36;
+}
+.nb-pa-note[data-tone="error"] { background: #FFF1E6; border-color: #F6C3A3; color: #8A2E0C; }
+.nb-pa-note > span { flex: 1 1 auto; min-width: 0; }
+.nb-pa-note-link { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; white-space: nowrap; }
+.nb-pa-note-close { border: 0; background: none; padding: 2px; color: inherit; cursor: pointer; display: inline-flex; border-radius: 6px; }
+
+.nb-pa-menu {
+  position: fixed; z-index: 130; width: 248px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 6px; border-radius: 12px;
+  background: #FFFDF8; border: 1px solid #E8D7B4; box-shadow: 0 18px 40px -16px rgb(60 40 10 / 0.45), 0 2px 6px rgb(60 40 10 / 0.08);
+}
+.nb-pa-item {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none;
+  color: #2B1D0E; font: inherit; text-align: left; cursor: pointer;
+}
+.nb-pa-item .nb-pa-ico { margin-top: 1px; }
+.nb-pa-item:hover, .nb-pa-item:focus-visible { background: #FFF1D2; }
+.nb-pa-item[data-danger="true"] { color: #9A3412; }
+.nb-pa-item[data-locked="true"] { color: #5E4A31; }
+.nb-pa-item-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nb-pa-item-word { font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.nb-pa-item-hint { font-size: 11.5px; line-height: 1.35; color: #6F5A3F; }
+
+.nb-pa-scrim { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(43 29 14 / 0.38); }
+.nb-pa-dialog {
+  width: 100%; max-width: 380px; padding: 20px; border-radius: 16px; background: #FFFDF8; border: 1px solid #EFD089;
+  box-shadow: 0 30px 60px -24px rgb(60 40 10 / 0.5); color: #2B1D0E;
+}
+.nb-pa-dialog-title { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 1.2; }
+.nb-pa-dialog-sub { margin: 4px 0 14px; font-size: 13px; color: #5E4A31; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-pa-dialog-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nb-pa-dialog-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #5E4A31; }
+.nb-pa-dialog-fields input {
+  height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid #E5DACA; background: #FFFFFF; color: #2B1D0E;
+  font: inherit; font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none;
+}
+.nb-pa-dialog-fields input:focus { outline: none; border-color: #F5A623; box-shadow: 0 0 0 3px rgb(245 166 35 / 0.25); }
+.nb-pa-dialog-err { margin: 10px 0 0; font-size: 12.5px; color: #8A2E0C; }
+.nb-pa-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+@media (max-width: 639px) {
+  .nb-pa-btn { height: 36px; padding: 0 11px; }
+  .nb-pa-why { display: none; }
+  /* On a narrow tile "More" is just its mark, so the main button keeps its word. */
+  .nb-pa[data-variant="compact"] .nb-pa-row { gap: 4px; }
+  .nb-pa[data-variant="compact"] .nb-pa-btn { padding: 0 8px; gap: 5px; font-size: 12px; }
+  .nb-pa[data-variant="compact"] .nb-pa-btn[data-more="true"] { flex: 0 0 34px; width: 34px; padding: 0; justify-content: center; }
+  .nb-pa[data-variant="compact"] .nb-pa-btn[data-more="true"] .nb-pa-word { display: none; }
+  .nb-pa[data-variant="compact"] .nb-pa-btn[data-primary="true"] .nb-pa-price { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nb-pa-btn, .nb-pa-item { transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease; }
+  .nb-pa-btn:active { transform: translateY(1px); }
+  .nb-pa-menu, .nb-pa-dialog { animation: nb-pa-pop 140ms ease-out; }
+  @keyframes nb-pa-pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+}
