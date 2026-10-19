@@ -138,6 +138,12 @@ The owner asked for My plan to be "all tiles and beautiful with images and anima
 - Motion (only without reduced motion): staggered rise on first render (fill mode `backwards`, so hover lift still works afterwards), donut and ready ring draw-in, timeline fill, a slow pulse on today's marker, the twinkling sparkle, hover lift.
 - Honesty: every claim keeps its tag in words, a missing level says "Not decided yet" with its reason behind "Why it is empty", and nothing is drawn for data the plan does not have.
 
+## Photoshoot (2026-10-19)
+
+- Create content has six cover tiles now (`TileGrid columns={6}`): Video, Photoshoot (palette `plum`, the Photoshoot accent family), then the four modes.
+- The pack choice on `/photoshoot` is six cover tiles (one column under 560 px, two up to 900 px, then three) with their own small drawings in `frontend/components/art/packs/` (imported from that folder, not the barrel; same drawing rules and budget as the main set). Palettes: product plum, marketplace blue, festival gold, lifestyle teal, flat lay coral, clean white ink.
+- Page styles: `frontend/components/photoshoot/photoshoot.css` (brown ink like Home, one warm gold summary card, no dark panel). The Home packs rail is a sideways row of compact `choice` tiles (`.nb-home-packs-rail`).
+
 ## Not done yet (by design)
 
-Photoshoot tile and page (the page does not exist yet), templates and packs, Home, Library, Inbox, Performance, Brand, Blueprint, Memory and Calendar tiles, photo tiles (none registered yet), a Lighthouse-style first paint comparison (the page weight was measured instead: see the build task report).
+Post templates, Home, Library, Inbox, Performance, Brand, Blueprint, Memory and Calendar tiles, photo tiles (none registered yet), a Lighthouse-style first paint comparison (the page weight was measured instead: see the build task report).
