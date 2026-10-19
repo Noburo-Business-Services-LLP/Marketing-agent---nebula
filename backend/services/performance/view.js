@@ -244,7 +244,7 @@ function buildPerformanceView(input) {
   // ---- top posts ----
   const measuredReason = () => {
     if (failed('measured')) return REASONS.failed;
-    if (overall.posts.available && overall.posts.value > 0) return 'Your posts from this period have not been measured yet. Each post is measured 1, 3 and 7 days after it goes out.';
+    if (overall.posts.available && overall.posts.value > 0) return 'Your posts from this period have not been measured yet. Each post is measured a day, three days and a week after it goes out.';
     return filter ? `Nothing was published on ${M.labelOf(filter)} in this period.` : 'Nothing was published in this period.';
   };
   const card = (p, metric) => ({
