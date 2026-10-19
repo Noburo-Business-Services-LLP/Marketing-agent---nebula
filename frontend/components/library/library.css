@@ -2,7 +2,8 @@
    Library tiles (pages/Library.tsx). One picture height for every tile, so each row is the same height;
    the columns come from the grid's real width and the last tile of a short row is widened (fillRows),
    so every row is filled (symmetry rule, ops/tile-system.md). Source and status chips in words.
-   Open, Edit and Download show on hover and keyboard focus, and always on touch screens.
+   Every tile ends in one action row: posts use the shared post actions (components/PostActions.tsx, main button and More),
+   videos and photos Open, Edit and Download. Views (Needs approval ... Bin) are one row of tabs with counts.
    Plain CSS on the cream theme tokens; motion only without reduced motion.
    ============================================================ */
 .nb-lib-grid { display: grid; gap: 14px; grid-template-columns: repeat(var(--nb-lib-cols, 2), minmax(0, 1fr)); align-items: stretch; margin: 0; padding: 0; list-style: none; }
@@ -40,6 +41,9 @@
 .nb-lib-chip[data-status="creating"] { background: #FFE2A1; color: #6B3F00; border-color: #EFC56A; }
 .nb-lib-chip[data-status="failed"] { background: #FFE3D0; color: #9A3412; border-color: #F6C3A3; }
 .nb-lib-chip[data-status="archived"] { background: #EFEAE1; color: #5E4A31; }
+.nb-lib-chip[data-status="approval"] { background: #F5A623; color: #1A1208; border-color: #F5A623; }
+.nb-lib-chip[data-status="approved"] { background: #E3EFD9; color: #2F5A1E; border-color: #C9E0B8; }
+.nb-lib-chip[data-status="binned"] { background: #EFEAE1; color: #5E4A31; }
 .nb-lib-body { display: flex; flex-direction: column; flex: 1 1 auto; gap: 4px; padding: 10px 12px 11px; min-width: 0; }
 .nb-lib-title {
   font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--gv-text-primary); min-height: 2.6em;
@@ -47,31 +51,48 @@
 }
 .nb-lib-meta { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--gv-text-muted); }
 .nb-lib-platforms { display: inline-flex; align-items: center; gap: 4px; color: var(--gv-text-tertiary); }
-.nb-lib-actions {
-  position: absolute; top: 98px; right: 8px; display: flex; gap: 4px; z-index: 2; opacity: 0;
+.nb-lib-foot { padding: 0 12px 12px; min-height: 46px; display: flex; align-items: flex-end; }
+.nb-lib-foot > .nb-pa { width: 100%; }
+.nb-lib-foot-wait { font-size: 11.5px; color: var(--gv-text-muted); padding-bottom: 8px; }
+
+/* Views: one row of tabs; scrolls sideways inside itself on a phone. */
+.nb-lib-views {
+  display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 14px; overflow-x: auto;
+  background: #FFF9EC; border: 1px solid #F0DFB8; scrollbar-width: none;
 }
-.nb-lib-tile:hover .nb-lib-actions, .nb-lib-tile:focus-within .nb-lib-actions { opacity: 1; }
-@media (hover: none) { .nb-lib-actions { opacity: 1; } }
-.nb-lib-action {
-  display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #EFD089;
-  background: #FFFDF8; color: #2B1D0E; font: inherit; font-size: 12px; font-weight: 600; text-decoration: none; cursor: pointer;
-  box-shadow: 0 2px 8px -2px rgb(26 18 8 / 0.25);
+.nb-lib-views::-webkit-scrollbar { display: none; }
+.nb-lib-view {
+  flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px;
+  border: 0; border-radius: 10px; background: none; color: #5E4A31; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;
 }
-.nb-lib-action[data-primary="true"] { background: #F5A623; border-color: #F5A623; color: #1A1208; }
-.nb-lib-action:focus-visible { outline: 3px solid #7A4A00; outline-offset: 2px; }
+.nb-lib-view:hover { background: #FFF1D2; color: #2B1D0E; }
+.nb-lib-view[data-on="true"] { background: #FFFFFF; color: #2B1D0E; box-shadow: 0 0 0 1px #EFD089, 0 2px 6px -2px rgb(90 60 20 / 0.25); }
+.nb-lib-view:focus-visible { outline: 3px solid #7A4A00; outline-offset: 1px; }
+.nb-lib-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  background: #EFE6D4; color: #5E4A31; font-size: 11px; font-weight: 700;
+}
+.nb-lib-count[data-attention="true"] { background: #F5A623; color: #1A1208; }
+
+/* The line above the grid in Needs approval and the Bin. */
+.nb-lib-band {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 14px;
+  background: linear-gradient(180deg, #FFF9EC, #FFF1D2); border: 1px solid #EFD089; color: #2B1D0E; font-size: 13px; line-height: 1.45;
+}
+.nb-lib-band p { margin: 0; flex: 1 1 320px; }
+.nb-lib-band strong { font-weight: 700; }
+.nb-lib-band[data-tone="bin"] { background: #F7F2E9; border-color: #E5DACA; color: #4A3A26; }
 
 @media (max-width: 639px) {
   .nb-lib-grid { gap: 10px; }
   .nb-lib-pic { height: 120px; }
-  .nb-lib-actions { top: 82px; right: 6px; }
-  .nb-lib-action { height: 28px; padding: 0 8px; }
-  .nb-lib-action-word { display: none; }
+  .nb-lib-foot { padding: 0 8px 8px; }
+  .nb-lib-view { flex: 0 0 auto; padding: 0 10px; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .nb-lib-tile { transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
   .nb-lib-pic img { transition: transform 360ms ease; }
-  .nb-lib-actions { transition: opacity 160ms ease; }
   .nb-lib-tile:hover { transform: translateY(-2px); box-shadow: 0 1px 2px rgb(var(--gv-ink-rgb) / 0.05), 0 16px 28px -16px rgb(150 100 20 / 0.45); }
   .nb-lib-tile:hover .nb-lib-pic img { transform: scale(1.04); }
 }

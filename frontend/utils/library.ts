@@ -1,10 +1,12 @@
+import { needsApproval } from './draftStatus.ts';
+
 /**
  * The Library merges four lists (post and image drafts, step-by-step video drafts, Hero videos, Photoshoot photos) into one
  * card shape, so one page can browse, filter and open all of them. Pure functions only.
  */
 export type LibraryKind = 'image' | 'video';
 export type LibrarySource = 'post' | 'reel' | 'video-draft' | 'hero' | 'photoshoot';
-export type LibraryStatus = 'creating' | 'draft' | 'ready' | 'scheduled' | 'posted' | 'archived' | 'failed';
+export type LibraryStatus = 'creating' | 'draft' | 'ready' | 'approved' | 'scheduled' | 'posted' | 'archived' | 'binned' | 'failed';
 
 export interface LibraryItem {
   id: string;
@@ -29,6 +31,10 @@ export interface LibraryItem {
   finish?: any;
   /** Hero videos: the prompt and settings to start a new version from */
   heroSource?: { prompt: string; tweak?: any };
+  /** posts Nebulaa made for the customer that wait for their approval */
+  needsApproval?: boolean;
+  /** posts in the Bin: when they went there */
+  binnedAt?: number;
 }
 
 const ms = (v: any): number => {
@@ -51,7 +57,8 @@ export function fromPostDraft(d: any): LibraryItem | null {
   const s = String(d.status || '').toLowerCase();
   const status: LibraryStatus =
     s === 'processing' ? 'creating' : s === 'failed' ? 'failed' : s === 'scheduled' ? 'scheduled'
-      : s === 'published' ? 'posted' : s === 'archived' ? 'archived' : s === 'completed' ? 'ready' : 'draft';
+      : s === 'published' ? 'posted' : s === 'archived' || s === 'rejected' ? 'archived' : s === 'completed' ? 'ready'
+        : s === 'approved' ? 'approved' : s === 'binned' ? 'binned' : 'draft';
   const slideList: any[] = Array.isArray(d.carouselSlides) ? d.carouselSlides : [];
   const slides = slideList.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).map((x) => String(x && x.imageUrl || '')).filter((u) => /^https?:\/\//i.test(u));
   // A carousel keeps its pictures per slide; the first one stands in as its cover.
@@ -68,6 +75,8 @@ export function fromPostDraft(d: any): LibraryItem | null {
     caption: text(d.caption, 600), platforms: list(d.platforms), createdAt: ms(d.createdAt || d.updatedAt || d.scheduledDate),
     raw: d, ...(jobId ? { jobId } : {}),
     ...(slideList.length ? { slides, slideTotal: slideList.length } : {}),
+    ...(needsApproval(d) ? { needsApproval: true } : {}),
+    ...(status === 'binned' && d.binnedAt ? { binnedAt: ms(d.binnedAt) } : {}),
   };
 }
 
@@ -131,8 +140,51 @@ export function applyFilters(items: LibraryItem[], f: LibraryFilters): LibraryIt
 }
 
 export const STATUS_WORD: Record<LibraryStatus, string> = {
-  creating: 'Creating', draft: 'Draft', ready: 'Ready', scheduled: 'Scheduled', posted: 'Posted', archived: 'Archived', failed: 'Did not finish',
+  creating: 'Creating', draft: 'Draft', ready: 'Ready', approved: 'Approved', scheduled: 'Scheduled', posted: 'Posted', archived: 'Archived',
+  binned: 'In the Bin', failed: 'Did not finish',
 };
+
+/** The word on a tile's status chip: "Needs approval" for posts waiting for the customer's OK. */
+export function statusWordOf(i: Pick<LibraryItem, 'status' | 'needsApproval'>): string {
+  if (i.needsApproval && i.status !== 'creating' && i.status !== 'failed') return 'Needs approval';
+  return STATUS_WORD[i.status];
+}
+
+/** The Library views (owner, 2026-10-19): Needs approval first, the Bin last. `count` is the GET /drafts/counts key. */
+export type LibraryView = 'approve' | 'approved' | 'scheduled' | 'posted' | 'all' | 'archived' | 'bin';
+export const LIBRARY_VIEWS: ReadonlyArray<{ key: LibraryView; label: string; count?: 'needsApproval' | 'approved' | 'scheduled' | 'posted' | 'archived' | 'binned' }> = Object.freeze([
+  { key: 'approve', label: 'Needs approval', count: 'needsApproval' },
+  { key: 'approved', label: 'Approved', count: 'approved' },
+  { key: 'scheduled', label: 'Scheduled', count: 'scheduled' },
+  { key: 'posted', label: 'Posted', count: 'posted' },
+  { key: 'all', label: 'All' },
+  { key: 'archived', label: 'Archived', count: 'archived' },
+  { key: 'bin', label: 'Bin', count: 'binned' },
+]);
+
+/** ?view= from the address, or '' when it names no view. */
+export function viewFromQuery(v: unknown): LibraryView | '' {
+  const s = String(v || '').toLowerCase();
+  return (LIBRARY_VIEWS.some((x) => x.key === s) ? s : '') as LibraryView | '';
+}
+
+/** The view to open: the address wins; otherwise Needs approval while something waits, else All. */
+export function defaultView(fromQuery: unknown, needsApprovalCount: number | null | undefined): LibraryView {
+  return viewFromQuery(fromQuery) || (Number(needsApprovalCount) > 0 ? 'approve' : 'all');
+}
+
+/** Does an item belong in a view? All hides the Archived and the Bin; the Bin holds only binned posts. */
+export function inView(i: Pick<LibraryItem, 'status' | 'needsApproval'>, view: LibraryView): boolean {
+  switch (view) {
+    case 'approve': return Boolean(i.needsApproval);
+    case 'approved': return i.status === 'approved';
+    case 'scheduled': return i.status === 'scheduled';
+    case 'posted': return i.status === 'posted';
+    case 'archived': return i.status === 'archived';
+    case 'bin': return i.status === 'binned';
+    default: return i.status !== 'archived' && i.status !== 'binned';
+  }
+}
 
 /** Where an item came from, in words, for the source chip on its tile. */
 export const SOURCE_WORD: Record<LibrarySource, string> = {

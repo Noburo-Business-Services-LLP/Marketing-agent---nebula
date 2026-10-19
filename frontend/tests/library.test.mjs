@@ -67,15 +67,19 @@ test('a carousel uses its first rendered slide as the cover and reports how many
 });
 
 import { readFileSync } from 'node:fs';
-test('Library filters are one compact row with accessible groups', () => {
+test('Library: one row of views (tabs with counts) and one compact filter row with accessible groups', () => {
   const src = readFileSync(new URL('../pages/Library.tsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../components/library/library.css', import.meta.url), 'utf8');
   assert.equal((src.match(/data-testid="library-filter-row"/g) || []).length, 1);
+  assert.equal((src.match(/data-testid="library-views"/g) || []).length, 1);
+  assert.match(src, /role="tablist" aria-label="Views"/);
+  assert.match(src, /role="tab" aria-selected=\{on\}/);
   assert.match(src, /role="group" aria-label="Type"/);
-  assert.match(src, /role="group" aria-label="Status"/);
   assert.match(src, /aria-pressed=\{filters\.kind === k\.key\}/);
-  assert.match(src, /aria-pressed=\{filters\.status === s\.key\}/);
   assert.match(src, /focus-visible:ring-2/);
-  assert.match(src, /overflow-x-auto/);
+  // the views scroll sideways inside themselves on a phone
+  assert.match(css, /\.nb-lib-views \{[^}]*overflow-x: auto/);
+  assert.match(css, /\.nb-lib-view:focus-visible/);
   assert.ok(!/h-9 px-4 rounded-full/.test(src));
 });
 
@@ -83,7 +87,7 @@ import { SOURCE_WORD, libraryTileActions, libraryColumns, STATUS_WORD as STATUS_
 
 test('every source and status has words for its chip', () => {
   ['post', 'reel', 'video-draft', 'hero', 'photoshoot'].forEach((s) => assert.ok(SOURCE_WORD[s]));
-  ['creating', 'draft', 'ready', 'scheduled', 'posted', 'archived', 'failed'].forEach((s) => assert.ok(STATUS_WORDS[s]));
+  ['creating', 'draft', 'ready', 'approved', 'scheduled', 'posted', 'archived', 'binned', 'failed'].forEach((s) => assert.ok(STATUS_WORDS[s]));
 });
 
 test('tile actions: none while creating, edit for drafts and failed, download only with a file and not for posts', () => {
@@ -95,4 +99,30 @@ test('tile actions: none while creating, edit for drafts and failed, download on
 
 test('library columns follow the grid width', () => {
   assert.deepEqual([343, 619, 620, 959, 960, 1100].map(libraryColumns), [2, 2, 3, 3, 4, 4]);
+});
+
+import { LIBRARY_VIEWS, inView, defaultView, viewFromQuery, statusWordOf } from '../utils/library.ts';
+
+test('library views: the owner order, and each item lands in the right view', () => {
+  assert.deepEqual(LIBRARY_VIEWS.map((v) => v.label), ['Needs approval', 'Approved', 'Scheduled', 'Posted', 'All', 'Archived', 'Bin']);
+  const auto = fromPostDraft({ _id: 'a', status: 'draft', origin: 'automation', imageUrl: 'https://i/a.jpg' });
+  const mine = fromPostDraft({ _id: 'm', status: 'draft', origin: 'manual' });
+  const approved = fromPostDraft({ _id: 'p', status: 'approved' });
+  const binned = fromPostDraft({ _id: 'b', status: 'binned', binnedAt: '2026-10-18T00:00:00Z' });
+  const archived = fromPostDraft({ _id: 'r', status: 'archived' });
+  assert.equal(auto.needsApproval, true); assert.equal(mine.needsApproval, undefined);
+  assert.equal(statusWordOf(auto), 'Needs approval'); assert.equal(statusWordOf(mine), 'Draft');
+  assert.equal(approved.status, 'approved'); assert.equal(statusWordOf(approved), 'Approved');
+  assert.equal(binned.status, 'binned'); assert.ok(binned.binnedAt > 0); assert.equal(statusWordOf(binned), 'In the Bin');
+  assert.ok(inView(auto, 'approve')); assert.ok(!inView(mine, 'approve'));
+  assert.ok(inView(approved, 'approved')); assert.ok(inView(binned, 'bin')); assert.ok(inView(archived, 'archived'));
+  assert.ok(inView(mine, 'all')); assert.ok(!inView(binned, 'all')); assert.ok(!inView(archived, 'all'));
+});
+
+test('library default view: the address first, then Needs approval while something waits', () => {
+  assert.equal(viewFromQuery('BIN'), 'bin'); assert.equal(viewFromQuery('nope'), '');
+  assert.equal(defaultView('scheduled', 4), 'scheduled');
+  assert.equal(defaultView(null, 3), 'approve');
+  assert.equal(defaultView('', 0), 'all');
+  assert.equal(defaultView(undefined, null), 'all');
 });

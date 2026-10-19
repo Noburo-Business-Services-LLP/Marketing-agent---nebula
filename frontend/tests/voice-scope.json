@@ -95,5 +95,9 @@
   "components/inbox/InboxOverview.tsx",
   "utils/inboxOverview.ts",
   "utils/videoOptionTiles.ts",
-  "components/video/VideoOptions.tsx"
+  "components/video/VideoOptions.tsx",
+  "utils/postActions.ts",
+  "components/PostActions.tsx",
+  "components/DraftPreviewModal.tsx",
+  "hooks/usePostAccess.ts"
 ]

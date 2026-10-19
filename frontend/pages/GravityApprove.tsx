@@ -1,9 +1,9 @@
 import PlatformIcon from '../components/PlatformIcon';
-import { priceWithWorth } from '../utils/plans';
-import { isAwaitingReview } from '../utils/draftStatus';
+import { needsApproval } from '../utils/draftStatus';
+import PostActions, { PostActionsChange, PostNotice, PostNoticeValue } from '../components/PostActions';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle, X, Pencil, LayoutGrid, Rows } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle, Pencil, LayoutGrid, Rows } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
 import { Draft, User } from '../types';
 import AddLanguagesControl, { LANGUAGE_VERSION_NOTE } from '../components/AddLanguagesControl';
@@ -14,11 +14,12 @@ import PageHeader, { PageEmphasis } from '../components/PageHeader';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
 import UpgradePrompt from '../components/UpgradePrompt';
-import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
+import { UpgradeInfo } from '../utils/plans';
 
-// Gravity Approve — matches the prototype's Approve screen: single big
-// preview on the left, structured metadata + caption on the right,
-// gold "Approve & schedule" CTA at the bottom-right.
+// Review and approve: the posts Nebulaa made for the customer (origin automation) that wait for their OK, one by one
+// or as a grid. Approve calls POST /drafts/:id/approve, which never posts: a post with a planned date is scheduled for
+// it, the others wait as Approved in the Library, where Schedule, Post now and Download are. Posts the customer made
+// by hand never need approval and are not listed here. The buttons are the shared post actions (PostActions).
 
 const PLATFORM_META: Record<string, { label: string; Icon: React.ComponentType<{ className?: string }> }> = {
   instagram: { label: 'Instagram', Icon: Instagram },
@@ -31,9 +32,9 @@ const PLATFORM_META: Record<string, { label: string; Icon: React.ComponentType<{
 };
 
 const formatScheduleDate = (d?: string | null) => {
-  if (!d) return 'Not scheduled';
+  if (!d) return 'No date yet';
   const date = new Date(d);
-  if (isNaN(date.getTime())) return 'Not scheduled';
+  if (isNaN(date.getTime())) return 'No date yet';
   const today = new Date(); today.setHours(0,0,0,0);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
   const dcopy = new Date(date); dcopy.setHours(0,0,0,0);
@@ -59,14 +60,12 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [upgrade, setUpgrade] = useState<UpgradeInfo | null>(null);
+  const [upgrade] = useState<UpgradeInfo | null>(null);
+  const [notice, setNotice] = useState<PostNoticeValue | null>(null);
   // Grid is for bulk triage across everything awaiting review at once;
   // single is the full detail view. A customer with fifty drafts going
   // through them one swipe at a time is the exact problem this solves.
   const [reviewView, setReviewView] = useState<'single' | 'grid'>('single');
-  // Which draft a grid-card action is currently running for, so clicking
-  // Approve on one card doesn't grey out every other card on the page.
-  const [gridBusyId, setGridBusyId] = useState<string | null>(null);
   // Track drafts we've auto-retried image gen for, so we don't spam.
   const autoRetriedRef = useRef<Set<string>>(new Set());
   const pollTimerRef = useRef<any>(null);
@@ -161,15 +160,15 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
 
   const detailImage = (d: any) => d?.imageUrl || d?.creative?.imageUrls?.[0] || '';
 
-  // What belongs in the queue (waiting and failed posts, never videos) is defined once in utils/draftStatus.ts,
-  // the same rule Home and the server use to count "posts waiting".
+  // What belongs in the queue (automation posts that wait or did not finish, never videos) is defined once in
+  // utils/draftStatus.ts (needsApproval), the same rule the server uses for the Library count and Home.
 
   const loadDrafts = async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
       const res = await draftsAPI.getDrafts();
       setVersionRows((Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => d?.languageVariantOf));
-      const filtered = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => isAwaitingReview(d));
+      const filtered = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => needsApproval(d));
       setDrafts(filtered);
       // Preserve index if possible so we don't jump around while polling
       setIndex((prev) => Math.min(prev, Math.max(0, filtered.length - 1)));
@@ -192,7 +191,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
     if (anyProcessing && !pollTimerRef.current) {
       pollTimerRef.current = setInterval(() => {
         draftsAPI.getDrafts().then((res) => {
-          const list = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => isAwaitingReview(d));
+          const list = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => needsApproval(d));
           setDrafts(list);
         }).catch(() => {});
       }, 6000);
@@ -255,37 +254,30 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [total]);
 
-  // Shared by both views — the single-card Approve button and every grid
-  // card's quick-approve both funnel through this.
-  const approveDraft = async (draft: any) => {
-    if (!draft?._id) return;
-    try {
-      // Publish through the draft endpoint. It creates the underlying
-      // Campaign itself (upsertCampaignFromDraft), so this also works for
-      // single posts, which have no campaignId — the old path silently
-      // skipped those and removed them from the list without publishing.
-      await draftsAPI.publishDraft(draft._id, draft.platforms || []);
-      setDrafts((prev) => {
-        const next = prev.filter((d: any) => d._id !== draft._id);
-        setIndex((i) => Math.min(i, Math.max(0, next.length - 1)));
-        return next;
-      });
-    } catch (e: any) {
-      const u = upgradeInfoOf(e);
-      if (u) setUpgrade(u); else setError(e?.message || 'The post could not be approved.');
-      throw e;
-    }
+  // After an action: a post that left the queue (approved, archived, moved to the Bin) is taken out; Make again
+  // reloads so the new picture shows when it is ready.
+  const actionDone = (draft: any) => (c: PostActionsChange) => {
+    if (c.key === 'makeAgain') { loadDrafts(true); return; }
+    if (!c.moved) return;
+    setDrafts((prev) => {
+      const next = prev.filter((d: any) => d._id !== draft._id);
+      setIndex((i) => Math.min(i, Math.max(0, next.length - 1)));
+      return next;
+    });
+    if (c.key === 'approve') setNotice({ text: c.message, tone: 'ok', to: { label: 'See approved posts', path: '/library?view=approved' } });
   };
+  const makeAgainQuarksFor = (draft: any) => regenerateCostFor(draft);
+  const onNotice = (text: string, tone: 'ok' | 'error', to?: { label: string; path: string }) => setNotice(text ? { text, tone, to } : null);
 
   const redoDraft = async (draft: any, promptOverride?: string) => {
     if (!draft?._id) return;
     const cost = regenerateCostFor(draft);
     const hasImage = !!(draft?.imageUrl || draft?.creative?.imageUrls?.[0]);
     const confirmMsg = cost > 0
-      ? `This costs ${priceWithWorth(cost, quarkCosts)} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
+      ? `This costs ${cost.toLocaleString('en-IN')} ${cost === 1 ? 'Quark' : 'Quarks'} and ${hasImage ? 'replaces the current image.' : 'adds an image to this post.'}`
       : hasImage ? 'This replaces the current image.' : 'This adds an image to this post.';
-    const dialogTitle = hasImage ? 'Regenerate this image?' : 'Add an image?';
-    const dialogConfirmLabel = hasImage ? 'Regenerate' : 'Add';
+    const dialogTitle = hasImage ? 'Make this again?' : 'Add an image?';
+    const dialogConfirmLabel = hasImage ? 'Make again' : 'Add';
     if (!(await confirm(confirmMsg, { title: dialogTitle, confirmLabel: dialogConfirmLabel }))) return;
     try {
       await draftsAPI.retryImageGeneration(String(draft._id), promptOverride);
@@ -301,12 +293,6 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
     const res = await draftsAPI.localizeDraft(String(current._id), languages);
     await loadDrafts(true);
     return res?.results || [];
-  };
-
-  const handleApprove = async () => {
-    if (!current) return;
-    setBusy(true);
-    try { await approveDraft(current); } catch { /* error already set */ } finally { setBusy(false); }
   };
 
   // What was actually sent to the image model for the CURRENT post — kept
@@ -351,21 +337,6 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
     }
   };
 
-  // Grid-card versions — track busy state per-card instead of the single
-  // page-wide `busy` flag, and open the full detail view on approve failure
-  // so the reason (e.g. no platforms selected) isn't invisible in a small card.
-  const handleGridApprove = async (draft: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setGridBusyId(draft._id);
-    try { await approveDraft(draft); } catch { /* error already set */ } finally { setGridBusyId(null); }
-  };
-
-  const handleGridRedo = async (draft: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setGridBusyId(draft._id);
-    try { await redoDraft(draft); } catch { /* error already set */ } finally { setGridBusyId(null); }
-  };
-
   const openInSingleView = (draftId: string) => {
     const i = drafts.findIndex((d: any) => d._id === draftId);
     if (i >= 0) setIndex(i);
@@ -379,18 +350,24 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   const Header = () => (
     <PageHeader
       eyebrow="Review and approve"
-      title={<>Review your <PageEmphasis>posts</PageEmphasis> before they are published</>}
-      description="Review the posts Nebulaa prepared, approve the ones that are ready, and regenerate the ones that need changes."
+      title={<>Review your <PageEmphasis>posts</PageEmphasis> before they go out</>}
+      description="Posts Nebulaa prepared for you wait here for your approval. Approving never posts by itself: a post with a planned date is scheduled for it, the others wait as Approved in the Library."
     />
   );
 
-  // Everything that is not waiting for your OK (drafts, scheduled, posted, archived) is in the Library.
+  // Everything that is not waiting for your OK (approved, scheduled, posted, your own posts) is in the Library.
   const TabBar = () => (
-    <div className="mb-8 flex flex-wrap items-center gap-3 text-[13px] text-[var(--gv-text-secondary)]">
-      <span className="inline-flex items-center h-9 px-5 rounded-full bg-[var(--gv-surface-3)] border border-[var(--gv-border-subtle)] font-semibold text-[var(--gv-text-primary)]">Needs review</span>
-      <button type="button" onClick={() => navigate('/library')} className="font-semibold text-[var(--gv-accent-text)] underline underline-offset-2">
-        See drafts, scheduled and posted in the Library
-      </button>
+    <div className="mb-6 space-y-3">
+      <div className="flex flex-wrap items-center gap-3 text-[13px] text-[var(--gv-text-secondary)]">
+        <span className="inline-flex items-center h-9 px-5 rounded-full bg-[var(--gv-surface-3)] border border-[var(--gv-border-subtle)] font-semibold text-[var(--gv-text-primary)]">Needs approval{total ? ` · ${total}` : ''}</span>
+        <button type="button" onClick={() => navigate('/library?view=approved')} className="font-semibold text-[var(--gv-accent-text)] underline underline-offset-2">
+          Approved posts
+        </button>
+        <button type="button" onClick={() => navigate('/library?view=all')} className="font-semibold text-[var(--gv-accent-text)] underline underline-offset-2">
+          Everything in the Library
+        </button>
+      </div>
+      <PostNotice notice={notice} onClose={() => setNotice(null)} />
     </div>
   );
 
@@ -413,12 +390,12 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
         <Header />
         <TabBar />
         <div className="max-w-[720px] mx-auto text-center py-16">
-        <div className="gravity-label mb-4">No posts to review</div>
+        <div className="gravity-label mb-4">Nothing to approve</div>
         <h2 className="font-serif-display text-[24px] leading-[1.2] tracking-[-0.01em] text-[var(--gv-text-primary)] mb-3">
-          No posts are waiting for <PageEmphasis>your review</PageEmphasis>.
+          No posts are waiting for <PageEmphasis>your approval</PageEmphasis>.
         </h2>
         <p className="text-[14px] text-[var(--gv-text-tertiary)] max-w-[520px] mx-auto mb-6">
-          New posts that Nebulaa prepares will appear here for your approval.
+          Posts Nebulaa prepares for you appear here. Posts you make yourself can be scheduled or posted straight away from the Library.
         </p>
         <button
           onClick={() => navigate('/campaigns')}
@@ -440,7 +417,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-baseline gap-3">
           <span className="gravity-label">
-            {reviewView === 'grid' ? `${total} awaiting review` : `Post ${index + 1} / ${total}`}
+            {reviewView === 'grid' ? `${total} waiting for approval` : `Post ${index + 1} / ${total}`}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -501,7 +478,6 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
             // been queued for one — that's neither processing nor failed.
             const processing = status === 'processing';
             const failed = status === 'failed' && !img;
-            const isBusy = gridBusyId === d._id;
             const cap = String(d.caption || d.creative?.textContent || '').replace(/#\w+/g, '').trim();
             return (
               <div
@@ -509,7 +485,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
                 onClick={() => openInSingleView(d._id)}
                 className="group relative rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] overflow-hidden cursor-pointer transition-all duration-200 hover:border-[rgb(var(--gv-accent-rgb)/0.50)] hover:bg-[var(--gv-surface-2)]"
               >
-                <div className="relative bg-black aspect-[4/5] overflow-hidden">
+                <div className="relative bg-[#F6EEDF] aspect-[4/5] overflow-hidden">
                   {img ? (
                     <img src={img} alt={d.title || 'Post'} className="w-full h-full object-contain" />
                   ) : failed ? (
@@ -541,24 +517,17 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
                         : <span key={p} className="text-[9.5px] text-[var(--gv-text-muted)]">{p}</span>;
                     })}
                   </div>
-                  <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-[var(--gv-border-subtle)]">
-                    <button
-                      onClick={(e) => handleGridApprove(d, e)}
-                      disabled={isBusy || processing || failed}
-                      title="Approve and schedule"
-                      className="flex-1 inline-flex items-center justify-center gap-1 h-8 rounded-md bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-black text-[11px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" strokeWidth={3} />}
-                      Approve
-                    </button>
-                    <button
-                      onClick={(e) => handleGridRedo(d, e)}
-                      disabled={isBusy || processing}
-                      title={img ? 'Regenerate' : 'Add image'}
-                      className="w-8 h-8 flex items-center justify-center rounded-md border border-[var(--gv-border-default)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-30"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                    </button>
+                  <div className="mt-3 pt-2.5 border-t border-[var(--gv-border-subtle)]" onClick={(e) => e.stopPropagation()}>
+                    <PostActions
+                      draft={d}
+                      variant="compact"
+                      label={d.title || 'this post'}
+                      makeAgainQuarks={makeAgainQuarksFor(d)}
+                      onEdit={() => openInSingleView(d._id)}
+                      archiveVia={d.contentCalendarId && d.calendarDay ? 'reject' : 'archive'}
+                      onChanged={actionDone(d)}
+                      onMessage={onNotice}
+                    />
                   </div>
                 </div>
               </div>
@@ -578,13 +547,13 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
                 <AlertCircle className="w-8 h-8 text-red-400/70" />
                 <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Image generation failed</div>
                 <div className="text-[11.5px] text-[var(--gv-text-tertiary)] max-w-[260px] leading-relaxed">
-                  {current?.errorMessage || 'Something went wrong. Select Regenerate to try again.'}
+                  {current?.errorMessage || 'Something went wrong. Select Make again to try once more.'}
                 </div>
                 <button
                   onClick={handleRedo}
                   className="mt-2 h-8 px-3 rounded-md bg-[var(--gv-surface-2)] hover:bg-[var(--gv-surface-4)] text-[12px] font-semibold text-[var(--gv-text-primary)]"
                 >
-                  Regenerate
+                  Make again
                 </button>
               </div>
             ) : String(current?.status || '').toLowerCase() !== 'processing' ? (
@@ -645,9 +614,9 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
           </h2>
 
           <dl className="grid grid-cols-[110px_1fr] gap-y-3 gap-x-4 mb-6">
-            <dt className="gravity-label pt-1">Scheduled</dt>
+            <dt className="gravity-label pt-1">Planned for</dt>
             <dd className="text-[13px] text-[var(--gv-text-primary)] flex items-center gap-2">
-              {formatScheduleDate(current?.scheduledDate)}
+              {formatScheduleDate(current?.plannedDate || current?.scheduledDate)}
             </dd>
 
             <dt className="gravity-label pt-1">Platforms</dt>
@@ -679,7 +648,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
 
             <dt className="gravity-label pt-1">Source</dt>
             <dd className="text-[13px] text-[var(--gv-text-secondary)]">
-              {current?.sourceType || 'Nebulaa AI'}{current?.aiGenerated !== false ? ' · Draft' : ''}
+              {current?.contentCalendarId || typeof current?.calendarDay === 'number' ? 'Made by Nebulaa from your plan' : 'Made by Nebulaa'}
             </dd>
           </dl>
 
@@ -712,10 +681,10 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
             />
             <p className="text-[10.5px] text-[var(--gv-text-muted)] mt-1.5">
               {promptDraft.trim() && promptDraft.trim() !== (current?.imagePromptResolved || '').trim()
-                ? 'You edited the prompt. Regenerate will use this exact text.'
+                ? 'You edited the prompt. Make again uses this exact text.'
                 : promptDraft.trim()
-                  ? 'Regenerate will use this exact text again.'
-                  : 'The prompt is empty. Regenerate will ask Nebulaa for a new concept.'}
+                  ? 'Make again uses this exact text again.'
+                  : 'The prompt is empty. Make again asks Nebulaa for a new idea.'}
             </p>
           </div>
 
@@ -756,35 +725,20 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
             />
           )}
 
-          {/* Actions — bottom right */}
-          <div className="mt-auto flex items-center justify-end gap-3">
-            <button
-              onClick={handleRedo}
-              disabled={busy}
-              className="flex items-center gap-2 h-11 px-5 rounded-lg border border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)] text-[13.5px] font-medium disabled:opacity-40"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Regenerate
-            </button>
-            <button
-              onClick={() => setEditOpen((v) => !v)}
-              className={`flex items-center gap-2 h-11 px-5 rounded-lg border text-[13.5px] font-medium ${
-                editOpen
-                  ? 'border-[rgb(var(--gv-accent-rgb)/0.50)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
-                  : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)] hover:bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)]'
-              }`}
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              Edit
-            </button>
-            <button
-              onClick={handleApprove}
-              disabled={busy}
-              className="flex items-center gap-2 h-11 px-5 rounded-lg bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[13.5px] font-semibold shadow-[0_8px_28px_rgba(245,166,35,0.28)] disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" strokeWidth={3} />}
-              Approve and schedule
-            </button>
+          {/* The shared post actions: Approve first, then the rest in the fixed order. */}
+          <div className="mt-auto">
+            <PostActions
+              key={current?._id}
+              draft={current}
+              label={current?.title || 'this post'}
+              makeAgainQuarks={makeAgainQuarksFor(current)}
+              makeAgainPrompt={promptDraft}
+              onEdit={() => setEditOpen((v) => !v)}
+              archiveVia={current?.contentCalendarId && current?.calendarDay ? 'reject' : 'archive'}
+              onChanged={actionDone(current)}
+              onMessage={onNotice}
+              className="nb-approve-actions"
+            />
           </div>
         </div>
       </div>
