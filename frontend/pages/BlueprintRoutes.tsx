@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import PageHeader from '../components/PageHeader';
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { GravityLabel } from '../components/gravity';
 import BlueprintStart from './BlueprintStart';
 import BlueprintView from './BlueprintView';
 import { apiService } from '../services/api';
@@ -33,11 +33,8 @@ const BlueprintList: React.FC = () => {
     return () => { live = false; };
   }, []);
   return (
-    <div className="max-w-[720px] w-full mx-auto px-4 sm:px-6 py-8 space-y-5">
-      <div>
-        <GravityLabel gold className="mb-2">Brand Growth Blueprint</GravityLabel>
-        <h1 className="text-[26px] font-semibold text-[var(--gv-text-primary)]">{L.listTitle}</h1>
-      </div>
+    <div className="max-w-[720px] w-full mx-auto px-4 sm:px-6 pb-8 space-y-5">
+      <PageHeader eyebrow="Brand Growth Blueprint" title={L.listTitle} />
       {items && items.length === 0 && <p className="text-[14px] text-[var(--gv-text-secondary)]">{L.listEmpty}</p>}
       <ul className="space-y-2">
         {(items || []).map((b) => (

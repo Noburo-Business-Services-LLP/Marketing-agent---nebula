@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import PageHeader from '../components/PageHeader';
 import { 
   Plus, Search, Edit, Trash2, Box, Package, 
   Filter, Download, ChevronRight, Loader2, 
@@ -10,7 +11,6 @@ import {
 import { inventoryAPI } from '../services/api';
 import { Product } from '../types';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
-import { GravityHero, GravityEmphasis } from '../components/gravity';
 import { useConfirm } from '../context/ConfirmContext';
 
 const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
@@ -366,11 +366,11 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
             </p>
           </div>
         ) : (
-          <GravityHero
-            align="left"
+          <PageHeader
             eyebrow="Products and services"
-            headline={<>Everything you <GravityEmphasis>offer</GravityEmphasis></>}
-            subcopy="Your products and services, with images and details Nebulaa draws on when it creates campaigns, images and videos."
+            title="Everything you"
+            emphasis="offer"
+            description="Your products and services, with images and details Nebulaa draws on when it creates campaigns, images and videos."
             className="!mb-0"
           />
         )}

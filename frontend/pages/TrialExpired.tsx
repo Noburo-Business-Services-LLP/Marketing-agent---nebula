@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import PageHeader from '../components/PageHeader';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, Check, Loader2, Shield, Plus, AlertCircle } from 'lucide-react';
 import { apiService, PlansResponse } from '../services/api';
@@ -207,11 +208,9 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ insideClient }) => {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10 pb-10">
-      <header>
-        <h1 className="text-[28px] font-semibold leading-tight" style={INK}>Plans</h1>
-        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed" style={QUIET}>{PLANS_INTRO}</p>
-        <p className="mt-3 text-[15px] font-medium leading-relaxed" style={INK} data-testid="current-plan-line">{planLine}</p>
-      </header>
+      <PageHeader eyebrow="Billing" title="Plans" description={PLANS_INTRO}>
+        <p className="mt-3 text-[14px] font-medium leading-relaxed" style={INK} data-testid="current-plan-line">{planLine}</p>
+      </PageHeader>
 
       {notice && <p role="status" className="flex items-start gap-2 rounded-xl border border-[var(--gv-border-default)] px-4 py-3 text-[14px]" style={{ background: 'var(--gv-mint)', color: 'var(--gv-text-primary)' }}><CheckCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{notice}</p>}
       {error && <p role="alert" className="flex items-start gap-2 rounded-xl border border-[var(--gv-coral)] px-4 py-3 text-[14px]" style={{ background: 'var(--gv-peach)', color: 'var(--gv-text-primary)' }}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{error}</p>}

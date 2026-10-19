@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import PageHeader from '../components/PageHeader';
 import { Link, useParams } from 'react-router-dom';
 import { Check, Loader2 } from 'lucide-react';
-import { GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
+import { GravityPanel, GravityButton } from '../components/gravity';
 import TagChip from '../components/blueprint/TagChip';
 import BlueprintDocument from '../components/blueprint/BlueprintDocument';
 import DesignedEdition from '../components/blueprint/DesignedEdition';
@@ -188,12 +189,8 @@ const BlueprintView: React.FC<{ user?: User | null }> = ({ user }) => {
 
   const ended = view.status === 'stopped' || view.status === 'failed';
   return (
-    <div className={`${view.status === 'completed' ? 'max-w-[858px]' : 'max-w-[720px]'} w-full mx-auto px-4 sm:px-6 py-8 space-y-6`}>
-      <div className="bp-noprint">
-        <GravityLabel gold className="mb-2">{view.businessName || 'Brand Growth Blueprint'}</GravityLabel>
-        <h1 className="text-[24px] sm:text-[30px] font-semibold leading-tight text-[var(--gv-text-primary)]">{statusHeading(view)}</h1>
-        <p role="status" className="mt-2 text-[14.5px] leading-relaxed text-[var(--gv-text-secondary)]">{progressText(view)}</p>
-      </div>
+    <div className={`${view.status === 'completed' ? 'max-w-[858px]' : 'max-w-[720px]'} w-full mx-auto px-4 sm:px-6 pb-8 space-y-6`}>
+      <PageHeader className="bp-noprint" eyebrow={view.businessName || 'Brand Growth Blueprint'} title={statusHeading(view)} description={progressText(view)} descriptionLive />
 
       {!ended && <Stepper view={view} />}
       {loadError && <p role="alert" className="text-[13.5px] text-[var(--gv-coral-text)]">{C.loadError}</p>}

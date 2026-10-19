@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import PageHeader from '../components/PageHeader';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { SocialConnection } from '../types';
 import { Loader2, RefreshCw, Check, X, Instagram, Facebook, Linkedin, Youtube, Video, AlertCircle, ShieldCheck, MessageCircle, Pin, ExternalLink, Inbox, Store, Lock, Bell, Sparkles, Tag, Activity, KeyRound, RadioTower, ArrowRight, CheckCircle2, Clock3 } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import {
-  GravityHero,
-  GravityEmphasis,
   GravityLabel,
   GravityButton,
 } from '../components/gravity';
@@ -588,13 +587,13 @@ const ConnectSocials: React.FC = () => {
         </div>
       )}
 
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
-        <GravityHero
-          align="left"
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-end">
+        <PageHeader
           eyebrow="Connected accounts"
-          headline={<>Connect your <GravityEmphasis>social accounts</GravityEmphasis></>}
-          subcopy="Connect your social media accounts securely so that Nebulaa can publish posts for you and report how they perform."
-          className="!mb-0"
+          title="Connect your"
+          emphasis="social accounts"
+          description="Connect your social media accounts securely so that Nebulaa can publish posts for you and report how they perform."
+          className="!mb-0 min-w-0 flex-1"
         />
         <div className="flex items-center gap-3 flex-shrink-0">
           <GravityButton variant="ghost" onClick={() => loadSocials()} disabled={loading}>

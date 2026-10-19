@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import PageHeader from '../components/PageHeader';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, X as XIcon } from 'lucide-react';
-import { GravityPanel, GravityLabel, GravityButton, GravityFileInput } from '../components/gravity';
+import { GravityPanel, GravityButton, GravityFileInput } from '../components/gravity';
 import UpgradePrompt from '../components/UpgradePrompt';
 import { apiService, brandAssetsAPI } from '../services/api';
 import { upgradeInfoOf } from '../utils/plans';
@@ -116,12 +117,8 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
   };
 
   return (
-    <form onSubmit={submit} noValidate className="max-w-[720px] w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <GravityLabel gold className="mb-2">Brand Growth Blueprint</GravityLabel>
-        <h1 className="text-[26px] sm:text-[32px] font-semibold leading-tight text-[var(--gv-text-primary)]">{C.title}</h1>
-        <p className="mt-2 text-[14.5px] leading-relaxed text-[var(--gv-text-secondary)]">{C.intro}</p>
-      </div>
+    <form onSubmit={submit} noValidate className="max-w-[720px] w-full mx-auto px-4 sm:px-6 pb-8 space-y-6">
+      <PageHeader eyebrow="Brand Growth Blueprint" title={C.title} description={C.intro} />
 
       <BlueprintFormTiles form={form} onGo={goTo} />
 

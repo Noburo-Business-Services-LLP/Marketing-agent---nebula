@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import PageHeader from '../components/PageHeader';
 import { Link, Navigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Check, Download, Loader2, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import { apiService } from '../services/api';
@@ -72,7 +73,7 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
     return (
       <div className="mx-auto max-w-2xl">
         <div className={CARD}>
-          <h1 className="text-[20px] font-semibold text-[var(--gv-text-primary)]">Clients are managed from your agency account</h1>
+          <h1 className="font-serif-display text-[26px] leading-[1.15] text-[var(--gv-text-primary)]">Clients are managed from your agency account</h1>
           <p className="mt-1 text-[14px] text-[var(--gv-text-secondary)]">To add, rename or remove clients, go back to your clients first.</p>
           <button type="button" className={`${BTN_MAIN} mt-3`} onClick={() => { const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}>Back to my clients</button>
         </div>
@@ -114,20 +115,18 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[24px] font-semibold tracking-[-0.01em] text-[var(--gv-text-primary)]">Clients</h1>
-          <p className="mt-1 text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">
-            Each client has its own brand details, calendar, library and connected accounts. {info ? includedText(info.includedClients, slotInr) : ''}
-          </p>
-        </div>
-        {data && !inactive && (
-          <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        eyebrow="Agency"
+        title="Your"
+        emphasis="clients"
+        description={<>Each client has its own brand details, calendar, library and connected accounts. {info ? includedText(info.includedClients, slotInr) : ''}</>}
+        actions={data && !inactive ? (
+          <>
             <span className="rounded-full bg-[var(--gv-accent-fill)] px-3 py-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)]" aria-label={`Clients in use: ${limitLabel(data.used, data.limit)}`}>{limitLabel(data.used, data.limit)}</span>
             <button type="button" className={BTN_MAIN} onClick={() => { setNotice(''); setDialog({ kind: 'add' }); }}><Plus className="h-4 w-4" /> Add a client</button>
-          </div>
-        )}
-      </div>
+          </>
+        ) : undefined}
+      />
 
       {data && inactive && (
         <div className={`${CARD} bg-[var(--gv-accent-fill)]`} role="status">

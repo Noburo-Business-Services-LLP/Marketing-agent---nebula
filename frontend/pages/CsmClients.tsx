@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import PageHeader from '../components/PageHeader';
 import { Loader2, Search, ArrowRight, Users } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
@@ -52,10 +53,7 @@ const CsmClients: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
-      <div>
-        <h1 className={`text-2xl font-semibold ${theme.text}`}>My clients</h1>
-        <p className={`text-sm mt-1 ${theme.textSecondary}`}>Open a client to work in their account. You can return to this list at any time from the banner at the top.</p>
-      </div>
+      <PageHeader eyebrow="Customer success" title="My" emphasis="clients" description="Open a client to work in their account. You can return to this list at any time from the banner at the top." />
       {error && <p className="text-sm text-red-600">{error}</p>}
       {clients.length === 0 ? (
         <div className={`rounded-2xl border p-8 text-center ${theme.bgCard} border-slate-200`}>

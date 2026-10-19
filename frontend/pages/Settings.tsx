@@ -1,6 +1,7 @@
 import AccountPrivacy from '../components/AccountPrivacy';
 import { equivalentText } from '../utils/plans';
 import React, { useState, useEffect } from 'react';
+import PageHeader from '../components/PageHeader';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Save, AlertCircle, Check, Loader2, Eye, EyeOff, Zap, RefreshCw, CreditCard, Download, ExternalLink } from 'lucide-react';
 import { User, BillingData, BusinessProfile } from '../types';
@@ -17,8 +18,6 @@ import BusinessProfileFields from '../components/BusinessProfileFields';
 import { cleanSelection } from '../utils/languages';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import {
-  GravityHero,
-  GravityEmphasis,
 } from '../components/gravity';
 
 interface SettingsProps {
@@ -297,11 +296,11 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <GravityHero
-        align="left"
+      <PageHeader
         eyebrow="Settings"
-        headline={<>Manage your <GravityEmphasis>account</GravityEmphasis></>}
-        subcopy={insideClient ? "Manage this client's profile and business details." : "Manage your profile, business details, notifications, security and billing in one place."}
+        title="Manage your"
+        emphasis="account"
+        description={insideClient ? "Manage this client's profile and business details." : "Manage your profile, business details, notifications, security and billing in one place."}
       />
 
       {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import PageHeader from '../components/PageHeader';
 import {
   AlertCircle,
   BrainCircuit,
@@ -30,8 +31,6 @@ import EnvironmentPanel from './EnvironmentAssets';
 import FramesManager from '../components/FramesManager';
 import BrandGlance from '../components/brand/BrandGlance';
 import {
-  GravityHero,
-  GravityEmphasis,
   GravityLabel,
   GravityButton,
   GravityFileInput,
@@ -661,21 +660,21 @@ const BrandAssets: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="min-h-screen pb-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-          <GravityHero
-            align="left"
-            eyebrow="Brand assets"
-            headline={<>Set up your <GravityEmphasis>brand identity</GravityEmphasis></>}
-            subcopy="Save your brand identity once, and Nebulaa applies it automatically to every campaign."
-            className="!mb-0"
-          />
-          <GravityButton variant="ghost" onClick={() => loadData(true)} disabled={refreshing} className="flex-shrink-0">
-            {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 text-[#F5A623]" />}
-            Refresh
-          </GravityButton>
-        </div>
+        <PageHeader
+          eyebrow="Brand assets"
+          title="Set up your"
+          emphasis="brand identity"
+          description="Save your brand identity once, and Nebulaa applies it automatically to every campaign."
+          className="!mb-0"
+          actions={(
+            <GravityButton variant="ghost" onClick={() => loadData(true)} disabled={refreshing} className="flex-shrink-0">
+              {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 text-[#F5A623]" />}
+              Refresh
+            </GravityButton>
+          )}
+        />
 
         {error && (
           <div className="px-5 py-3.5 rounded-xl border border-red-500/30 bg-red-500/[0.08] text-[13px] text-red-200/90 flex items-center gap-3">
