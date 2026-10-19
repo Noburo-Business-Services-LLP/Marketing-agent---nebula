@@ -241,6 +241,63 @@
     };
   };
   var drafts = [draft(0, 'draft', 'post', IMG1), draft(1, 'draft', 'calendar', IMG2), draft(2, 'scheduled', 'campaign', IMG3), draft(3, 'published', 'post', IMG1)];
+  // Navigation phase 2: who made each post (only automation posts need approval), plus an approved, an archived and a
+  // binned one, so the Library views, the counts and Review and approve have something to show.
+  drafts[0].origin = 'manual'; drafts[2].origin = 'manual'; drafts[3].origin = 'manual';
+  drafts[1].origin = 'automation'; drafts[1].contentCalendarId = 'audit-calendar-1'; drafts[1].calendarDay = 3; drafts[1].plannedDate = iso(3);
+  drafts.push(Object.assign(draft(4, 'completed', 'post', IMG3), { origin: 'automation', calendarDay: 5, plannedDate: iso(5), title: 'Festive hamper preview' }));
+  drafts.push(Object.assign(draft(5, 'approved', 'post', IMG2), { origin: 'automation', calendarDay: 2, title: 'Filter coffee and cake', scheduledDate: null }));
+  drafts.push(Object.assign(draft(6, 'archived', 'post', IMG1), { origin: 'manual', title: 'Old monsoon offer' }));
+  drafts.push(Object.assign(draft(7, 'binned', 'post', IMG3), { origin: 'manual', title: 'Duplicate croissant post', binnedAt: iso(-3), binnedFrom: 'draft' }));
+  var draftById = function (c) { var id = decodeURIComponent(c.path.split('/')[2] || ''); for (var i = 0; i < drafts.length; i++) if (drafts[i]._id === id) return drafts[i]; return null; };
+  var isAutomation = function (d) { return d.origin === 'automation' || (!d.origin && (d.contentCalendarId || typeof d.calendarDay === 'number')); };
+  var draftCounts = function () {
+    var n = function (f) { return drafts.filter(f).length; };
+    var waiting = ['pending', 'draft', 'ready', 'completed', 'processing', 'failed'];
+    return {
+      needsApproval: n(function (d) { return isAutomation(d) && waiting.indexOf(d.status) >= 0 && d.sourceType !== 'reel'; }),
+      drafts: n(function (d) { return !isAutomation(d) && waiting.indexOf(d.status) >= 0; }),
+      approved: n(function (d) { return d.status === 'approved'; }), scheduled: n(function (d) { return d.status === 'scheduled'; }),
+      posted: n(function (d) { return d.status === 'published'; }), archived: n(function (d) { return d.status === 'archived'; }),
+      binned: n(function (d) { return d.status === 'binned'; })
+    };
+  };
+  // The Phase 1 routes, answered like backend/services/postLifecycle.js (state kept for the tab until a reload).
+  var draftAction = function (name) {
+    return function (c) {
+      var d = draftById(c);
+      if (!d) return { __status: 404, body: { success: false, message: 'Draft not found' } };
+      var s = d.status;
+      if (name === 'approve') {
+        if (s === 'binned') return { __status: 409, body: { success: false, message: 'Restore this post from the Bin first.' } };
+        if (s === 'published') return { __status: 409, body: { success: false, message: 'This post has already gone out.' } };
+        var canSchedule = MANAGED || AGENCY;
+        if (d.plannedDate && new Date(d.plannedDate).getTime() > Date.now() + 300000 && canSchedule) { d.status = 'scheduled'; d.scheduledDate = d.plannedDate; return ok({ outcome: 'scheduled', draft: d, message: 'Approved and scheduled for its planned date.' }); }
+        d.status = 'approved'; return ok({ outcome: 'approved', draft: d, message: 'Approved. You can schedule it, post it now or download it.' });
+      }
+      if (name === 'unapprove') { if (s !== 'approved') return { __status: 409, body: { success: false, message: 'This post is not approved.' } }; d.status = 'draft'; return ok({ message: 'Moved back to Needs approval.' }); }
+      if (name === 'unschedule') { if (s !== 'scheduled') return { __status: 409, body: { success: false, message: 'This post is not scheduled.' } }; d.status = 'approved'; d.plannedDate = d.scheduledDate; d.scheduledDate = null; return ok({ message: 'Unscheduled. The post is approved and waits for a new time.' }); }
+      if (name === 'archive') { if (s === 'scheduled') return { __status: 409, body: { success: false, message: 'Unschedule this post first.' } }; d.archivedFrom = s; d.status = 'archived'; return ok({ message: 'Archived. You can restore it at any time.', draft: d }); }
+      if (name === 'bin') {
+        if (s === 'published') return { __status: 409, body: { success: false, message: 'Posted items cannot go to the Bin. Archive them instead.' } };
+        if (s === 'scheduled') return { __status: 409, body: { success: false, message: 'Unschedule this post first.' } };
+        d.binnedFrom = s; d.binnedAt = new Date().toISOString(); d.status = 'binned'; return ok({ message: 'Moved to the Bin. You can restore it for 14 days.' });
+      }
+      if (name === 'restore') {
+        if (s === 'binned') { d.status = d.binnedFrom === 'scheduled' ? 'approved' : (d.binnedFrom || 'draft'); d.binnedAt = null; return ok({ message: 'Restored.', restoredTo: d.status }); }
+        if (s === 'archived') { d.status = d.archivedFrom && d.archivedFrom !== 'archived' ? (d.archivedFrom === 'scheduled' ? 'approved' : d.archivedFrom) : 'draft'; return ok({ message: 'Restored.', restoredTo: d.status }); }
+        return { __status: 409, body: { success: false, message: 'Only items in the Bin or in Archived can be restored.' } };
+      }
+      return ok({});
+    };
+  };
+  var sendGate = function (c, then) {
+    var d = draftById(c);
+    if (!d) return { __status: 404, body: { success: false, message: 'Draft not found' } };
+    if (!(MANAGED || AGENCY)) return { __status: 403, body: { success: false, upgradeRequired: true, reason: TIERQ === 'starter' || TIERQ === 'professional' ? 'addon' : 'upgrade', feature: 'publish', message: 'This needs an add-on. Please add it to your plan or upgrade.' } };
+    if (isAutomation(d) && ['approved', 'scheduled', 'published'].indexOf(d.status) < 0) return { __status: 409, body: { success: false, message: 'Approve this post first.' } };
+    return then(d);
+  };
 
   var campaign = function (i, status) {
     return {
@@ -764,7 +821,23 @@
       return ok({ plan: { tier: tier, addons: tier === 'agency' ? ['bundle'] : [] }, subscription: (tier === 'free' || tier === 'managed') ? { plan: 'free', status: 'active' } : { plan: tier, status: 'active', cancelAtPeriodEnd: false, endsAt: iso(21) }, credits: { balance: ASTATE === 'pool-empty' ? 0 : tier === 'free' ? 0 : credits.balance }, payments: [] });
     }],
     ['GET', /^\/payment\/status/, ok({ subscription: user.subscription, credits: credits, payments: [] })],
-    ['GET', /^\/drafts\/?$/, ok({ drafts: drafts, total: drafts.length })],
+    ['GET', /^\/drafts\/counts$/, function () { return ok({ counts: draftCounts() }); }],
+    ['GET', /^\/drafts\/?$/, function (c) {
+      var st = c.url.searchParams.get('status');
+      var list = st === 'binned' ? drafts.filter(function (d) { return d.status === 'binned'; }) : drafts.filter(function (d) { return d.status !== 'binned'; });
+      return ok({ drafts: list, total: list.length });
+    }],
+    ['POST', /^\/drafts\/[^/]+\/approve$/, draftAction('approve')],
+    ['POST', /^\/drafts\/[^/]+\/unapprove$/, draftAction('unapprove')],
+    ['POST', /^\/drafts\/[^/]+\/unschedule$/, draftAction('unschedule')],
+    ['POST', /^\/drafts\/[^/]+\/archive$/, draftAction('archive')],
+    ['POST', /^\/drafts\/[^/]+\/reject$/, draftAction('archive')],
+    ['POST', /^\/drafts\/[^/]+\/restore$/, draftAction('restore')],
+    ['DELETE', /^\/drafts\/[^/]+$/, draftAction('bin')],
+    ['POST', /^\/drafts\/[^/]+\/publish$/, function (c) { return sendGate(c, function (d) { d.status = 'published'; return ok({ draft: d }); }); }],
+    ['POST', /^\/drafts\/[^/]+\/schedule$/, function (c) { return sendGate(c, function (d) { var b = {}; try { b = JSON.parse(c.body || '{}'); } catch (e) { /* ignore */ } d.status = 'scheduled'; d.scheduledDate = b.scheduledDate || iso(1); return ok({ draft: d }); }); }],
+    ['PUT', /^\/drafts\/[^/]+$/, function (c) { var d = draftById(c); return d ? ok({ draft: d }) : { __status: 404, body: { success: false, message: 'Draft not found' } }; }],
+    ['POST', /^\/drafts\/[^/]+\/retry-image$/, function (c) { var d = draftById(c); return d ? ok({ draft: d }) : { __status: 404, body: { success: false, message: 'Draft not found' } }; }],
     ['POST', /^\/drafts\/[^/]+\/localize$/, ok({ results: [{ language: 'kannada', ok: true, draftId: 'audit-draft-v1' }, { language: 'telugu', ok: false, message: 'We could not write the Telugu version this time. Please try again.' }] })],
     ['GET', /^\/drafts\/[^/]+$/, function (c) { return ok({ draft: drafts[0] }); }],
     ['GET', /^\/campaigns\/?$/, ok({ campaigns: campaigns, counts: { all: 3, draft: 1, scheduled: 1, posted: 1 } })],
