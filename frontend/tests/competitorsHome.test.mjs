@@ -88,7 +88,7 @@ test('Home picks at most three tiles, tracked ones with a best post first', () =
 test('quiet notes: an add-on note links to plans except inside a client workspace; pending never promises a date', () => {
   assert.deepEqual(boardNote('locked', { clientWorkspace: false }), { text: 'Following your competitors is an add-on.', link: { to: '/trial-expired', text: 'See plans' } });
   assert.deepEqual(boardNote('locked', { clientWorkspace: true }), { text: 'Following your competitors is an add-on.', link: null });
-  assert.equal(boardNote('none', {}).link.to, '/competitors');
+  assert.equal(boardNote('none', {}).link.to, '/analytics?tab=competitors');
   const pending = boardNote('pending', {});
   assert.match(pending.text, /have not been checked yet/);
   assert.ok(!/\b(today|tomorrow|soon|monday|hours?)\b/i.test(pending.text));

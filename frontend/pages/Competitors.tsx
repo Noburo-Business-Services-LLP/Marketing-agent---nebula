@@ -33,7 +33,8 @@ interface Competitor {
   competitorType?: 'local' | 'regional' | 'national' | 'global' | 'startup' | 'emerging' | 'direct' | 'indirect' | 'market_leader' | 'unknown';
 }
 
-const Competitors: React.FC = () => {
+/** `embedded`: the Competitors tab of Insights, whose page header and tab bar sit above it. */
+const Competitors: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { isDarkMode } = useTheme();
   const theme = getThemeClasses(isDarkMode);
   const [posts, setPosts] = useState<CompetitorPost[]>([]);
@@ -354,11 +355,13 @@ const Competitors: React.FC = () => {
         </div>
       )}
 
-      <PageHeader
-        eyebrow="Competitors"
-        title={<>Who else is in the <PageEmphasis>room</PageEmphasis>?</>}
-        description="Their public posts, checked once a week: what is working for them and what you can make from it."
-      />
+      {!embedded && (
+        <PageHeader
+          eyebrow="Competitors"
+          title={<>Who else is in the <PageEmphasis>room</PageEmphasis>?</>}
+          description="Their public posts, checked once a week: what is working for them and what you can make from it."
+        />
+      )}
 
       <CompetitorBoard onLocked={onInsightsLocked} />
 

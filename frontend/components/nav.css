@@ -1,0 +1,16 @@
+/* Left menu: the sub-items of the open category and the Library count (navigation phases 3 to 5). */
+.nb-nav-sub { list-style: none; margin: 2px 0 6px; padding: 0 0 0 26px; position: relative; }
+.nb-nav-sub::before { content: ''; position: absolute; left: 23px; top: 4px; bottom: 4px; width: 1px; background: var(--gv-border-subtle); }
+.nb-nav-subitem {
+  position: relative; display: flex; align-items: center; min-height: 34px; padding: 0 10px 0 16px; border-radius: 8px;
+  font-size: 13px; font-weight: 500; color: var(--gv-text-tertiary); text-decoration: none; transition: background-color .15s, color .15s;
+}
+.nb-nav-subitem:hover { color: var(--gv-text-primary); background: var(--gv-surface-1); }
+.nb-nav-subitem:focus-visible { outline: none; box-shadow: 0 0 0 2px #7A4A00; }
+.nb-nav-subitem[data-on="true"] { color: var(--gv-text-primary); font-weight: 600; background: #FFF1D2; }
+.nb-nav-subitem[data-on="true"]::before { content: ''; position: absolute; left: -4px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: #F5A623; }
+.nb-nav-badge {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; background: #F5A623; color: #1A1208;
+}
+@media (pointer: coarse) { .nb-nav-subitem { min-height: 44px; } }

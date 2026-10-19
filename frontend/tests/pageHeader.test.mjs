@@ -89,7 +89,15 @@ test('every menu page uses the shared PageHeader and no ad-hoc big title', () =>
 
 test('tabbed pages take their header from App.tsx and draw no page title of their own', () => {
   const app = read('App.tsx');
-  for (const k of ['create', 'upload', 'calendar', 'ideas']) assert.match(app, new RegExp(`header: PAGE_HEADERS\\.${k}`), `tab ${k} has a header`);
+  for (const k of ['create', 'upload']) assert.match(app, new RegExp(`header: PAGE_HEADERS\\.${k}`), `tab ${k} has a header`);
+  // Plan and Insights (navigation phases 3 and 4): one header per tab above the tab bar, the tab bodies draw none.
+  const plan = read('pages/PlanHub.tsx');
+  for (const k of ['plan', 'calendar', 'ideas', 'blueprint']) assert.match(plan, new RegExp(`${k}: <PageHeader eyebrow="Plan"`), `Plan tab ${k}`);
+  assert.match(plan, /header: PLAN_HEADERS\[t\.key\]/);
+  assert.match(plan, /<MyPlan user=\{user\} embedded \/>/);
+  const ins = read('pages/InsightsHub.tsx');
+  for (const k of ['performance', 'competitors', 'learned']) assert.match(ins, new RegExp(`${k}: <PageHeader eyebrow="Insights"`), `Insights tab ${k}`);
+  for (const c of ['GravityInsights', 'Competitors', 'AIMemory']) assert.match(ins, new RegExp(`<${c} embedded />`), c);
   assert.match(read('components/PageTabs.tsx'), /\{current\.header\}/);
   for (const f of IN_TABS) {
     const src = read(f);

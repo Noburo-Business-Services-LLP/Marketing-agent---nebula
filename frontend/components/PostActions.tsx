@@ -116,6 +116,8 @@ const PostActions: React.FC<PostActionsProps> = ({
     const message = (res && typeof res.message === 'string' && res.message) || DONE_WORDS[key];
     say(message, 'ok');
     onChanged?.({ key, message, moved: MOVES.includes(key), draft: res?.draft });
+    // The menu's Library count listens for this (components/Layout.tsx).
+    try { window.dispatchEvent(new CustomEvent('nebulaa-posts-changed')); } catch { /* not in a browser */ }
   };
 
   const fail = (e: any) => {

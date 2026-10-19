@@ -1,0 +1,14 @@
+/* The tab bar of the pages made of tabs (Create, Plan, Insights): one pill row from 640 px; on a phone a grid of
+   equal pills, two a row, an odd last one across the whole row, so nothing scrolls sideways (symmetry rule). */
+.nb-tabs { margin-bottom: 24px; }
+.nb-tabs-list { display: inline-flex; align-items: center; gap: 4px; padding: 4px; border-radius: 999px; background: var(--gv-surface-1); border: 1px solid var(--gv-border-subtle); }
+.nb-tabs-tab { white-space: nowrap; height: 36px; padding: 0 20px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--gv-text-tertiary); transition: background-color .15s, color .15s; }
+.nb-tabs-tab:hover { color: var(--gv-text-secondary); }
+.nb-tabs-tab[aria-selected="true"] { background: var(--gv-surface-3); color: var(--gv-text-primary); }
+.nb-tabs-tab:focus-visible { outline: none; box-shadow: 0 0 0 2px #7A4A00; }
+@media (max-width: 639px) {
+  .nb-tabs { margin-bottom: 20px; }
+  .nb-tabs-list { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-radius: 18px; }
+  .nb-tabs-tab { padding: 0 10px; min-height: 40px; border-radius: 14px; white-space: normal; line-height: 1.2; }
+  .nb-tabs-tab:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}

@@ -279,7 +279,7 @@ export const TodayPlan: React.FC<{ summary: HomeSummary; failed: boolean }> = ({
       {failed ? (
         <p className="nb-home-quiet" role="status">We could not load today's posts just now. Please try again in a moment.</p>
       ) : rows.length === 0 ? (
-        <p className="nb-home-quiet">Nothing is scheduled for today. <Link to="/content-calendar" className="nb-home-link">Open the calendar</Link></p>
+        <p className="nb-home-quiet">Nothing is scheduled for today. <Link to="/plan?tab=calendar" className="nb-home-link">Open the calendar</Link></p>
       ) : (
         <ul className="nb-home-today">
           {rows.map((r) => {

@@ -29,7 +29,7 @@ test('every brand tile gets its status from stored rows', () => {
   assert.equal(t.products.state, 'partly');
   assert.equal(t.products.line, '1 without a photo');
   assert.equal(t.memory.status, '5 learned');
-  assert.equal(t.memory.to, '/ai-memory');
+  assert.equal(t.memory.to, '/analytics?tab=learned');
   assert.deepEqual(brandProgress(brandTiles(full)), { done: 6, total: 6, unknown: 0, text: '6 of 6 set up. Open a tile to add or change it.' });
 });
 

@@ -4,13 +4,13 @@ import { TOUR_STEPS, visibleSteps, shouldAutoStart, reduce } from '../utils/tour
 
 const user = (o = {}) => ({ onboardingCompleted: true, staffRole: null, isCsm: false, tour: null, ...o });
 
-test('six steps, in order, with plain wording', () => {
-  assert.deepEqual(TOUR_STEPS.map((s) => s.id), ['welcome', 'create', 'review', 'calendar', 'plan', 'help']);
+test('five steps, in order, with plain wording', () => {
+  assert.deepEqual(TOUR_STEPS.map((s) => s.id), ['welcome', 'create', 'library', 'plan', 'help']);
   for (const s of TOUR_STEPS) assert.doesNotMatch(`${s.title} ${s.body}`, /credit|trial|7 days|quark|agent/i, s.id);
 });
 test('a step whose target is missing is skipped', () => {
-  const has = (sel) => !sel.includes('nav-calendar');
-  assert.deepEqual(visibleSteps(TOUR_STEPS, has).map((s) => s.id), ['welcome', 'create', 'review', 'plan', 'help']);
+  const has = (sel) => !sel.includes('nav-library');
+  assert.deepEqual(visibleSteps(TOUR_STEPS, has).map((s) => s.id), ['welcome', 'create', 'plan', 'help']);
   assert.deepEqual(visibleSteps(TOUR_STEPS, () => false), []);
 });
 test('the tour starts by itself once, for ordinary customers on the home screen only', () => {

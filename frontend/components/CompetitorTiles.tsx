@@ -321,7 +321,7 @@ export const HomeCompetitors: React.FC<{ enabled: boolean; language?: string | n
       <section className="nb-ct-card" aria-labelledby="ct-home-title" aria-busy={state === 'loading' ? 'true' : undefined}>
         <div className="nb-ct-sechead">
           <h2 id="ct-home-title">Your competitors</h2>
-          {state === 'ready' && <Link to="/competitors" className="nb-ct-link">{total > cards.length ? `See all ${total}` : 'Open Competitors'}<ArrowRight aria-hidden="true" /></Link>}
+          {state === 'ready' && <Link to="/analytics?tab=competitors" className="nb-ct-link">{total > cards.length ? `See all ${total}` : 'Open Competitors'}<ArrowRight aria-hidden="true" /></Link>}
         </div>
         {state === 'loading' && <TileSkeleton count={3} />}
         {note && (

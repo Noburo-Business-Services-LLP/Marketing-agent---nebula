@@ -16,7 +16,7 @@ import { heroStats, titleCard } from '../utils/planVisuals';
 import '../components/plan/plan.css';
 
 /** The one line under the page title. */
-const PLAN_LINE = 'The plan Nebulaa made from your business details: what to post, for whom, and how it is going.';
+export const PLAN_LINE = 'The plan Nebulaa made from your business details: what to post, for whom, and how it is going.';
 
 const BTN_MAIN = 'nb-plan-btn is-main';
 const BTN = 'nb-plan-btn';
@@ -30,7 +30,8 @@ const StateCard: React.FC<{ tone: string; art?: React.ReactNode; role?: string; 
   </div>
 );
 
-const MyPlan: React.FC<{ user?: User | null }> = ({ user }) => {
+/** `embedded`: drawn as the My plan tab of Plan, whose page header and tab bar sit above it. */
+const MyPlan: React.FC<{ user?: User | null; embedded?: boolean }> = ({ user, embedded = false }) => {
   const navigate = useNavigate();
   const [view, setView] = useState<PlanView | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -76,7 +77,7 @@ const MyPlan: React.FC<{ user?: User | null }> = ({ user }) => {
   if (!view) {
     return (
       <div className="nb-plan">
-        <PageHeader eyebrow="My plan" title="Your marketing" emphasis="plan" description={PLAN_LINE} />
+        {!embedded && <PageHeader eyebrow="My plan" title="Your marketing" emphasis="plan" description={PLAN_LINE} />}
         {loadError
           ? <StateCard tone="coral"><p role="alert" className="nb-plan-state-text">{loadError}</p><button type="button" className={BTN} onClick={load}>Try again</button></StateCard>
           : <div className="nb-plan-loading" role="status" aria-label="Loading your plan"><Loader2 className="nb-plan-spin" aria-hidden /></div>}
@@ -93,7 +94,7 @@ const MyPlan: React.FC<{ user?: User | null }> = ({ user }) => {
 
   return (
     <div className="nb-plan">
-      <PageHeader eyebrow="My plan" title="Your marketing" emphasis="plan" description={PLAN_LINE} />
+      {!embedded && <PageHeader eyebrow="My plan" title="Your marketing" emphasis="plan" description={PLAN_LINE} />}
       <PlanHero
         name={name}
         made={made}
@@ -161,7 +162,7 @@ const MyPlan: React.FC<{ user?: User | null }> = ({ user }) => {
           <div className="nb-plan-state-actions">
             {view.freeBlueprint
               ? <Link to={`/blueprint/${view.freeBlueprint.id}`} className={BTN_MAIN}>Open my Blueprint</Link>
-              : <Link to="/blueprint" className={BTN_MAIN}>Make my free Blueprint</Link>}
+              : <Link to="/blueprint/new" className={BTN_MAIN}>Make my free Blueprint</Link>}
             <Link to="/trial-expired" className={BTN}>See plans</Link>
           </div>
         </StateCard>

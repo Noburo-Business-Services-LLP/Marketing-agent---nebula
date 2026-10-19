@@ -85,7 +85,7 @@ function nextActions(input, options) {
       kind: 'setup', title: 'Connect your accounts', detail: 'You can still make posts without it. Connecting lets them go out for you.', to: '/connect-socials'
     } : null),
     confirm_competitor: () => (needHandle > 0 ? {
-      kind: 'competitors', title: needHandle === 1 ? "Confirm a competitor's handle" : "Confirm your competitors' handles", detail: 'We only look at a page once you have confirmed it.', to: '/competitors', count: needHandle
+      kind: 'competitors', title: needHandle === 1 ? "Confirm a competitor's handle" : "Confirm your competitors' handles", detail: 'We only look at a page once you have confirmed it.', to: '/analytics?tab=competitors', count: needHandle
     } : null),
     add_product_photo: () => (noPhoto > 0 ? {
       kind: 'products', title: noPhoto === 1 ? 'Add a photo to a product' : 'Add photos to your products', detail: `${noun(noPhoto, 'product has', 'products have')} no photo yet.`, to: '/brand-assets?tab=products', count: noPhoto

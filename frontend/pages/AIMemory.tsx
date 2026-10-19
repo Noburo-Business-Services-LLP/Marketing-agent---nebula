@@ -125,7 +125,8 @@ const PatternTile: React.FC<{ group: PatternGroup; span3: number; span2: number;
   );
 };
 
-const AIMemory: React.FC = () => {
+/** `embedded`: the What Nebulaa learned tab of Insights, whose page header and tab bar sit above it. */
+const AIMemory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const [loading, setLoading] = useState(true);
   const [distilling, setDistilling] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -194,7 +195,7 @@ const AIMemory: React.FC = () => {
 
   if (loading && !data) {
     return (
-      <div className="nb-mem-loading" role="status" aria-label="Loading brand memory">
+      <div className="nb-mem-loading" role="status" aria-label="Loading what Nebulaa learned">
         <Loader2 className="nb-mem-spin" aria-hidden />
       </div>
     );
@@ -202,15 +203,17 @@ const AIMemory: React.FC = () => {
 
   return (
     <div className="nb-mem">
+      {!embedded && (
       <PageHeader
-        eyebrow="Brand memory"
+        eyebrow="What Nebulaa learned"
         title="What Nebulaa has"
         emphasis="learned"
         description="Nebulaa keeps a short list of patterns it has learned from how your published posts performed, and uses it when it plans your next posts."
       />
-      <section className="nb-mem-hero nb-mem-in" style={{ ['--i' as any]: 0 }} aria-label="Brand memory at a glance">
+      )}
+      <section className="nb-mem-hero nb-mem-in" style={{ ['--i' as any]: 0 }} aria-label="What Nebulaa learned at a glance">
         <div className="nb-mem-hero-id">
-          <ul className="nb-mem-meta" aria-label="Brand memory in numbers">
+          <ul className="nb-mem-meta" aria-label="What Nebulaa learned in numbers">
             <li data-tone="gold"><Brain aria-hidden />Based on {trackedLabel(performanceCount)}</li>
             <li data-tone="teal"><b>{noteCount}</b>{noteCount === 1 ? 'pattern' : 'patterns'} learned</li>
             {updated && <li><CalendarDays aria-hidden />Last updated {updated}</li>}

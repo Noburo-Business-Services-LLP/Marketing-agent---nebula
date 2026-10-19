@@ -37,6 +37,7 @@
   box-shadow: var(--lift);
 }
 .nb-perf-hero-id { flex: 1 1 auto; min-width: 0; }
+.nb-perf-hero-line { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); max-width: 640px; }
 .nb-perf-lede { margin-top: 6px !important; font-size: 14px; line-height: 1.5; color: var(--ink-2); max-width: 64ch; }
 .nb-perf-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px !important; }
 .nb-perf-meta li { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; background: rgb(255 255 255 / 0.8); border: 1px solid var(--line); color: var(--ink-2); }

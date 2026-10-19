@@ -588,7 +588,7 @@
         { id: 'approve_week', kind: 'week', title: "Make this week's 5 posts", detail: 'Nothing goes out until you approve it.', to: '/dashboard#this-week', count: 5 },
         { id: 'review_drafts', kind: 'drafts', title: 'Approve 4 posts', detail: '4 posts Nebulaa made are waiting for your approval.', to: '/library?view=approve', count: 4 },
         { id: 'reply_messages', kind: 'inbox', title: 'Reply to 6 messages', detail: '6 messages are unread.', to: '/inbox', count: 6 },
-        { id: 'confirm_competitor', kind: 'competitors', title: "Confirm your competitors' handles", detail: 'We only look at a page once you have confirmed it.', to: '/competitors', count: 2 },
+        { id: 'confirm_competitor', kind: 'competitors', title: "Confirm your competitors' handles", detail: 'We only look at a page once you have confirmed it.', to: '/analytics?tab=competitors', count: 2 },
         { id: 'add_product_photo', kind: 'products', title: 'Add a photo to a product', detail: '1 product has no photo yet.', to: '/brand-assets?tab=products', count: 1 }
       ],
       week: { start: ymd(-((now.getDay() + 6) % 7)), end: ymd(7 - ((now.getDay() + 6) % 7)), proposal: 'proposed', topUp: false, posts: { planned: 5, made: 0, published: 3, scheduled: 2 }, counts: { posts: 5, carousels: 1, videos: 1 } },
@@ -808,7 +808,7 @@
     }],
     ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user, actingAgency: user.actingAgency || null, actingCsm: null }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
-    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 23, image_generated: 11, campaign_full: 11, carousel_generated: 8, campaign_text: 4, studio_video: 161, photoshoot_image: 10 }, units: {} })],
+    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 23, blueprint_pdf: 499, image_generated: 11, campaign_full: 11, carousel_generated: 8, campaign_text: 4, studio_video: 161, photoshoot_image: 10 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {
       var price = function (inr) { var gst = Math.round(inr * 18); return { inr: inr, gstPaise: gst, chargePaise: inr * 100 + gst }; };
       var feat = function (posts, videos) { return ['Up to ' + posts + ' posts a month, or', 'up to ' + videos + ' short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time']; };

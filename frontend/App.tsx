@@ -13,40 +13,37 @@ import CreateVideo from './pages/CreateVideo';
 import NeedPlanModal from './components/NeedPlanModal';
 import Dashboard from './pages/Dashboard';
 import GravityHome from './pages/GravityHome';
-import MyPlan from './pages/MyPlan';
+import PlanHub from './pages/PlanHub';
+import InsightsHub from './pages/InsightsHub';
+import OldAddress from './components/OldAddress';
+import { showsCompetitorsEntry } from './utils/navMenu';
 // Developer page for the tile and illustration set; the condition below is false in a production build.
 const ArtShowcase = import.meta.env.DEV ? React.lazy(() => import('./pages/ArtShowcase')) : null;
 // The Photoshoot studio loads only when it is opened, so the rest of the app does not carry it.
 const Photoshoot = React.lazy(() => import('./pages/Photoshoot'));
 import GravityCreate from './pages/GravityCreate';
-import GravityApprove from './pages/GravityApprove';
 import Library from './pages/Library';
 import PageTabs from './components/PageTabs';
 import PageHeader from './components/PageHeader';
 import GravityCalendar from './pages/GravityCalendar';
-import GravityInsights from './pages/GravityInsights';
 import Campaigns from './pages/Campaigns';
 import ContentCalendar from './pages/ContentCalendar';
-import CalendarHome from './pages/CalendarHome';
-import IdeaInbox from './pages/IdeaInbox';
 import SocialInbox from './pages/SocialInbox';
 import CsmClients from './pages/CsmClients';
 import AgencyClients from './pages/AgencyClients';
 import StaffLayout from './pages/staff/StaffLayout';
 import { landingPath, returnHashAfterActing } from './utils/staffHome';
-import { isAgencyUser, isInsideClient } from './utils/agency';
+import { isAgencyUser, isInsideClient, isLapsedAgency } from './utils/agency';
 import { afterOnboardingHash } from './utils/agencyPlan';
 import ReelGenerator from './pages/ReelGenerator';
 import HeroVideo from './pages/HeroVideo';
 import AdCampaigns from './pages/AdCampaigns';
-import Competitors from './pages/Competitors';
 import ConnectSocials from './pages/ConnectSocials';
 import BrandAssets from './pages/BrandAssets';
 import Inventory from './pages/Inventory';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
 import SEOAssistant from './pages/SEOAssistant';
-import AIMemory from './pages/AIMemory';
 import AIHistory from './pages/AIHistory';
 import AIPerformance from './pages/AIPerformance';
 import InfluencerPortal from './pages/InfluencerPortal';
@@ -93,8 +90,6 @@ const LoginRedirect: React.FC = () => {
 const PAGE_HEADERS = {
   create: <PageHeader eyebrow="Create content" title="What would you like to" emphasis="make?" description="Choose what to make, describe it in a few words, and Nebulaa prepares it for your review." />,
   upload: <PageHeader eyebrow="Create content" title="Upload your own" emphasis="photo or video" description="Upload a photo or a video. Nebulaa can write the caption, and you can publish the post now or schedule it for later." />,
-  calendar: <PageHeader eyebrow="Calendar" title="Your month of" emphasis="posts" description="The plan for each month, and every post on the day it is scheduled." />,
-  ideas: <PageHeader eyebrow="Content ideas" title="Save ideas for" emphasis="future posts" description="Add a thought, a link or an ad you liked, or paste a list of ideas. You can turn any idea into a post when you are ready." />,
 };
 
 const VideosEntry: React.FC = () => {
@@ -150,6 +145,10 @@ const App: React.FC = () => {
 
   // A new account with no plan and no Quarks: it can look around and make its free Blueprint, nothing else.
   const needsPlan = !!user && user.plan?.tier === 'free' && (user.credits?.balance ?? 0) <= 0;
+  // The same rules as the menu (components/Layout.tsx): My plan for customers, agency owners and inside a client; Competitors on paid plans.
+  const holdsPass = Boolean(localStorage.getItem('csmReturnToken'));
+  const showsMyPlan = isInsideClient(user) || holdsPass || (!!user && !user.staffRole && !user.isCsm && !isLapsedAgency(user));
+  const showsCompetitors = showsCompetitorsEntry(user, holdsPass);
 
   const trialExpiredRef = useRef(trialExpired);
   trialExpiredRef.current = trialExpired;
@@ -288,30 +287,28 @@ const App: React.FC = () => {
                 <Layout user={user} onLogout={handleLogout} needsPlan={needsPlan} onTourSaved={(tour) => setUser((u) => (u ? { ...u, tour: { ...(u.tour || {}), ...tour } } : u))}>
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome user={user} />} />
-                    <Route path="/plan" element={<MyPlan user={user} />} />
+                    <Route path="/plan" element={<PlanHub user={user} showsMyPlan={showsMyPlan} />} />
                     {ArtShowcase && <Route path="/art-showcase" element={<React.Suspense fallback={null}><ArtShowcase /></React.Suspense>} />}
                     {/* The plans page sits inside the app shell like every other page. The route name is kept for old links. */}
                     <Route path="/trial-expired" element={<TrialExpired insideClient={isInsideClient(user)} />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
-                    {/* Two tabs on one page: Plan (AI month strategy, the PDF-able
-                        view) and Schedule (real month grid, thumbnails on the day
-                        they're actually scheduled). content-calendar-grid/-classic
-                        kept as direct links to the individual views. */}
-                    <Route path="/content-calendar" element={<PageTabs tabs={[{ key: 'calendar', label: 'Calendar', element: <CalendarHome />, header: PAGE_HEADERS.calendar, frame: 'max-w-[1440px] mx-auto' }, { key: 'ideas', label: 'Content ideas', element: <IdeaInbox />, header: PAGE_HEADERS.ideas, frame: 'max-w-[1100px] mx-auto' }]} />} />
+                    {/* Old addresses (bookmarks, emails, old tour steps): replace redirects to their new place, query kept.
+                        The list and its targets: NAV_REDIRECTS in utils/navMenu.ts, tested in tests/navMenu.test.mjs. */}
+                    <Route path="/content-calendar" element={<OldAddress from="/content-calendar" />} />
                     <Route path="/content-calendar-grid" element={<GravityCalendar />} />
                     <Route path="/content-calendar-classic" element={<ContentCalendar />} />
-                    <Route path="/idea-inbox" element={<Navigate to="/content-calendar?tab=ideas" replace />} />
+                    <Route path="/idea-inbox" element={<OldAddress from="/idea-inbox" />} />
                     <Route path="/campaigns" element={<PageTabs tabs={[{ key: 'create', label: 'Create with Nebulaa', element: <GravityCreate />, header: PAGE_HEADERS.create, frame: 'max-w-[960px] mx-auto' }, { key: 'upload', label: 'Upload and schedule', element: <UploadAndSchedule />, header: PAGE_HEADERS.upload, frame: 'max-w-[900px] mx-auto' }]} />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
-                    <Route path="/drafts" element={<GravityApprove user={user} />} />
-                    <Route path="/library" element={<Library />} />
+                    <Route path="/drafts" element={<OldAddress from="/drafts" />} />
+                    <Route path="/library" element={<Library user={user} />} />
                     <Route path="/photoshoot" element={<React.Suspense fallback={null}><Photoshoot /></React.Suspense>} />
                     <Route path="/reels" element={<VideosEntry />} />
                     <Route path="/reels/studio" element={<ReelGenerator />} />
                     <Route path="/reels/hero" element={<HeroVideo />} />
                     <Route path="/upload" element={<Navigate to="/campaigns?tab=upload" replace />} />
                     <Route path="/ad-campaigns" element={<AdCampaigns />} />
-                    <Route path="/competitors" element={<Competitors />} />
+                    <Route path="/competitors" element={<OldAddress from="/competitors" />} />
                     <Route path="/connect-socials" element={<ConnectSocials />} />
                     <Route path="/inbox" element={<SocialInbox />} />
                     <Route path="/clients" element={<CsmClients />} />
@@ -324,7 +321,7 @@ const App: React.FC = () => {
                     {/* Products & Services now lives inside Brand Assets. The old route is
                         kept so existing links and bookmarks still land somewhere sensible. */}
                     <Route path="/inventory" element={<Navigate to="/brand-assets?tab=products" replace />} />
-                    <Route path="/analytics" element={<GravityInsights />} />
+                    <Route path="/analytics" element={<InsightsHub showsCompetitors={showsCompetitors} />} />
                     <Route path="/analytics-classic" element={<Analytics />} />
                     <Route path="/seo" element={<SEOAssistant />} />
                     <Route path="/seo/keywords" element={<SEOAssistant />} />
@@ -337,7 +334,7 @@ const App: React.FC = () => {
                     <Route path="/influencer-portal/submissions" element={<SubmissionReview />} />
                     <Route path="/influencer-portal/analytics" element={<InfluencerAnalytics />} />
                     <Route path="/influencer-portal/profile" element={<InfluencerProfile />} />
-                    <Route path="/ai-memory" element={<AIMemory />} />
+                    <Route path="/ai-memory" element={<OldAddress from="/ai-memory" />} />
                     <Route path="/ai-history" element={<AIHistory />} />
                     <Route path="/ai-performance" element={<AIPerformance />} />
                     <Route path="/settings" element={<Settings user={user} onUserUpdate={setUser} />} />

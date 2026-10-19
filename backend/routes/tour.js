@@ -6,7 +6,9 @@ const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 
 // Must equal the ids of TOUR_STEPS in frontend/utils/tour.ts (a test reads that file and compares).
-const TOUR_STEP_IDS = Object.freeze(['welcome', 'create', 'review', 'calendar', 'plan', 'help']);
+const TOUR_STEP_IDS = Object.freeze(['welcome', 'create', 'library', 'plan', 'help']);
+// The six-step tour before navigation phase 3 (2026-10-19): still accepted, so a page loaded before a release can save its step.
+const OLD_STEP_IDS = Object.freeze(['review', 'calendar']);
 const ACTIONS = ['step', 'complete', 'skip', 'replay'];
 
 const toUserId = (user) => (!user ? null : user._id ? String(user._id) : user.id ? String(user.id) : null);
@@ -30,7 +32,7 @@ function createTourRouter(impl = {}) {
       const body = req.body && typeof req.body === 'object' ? req.body : {};
       const action = typeof body.action === 'string' ? body.action : '';
       if (!ACTIONS.includes(action)) return res.status(400).json({ success: false, message: 'Choose step, complete, skip or replay.' });
-      if (action === 'step' && !(typeof body.step === 'string' && TOUR_STEP_IDS.includes(body.step))) {
+      if (action === 'step' && !(typeof body.step === 'string' && (TOUR_STEP_IDS.includes(body.step) || OLD_STEP_IDS.includes(body.step)))) {
         return res.status(400).json({ success: false, message: 'That tour step is not known.' });
       }
       const User = getUser();

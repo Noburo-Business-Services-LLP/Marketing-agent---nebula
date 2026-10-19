@@ -219,7 +219,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ insideClient }) => {
         <section className={`${CARD} p-5 sm:p-6`} aria-labelledby="free-blueprint">
           <h2 id="free-blueprint" className="text-[18px] font-semibold" style={INK}>Your Brand Growth Blueprint is free</h2>
           <p className="mt-1 text-[14px] leading-relaxed" style={QUIET}>A plan for your business: who to reach, what to post and where to start. It takes a few minutes and costs nothing. Posts, campaigns and videos start with a plan below.</p>
-          <button type="button" className={`${BTN} mt-4 sm:max-w-xs`} onClick={() => navigate('/blueprint')}>Make my free Blueprint</button>
+          <button type="button" className={`${BTN} mt-4 sm:max-w-xs`} onClick={() => navigate('/blueprint/new')}>Make my free Blueprint</button>
         </section>
       )}
 

@@ -2,9 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import LegalLinks from './LegalLinks';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Megaphone,
-  UploadCloud,
   Users,
   Settings,
   LogOut,
@@ -14,26 +11,14 @@ import {
   Sparkles,
   Palette,
   BarChart3,
-  Package,
   Zap,
   ChevronDown,
-  ImageIcon,
-  PenTool,
-  Layers,
-  PlayCircle,
-  Brain,
-  CalendarDays,
-  Search,
-  HelpCircle,
-  Plus,
-  Lightbulb,
-  FileText,
   ClipboardList,
   Inbox,
   Shield,
   Images,
-  Binoculars,
-  Camera
+  HelpCircle,
+  Home as HomeIcon
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
@@ -44,8 +29,10 @@ import GuidedTour from './GuidedTour';
 import HelpMenu, { TOUR_REPLAY_EVENT } from './HelpMenu';
 import { TOUR_STEPS, shouldAutoStart } from '../utils/tour';
 import { needsTermsPrompt } from '../utils/accountDeletion';
-import { groupHasPath, showsCompetitorsEntry } from '../utils/navMenu';
-import { apiService } from '../services/api';
+import { groupHasPath, showsCompetitorsEntry, navSectionOf, navSubItems, activeSubKey, topBarMeta as topBarMetaOf, badgeText, NavSection, NavSubItem } from '../utils/navMenu';
+import { SUPPORT_EMAIL } from '../constants/legal';
+import './nav.css';
+import { apiService, draftsAPI } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
 import { balanceWithEquivalent, equivalentText } from '../utils/plans';
 import { actingBannerText, actingClientName, isAgencyUser, isInsideClient, isLapsedAgency, returnButtonLabel, showClientSwitcher, showsPostsNotQuarks } from '../utils/agency';
@@ -179,40 +166,41 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCreditPanel]);
 
-  // Nav grouping follows the order the work actually happens in: look at
-  // where things stand, make something, review it, schedule it, see how it
-  // did. Videos sits beside Create because it is the other thing you make —
-  // it was previously under a "More" heading, below Insights, which ranked a
-  // headline feature under a junk drawer.
-  const staffEntry = staffMenuEntry(user, Boolean(localStorage.getItem('csmReturnToken')));
+  // The menu (navigation phases 3 to 5): the role entries first, then six categories and the folded Setup group.
+  // The open category shows its tabs indented under it. Model and tests: utils/navMenu.ts, tests/navMenu.test.mjs.
+  const holdsPass = Boolean(localStorage.getItem('csmReturnToken'));
+  const staffEntry = staffMenuEntry(user, holdsPass);
   // My plan is for customers and agency owners (who get a plan like any account), and for a CSM while inside a client; staff accounts keep their own menu.
-  const showsMyPlan = isInsideClient(user) || Boolean(localStorage.getItem('csmReturnToken')) || (!!user && !user.staffRole && !user.isCsm && !isLapsedAgency(user));
-  const primaryNav = [
+  const showsMyPlan = isInsideClient(user) || holdsPass || (!!user && !user.staffRole && !user.isCsm && !isLapsedAgency(user));
+  const navOptions = { showsMyPlan, showsCompetitors: showsCompetitorsEntry(user, holdsPass) };
+  const roleNav = [
     ...(staffEntry?.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
-    ...(user?.isCsm && !localStorage.getItem('csmReturnToken') ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),
+    ...(user?.isCsm && !holdsPass ? [{ path: '/clients', label: 'My clients', icon: Users }] : []),
     ...(isAgencyUser(user) || isLapsedAgency(user) ? [{ path: '/agency/clients', label: 'Clients', icon: Users }] : []),
-    { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
-    ...(showsMyPlan ? [{ path: '/plan', label: 'My plan', icon: ClipboardList }] : []),
-    { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
-    { path: '/reels',            label: 'Create video',      icon: PlayCircle },
-    { path: '/photoshoot',       label: 'Photoshoot',        icon: Camera },
-    { path: '/drafts',           label: 'Review and approve', icon: PenTool, badge: 'drafts' as const },
-    { path: '/library',          label: 'Library',           icon: Images },
-    { path: '/content-calendar', label: 'Calendar',          icon: CalendarDays },
-    { path: '/inbox',            label: 'Inbox',             icon: Inbox },
-    { path: '/analytics',        label: 'Performance',       icon: BarChart3 },
-    ...(showsCompetitorsEntry(user, Boolean(localStorage.getItem('csmReturnToken'))) ? [{ path: '/competitors', label: 'Competitors', icon: Binoculars }] : []),
   ];
-  // Tools used now and then, and set-once configuration, are folded into one group so the menu stays short.
+  const categoryNav: Array<{ section: NavSection; path: string; label: string; icon: React.ComponentType<{ className?: string }>; tour?: string }> = [
+    { section: 'home',     path: '/dashboard', label: 'Home',     icon: HomeIcon },
+    { section: 'plan',     path: '/plan',      label: 'Plan',     icon: ClipboardList, tour: 'nav-plan' },
+    { section: 'create',   path: '/campaigns', label: 'Create',   icon: Sparkles, tour: 'nav-create' },
+    { section: 'library',  path: '/library',   label: 'Library',  icon: Images, tour: 'nav-library' },
+    { section: 'inbox',    path: '/inbox',     label: 'Inbox',    icon: Inbox },
+    { section: 'insights', path: '/analytics', label: 'Insights', icon: BarChart3 },
+  ];
+  // Set-once configuration is folded into one group so the menu stays short.
   // Ad Campaigns and Influencer Portal remain hidden from navigation; their routes are intact.
-  const secondaryNav = [
+  const setupNav = [
     ...(staffEntry && !staffEntry.primary ? [{ path: staffEntry.path, label: staffEntry.label, icon: Shield }] : []),
-    { path: '/blueprint',        label: 'Growth Blueprint',  icon: FileText },
-    { path: '/brand-assets',      label: 'Brand assets',      icon: Palette },
-    { path: '/connect-socials',   label: 'Connected accounts', icon: Link2 },
-    { path: '/ai-memory',         label: 'Brand memory',      icon: Brain },
+    { path: '/brand-assets',    label: 'Brand assets',       icon: Palette },
+    { path: '/connect-socials', label: 'Connected accounts', icon: Link2 },
+    { path: '/settings',        label: 'Settings',           icon: Settings },
   ];
-  const groupOnItsPage = groupHasPath(location.pathname, secondaryNav.map((n) => n.path).filter((p) => !p.startsWith('/staff')));
+  const currentSection = navSectionOf(location.pathname);
+  const currentSub = activeSubKey(location.pathname, location.search, navOptions);
+  // Which category shows its sub-items: the current one, unless the customer opened or closed one with its arrow.
+  const [openOverride, setOpenOverride] = useState<NavSection | '' | null>(null);
+  useEffect(() => { setOpenOverride(null); }, [location.pathname]);
+  const openSection = openOverride === null ? currentSection : openOverride;
+  const groupOnItsPage = currentSection === 'setup' || groupHasPath(location.pathname, setupNav.map((n) => n.path).filter((p) => !p.startsWith('/staff')));
   const [moreOpen, setMoreOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('nebulaa_sidebar_more') === '1'; } catch { return false; }
   });
@@ -222,39 +210,24 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   });
   const showMore = moreOpen || groupOnItsPage;
 
-  const resolveTopBarMeta = (pathname: string) => {
-    if (pathname.startsWith('/campaigns')) return { title: 'Create content', crumb: 'New campaign' };
-    if (pathname.startsWith('/plan')) return { title: 'My plan', crumb: '' };
-    if (pathname.startsWith('/trial-expired')) return { title: 'Plans', crumb: '' };
-    if (pathname.startsWith('/content-calendar')) return { title: 'Calendar', crumb: '' };
-    if (pathname.startsWith('/reels')) return { title: 'Create video', crumb: '' };
-    if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };
-    if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
-    if (pathname.startsWith('/staff')) return { title: 'Staff area', crumb: '' };
-    if (pathname.startsWith('/clients')) return { title: 'My clients', crumb: '' };
-    if (pathname.startsWith('/agency/clients')) return { title: 'Clients', crumb: '' };
-    if (pathname.startsWith('/inbox')) return { title: 'Inbox', crumb: '' };
-    if (pathname.startsWith('/connect-socials')) return { title: 'Connected accounts', crumb: '' };
-    if (pathname.startsWith('/brand-assets')) return { title: 'Brand assets', crumb: '' };
-    if (pathname.startsWith('/inventory')) return { title: 'Brand assets', crumb: 'Products and services' };
-    if (pathname.startsWith('/analytics')) return { title: 'Performance', crumb: '' };
-    if (pathname.startsWith('/competitors')) return { title: 'Competitors', crumb: '' };
-    if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) return { title: 'Brand memory', crumb: '' };
-    if (pathname.startsWith('/library')) return { title: 'Library', crumb: '' };
-    if (pathname.startsWith('/photoshoot')) return { title: 'Photoshoot', crumb: '' };
-    if (pathname.startsWith('/drafts')) return { title: 'Review and approve', crumb: '' };
-    if (pathname.startsWith('/idea-inbox')) return { title: 'Content ideas', crumb: '' };
-    if (pathname.startsWith('/upload')) return { title: 'Upload and schedule', crumb: '' };
-    if (pathname.startsWith('/settings')) return { title: 'Settings', crumb: '' };
-    if (pathname.startsWith('/blueprint')) return { title: 'Growth Blueprint', crumb: '' };
-    return { title: 'Dashboard', crumb: '' };
-  };
+  // The Library count: posts that wait for the customer's approval (GET /drafts/counts), on start, every minute,
+  // after any post action and on every page change. Nothing is drawn for 0 or when the count is unknown.
+  const [needsApproval, setNeedsApproval] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = () => { draftsAPI.getDraftCounts().then((r) => { if (live) setNeedsApproval(Number(r?.counts?.needsApproval ?? NaN)); }).catch(() => { if (live) setNeedsApproval(null); }); };
+    load();
+    const id = setInterval(load, 60000);
+    window.addEventListener('nebulaa-posts-changed', load);
+    return () => { live = false; clearInterval(id); window.removeEventListener('nebulaa-posts-changed', load); };
+  }, [location.pathname]);
+  const libraryBadge = badgeText(needsApproval);
 
-  const topBarMeta = resolveTopBarMeta(location.pathname);
+  const topBarMeta = topBarMetaOf(location.pathname, location.search);
   // With two switchers in the bar, a computer-sized screen has no room for the page title; the page has its own heading.
   // Agencies and their clients see posts and videos, never Quarks, so the Quark balance is not shown to them.
   const hideQuarks = showsPostsNotQuarks(user);
-  const clientSwitcherShown = showClientSwitcher(user, Boolean(localStorage.getItem('csmReturnToken')));
+  const clientSwitcherShown = showClientSwitcher(user, holdsPass);
   const isActive = (path: string) =>
     path === '/staff/home' ? location.pathname.startsWith('/staff') :
     location.pathname === path || (path !== '/dashboard' && location.pathname.startsWith(path));
@@ -268,33 +241,78 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
   const businessInitial = businessName.trim().charAt(0).toUpperCase() || 'B';
   const businessHandle = user?.email || 'Add your email in Settings';
 
-  const NAV_TOUR: Record<string, string> = { '/campaigns': 'nav-create', '/drafts': 'nav-review', '/content-calendar': 'nav-calendar', '/plan': 'nav-plan' };
+  const ROW = 'group relative flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A4A00]';
+  const rowTone = (active: boolean) => (active
+    ? 'bg-[var(--gv-surface-2)] text-[var(--gv-text-primary)]'
+    : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)]');
   const NavLink: React.FC<{
     path: string;
     label: string;
     icon: React.ComponentType<{ className?: string }>;
-    badge?: 'drafts';
-  }> = ({ path, label, icon: Icon }) => {
-    const active = isActive(path);
+    active?: boolean;
+    tour?: string;
+    badge?: string;
+  }> = ({ path, label, icon: Icon, active = isActive(path), tour, badge }) => (
+    <Link
+      to={path}
+      data-tour={tour}
+      aria-current={active ? 'page' : undefined}
+      onClick={() => setSidebarOpen(false)}
+      className={`${ROW} flex-1 min-w-0 ${rowTone(active)}`}
+    >
+      {active && <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-[var(--gv-accent)]" />}
+      <Icon className={`w-[15px] h-[15px] ${active ? 'text-[var(--gv-accent)]' : 'text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]'}`} />
+      <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1 truncate">{label}</span>
+      {badge && (
+        <span className="nb-nav-badge" aria-label={`${badge} waiting for your approval`}>{badge}</span>
+      )}
+    </Link>
+  );
+
+  /** A category: its link, an arrow that opens or closes its sub-items, and the sub-items indented under it. */
+  const NavCategory: React.FC<{ section: NavSection; path: string; label: string; icon: React.ComponentType<{ className?: string }>; tour?: string; badge?: string }> = ({ section, ...item }) => {
+    const subs: NavSubItem[] = navSubItems(section, navOptions);
+    const active = currentSection === section;
+    const expanded = subs.length > 0 && openSection === section;
+    const listId = `nav-sub-${section}`;
     return (
-      <Link
-        to={path}
-        data-tour={NAV_TOUR[path]}
-        onClick={() => setSidebarOpen(false)}
-        className={`group relative flex items-center gap-3 pl-4 pr-3 h-10 rounded-lg transition-colors ${
-          active
-            ? 'bg-[var(--gv-surface-2)] text-[var(--gv-text-primary)]'
-            : 'text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)]'
-        }`}
-      >
-        {active && (
-          <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-r-full bg-[var(--gv-accent)]" />
+      <div>
+        <div className="flex items-center">
+          <NavLink {...item} active={active} />
+          {subs.length > 0 && (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={listId}
+              aria-label={expanded ? `Hide the parts of ${item.label}` : `Show the parts of ${item.label}`}
+              onClick={() => setOpenOverride(expanded ? '' : section)}
+              className="ml-0.5 w-8 h-8 shrink-0 rounded-md flex items-center justify-center text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A4A00]"
+            >
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {expanded && (
+          <ul id={listId} className="nb-nav-sub" aria-label={item.label}>
+            {subs.map((sub) => {
+              const on = active && currentSub === sub.key;
+              return (
+                <li key={sub.key}>
+                  <Link
+                    to={sub.to}
+                    aria-current={on ? 'page' : undefined}
+                    onClick={() => setSidebarOpen(false)}
+                    className="nb-nav-subitem"
+                    data-on={on ? 'true' : undefined}
+                  >
+                    {sub.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         )}
-        <Icon className={`w-[15px] h-[15px] ${active ? 'text-[var(--gv-accent)]' : 'text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]'}`} />
-        <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1">{label}</span>
-        {/* The drafts badge used to show a hard-coded "5" for everyone. No real
-            count is loaded here, so nothing is shown until one is. */}
-      </Link>
+      </div>
     );
   };
 
@@ -347,9 +365,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
 
             {/* Nav — scroll region */}
             <div className="flex-1 min-h-0 overflow-y-auto hide-scrollbar px-3 pb-4">
-              <nav className="space-y-0.5">
-                {primaryNav.map((item) => (
+              <nav className="space-y-0.5" aria-label="Main menu">
+                {roleNav.map((item) => (
                   <NavLink key={item.path} {...item} />
+                ))}
+                {categoryNav.map((item) => (
+                  <NavCategory key={item.section} {...item} badge={item.section === 'library' ? libraryBadge : undefined} />
                 ))}
               </nav>
               <div className="my-3 mx-1 border-t border-[var(--gv-border-subtle)]" />
@@ -357,16 +378,25 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                 type="button"
                 onClick={toggleMore}
                 aria-expanded={showMore}
-                className="w-full flex items-center justify-between pl-4 pr-3 h-9 rounded-lg text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)]"
+                aria-controls="nav-setup"
+                className="w-full flex items-center justify-between pl-4 pr-3 h-9 rounded-lg text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A4A00]"
               >
-                <span className="gravity-label">Setup and tools</span>
+                <span className="gravity-label">Setup</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showMore ? 'rotate-180' : ''}`} />
               </button>
               {showMore && (
-                <nav className="space-y-0.5 mt-1">
-                  {secondaryNav.map((item) => (
+                <nav id="nav-setup" className="space-y-0.5 mt-1" aria-label="Setup">
+                  {setupNav.map((item) => (
                     <NavLink key={item.path} {...item} />
                   ))}
+                  <a
+                    href={`mailto:${SUPPORT_EMAIL}`}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`${ROW} ${rowTone(false)}`}
+                  >
+                    <HelpCircle className="w-[15px] h-[15px] text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]" />
+                    <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1">Help</span>
+                  </a>
                 </nav>
               )}
             </div>
@@ -379,11 +409,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
 
         {/* ================= MAIN COLUMN ================= */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {needsPlan && !location.pathname.startsWith('/blueprint') && !location.pathname.startsWith('/trial-expired') && (
+          {needsPlan && !location.pathname.startsWith('/blueprint') && !(location.pathname === '/plan' && new URLSearchParams(location.search).get('tab') === 'blueprint') && !location.pathname.startsWith('/trial-expired') && (
             <div className="shrink-0 border-b border-[var(--gv-border-subtle)] bg-[var(--gv-accent-fill)] px-4 md:px-8 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
               <p className="text-[13px] text-[var(--gv-text-primary)]">You are looking around. Choose a plan to start making posts and videos. Your Growth Blueprint is free.</p>
               <div className="flex gap-2">
-                <button onClick={() => navigate('/blueprint')} className="rounded-lg border border-[var(--gv-border-default)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--gv-text-primary)]">Make my free Blueprint</button>
+                <button onClick={() => navigate('/plan?tab=blueprint')} className="rounded-lg border border-[var(--gv-border-default)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--gv-text-primary)]">Make my free Blueprint</button>
                 <button onClick={() => navigate('/trial-expired')} className="rounded-lg bg-[var(--gv-accent)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--gv-accent-ink)]">See plans</button>
               </div>
             </div>
@@ -450,12 +480,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
               )}
             </div>
             <div className="flex items-center gap-2 ml-auto shrink-0">
-              <button
-                className="w-9 h-9 rounded-lg flex items-center justify-center text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] transition-colors"
-                aria-label="Search"
-              >
-                <Search className="w-4 h-4" />
-              </button>
               <HelpMenu canReplay={tourEligible} canSetup={tourEligible} />
               <div className="w-9 h-9 flex items-center justify-center">
                 <NotificationBell />

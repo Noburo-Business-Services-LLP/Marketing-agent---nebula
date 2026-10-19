@@ -22,7 +22,7 @@ const NUMBER_DEFS: ReadonlyArray<{ key: NumberKey; field: keyof HomeSummary['num
   { key: 'reach', field: 'reach', title: 'Reach', to: '/analytics' },
   { key: 'engagement', field: 'engagement', title: 'Engagement', to: '/analytics' },
   { key: 'followers', field: 'followers', title: 'Followers', to: '/analytics' },
-  { key: 'posts', field: 'postsPublishedThisWeek', title: 'Posts this week', to: '/content-calendar' },
+  { key: 'posts', field: 'postsPublishedThisWeek', title: 'Posts this week', to: '/plan?tab=calendar' },
   { key: 'drafts', field: 'draftsWaiting', title: 'Needs approval', to: '/library?view=approve' },
   { key: 'messages', field: 'unrepliedMessages', title: 'Unread messages', to: '/inbox' },
 ];
@@ -210,7 +210,7 @@ export function competitorsStrip(c: HomeSummary['competitors'] | null | undefine
   const detail = isNum(c.needHandle) && c.needHandle > 0
     ? `${formatCount(c.needHandle)} ${c.needHandle === 1 ? 'needs' : 'need'} a confirmed handle.`
     : 'We look at their public posts each week.';
-  return { title, detail, to: '/competitors' };
+  return { title, detail, to: '/analytics?tab=competitors' };
 }
 
 export function blockFailed(s: HomeSummary | null | undefined, name: string): boolean {

@@ -153,8 +153,8 @@ export function homeCards(res: BestPostsResponse | null, max = 3): CompetitorCar
 export interface BoardNote { text: string; link: { to: string; text: string } | null }
 export function boardNote(state: BoardState, opts: { clientWorkspace?: boolean }): BoardNote | null {
   if (state === 'locked') return { text: 'Following your competitors is an add-on.', link: opts.clientWorkspace ? null : { to: '/trial-expired', text: 'See plans' } };
-  if (state === 'none') return { text: 'Add the competitors you want to follow. We look at their public posts each week.', link: { to: '/competitors', text: 'Add competitors' } };
-  if (state === 'pending') return { text: "Your competitors' public posts have not been checked yet. Their numbers appear here after the first weekly check.", link: { to: '/competitors', text: 'Open Competitors' } };
+  if (state === 'none') return { text: 'Add the competitors you want to follow. We look at their public posts each week.', link: { to: '/analytics?tab=competitors', text: 'Add competitors' } };
+  if (state === 'pending') return { text: "Your competitors' public posts have not been checked yet. Their numbers appear here after the first weekly check.", link: { to: '/analytics?tab=competitors', text: 'Open Competitors' } };
   if (state === 'error') return { text: 'We could not load your competitors just now.', link: null };
   return null;
 }

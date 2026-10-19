@@ -45,10 +45,11 @@ test('the old routes still resolve for existing bookmarks', () => {
 });
 
 test('the left menu calls the video entry "Create video" and keeps "Create content"', () => {
+  const nav = fs.readFileSync(path.join(ROOT, 'utils/navMenu.ts'), 'utf8');
   const layout = fs.readFileSync(path.join(ROOT, 'components/Layout.tsx'), 'utf8');
-  assert.match(layout, /path: '\/reels',\s+label: 'Create video'/);
-  assert.match(layout, /path: '\/campaigns',\s+label: 'Create content'/);
-  assert.doesNotMatch(layout, /label: 'Videos'/);
+  assert.match(nav, /label: 'Create video', to: '\/reels'/);
+  assert.match(nav, /label: 'Create content', to: '\/campaigns'/);
+  assert.doesNotMatch(nav + layout, /label: 'Videos'/);
 });
 
 test('the Library offers no Hero filter and names the video filter "Videos"', () => {

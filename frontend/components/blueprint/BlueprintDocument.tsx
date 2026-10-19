@@ -422,7 +422,7 @@ const BlueprintDocument: React.FC<{ view: BlueprintView; user?: User | null }> =
     setBusy(true); setError('');
     try {
       await apiService.regenerateCalendar({ focus });
-      navigate('/content-calendar');
+      navigate('/plan?tab=calendar');
     } catch {
       setError(D.calendarError);
       setBusy(false);

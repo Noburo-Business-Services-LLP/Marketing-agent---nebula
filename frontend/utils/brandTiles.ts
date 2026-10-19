@@ -105,13 +105,13 @@ export function brandTiles(input: BrandInput): StatusTile[] {
   }
 
   // Brand memory (its own page)
-  if (input.memory === null) tiles.push({ key: 'memory', title: 'Brand memory', status: UNKNOWN, state: 'unknown', line: 'What Nebulaa has learned', thumbs: [], to: '/ai-memory' });
+  if (input.memory === null) tiles.push({ key: 'memory', title: 'What Nebulaa learned', status: UNKNOWN, state: 'unknown', line: 'Patterns from your published posts', thumbs: [], to: '/analytics?tab=learned' });
   else {
     const { notes, tracked } = input.memory;
     tiles.push({
-      key: 'memory', title: 'Brand memory', status: notes ? `${notes} learned` : tracked ? 'Learning' : 'Not started', state: notes ? 'added' : tracked ? 'partly' : 'missing',
+      key: 'memory', title: 'What Nebulaa learned', status: notes ? `${notes} learned` : tracked ? 'Learning' : 'Not started', state: notes ? 'added' : tracked ? 'partly' : 'missing',
       line: notes ? 'Patterns from your published posts' : tracked ? `Watching ${tracked} ${tracked === 1 ? 'post' : 'posts'}` : 'Starts when your posts are published',
-      thumbs: [], to: '/ai-memory',
+      thumbs: [], to: '/analytics?tab=learned',
     });
   }
   return tiles;

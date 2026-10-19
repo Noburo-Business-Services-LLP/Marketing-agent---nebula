@@ -187,7 +187,7 @@ test('the create tiles open the right screen and mode', () => {
 test('the competitors strip shows only when there is something to show', () => {
   assert.equal(competitorsStrip({ held: false, tracked: 0, needHandle: 0 }), null);
   assert.equal(competitorsStrip({ held: true, tracked: 0, needHandle: 0 }), null);
-  assert.deepEqual(competitorsStrip({ held: true, tracked: 4, needHandle: 2 }), { title: '4 competitors tracked', detail: '2 need a confirmed handle.', to: '/competitors' });
+  assert.deepEqual(competitorsStrip({ held: true, tracked: 4, needHandle: 2 }), { title: '4 competitors tracked', detail: '2 need a confirmed handle.', to: '/analytics?tab=competitors' });
   assert.equal(competitorsStrip({ held: true, tracked: 1, needHandle: 0 }).title, '1 competitor tracked');
 });
 

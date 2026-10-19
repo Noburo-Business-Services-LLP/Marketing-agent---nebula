@@ -144,7 +144,8 @@ const ReachChart: React.FC<{ days: Array<{ date: string; value: number }>; reaso
   );
 };
 
-const GravityInsights: React.FC = () => {
+/** `embedded`: the Performance tab of Insights; the page header and tab bar sit above it, so the hero keeps only its line and chips. */
+const GravityInsights: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [summaryFailed, setSummaryFailed] = useState(false);
@@ -204,7 +205,9 @@ const GravityInsights: React.FC = () => {
     <div className="nb-perf">
       <header className="nb-perf-hero nb-perf-in" style={{ ['--i' as any]: 0 }}>
         <div className="nb-perf-hero-id">
-          <PageHeader eyebrow="Performance" title="How your posts are" emphasis="doing" description={heroLine(tiles)} />
+          {embedded
+            ? <p className="nb-perf-hero-line">{heroLine(tiles)}</p>
+            : <PageHeader eyebrow="Performance" title="How your posts are" emphasis="doing" description={heroLine(tiles)} />}
           <ul className="nb-perf-meta" aria-label="About these numbers">
             {asOf && <li data-tone={stale ? 'coral' : 'lilac'}><CalendarDays aria-hidden />{stale ? `Last update ${dayMonth(asOf)}, waiting for newer numbers` : `Updated ${dayMonth(asOf)}`}</li>}
             {connected !== null && <li>{connected === 0 ? 'No account connected' : `${connected} ${connected === 1 ? 'account' : 'accounts'} connected`}</li>}

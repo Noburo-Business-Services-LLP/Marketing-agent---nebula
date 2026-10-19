@@ -53,9 +53,9 @@ test('TOUR_STEP_IDS equals the ids of TOUR_STEPS in frontend/utils/tour.ts', () 
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'utils', 'tour.ts'), 'utf8');
   const block = src.slice(src.indexOf('TOUR_STEPS'));
   const ids = [...block.matchAll(/\bid:\s*'([^']+)'/g)].map((m) => m[1]);
-  assert.ok(ids.length >= 6);
+  assert.ok(ids.length >= 5);
   assert.deepStrictEqual([...TOUR_STEP_IDS], ids);
-  assert.deepStrictEqual([...TOUR_STEP_IDS], ['welcome', 'create', 'review', 'calendar', 'plan', 'help']);
+  assert.deepStrictEqual([...TOUR_STEP_IDS], ['welcome', 'create', 'library', 'plan', 'help']);
 });
 
 test('complete stamps completedAt once and a second complete does not change it', async () => {
@@ -164,4 +164,13 @@ test('toPublicJSON carries tour.completedAt and tour.skippedAt and nothing else'
   const fresh = new User({ email: 'b@example.com', firstName: 'B' }).toPublicJSON();
   assert.deepStrictEqual(Object.keys(fresh.tour).sort(), ['completedAt', 'skippedAt']);
   assert.strictEqual(fresh.tour.completedAt, undefined);
+});
+
+test('a page loaded before the five-step tour can still save its old step ids', async () => {
+  const Model = fakeUser();
+  const r = mk(Model);
+  for (const id of ['review', 'calendar']) {
+    const res = await put_(r, { user: own(), body: { action: 'step', step: id } });
+    assert.strictEqual(res.code, 200, id);
+  }
 });

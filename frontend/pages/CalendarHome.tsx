@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ContentCalendar from './ContentCalendar';
 import GravityCalendar from './GravityCalendar';
 
@@ -13,15 +13,19 @@ import GravityCalendar from './GravityCalendar';
 type CalendarTab = 'plan' | 'schedule';
 
 const TABS: { key: CalendarTab; label: string }[] = [
-  { key: 'plan', label: 'Plan' },
+  { key: 'plan', label: 'Month plan' },
   { key: 'schedule', label: 'Schedule' },
 ];
 
 const CalendarHome: React.FC = () => {
-  const [tab, setTab] = useState<CalendarTab>('plan');
+  // Kept in the address (&view=schedule) so a link and the browser back button open the same view. Replace, so
+  // flipping the view does not add history entries of its own.
+  const [params, setParams] = useSearchParams();
+  const tab: CalendarTab = params.get('view') === 'schedule' ? 'schedule' : 'plan';
+  const setTab = (t: CalendarTab) => { const next = new URLSearchParams(params); if (t === 'plan') next.delete('view'); else next.set('view', t); setParams(next, { replace: true }); };
 
   return (
-    <div className="max-w-[1440px] mx-auto pb-16">
+    <div className="pb-16">
       {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
           toggle — the one tab control style the whole app should share. */}
       <div className="mb-5 overflow-x-auto">
@@ -48,23 +52,6 @@ const CalendarHome: React.FC = () => {
           would otherwise reset every time someone flips back from Schedule. */}
       <div className={tab === 'plan' ? '' : 'hidden'}>
         <ContentCalendar />
-        <div
-          className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-3.5"
-          style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)' }}
-        >
-          <div className="min-w-0 flex-1">
-            <h2 className="text-[14.5px] font-semibold" style={{ color: 'var(--gv-text-primary)' }}>Brand Growth Blueprint</h2>
-            <p className="mt-0.5 text-[13px] leading-relaxed" style={{ color: 'var(--gv-text-secondary)' }}>
-              Build a 90-day plan from your website and Instagram page, then use it to plan your calendar.
-            </p>
-          </div>
-          <Link
-            to="/blueprint/new"
-            className="shrink-0 inline-flex items-center justify-center px-4 py-2 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] bg-[var(--gv-panel)] text-[var(--gv-text-primary)] hover:border-[var(--gv-border-strong)]"
-          >
-            Create a Blueprint
-          </Link>
-        </div>
       </div>
       <div className={tab === 'schedule' ? '' : 'hidden'}>
         <GravityCalendar />

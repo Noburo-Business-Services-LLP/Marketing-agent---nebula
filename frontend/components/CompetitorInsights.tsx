@@ -194,7 +194,7 @@ const CompetitorInsights: React.FC<Props> = ({ showLink = true, onLocked, showCo
 
       {state !== 'error' && showLink && (
         <div className="nb-ci-link">
-          <Link to="/competitors" className="nb-ct-btn">{linkLabel(competitors)}<ArrowRight aria-hidden="true" /></Link>
+          <Link to="/analytics?tab=competitors" className="nb-ct-btn">{linkLabel(competitors)}<ArrowRight aria-hidden="true" /></Link>
         </div>
       )}
     </section>

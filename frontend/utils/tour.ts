@@ -12,9 +12,8 @@ export interface TourStep {
 export const TOUR_STEPS: TourStep[] = [
   { id: 'welcome', route: '/dashboard', target: '[data-tour="this-week"]', title: 'This is your week', body: 'Every week Nebulaa suggests what to make, based on your plan. Approve it and the posts are made for you.' },
   { id: 'create', route: '/dashboard', target: '[data-tour="nav-create"]', title: 'Make something yourself', body: 'Posts, carousels and videos start here, when you want to make one now.' },
-  { id: 'review', route: '/dashboard', target: '[data-tour="nav-review"]', title: 'Review and approve', body: 'Everything Nebulaa makes waits here until you approve it.' },
-  { id: 'calendar', route: '/dashboard', target: '[data-tour="nav-calendar"]', title: 'Your calendar', body: 'See what is planned and what has gone out.' },
-  { id: 'plan', route: '/dashboard', target: '[data-tour="nav-plan"]', title: 'My plan', body: 'Who your customers are, where to show up, and what the next 90 days look like.' },
+  { id: 'library', route: '/dashboard', target: '[data-tour="nav-library"]', title: 'Approve, schedule and download', body: 'Everything you and Nebulaa make is in the Library. Posts Nebulaa prepares for you wait there for your approval.' },
+  { id: 'plan', route: '/dashboard', target: '[data-tour="nav-plan"]', title: 'Your plan and calendar', body: 'Who your customers are, what to post this month, and every post on the day it goes out.' },
   { id: 'help', route: '/dashboard', target: '[data-tour="help"]', title: 'Help is always here', body: 'Replay this tour or see your setup steps any time from this button.' },
 ];
 

@@ -524,7 +524,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                             </button>
                             {refreshState === 'done' && (
                               <>
-                                <Link to="/content-calendar" className="text-[13px] font-semibold underline underline-offset-2">Regenerate your calendar</Link>
+                                <Link to="/plan?tab=calendar" className="text-[13px] font-semibold underline underline-offset-2">Regenerate your calendar</Link>
                                 <Link to="/blueprint/new" className="text-[13px] font-semibold underline underline-offset-2">Run your Growth Blueprint again</Link>
                               </>
                             )}

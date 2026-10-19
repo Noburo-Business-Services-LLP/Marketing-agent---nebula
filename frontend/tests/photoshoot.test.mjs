@@ -143,7 +143,7 @@ test("Use in Create hands the photo over as the post's product picture, once", (
 
 test('the page: route, menu entry, compact cover tiles, accessible choices, no dark panel', () => {
   assert.ok(read('App.tsx').includes('<Route path="/photoshoot"'));
-  assert.ok(read('components/Layout.tsx').includes("{ path: '/photoshoot',       label: 'Photoshoot',        icon: Camera }"));
+  assert.ok(read('utils/navMenu.ts').includes("{ key: 'photoshoot', label: 'Photoshoot', to: '/photoshoot' }"));
   const page = read('pages/Photoshoot.tsx');
   assert.ok(page.includes('<CoverTile') && page.includes('aria-pressed'), 'cover tiles for the packs, pressed state on choices');
   assert.ok(page.includes('role="status" aria-live="polite"'), 'progress is announced');
