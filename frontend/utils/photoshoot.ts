@@ -99,7 +99,7 @@ export function createState(o: PhotoshootOptions | null, s: PhotoshootSelection,
   if (!o) return { ok: false, reason: '' };
   if (o.staff && !o.pass) return { ok: false, reason: 'Staff accounts cannot make photoshoots here. Open a client to make one for them.' };
   if (o.entitled === false) return { ok: false, reason: o.pass ? 'Photoshoots are not available for this account.' : 'Photoshoots are part of the paid plans.' };
-  if (o.enabled === false) return { ok: false, reason: 'Photoshoots open soon.' };
+  if (o.enabled === false) return { ok: false, reason: 'Photoshoots are not switched on for your account yet.' };
   if (busy) return { ok: false, reason: 'A photoshoot is being made. You can start another one when it has finished.' };
   if (!s.pack) return { ok: false, reason: 'Choose a pack to start.' };
   if (!s.productIds.length) return { ok: false, reason: 'Choose at least one product with a photo.' };

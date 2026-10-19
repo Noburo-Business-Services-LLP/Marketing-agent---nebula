@@ -55,7 +55,7 @@ test('Create is allowed only when everything is in place, and says why otherwise
   assert.equal(createState(null, s).ok, false);
   assert.match(createState({ ...OPTS, entitled: false }, s).reason, /paid plans/);
   assert.equal(createState({ ...OPTS, entitled: false, pass: true }, s).reason, 'Photoshoots are not available for this account.', 'no upsell inside a client');
-  assert.equal(createState({ ...OPTS, enabled: false }, s).reason, 'Photoshoots open soon.');
+  assert.equal(createState({ ...OPTS, enabled: false }, s).reason, 'Photoshoots are not switched on for your account yet.');
   assert.match(createState({ ...OPTS, staff: true }, s).reason, /Staff accounts/);
   assert.equal(createState({ ...OPTS, staff: true, pass: true }, s).ok, true);
   assert.match(createState(OPTS, s, true).reason, /being made/);

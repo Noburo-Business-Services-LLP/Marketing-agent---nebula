@@ -210,7 +210,7 @@ const Photoshoot: React.FC = () => {
           {locked.to && <Link to={locked.to} className="nb-ps-btn" data-small="true">{locked.action}</Link>}
         </div>
       )}
-      {!locked && opts.enabled === false && <div className="nb-ps-note" data-tone="warn">Photoshoots open soon. You can look at the packs and prices now.</div>}
+      {!locked && opts.enabled === false && <div className="nb-ps-note" data-tone="warn">Photoshoots are not switched on for your account yet. You can look at the packs and prices now.</div>}
       {opts.staff && !opts.pass && <div className="nb-ps-note">Staff accounts cannot make photoshoots here. Open a client to make one for them.</div>}
 
       <section className="nb-ps-step" aria-labelledby="ps-step-pack">
