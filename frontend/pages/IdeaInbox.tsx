@@ -10,7 +10,6 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import { GravityHero, GravityEmphasis } from '../components/gravity';
 import { ideasAPI, draftsAPI } from '../services/api';
 import { useConfirm } from '../context/ConfirmContext';
 
@@ -226,12 +225,7 @@ const IdeaInbox: React.FC = () => {
 
   return (
     <div className="max-w-[1100px] mx-auto pb-16">
-      <GravityHero
-        eyebrow="Content ideas"
-        headline={<>Save ideas for <GravityEmphasis>future posts</GravityEmphasis></>}
-        subcopy="Add a thought, a link or an ad you liked, or paste a list of ideas. You can turn any idea into a post when you are ready."
-        align="left"
-      />
+      {/* The page header (shared PageHeader) is drawn above the tab bar by the Calendar route in App.tsx. */}
 
       {error && (
         <div className="mb-5 flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/25 text-red-300 text-[13px]">

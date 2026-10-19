@@ -25,6 +25,8 @@ export const GravityLabel: React.FC<{
 
 /**
  * Page hero: gold eyebrow, serif display headline, muted subcopy.
+ * For the top of a page use components/PageHeader.tsx (the one page-header spec, owner 2026-10-19); 'lg' is kept
+ * only until the last pages move to it. 'md' stays for step headings inside a page.
  * `emphasis` is rendered italic in gold, the way Create highlights one word.
  */
 export const GravityHero: React.FC<{
@@ -37,16 +39,18 @@ export const GravityHero: React.FC<{
   className?: string;
 }> = ({ eyebrow, headline, subcopy, align = 'center', size = 'lg', className = '' }) => {
   const lg = size === 'lg';
+  // 'md' is a step or section heading under the page's one PageHeader, so it is an h2 and smaller than the page title.
+  const Heading = lg ? 'h1' : 'h2';
   return (
     <div className={`${align === 'center' ? 'text-center' : 'text-left'} ${lg ? 'mb-10' : 'mb-6'} ${className}`}>
       {eyebrow && <GravityLabel gold className={lg ? 'mb-4' : 'mb-2'}>{eyebrow}</GravityLabel>}
-      <h1
+      <Heading
         className={`font-serif-display leading-[1.1] tracking-[-0.02em] text-[var(--gv-text-primary)] ${
-          lg ? 'text-[clamp(34px,4.4vw,56px)] leading-[1.05] mb-5' : 'text-[26px] mb-2'
+          lg ? 'text-[clamp(34px,4.4vw,56px)] leading-[1.05] mb-5' : 'text-[22px] mb-2'
         }`}
       >
         {headline}
-      </h1>
+      </Heading>
       {subcopy && (
         <p
           className={`text-[var(--gv-text-secondary)] leading-relaxed ${lg ? 'text-[15px] max-w-[560px]' : 'text-[13.5px] max-w-[620px]'} ${

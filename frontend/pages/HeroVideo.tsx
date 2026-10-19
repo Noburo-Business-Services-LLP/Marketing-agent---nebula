@@ -13,7 +13,8 @@ import HeroQuickStart from '../components/HeroQuickStart';
 import HeroShare from '../components/HeroShare';
 import HeroEdit from '../components/HeroEdit';
 import HeroTweak, { TweakSource } from '../components/HeroTweak';
-import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
+import { GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
+import PageHeader from '../components/PageHeader';
 
 // Hero Studio: one premium 15-second clip built from the Reels wizard's story, cast and place,
 // plus the client's brand (loaded server-side). The wizard sends a compact brief via router
@@ -571,12 +572,7 @@ const HeroVideoInner: React.FC = () => {
     return (
       <div className="hero-studio max-w-[920px] mx-auto pb-16 pt-6 space-y-8">
         <style>{LIGHT_FIX}</style>
-        <GravityHero
-          eyebrow="Hero Studio"
-          headline={<>Make a new <GravityEmphasis>version</GravityEmphasis></>}
-          subcopy="Edit the prompt and make another video from it."
-          className="!mb-0"
-        />
+        <PageHeader eyebrow="Hero Studio" title="Make a new" emphasis="version" description="Edit the prompt and make another video from it." className="!mb-0" />
         {!jobId && <HeroTweak source={tweakSource} onStarted={(id) => { setJobId(id); setJobStatus('queued'); startPolling(id); }} />}
         {jobPanel}
         {historyList}
@@ -589,10 +585,11 @@ const HeroVideoInner: React.FC = () => {
     return (
       <div className="hero-studio max-w-[920px] mx-auto pb-16 pt-6 space-y-8">
         <style>{LIGHT_FIX}</style>
-        <GravityHero
+        <PageHeader
           eyebrow="Hero Studio"
-          headline={<>Create a <GravityEmphasis>Hero video</GravityEmphasis></>}
-          subcopy="One crisp 15-second clip: a hook, three short beats and a clear closing call to action. For a longer video of 30 to 60 seconds, use the step-by-step video in Videos."
+          title="Create a"
+          emphasis="Hero video"
+          description="One crisp 15-second clip: a hook, three short beats and a clear closing call to action. For a longer video of 30 to 60 seconds, use the step-by-step video in Videos."
           className="!mb-0"
         />
         {prepError && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{prepError}</p>}
@@ -623,12 +620,11 @@ const HeroVideoInner: React.FC = () => {
   return (
     <div className="hero-studio max-w-[960px] mx-auto pb-16 pt-2">
       <style>{LIGHT_FIX}</style>
-      <GravityHero
-        size="md"
-        align="left"
+      <PageHeader
         eyebrow="Hero Studio"
-        headline={<>Your <GravityEmphasis>Hero video</GravityEmphasis></>}
-        subcopy="One 15-second clip, cut from your story with your cast, your place and your brand. Check each part, build the prompt, then generate."
+        title="Your"
+        emphasis="Hero video"
+        description="One 15-second clip, cut from your story with your cast, your place and your brand. Check each part, build the prompt, then generate."
       />
 
       <div className="space-y-5">

@@ -4,6 +4,7 @@ import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { apiService, inventoryAPI } from '../services/api';
 import StrategyFunnel, { PlanPreview } from '../components/StrategyFunnel';
 import PlanHero from '../components/plan/PlanHero';
+import PageHeader from '../components/PageHeader';
 import PlanDetails from '../components/plan/PlanDetails';
 import { PlanRoadArt } from '../components/art/plan/Road';
 import { PlanShopArt } from '../components/art/plan/Shop';
@@ -13,6 +14,9 @@ import { BANNER_TEXT, dayMonth, planBanner, refreshLabel, shouldPoll, stoppedMes
 import { levelsOf } from '../utils/strategyLevels';
 import { heroStats, titleCard } from '../utils/planVisuals';
 import '../components/plan/plan.css';
+
+/** The one line under the page title. */
+const PLAN_LINE = 'The plan Nebulaa made from your business details: what to post, for whom, and how it is going.';
 
 const BTN_MAIN = 'nb-plan-btn is-main';
 const BTN = 'nb-plan-btn';
@@ -72,6 +76,7 @@ const MyPlan: React.FC<{ user?: User | null }> = ({ user }) => {
   if (!view) {
     return (
       <div className="nb-plan">
+        <PageHeader eyebrow="My plan" title="Your marketing" emphasis="plan" description={PLAN_LINE} />
         {loadError
           ? <StateCard tone="coral"><p role="alert" className="nb-plan-state-text">{loadError}</p><button type="button" className={BTN} onClick={load}>Try again</button></StateCard>
           : <div className="nb-plan-loading" role="status" aria-label="Loading your plan"><Loader2 className="nb-plan-spin" aria-hidden /></div>}
@@ -88,6 +93,7 @@ const MyPlan: React.FC<{ user?: User | null }> = ({ user }) => {
 
   return (
     <div className="nb-plan">
+      <PageHeader eyebrow="My plan" title="Your marketing" emphasis="plan" description={PLAN_LINE} />
       <PlanHero
         name={name}
         made={made}

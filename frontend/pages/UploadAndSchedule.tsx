@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, Loader2, Sparkles, Calendar, Send, X, Instagram, Facebook, Linkedin, Twitter, Check } from 'lucide-react';
 import { draftsAPI, apiService } from '../services/api';
-import { GravityHero, GravityEmphasis } from '../components/gravity';
 import UpgradePrompt from '../components/UpgradePrompt';
 import PlatformIcon from '../components/PlatformIcon';
 import { choicesFor } from '../utils/platforms';
@@ -122,11 +121,7 @@ const UploadAndSchedule: React.FC = () => {
 
   return (
     <div className="max-w-[900px] mx-auto pb-24">
-      <GravityHero
-        eyebrow="Upload and schedule"
-        headline={<>Upload your own <GravityEmphasis>photo or video</GravityEmphasis></>}
-        subcopy="Upload a photo or a video. Nebulaa can write the caption, and you can publish the post now or schedule it for later."
-      />
+      {/* The page header (shared PageHeader) is drawn above the tab bar by the Create content route in App.tsx. */}
 
       {!file ? (
         <div

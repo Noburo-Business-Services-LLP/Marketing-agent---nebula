@@ -34,6 +34,7 @@ import {
   Target,
   Megaphone,
   Calendar as CalendarIcon, SlidersHorizontal } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
 import {
   GravityHero,
   GravityEmphasis,
@@ -2298,22 +2299,15 @@ setCharacterAge(nextDraft?.characterAge || '');
   ).trim();
 
   return (
-    <div className={`p-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
+    <div className={`pb-6 min-h-screen ${isDarkMode ? 'bg-[#070A12]' : 'bg-slate-50'}`}>
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* In the wizard, each step already carries its own GravityHero as
-            the display headline — a page-level one on top would stack two
-            competing titles, so this collapses to a compact meta line
-            instead. Browsing (not in the wizard) has no step hero to lean
-            on, so it gets the full page-level hero like every other page. */}
-        {showWizard ? (
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <GravityLabel>Videos</GravityLabel>
-              <p className="text-[13px] text-white/45 mt-1">Create, schedule, and track your AI videos in one place.</p>
-            </div>
-            {/* Every step of this wizard runs on a prompt. They are reachable
-                from here so a weak result can be traced to the prompt that
-                produced it without leaving the page. */}
+        {/* One page header like every other page. In the wizard each step adds its own smaller step heading below. */}
+        <PageHeader
+          eyebrow="Videos"
+          title={showWizard ? 'Make a step-by-step' : 'Create videos for your'}
+          emphasis={showWizard ? 'video' : 'brand'}
+          description="Create, schedule, and track your videos in one place."
+          actions={(
             <button
               onClick={() => setPromptStudioOpen(true)}
               className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
@@ -2321,25 +2315,8 @@ setCharacterAge(nextDraft?.characterAge || '');
               <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
               Edit the prompts
             </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <GravityHero
-              align="left"
-              eyebrow="Videos"
-              headline={<>Create videos for your <GravityEmphasis>brand</GravityEmphasis></>}
-              subcopy="Create, schedule, and track your AI videos in one place."
-              className="!mb-0"
-            />
-            <button
-              onClick={() => setPromptStudioOpen(true)}
-              className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.05] hover:border-[#F5A623]/40 transition-all"
-            >
-              <SlidersHorizontal className="w-4 h-4 text-[#F5A623]" />
-              Edit the prompts
-            </button>
-          </div>
-        )}
+          )}
+        />
 
         <AssetPicker
           open={productPickerOpen}
@@ -2742,7 +2719,8 @@ setCharacterAge(nextDraft?.characterAge || '');
             {step === 1 && (
               <div className="space-y-6">
                 <GravityHero
-                  eyebrow="Videos"
+                  size="md"
+                  eyebrow="Step 1"
                   headline={<>Describe your <GravityEmphasis>video</GravityEmphasis></>}
                   subcopy="Describe the video once. Nebulaa then writes the script, chooses the voice and creates every scene."
                 />

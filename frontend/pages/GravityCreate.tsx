@@ -1138,9 +1138,10 @@ const GravityCreate: React.FC = () => {
 
       {/* The brief: a small heading with the optional shortcuts beside it, then the idea box. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-2.5">
-        <h1 className="font-serif-display text-[24px] leading-tight tracking-[-0.01em] text-[var(--gv-text-primary)]">
+        {/* A section heading: the page title is the shared page header above the tab bar (App.tsx). */}
+        <h2 className="font-serif-display text-[22px] leading-tight tracking-[-0.01em] text-[var(--gv-text-primary)]">
           Describe your <GravityEmphasis>{mode === 'campaign' ? 'campaign' : mode === 'carousel' ? 'carousel' : 'post'}</GravityEmphasis>
-        </h1>
+        </h2>
         {/* Ideas already planned in the calendar, the prompts and products: small shortcuts, the brief is the point of this screen. */}
         <div className="flex flex-wrap items-center gap-1.5">
           <button type="button" onClick={() => setIdeaPickerOpen(true)} className={SHORTCUT}>

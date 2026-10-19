@@ -10,6 +10,7 @@ import { actionRows, greeting, headline, isNewAccount, planBanner, blockFailed }
 import { BalanceChip, CreateToday, DoThisNext, NumbersStrip, Skeleton, PlanBanner, TodayPlan } from '../components/home/HomeBlocks';
 import { HomeCompetitors } from '../components/CompetitorTiles';
 import '../components/home/home.css';
+import PageHeader, { PageEmphasis } from '../components/PageHeader';
 
 // Home, the control room. The page reads ONE small answer, GET /api/home/summary (numbers, Do this next, this week,
 // plan state, balance, today's posts), plus the Setup and This week cards' own calls. Nothing downloads every draft or
@@ -74,18 +75,15 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
     <div className="nb-home">
       {isAgencyUser(user) && <AgencyUsage />}
 
-      <header className="nb-home-head">
-        <div style={{ minWidth: 0 }}>
-          <p className="nb-home-date">{istDateLabel(now)}</p>
-          <h1 className="nb-home-hello font-serif-display">
-            {hello}{name ? <>, <em>{name}</em></> : null}
-          </h1>
-          <p className="nb-home-line" aria-live="polite">
-            {summary ? headline(summary, actionRows(summary.nextActions, { planBanner: Boolean(banner) }).length) : loading ? ' ' : 'Here is your day at a glance.'}
-          </p>
-        </div>
-        {showBalance && summary && <BalanceChip summary={summary} />}
-      </header>
+      {/* The greeting band uses the one page header, so its sizes match every other page. */}
+      <PageHeader
+        className="nb-home-head"
+        eyebrow={istDateLabel(now)}
+        title={<>{hello}{name ? <>, <PageEmphasis>{name}</PageEmphasis></> : null}</>}
+        description={summary ? headline(summary, actionRows(summary.nextActions, { planBanner: Boolean(banner) }).length) : loading ? ' ' : 'Here is your day at a glance.'}
+        descriptionLive
+        actions={showBalance && summary ? <BalanceChip summary={summary} /> : undefined}
+      />
 
       {banner && <PlanBanner banner={banner} />}
 

@@ -5,9 +5,9 @@
 
 .nb-ps {
   --gv-text-primary: #2B1D0E; --gv-text-secondary: #4F3F2B;
-  position: relative; max-width: 1180px; margin: 0 auto; padding: 24px 16px 56px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box;
+  position: relative; max-width: 1180px; margin: 0 auto; padding: 0 16px 56px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box;
 }
-@media (min-width: 640px) { .nb-ps { padding: 28px 24px 64px; } }
+@media (min-width: 640px) { .nb-ps { padding: 0 24px 64px; } }
 .nb-ps::before {
   content: ""; position: absolute; z-index: 0; pointer-events: none; left: 0; right: 0; top: -20px; height: 320px;
   background:
@@ -21,11 +21,9 @@
 .nb-ps a:focus-visible, .nb-ps button:focus-visible, .nb-ps input:focus-visible, .nb-ps label:focus-within { outline: 3px solid #7A4A00; outline-offset: 2px; }
 
 /* ---- header ---- */
-.nb-ps-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; }
-.nb-ps-eyebrow { margin: 0 0 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #8A5200; }
-.nb-ps-title { font-size: 28px; line-height: 1.15; font-weight: 400; color: var(--gv-text-primary); }
-.nb-ps-title em { font-style: italic; color: #A1349A; }
-.nb-ps-line { margin-top: 6px !important; font-size: 14px; line-height: 1.5; color: var(--gv-text-secondary); max-width: 640px; }
+/* The title, eyebrow and description come from the one page header (components/pageHeader.css); the page has no top
+   padding of its own, like every other page. Column gap 18 px plus 6 px keeps the spec's 24 px below the header. */
+.nb-ps > .nb-page-head { margin-bottom: 6px; }
 .nb-ps-chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: #6B2A75; background: #F4E1F8; border: 1px solid #E6C2EE; white-space: nowrap; }
 
 /* ---- notes ---- */

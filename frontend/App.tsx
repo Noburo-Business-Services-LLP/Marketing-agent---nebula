@@ -22,6 +22,7 @@ import GravityCreate from './pages/GravityCreate';
 import GravityApprove from './pages/GravityApprove';
 import Library from './pages/Library';
 import PageTabs from './components/PageTabs';
+import PageHeader from './components/PageHeader';
 import GravityCalendar from './pages/GravityCalendar';
 import GravityInsights from './pages/GravityInsights';
 import Campaigns from './pages/Campaigns';
@@ -88,6 +89,14 @@ const LoginRedirect: React.FC = () => {
 };
 
 // /reels opens the single Videos flow. A link that carries a job (an older reel being resumed) still opens the step-by-step maker.
+/** The page headers of the pages made of tabs: shown above the tab bar, the same header every page uses. */
+const PAGE_HEADERS = {
+  create: <PageHeader eyebrow="Create content" title="What would you like to" emphasis="make?" description="Choose what to make, describe it in a few words, and Nebulaa prepares it for your review." />,
+  upload: <PageHeader eyebrow="Create content" title="Upload your own" emphasis="photo or video" description="Upload a photo or a video. Nebulaa can write the caption, and you can publish the post now or schedule it for later." />,
+  calendar: <PageHeader eyebrow="Calendar" title="Your month of" emphasis="posts" description="The plan for each month, and every post on the day it is scheduled." />,
+  ideas: <PageHeader eyebrow="Content ideas" title="Save ideas for" emphasis="future posts" description="Add a thought, a link or an ad you liked, or paste a list of ideas. You can turn any idea into a post when you are ready." />,
+};
+
 const VideosEntry: React.FC = () => {
   const [params] = useSearchParams();
   return params.get('jobId') ? <ReelGenerator /> : <CreateVideo />;
@@ -288,11 +297,11 @@ const App: React.FC = () => {
                         view) and Schedule (real month grid, thumbnails on the day
                         they're actually scheduled). content-calendar-grid/-classic
                         kept as direct links to the individual views. */}
-                    <Route path="/content-calendar" element={<PageTabs tabs={[{ key: 'calendar', label: 'Calendar', element: <CalendarHome /> }, { key: 'ideas', label: 'Content ideas', element: <IdeaInbox /> }]} />} />
+                    <Route path="/content-calendar" element={<PageTabs tabs={[{ key: 'calendar', label: 'Calendar', element: <CalendarHome />, header: PAGE_HEADERS.calendar, frame: 'max-w-[1440px] mx-auto' }, { key: 'ideas', label: 'Content ideas', element: <IdeaInbox />, header: PAGE_HEADERS.ideas, frame: 'max-w-[1100px] mx-auto' }]} />} />
                     <Route path="/content-calendar-grid" element={<GravityCalendar />} />
                     <Route path="/content-calendar-classic" element={<ContentCalendar />} />
                     <Route path="/idea-inbox" element={<Navigate to="/content-calendar?tab=ideas" replace />} />
-                    <Route path="/campaigns" element={<PageTabs tabs={[{ key: 'create', label: 'Create with Nebulaa', element: <GravityCreate /> }, { key: 'upload', label: 'Upload and schedule', element: <UploadAndSchedule /> }]} />} />
+                    <Route path="/campaigns" element={<PageTabs tabs={[{ key: 'create', label: 'Create with Nebulaa', element: <GravityCreate />, header: PAGE_HEADERS.create, frame: 'max-w-[960px] mx-auto' }, { key: 'upload', label: 'Upload and schedule', element: <UploadAndSchedule />, header: PAGE_HEADERS.upload, frame: 'max-w-[900px] mx-auto' }]} />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove user={user} />} />
                     <Route path="/library" element={<Library />} />

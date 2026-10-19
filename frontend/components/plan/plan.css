@@ -74,6 +74,9 @@
 .nb-plan-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--gv-accent); }
 
 /* ---- hero ---- */
+/* The page title is the one page header above the hero card (components/pageHeader.css). Column gap 18 px plus 6 px
+   keeps the spec's 24 px below the header. */
+.nb-plan > .nb-page-head { margin-bottom: 6px; }
 .nb-plan-hero {
   position: relative; overflow: hidden; border-radius: 22px; padding: 22px 24px 20px; border: 1px solid #F0DDB4;
   background:
@@ -85,8 +88,8 @@
 }
 .nb-plan-hero-top { display: flex; align-items: flex-start; gap: 16px; }
 .nb-plan-hero-id { flex: 1 1 auto; min-width: 0; }
-.nb-plan-hero h1 { display: flex; flex-direction: column; gap: 4px; font-weight: 400; }
-.nb-plan-hero-name { font-family: 'Playfair Display', Georgia, serif; font-size: 32px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; color: var(--ink); overflow-wrap: anywhere; }
+.nb-plan-hero h2 { display: flex; flex-direction: column; gap: 4px; font-weight: 400; }
+.nb-plan-hero-name { font-family: 'Playfair Display', Georgia, serif; font-size: 24px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; color: var(--ink); overflow-wrap: anywhere; }
 .nb-plan-hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .nb-plan-meta { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 11px; font-size: 12.5px; font-weight: 600; background: rgb(255 255 255 / 0.8); border: 1px solid var(--line); color: var(--ink-2); }
 .nb-plan-meta svg { width: 14px; height: 14px; color: var(--gv-accent-text); }
@@ -352,7 +355,7 @@
   .nb-plan-grid.is-skeleton { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nb-plan-hero { padding: 18px 16px 16px; border-radius: 18px; }
   .nb-plan-hero-top { flex-direction: column; gap: 12px; }
-  .nb-plan-hero-name { font-size: 26px; }
+  .nb-plan-hero-name { font-size: 22px; }
   .nb-plan-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .nb-plan-stats li { flex-direction: column; gap: 0; padding: 6px 10px; line-height: 1.25; }
   .nb-plan-card { padding: 14px 44px 14px 16px; }

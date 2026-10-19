@@ -13,6 +13,7 @@ import { fillRows } from '../utils/rowSpans';
 import { CATEGORY_INFO, STRENGTH_LABEL, groupNotes, trackedLabel, waitingHint } from '../utils/memoryView';
 import type { LearnedNote, MemoryCategory, PatternGroup } from '../utils/memoryView';
 import '../components/memory/memory.css';
+import PageHeader from '../components/PageHeader';
 
 /**
  * Brand memory: what Nebulaa has learned from how the published posts did. A cream and gold hero with the count of
@@ -201,11 +202,14 @@ const AIMemory: React.FC = () => {
 
   return (
     <div className="nb-mem">
-      <header className="nb-mem-hero nb-mem-in" style={{ ['--i' as any]: 0 }}>
+      <PageHeader
+        eyebrow="Brand memory"
+        title="What Nebulaa has"
+        emphasis="learned"
+        description="Nebulaa keeps a short list of patterns it has learned from how your published posts performed, and uses it when it plans your next posts."
+      />
+      <section className="nb-mem-hero nb-mem-in" style={{ ['--i' as any]: 0 }} aria-label="Brand memory at a glance">
         <div className="nb-mem-hero-id">
-          <p className="nb-mem-eyebrow">Brand memory</p>
-          <h1>What Nebulaa has <em>learned</em></h1>
-          <p className="nb-mem-lede">Nebulaa keeps a short list of patterns it has learned from how your published posts performed, and uses it when it plans your next posts.</p>
           <ul className="nb-mem-meta" aria-label="Brand memory in numbers">
             <li data-tone="gold"><Brain aria-hidden />Based on {trackedLabel(performanceCount)}</li>
             <li data-tone="teal"><b>{noteCount}</b>{noteCount === 1 ? 'pattern' : 'patterns'} learned</li>
@@ -222,7 +226,7 @@ const AIMemory: React.FC = () => {
             Refresh now
           </button>
         </div>
-      </header>
+      </section>
 
       <div role="status" aria-live="polite" className={statusMsg ? 'nb-mem-status' : 'nb-mem-sr'}>{statusMsg}</div>
 

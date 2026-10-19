@@ -32,11 +32,10 @@ main:has(> .nb-home) { container-type: inline-size; --nb-area-pad: 16px; overflo
 .nb-home h2, .nb-home h3 { margin: 0; }
 
 /* ---- header ---- */
-.nb-home-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; padding-top: 2px; }
-.nb-home-date { margin: 0 0 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gv-text-tertiary); }
-.nb-home-hello { margin: 0; font-size: 30px; line-height: 1.15; font-weight: 400; color: var(--gv-text-primary); overflow-wrap: anywhere; }
-.nb-home-hello em { font-style: italic; color: #C06F00; } /* the display gold one step deeper, for 3 to 1 on the cream at this size */
-.nb-home-line { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--gv-text-secondary); }
+.nb-home-head { padding-top: 2px; }
+/* The title, eyebrow and description come from the one page header (components/pageHeader.css). The column gap
+   (18 px) plus this margin keeps the spec's 24 px below the header (14 px plus 6 px on a phone). */
+.nb-home > .nb-page-head { margin-bottom: 6px; }
 .nb-home-balance {
   display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 14px; min-width: 0;
   background: rgb(255 255 255 / 0.82); border: 1px solid var(--gv-border-subtle); box-shadow: 0 1px 2px rgb(43 29 14 / 0.04);
@@ -200,7 +199,6 @@ main:has(> .nb-home) { container-type: inline-size; --nb-area-pad: 16px; overflo
 
 @media (max-width: 639px) {
   .nb-home { gap: 14px; }
-  .nb-home-hello { font-size: 25px; }
   .nb-home-balance { width: 100%; }
   .nb-home-num { min-height: 84px; padding: 10px 11px; gap: 4px; }
   .nb-home-next { padding: 14px 14px 6px; }

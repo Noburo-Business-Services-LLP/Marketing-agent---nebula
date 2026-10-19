@@ -50,10 +50,11 @@ const PlanHero: React.FC<{
     <header className="nb-plan-hero nb-plan-in" style={{ ['--i' as any]: 0 }}>
       <div className="nb-plan-hero-top">
         <div className="nb-plan-hero-id">
-          <h1>
-            <span className="nb-plan-eyebrow">My plan</span>
-            <span className="nb-plan-hero-name">{name || 'Your marketing plan'}</span>
-          </h1>
+          {/* The page title is the shared page header above this card; the card names the business. */}
+          <h2>
+            <span className="nb-plan-eyebrow">Made for</span>
+            <span className="nb-plan-hero-name">{name || 'Your business'}</span>
+          </h2>
           <div className="nb-plan-hero-meta">
             {made && state !== 'building' && <span className="nb-plan-meta"><CalendarDays aria-hidden />Made on {made}</span>}
             {chip && <span className="nb-plan-meta" data-tone={chip.tone}><span className="nb-plan-status-dot" aria-hidden="true" />{chip.text}</span>}

@@ -26,24 +26,24 @@ test('the style sheet defines every class the header uses', () => {
 });
 
 test('the title is the serif display at one size scale: 32 px, 26 px on a phone', () => {
-  const t = rule(css, '.nb-page-title');
+  const t = rule(css, '.nb-page-head .nb-page-title');
   assert.match(t, /font-family: 'Playfair Display'/);
   assert.match(t, new RegExp(`font-size: ${PAGE_HEADER.titleDesktopPx}px`));
   assert.match(t, new RegExp(`line-height: ${PAGE_HEADER.titleLineHeight}`));
   assert.match(t, new RegExp(`font-weight: ${PAGE_HEADER.titleWeight}`));
   assert.ok(phone.length > 0, 'a phone rule exists');
-  assert.match(rule(phone, '.nb-page-title'), new RegExp(`font-size: ${PAGE_HEADER.titlePhonePx}px`));
+  assert.match(rule(phone, '.nb-page-head .nb-page-title'), new RegExp(`font-size: ${PAGE_HEADER.titlePhonePx}px`));
 });
 
 test('eyebrow, description, emphasis and spacing follow the spec', () => {
-  const e = rule(css, '.nb-page-eyebrow');
+  const e = rule(css, '.nb-page-head .nb-page-eyebrow');
   assert.match(e, new RegExp(`font-size: ${PAGE_HEADER.eyebrowPx}px`));
   assert.match(e, /text-transform: uppercase/);
-  const d = rule(css, '.nb-page-desc');
+  const d = rule(css, '.nb-page-head .nb-page-desc');
   assert.match(d, new RegExp(`font-size: ${PAGE_HEADER.descriptionPx}px`));
   assert.match(d, new RegExp(`max-width: ${PAGE_HEADER.descriptionMaxWidthPx}px`));
   assert.match(d, /color: var\(--gv-text-secondary\)/);
-  assert.match(css, new RegExp(`\\.nb-page-title em, \\.nb-page-em \\{ font-style: italic; font-weight: inherit; color: ${PAGE_HEADER.emphasisColour}`));
+  assert.match(css, new RegExp(`\\.nb-page-head \\.nb-page-title em, \\.nb-page-em \\{ font-style: italic; font-weight: inherit; color: ${PAGE_HEADER.emphasisColour}`));
   const h = rule(css, '.nb-page-head');
   assert.match(h, new RegExp(`margin: 0 0 ${PAGE_HEADER.gapBelowPx}px`), 'no top margin, the spec gap below');
   assert.match(rule(phone, '.nb-page-head'), new RegExp(`margin-bottom: ${PAGE_HEADER.gapBelowPhonePx}px`));

@@ -12,6 +12,7 @@ import {
   type PhotoshootJob, type PhotoshootOptions, type PhotoshootPack, type PhotoshootPhoto, type PhotoshootSelection,
 } from '../utils/photoshoot';
 import '../components/photoshoot/photoshoot.css';
+import PageHeader from '../components/PageHeader';
 
 const PACK_ART: Record<string, React.ReactNode> = {
   product: <PackProductArt />, marketplace: <PackMarketplaceArt />, festival: <PackFestivalArt />,
@@ -181,14 +182,13 @@ const Photoshoot: React.FC = () => {
 
   return (
     <div className="nb-ps" data-testid="photoshoot-page">
-      <header className="nb-ps-head">
-        <div>
-          <p className="nb-ps-eyebrow">Photoshoot</p>
-          <h1 className="nb-ps-title">Product photos, <em>ready in minutes</em></h1>
-          <p className="nb-ps-line">Pick a pack, choose your products and see the price before anything is made. Only your product appears in the photos, never a person.</p>
-        </div>
-        {perPhoto > 0 && <span className="nb-ps-chip"><Camera size={14} aria-hidden="true" />{priceOf(perPhoto)} for each photo</span>}
-      </header>
+      <PageHeader
+        eyebrow="Photoshoot"
+        title="Product photos,"
+        emphasis="ready in minutes"
+        description="Pick a pack, choose your products and see the price before anything is made. Only your product appears in the photos, never a person."
+        actions={perPhoto > 0 ? <span className="nb-ps-chip"><Camera size={14} aria-hidden="true" />{priceOf(perPhoto)} for each photo</span> : undefined}
+      />
 
       {locked && (
         <div className="nb-ps-note" data-tone="warn">

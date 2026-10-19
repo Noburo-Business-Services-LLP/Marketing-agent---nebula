@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, Search, Trash2, X } from 'lucide-react';
-import { GravityLabel, GravityButton } from '../components/gravity';
+import { GravityButton } from '../components/gravity';
 import { useConfirm } from '../context/ConfirmContext';
 import GenerationTimer from '../components/GenerationTimer';
 import HeroShare from '../components/HeroShare';
@@ -18,6 +18,7 @@ import {
 } from '../utils/library';
 import { fillRows } from '../utils/rowSpans';
 import '../components/library/library.css';
+import PageHeader from '../components/PageHeader';
 
 const STATUS_CHIPS: Array<{ key: 'all' | LibraryStatus; label: string }> = [
   { key: 'all', label: 'All' }, { key: 'draft', label: 'Drafts' }, { key: 'ready', label: 'Ready' },
@@ -125,12 +126,13 @@ const Library: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1100px] w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
-      <div>
-        <GravityLabel gold className="mb-2">Library</GravityLabel>
-        <h1 className="text-[26px] sm:text-[32px] font-semibold leading-tight text-[var(--gv-text-primary)]">Everything you have made</h1>
-        <p className="mt-2 text-[14.5px] text-[var(--gv-text-secondary)]">Images, videos and photoshoots in one place. Open one to download it, post it, schedule it or keep editing.</p>
-      </div>
+    <div className="max-w-[1100px] w-full mx-auto px-4 sm:px-6 pb-8 space-y-6">
+      <PageHeader
+        eyebrow="Library"
+        title="Everything you have"
+        emphasis="made"
+        description="Images, videos and photoshoots in one place. Open one to download it, post it, schedule it or keep editing."
+      />
 
       <div className="space-y-3">
         <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1 py-0.5" data-testid="library-filter-row">

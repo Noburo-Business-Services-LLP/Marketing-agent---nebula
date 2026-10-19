@@ -10,7 +10,7 @@ import AddLanguagesControl, { LANGUAGE_VERSION_NOTE } from '../components/AddLan
 import { languageName, variantLabel, versionsOf } from '../utils/languages';
 import GeneratingFill from '../components/GeneratingFill';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
-import { GravityHero, GravityEmphasis } from '../components/gravity';
+import PageHeader, { PageEmphasis } from '../components/PageHeader';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
 import UpgradePrompt from '../components/UpgradePrompt';
@@ -377,11 +377,10 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   // The page-level header, same shape as every other top-level page —
   // TabBar sits below it, not instead of it.
   const Header = () => (
-    <GravityHero
-      align="left"
+    <PageHeader
       eyebrow="Review and approve"
-      headline={<>Review your <GravityEmphasis>posts</GravityEmphasis> before they are published</>}
-      subcopy="Review the posts Nebulaa prepared, approve the ones that are ready, and regenerate the ones that need changes."
+      title={<>Review your <PageEmphasis>posts</PageEmphasis> before they are published</>}
+      description="Review the posts Nebulaa prepared, approve the ones that are ready, and regenerate the ones that need changes."
     />
   );
 
@@ -411,12 +410,13 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   if (total === 0) {
     return (
       <div className="max-w-[1100px] mx-auto pb-24">
+        <Header />
         <TabBar />
         <div className="max-w-[720px] mx-auto text-center py-16">
         <div className="gravity-label mb-4">No posts to review</div>
-        <h1 className="font-serif-display text-[42px] leading-[1.05] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-4">
-          No posts are waiting for <span className="italic text-[var(--gv-accent-display)]">your review</span>.
-        </h1>
+        <h2 className="font-serif-display text-[24px] leading-[1.2] tracking-[-0.01em] text-[var(--gv-text-primary)] mb-3">
+          No posts are waiting for <PageEmphasis>your review</PageEmphasis>.
+        </h2>
         <p className="text-[14px] text-[var(--gv-text-tertiary)] max-w-[520px] mx-auto mb-6">
           New posts that Nebulaa prepares will appear here for your approval.
         </p>
@@ -640,9 +640,9 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
               <p className="text-[12.5px] text-[var(--gv-text-secondary)] mt-2">{LANGUAGE_VERSION_NOTE}</p>
             </div>
           )}
-          <h1 className="font-serif-display text-[36px] leading-[1.1] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-6">
+          <h2 className="font-serif-display text-[24px] leading-[1.2] tracking-[-0.01em] text-[var(--gv-text-primary)] mb-6">
             {current?.title || current?.name || 'Untitled draft'}
-          </h1>
+          </h2>
 
           <dl className="grid grid-cols-[110px_1fr] gap-y-3 gap-x-4 mb-6">
             <dt className="gravity-label pt-1">Scheduled</dt>

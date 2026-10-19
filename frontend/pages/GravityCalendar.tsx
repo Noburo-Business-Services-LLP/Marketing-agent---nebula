@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Plus, Loader2 } from 'lucide-react';
 import { apiService } from '../services/api';
 import { Campaign } from '../types';
-import { GravityHero } from '../components/gravity';
+import { PageEmphasis } from '../components/PageHeader';
 
 // Gravity Calendar — a real month grid: jump to any month, see every day at
 // once, posts sit on the day they're actually scheduled for with a
@@ -135,13 +135,14 @@ const GravityCalendar: React.FC = () => {
     <div className="max-w-[1440px] mx-auto pb-16">
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-6">
-        <GravityHero
-          align="left"
-          eyebrow="Schedule"
-          headline={<>{monthLabel} <span className="italic text-[var(--gv-accent-display)]">{yearLabel}</span></>}
-          className="!mb-0"
-        />
-        <div className="flex items-center gap-2 flex-shrink-0 mt-8">
+        {/* A section heading: the page title is the shared page header of the Calendar page. */}
+        <div className="min-w-0">
+          <p className="gravity-label mb-2">Schedule</p>
+          <h2 className="font-serif-display text-[24px] leading-[1.2] tracking-[-0.01em] text-[var(--gv-text-primary)]">
+            {monthLabel} <PageEmphasis>{yearLabel}</PageEmphasis>
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0 mt-6">
           <button
             onClick={() => setAnchorMonth((m) => addMonths(m, -1))}
             title="Previous month"

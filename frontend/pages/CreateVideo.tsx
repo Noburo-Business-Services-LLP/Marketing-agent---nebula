@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, ChevronDown, Download, Loader2, Package, Image as ImageIcon, User as UserIcon, Wand2, Trash2, Sparkles, Music } from 'lucide-react';
-import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
+import { GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
+import PageHeader from '../components/PageHeader';
 import IdeaBoxTools from '../components/IdeaBoxTools';
 import PlatformIcon from '../components/PlatformIcon';
 import { ShapeArt, LogoPostArt } from '../components/CreateOptions';
@@ -320,10 +321,11 @@ const CreateVideo: React.FC = () => {
 
   return (
     <div className="max-w-[820px] mx-auto pb-24">
-      <GravityHero
-        className="!mb-6"
+      <PageHeader
         eyebrow="Videos"
-        headline={<>Describe your <GravityEmphasis>video</GravityEmphasis></>}
+        title="Describe your"
+        emphasis="video"
+        description="Describe the video once. Nebulaa writes the script, chooses the voice and makes every scene."
       />
 
       {step !== 'result' && (
