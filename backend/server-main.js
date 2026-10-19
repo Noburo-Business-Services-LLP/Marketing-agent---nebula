@@ -486,6 +486,8 @@ app.use('/api/videos', require('./routes/studioVideos'));
 app.use('/api/blueprint', blueprintRoutes);
 app.use('/api/plan', require('./routes/plan'));
 app.use('/api/home', require('./routes/home'));
+// Home drafts from a competitor's stored post (a post in response, a witty comment to copy). Off unless ENABLE_COMPETITOR_DRAFTS=on.
+app.use('/api/home', require('./routes/homeDrafts'));
 app.use('/api/week', require('./routes/week'));
 app.use('/api/setup', require('./routes/week').setupRouter);
 app.use('/api/tour', require('./routes/tour'));

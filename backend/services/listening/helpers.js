@@ -243,10 +243,10 @@ const SUFFIX = '(?:s|es|ing|in|ed|er|y)?';
 const SEP_LONG = '[.,\\-_/|;:\\s]?';
 const SEP_SHORT = '[.,\\-_/|;:]?';
 
-function abuseRegexList() {
-  if (abuseRegexes) return abuseRegexes;
+/** Whole-word patterns (with the obfuscation rules above) for a list of words. Shared with the Home drafts filter. */
+function wordRegexes(words) {
   const list = [];
-  for (const raw of cfg.ABUSE_WORDS) {
+  for (const raw of Array.isArray(words) ? words : []) {
     const w = String(raw).normalize('NFKC').toLowerCase().trim();
     if (!w) continue;
     if (!/^[a-z]+$/.test(w)) { list.push(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u')); continue; }
@@ -263,7 +263,11 @@ function abuseRegexList() {
       list.push(new RegExp(`${BOUND_L}${letters.slice(0, -1).join(sep)}${sep}(?:ing|in|ed|er|d|r|s)${BOUND_R}`, 'u'));
     }
   }
-  abuseRegexes = list;
+  return list;
+}
+
+function abuseRegexList() {
+  if (!abuseRegexes) abuseRegexes = wordRegexes(cfg.ABUSE_WORDS);
   return abuseRegexes;
 }
 
@@ -334,6 +338,17 @@ function safeQuoteText(text) {
   return t;
 }
 
+/**
+ * True when the text holds none of the abuse words (on the text as written and on its normalised form). Only the abuse
+ * rule: no length, number or contact rules, so it can check any sentence. Used by the Home drafts filter.
+ */
+function isDecentText(text) {
+  if (typeof text !== 'string') return false;
+  const t = collapse(text.length > SAFE_INPUT_MAX * 2 ? text.slice(0, SAFE_INPUT_MAX * 2) : text).normalize('NFKC');
+  for (const v of new Set([t.toLowerCase(), abuseForm(t)])) if (abuseUnsafe(v)) return false;
+  return true;
+}
+
 // The ~270 abuse patterns compile on their first uses (about 125 ms for plain text, 90 ms more for the first Tamil or emoji
 // text, and a slower second run). Doing that once at load keeps the first card load after a restart from stalling.
 (function warmQuoteFilter() {
@@ -388,4 +403,8 @@ function pickQuotes(candidates, now) {
   } catch (_) { return []; }
 }
 
-module.exports = { eligibleItem, kindOf, makeBatches, buildPrompt, parseReply, aggregate, percentages, trendSentence, safeQuoteText, pickQuotes, truncateAtWord };
+module.exports = {
+  eligibleItem, kindOf, makeBatches, buildPrompt, parseReply, aggregate, percentages, trendSentence, safeQuoteText, pickQuotes, truncateAtWord,
+  // shared with the Home drafts decency filter (services/homeDrafts/decency.js)
+  isDecentText, wordRegexes, abuseForm, contactForm, contactUnsafe, foldText, extractJson
+};

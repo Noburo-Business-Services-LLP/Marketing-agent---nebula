@@ -40,6 +40,12 @@ const PROVIDER_RATES = {
   listening_input_per_mtok: 0.15,
   listening_output_per_mtok: 0.60,
 
+  // The regional writing model (TEXT_MODEL_REGIONAL, default gpt-6.1-sol): $2 per million tokens in, $10 out (the same
+  // figures as the note above). The decency check of the Home drafts runs on the cheapest configured text model, which is
+  // this one unless DECENCY_CHECK_MODEL or LISTENING_MODEL names a cheaper one, so pricing the check here is the safe side.
+  regional_input_per_mtok: 2.00,
+  regional_output_per_mtok: 10.00,
+
   // OpenAI pricing, per minute of audio, about USD 0.006 (checked from the owner's earlier real run 2026-10-18).
   // whisper-1 times the subtitles of a finished video. Billed per second of audio but estimated here in 6 second blocks.
   whisper_per_minute: 0.006,
@@ -171,7 +177,11 @@ const TOKENS = {
   scene_script:      { in: 2000, out: 800 },  // per scene, video pipeline
   story_skeleton:    { in: 3000, out: 1600 }, // once per video: story + shot list
   blueprint_plan:    { in: 5000, out: 4500 }, // one planner call per Brand Growth Blueprint
-  listening_batch:   { in: 3000, out: 700 }   // one batch of up to 40 comments, labels only
+  listening_batch:   { in: 3000, out: 700 },  // one batch of up to 40 comments, labels only
+  // Home drafts. Output includes the thinking tokens a newer model spends before it answers, so it is generous.
+  home_response_post: { in: 1600, out: 1200 }, // one caption (up to 600 characters) and a short picture idea
+  home_witty_comment: { in: 1300, out: 800 },  // one comment (up to 220 characters)
+  decency_check:      { in: 900, out: 500 }    // one yes or no answer about one draft
 };
 
 const gpt4o = (shape) =>
@@ -184,6 +194,17 @@ const listeningCost = (shape) =>
   (shape.out * PROVIDER_RATES.listening_output_per_mtok / 1e6);
 
 const image = PROVIDER_RATES.nano_banana_pro_per_image;
+
+const regionalCost = (shape) =>
+  (shape.in * PROVIDER_RATES.regional_input_per_mtok / 1e6) +
+  (shape.out * PROVIDER_RATES.regional_output_per_mtok / 1e6);
+
+// Home drafts: how often the first draft fails a check and one more is written (at most one). Not measured yet (no real
+// drafts exist): set on the pessimistic side and to be measured from the staff counts once the feature is in use.
+const HOME_DRAFT_REWRITE_RATE = 0.3;
+// One draft = one writing call (priced on the English model, the dearer of the two writers) plus one decency check,
+// times the chance of a second try. A blocked or failed draft is refunded, so its cost is carried by the margin.
+const homeDraft = (shape) => (gpt4o(shape) + regionalCost(TOKENS.decency_check)) * (1 + HOME_DRAFT_REWRITE_RATE);
 
 // What one finished picture costs on the current path: English starts at low and is remade at medium when the
 // proofreader finds a problem; other languages start at medium and are remade at high. Every attempt is checked.
@@ -327,7 +348,11 @@ const ACTION_USD = {
 
   // A person or a place made for a video before it is filmed: one medium quality picture, no proofreading (it
   // carries no text). The customer approves it, or asks for another.
-  studio_reference: PROVIDER_RATES.gpt_image_2_per_picture.medium + assetCost(INFRA.mb_per_image)
+  studio_reference: PROVIDER_RATES.gpt_image_2_per_picture.medium + assetCost(INFRA.mb_per_image),
+
+  // Home drafts from a competitor's post (text only, nothing is posted anywhere): see homeDraft() above.
+  home_response_post: homeDraft(TOKENS.home_response_post),
+  home_witty_comment: homeDraft(TOKENS.home_witty_comment)
 };
 
 // ---------------------------------------------------------------------------
@@ -425,7 +450,9 @@ const ACTION_UNITS = {
   listening_score: 'per batch of comments',
   studio_transcription: 'per 6 seconds of video',
   blueprint: 'per blueprint',
-  blueprint_pdf: 'per designed Blueprint PDF'
+  blueprint_pdf: 'per designed Blueprint PDF',
+  home_response_post: 'per draft',
+  home_witty_comment: 'per draft'
 };
 
 // ---------------------------------------------------------------------------
@@ -712,7 +739,7 @@ const ADDONS = {
 };
 
 module.exports = {
-  listeningCost,
+  listeningCost, regionalCost, HOME_DRAFT_REWRITE_RATE, TOKENS,
   PROVIDER_RATES, HERO_CLIP_SECONDS, STUDIO_CLIP_SECONDS, STUDIO_TRANSCRIBE_BLOCK_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
   assertPlanAllowance, TOPUP_PACKS, TOPUP_INR_PER_QUARK, outputsFor, GST_RATE, gstPaise, chargePaise, ADDONS, AGENCY,

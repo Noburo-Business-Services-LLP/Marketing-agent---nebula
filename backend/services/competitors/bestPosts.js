@@ -57,6 +57,19 @@ const handleOf = (c) => String((c && c.socialHandles && c.socialHandles.instagra
 const HANDLE_RE = /^[A-Za-z0-9._]{1,30}$/;
 const POST_LINK = /^https:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/[A-Za-z0-9_-]{1,64}\/?$/;
 
+/**
+ * A stable key for one stored post: its Instagram shortcode when the link is known ("p-Cx12_ab"), else its time
+ * ("t-1760000000000"). With the competitor id it makes the post reference ("<competitorId>.<key>") that the Home drafts
+ * use, so the page names a stored post and never sends any text of it.
+ */
+function postKeyOf(p) {
+  const m = /instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]{1,64})\/?$/.exec(String((p && p.url) || ''));
+  if (m) return `p-${m[1]}`;
+  const at = toDate(p && p.at);
+  return at ? `t-${at.getTime()}` : '';
+}
+const postRefOf = (competitorId, p) => { const k = postKeyOf(p); return competitorId && k ? `${competitorId}.${k}` : ''; };
+
 /** likes + 3 x comments; null when the likes are not known. */
 function scoreOf(p) {
   if (!p || !isCount(p.likes)) return null;
@@ -186,7 +199,7 @@ function competitorCard({ competitor, status, snapshots, now, lastCheckedAt = nu
   const month = week ? null : bestOf(posts, { now: at, period: 'month' });
   const best = week || month;
   if (best) {
-    card.bestPost = { period: week ? 'week' : 'month', type: best.type, likes: best.likes, comments: best.comments, at: best.at.toISOString(), url: best.url, score: best.score };
+    card.bestPost = { period: week ? 'week' : 'month', type: best.type, likes: best.likes, comments: best.comments, at: best.at.toISOString(), url: best.url, score: best.score, ref: postRefOf(card.id, best) };
   } else if (!asArray(latest.posts).length && latest.topPost) {
     // An older snapshot (before the post list was stored): its own best post, if it is recent and has likes.
     const t = latest.topPost; const tAt = toDate(latest.topPostAt);
@@ -194,7 +207,7 @@ function competitorCard({ competitor, status, snapshots, now, lastCheckedAt = nu
       const url = POST_LINK.test(String(t.url || '')) ? t.url : '';
       card.bestPost = {
         period: weekStartOf(tAt) === thisWeek ? 'week' : 'month', type: typeOf(t.type), likes: t.likes, comments: isCount(t.comments) ? t.comments : null,
-        at: tAt.toISOString(), url, score: scoreOf({ likes: t.likes, comments: t.comments })
+        at: tAt.toISOString(), url, score: scoreOf({ likes: t.likes, comments: t.comments }), ref: postRefOf(card.id, { url, at: tAt })
       };
     }
   }
@@ -258,7 +271,7 @@ function workingPosts(cards, { pillars = [], max = MAX_WORKING } = {}) {
       const counts = `${fmt(b.likes)} ${b.likes === 1 ? 'like' : 'likes'}${isCount(b.comments) && b.comments > 0 ? ` and ${fmt(b.comments)} ${b.comments === 1 ? 'comment' : 'comments'}` : ''}`;
       const { type, brief } = competitorBrief(c, topic);
       return {
-        competitorId: c.id, name: c.name, handle: c.handle, period: b.period, type: b.type, likes: b.likes, comments: b.comments, at: b.at, url: b.url,
+        competitorId: c.id, name: c.name, handle: c.handle, period: b.period, type: b.type, likes: b.likes, comments: b.comments, at: b.at, url: b.url, ref: b.ref || '',
         reason: `A ${NOUN[b.type]} on ${dayLabel(new Date(b.at))} with ${counts}, their best ${b.period === 'week' ? 'this week' : 'this month'}.`,
         worked: c.worked ? c.worked.text : null,
         action: actionFor(type, brief)
@@ -331,6 +344,6 @@ function isPlainText(s) {
 }
 
 module.exports = {
-  scoreOf, mergePosts, bestOf, whatWorked, competitorCard, workingPosts, trendItems, cleanTopic, safeTopic, isPlainText,
+  scoreOf, postKeyOf, postRefOf, mergePosts, bestOf, whatWorked, competitorCard, workingPosts, trendItems, cleanTopic, safeTopic, isPlainText,
   SCORE_COMMENT_WEIGHT, MIN_POSTS_FOR_PATTERN, MIN_GROUP, MIN_RATIO, MONTH_DAYS, FESTIVAL_WINDOW_DAYS, MAX_WORKING, MAX_TRENDING
 };

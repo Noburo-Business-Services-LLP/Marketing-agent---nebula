@@ -20,9 +20,11 @@ const PROVIDER_OF = {
   video_scene_clip: 'fal_video', video_character_portrait: 'fal_video',
   competitor_scrape: 'apify_scrape',
   listening_score: 'listening_score',
-  studio_transcription: 'studio_transcription'
+  studio_transcription: 'studio_transcription',
+  // Home drafts from a competitor's post: their own switch, so staff can stop just these (the Writing switch stops them too).
+  home_response_post: 'home_drafts', home_witty_comment: 'home_drafts'
 };
-const LABELS = { openai_image: 'Pictures', openai_text: 'Writing', google_video: 'Videos', fal_video: 'Older video maker', apify_scrape: 'Competitor checks', listening_score: 'Comment scoring', studio_transcription: 'Subtitle timing' };
+const LABELS = { openai_image: 'Pictures', openai_text: 'Writing', google_video: 'Videos', fal_video: 'Older video maker', apify_scrape: 'Competitor checks', listening_score: 'Comment scoring', studio_transcription: 'Subtitle timing', home_drafts: 'Competitor post drafts' };
 const PROVIDERS = Object.keys(LABELS);
 const BUSY = 'Making things is very busy right now. Please try again in a little while. Nothing was charged.';
 

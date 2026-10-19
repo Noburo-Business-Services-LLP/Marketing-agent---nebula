@@ -44,6 +44,7 @@ const RULES = [
   { model: 'EmailCampaign', field: 'userId', action: D },
   { model: 'FeatureEvent', field: 'userId', action: D },
   { model: 'HeroVideoJob', field: 'userId', action: D },
+  { model: 'HomeDraft', field: 'userId', action: D, note: 'Home drafts from competitor posts: the request ledger, and the text of drafts that were shown. Removed after 30 days anyway.' },
   { model: 'Influencer', field: 'userId', action: D },
   { model: 'InfluencerAnalytics', field: 'userId', action: D },
   { model: 'Insight', field: 'userId', action: D },
