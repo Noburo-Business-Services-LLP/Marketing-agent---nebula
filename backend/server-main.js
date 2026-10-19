@@ -474,6 +474,8 @@ app.post('/api/video-generation/schedulePost', protect, requireFeature('schedule
 const CHEAP_VIDEO_POSTS = /^\/(favourite-audio|favourite-voice|updateEnvironment|applySceneLogo|createDraft|schedulePost|jobs\/[^/]+\/cancel)\/?$/;
 app.use('/api/video-generation', protect, requireFeature('video', { when: (req) => req.method === 'POST' && !CHEAP_VIDEO_POSTS.test(req.path) }));
 app.use('/api/video-generation', videoGenerationRoutes);
+// Posting or scheduling a finished Hero video follows the same Publish add-on rule as posts (owner decision 8).
+app.post('/api/hero-video/jobs/:jobId/publish', protect, requireFeature('publish'));
 app.use('/api/hero-video', protect, requireFeature('video', { when: (req) => req.method === 'POST' && /^\/(concepts|plan|generate)\/?$/.test(req.path) }));
 app.use('/api/hero-video', heroVideoRoutes);
 // Download your data, delete your account, undo that, and agree to the current terms.
@@ -806,6 +808,13 @@ const startServer = async () => {
       require('./services/homeDrafts').startHomeDraftsSweep();
     } catch (schedulerError) {
       console.warn('Home drafts sweep failed to start:', schedulerError.message);
+    }
+
+    // Remove items that have been in the Bin for more than 14 days, with their stored files (off with ENABLE_BIN_PURGE=off)
+    try {
+      require('./services/binPurge').startBinPurge();
+    } catch (schedulerError) {
+      console.warn('Bin purge failed to start:', schedulerError.message);
     }
 
     // Pick up weekly posts a restart left half-made (off with ENABLE_WEEK_RECOVERY=off)

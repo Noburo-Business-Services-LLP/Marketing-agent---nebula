@@ -39,6 +39,10 @@ async function generateSingleCalendarItem(calendar, item, weekNumber) {
       userId: calendar.userId,
       title: item.headline || `Weekly Generated Day ${item.day}`,
       status: 'processing',
+      // Made by Nebulaa (weekly plan, calendar auto-generation, regenerate): needs the customer's approval.
+      origin: 'automation',
+      // The day the plan meant it for: approving it schedules it for this date (services/postLifecycle.js).
+      plannedDate: require('./postLifecycle').plannedDateFor({ isoDate: item.plannedOn, month: calendar.month, day: item.day }),
       sourceType,
       contentCalendarId: calendar._id,
       calendarWeek: weekNumber,
@@ -145,6 +149,9 @@ Return ONLY a JSON object (no markdown, no backticks, no code blocks):
       }
     });
     await campaign.save();
+    // Linked, so approving, posting or scheduling the post uses this campaign (no second copy), and the campaign
+    // routes can see that it belongs to a post that still needs approval.
+    try { await Draft.updateOne({ _id: draft._id }, { $set: { campaignId: campaign._id } }); draft.campaignId = campaign._id; } catch (_) { /* best effort */ }
 
     // Remember this generation in the AI Memory system (Layer 1 evidence).
     // Fire-and-forget, same as the single-post path above.

@@ -1530,6 +1530,7 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
           $set: {
             title: String(payload.description || 'AI Video Draft').substring(0, 50),
             status: 'processing',
+            origin: 'manual',
             sourceType: 'reel',
             contentType: 'reel',
             'generationProgress.step': 'Queued in background',

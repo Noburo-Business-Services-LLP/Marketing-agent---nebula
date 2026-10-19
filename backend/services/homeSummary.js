@@ -6,7 +6,7 @@
 // How each number is computed and what each reason means: docs/superpowers/ops/home-summary.md
 const { istWeek, istDay } = require('./weekIst');
 const { nextActions } = require('./homeActions');
-const { awaitingFilter } = require('./draftStatus');
+const { needsApprovalFilter } = require('./draftStatus');
 const { canUse, resolveTier } = require('../config/entitlements');
 const { setupSteps } = require('./week/setupSteps');
 const { profileComplete } = require('./plan/profileInput');
@@ -83,14 +83,14 @@ function defaultDeps() {
   const m = (name) => require(`../models/${name}`);
   return {
     now: () => new Date(),
-    draftsWaiting: (userId) => m('Draft').countDocuments(awaitingFilter(userId)).maxTimeMS(MAX_TIME_MS),
+    draftsWaiting: (userId) => m('Draft').countDocuments(needsApprovalFilter(userId)).maxTimeMS(MAX_TIME_MS),
     publishedBetween: (userId, from, to) => m('Campaign').countDocuments({ userId, status: 'posted', publishedAt: { $gte: from, $lt: to } }).maxTimeMS(MAX_TIME_MS),
     scheduledBetween: (userId, from, to) => m('Campaign').countDocuments({ userId, status: 'scheduled', scheduledFor: { $gte: from, $lt: to } }).maxTimeMS(MAX_TIME_MS),
     todayCampaigns: (userId, from, to) => m('Campaign').find({ $or: [{ userId, scheduledFor: { $gte: from, $lt: to } }, { userId, publishedAt: { $gte: from, $lt: to } }] })
       .select('name status platforms scheduledFor publishedAt creative.imageUrls creative.textContent').sort({ scheduledFor: 1 }).limit(TODAY_LIMIT).maxTimeMS(MAX_TIME_MS).lean(),
     recentItems: async (userId) => {
       const [drafts, campaigns] = await Promise.all([
-        m('Draft').find({ userId }).sort({ createdAt: -1 }).limit(RECENT_LIMIT + 2).select('imageUrl creative.imageUrls platforms scheduledDate createdAt').maxTimeMS(MAX_TIME_MS).lean(),
+        m('Draft').find({ userId, status: { $ne: 'binned' } }).sort({ createdAt: -1 }).limit(RECENT_LIMIT + 2).select('imageUrl creative.imageUrls platforms scheduledDate createdAt').maxTimeMS(MAX_TIME_MS).lean(),
         m('Campaign').find({ userId }).sort({ createdAt: -1 }).limit(RECENT_LIMIT + 2).select('creative.imageUrls platforms scheduledFor publishedAt createdAt').maxTimeMS(MAX_TIME_MS).lean()
       ]);
       // Drafts first: the artwork a customer has made lives on drafts.

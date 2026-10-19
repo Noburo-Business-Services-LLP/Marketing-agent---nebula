@@ -15,12 +15,30 @@ const { buildBrandMemoryBlock } = require('../services/brandMemory');
 const { callTextLLM } = require('../services/openAI');
 const { parseGeminiJSON } = require('../services/geminiAI');
 const { normalizeLanguage } = require('../services/contentCalendarService');
+const postLifecycle = require('../services/postLifecycle');
+const { publishGate, editableFields, listStatusFilter } = postLifecycle;
+
+// Approve, Bin, archive, restore and counts (services/postLifecycle.js). Built lazily so tests can load this file.
+let lifecycle = null;
+const actions = () => (lifecycle = lifecycle || postLifecycle.createPostActions({ Draft, Campaign, upsertCampaign: (...a) => upsertCampaignFromDraft(...a) }));
+const ownerId = (req) => req.user.userId || req.user.id;
+const send = (res, out) => res.status(out.status).json(out.json);
+const lifecycleRoute = (name, failMessage) => async (req, res) => {
+  try {
+    return send(res, await actions()[name](ownerId(req), req.params.id));
+  } catch (error) {
+    console.error(`Draft ${name} error:`, error && error.message);
+    return res.status(500).json({ success: false, message: failMessage });
+  }
+};
 
 // 1. POST /save - Create or update a draft (upsert by _id if provided)
 router.post('/save', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
-    const { _id, ...draftData } = req.body;
+    const { _id } = req.body || {};
+    // Status and origin are never taken from the body: approval and the Bin have their own routes.
+    const draftData = editableFields(req.body);
 
     let draft;
     if (_id) {
@@ -32,8 +50,11 @@ router.post('/save', protect, async (req, res) => {
       }
     }
 
+    // A draft saved here is made by the customer by hand (Create, Campaigns), so it needs no approval.
     draft = new Draft({
       ...draftData,
+      status: req.body && req.body.status === 'completed' ? 'completed' : 'draft',
+      origin: 'manual',
       userId
     });
     await draft.save();
@@ -50,14 +71,8 @@ router.get('/', protect, async (req, res) => {
     const userId = req.user.userId || req.user.id;
     const { status, type } = req.query;
 
-    const query = { userId };
-    if (status && status !== 'all') {
-      if (status === 'draft') {
-        query.status = { $in: ['draft', 'processing', 'completed', 'failed'] };
-      } else {
-        query.status = status;
-      }
-    }
+    // The Bin is only listed when asked for (?status=binned).
+    const query = { userId, status: listStatusFilter(status) };
     if (type) {
       if (type.includes(',')) {
         query.contentType = { $in: type.split(',') };
@@ -71,6 +86,18 @@ router.get('/', protect, async (req, res) => {
   } catch (error) {
     console.error('Get drafts error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch drafts', error: error.message });
+  }
+});
+
+// GET /counts - how many posts in each Library view (the Library badge is needsApproval). countDocuments on the
+// { userId, status } index. needsApproval uses the same filter as Home "drafts waiting".
+router.get('/counts', protect, async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    return send(res, await actions().counts(ownerId(req)));
+  } catch (error) {
+    console.error('Draft counts error:', error && error.message);
+    return res.status(500).json({ success: false, message: 'We could not load your post counts. Please try again.' });
   }
 });
 
@@ -101,7 +128,7 @@ router.put('/:id', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Draft not found' });
     }
 
-    Object.assign(draft, req.body);
+    Object.assign(draft, editableFields(req.body));
     await draft.save();
 
     // If there is an associated campaign, update that too to keep them in sync
@@ -120,13 +147,14 @@ router.put('/:id', protect, async (req, res) => {
           hashtags: draft.hashtags || campaign.creative?.hashtags || [],
           callToAction: draft.cta || campaign.creative?.callToAction || ''
         };
-        if (draft.scheduledDate) {
+        // Only a post that is scheduled moves its campaign's time. An edit never schedules a post by itself (that
+        // would skip approval and the Publish add-on check).
+        if (draft.scheduledDate && draft.status === 'scheduled' && campaign.status === 'scheduled') {
           campaign.scheduling = {
             startDate: draft.scheduledDate,
             frequency: 'once',
             postTime: new Date(draft.scheduledDate).toTimeString().split(' ')[0].substring(0, 5)
           };
-          campaign.status = 'scheduled';
         }
         await campaign.save();
       }
@@ -196,8 +224,15 @@ router.post('/:id/schedule', protect, requireFeature('schedule'), async (req, re
     if (!draft) {
       return res.status(404).json({ success: false, message: 'Draft not found' });
     }
+    // Automation posts must be approved first; manual posts are scheduled straight away.
+    const blocked = publishGate(draft);
+    if (blocked) return res.status(blocked.status).json({ success: false, message: blocked.message });
+    const when = new Date(scheduledDate);
+    if (Number.isNaN(when.getTime())) {
+      return res.status(400).json({ success: false, message: 'Please choose a valid date and time.' });
+    }
 
-    draft.scheduledDate = new Date(scheduledDate);
+    draft.scheduledDate = when;
     draft.status = 'scheduled';
     await draft.save();
 
@@ -223,6 +258,9 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
     if (!draft) {
       return res.status(404).json({ success: false, message: 'Draft not found' });
     }
+    // Automation posts must be approved first; manual posts are posted straight away.
+    const blocked = publishGate(draft);
+    if (blocked) return res.status(blocked.status).json({ success: false, message: blocked.message });
 
     // Override platforms if supplied in body, else use draft's
     if (req.body.platforms) {
@@ -281,25 +319,28 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
   }
 });
 
-// 7. DELETE /:id - Soft-delete (archive) a draft
+// 7. DELETE /:id - Move a draft to the Bin (restorable for 14 days, then removed for good by services/binPurge.js).
+// Posted items cannot be binned (archive them); scheduled items must be unscheduled first.
 router.delete('/:id', protect, async (req, res) => {
   try {
-    const userId = req.user.userId || req.user.id;
-    const draft = await Draft.findOne({ _id: req.params.id, userId });
-
-    if (!draft) {
-      return res.status(404).json({ success: false, message: 'Draft not found' });
-    }
-
-    draft.status = 'archived';
-    await draft.save();
-
-    res.status(200).json({ success: true, message: 'Draft archived successfully' });
+    return send(res, await actions().bin(ownerId(req), req.params.id));
   } catch (error) {
-    console.error('Delete draft error:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete draft', error: error.message });
+    console.error('Delete draft error:', error && error.message);
+    res.status(500).json({ success: false, message: 'Failed to delete draft' });
   }
 });
+
+// Approve: "this is good enough to go out". Never posts. With a planned date ahead and the right to schedule it is
+// scheduled for that date; otherwise it waits as approved. Free on every plan.
+router.post('/:id/approve', protect, lifecycleRoute('approve', 'We could not approve this post. Please try again.'));
+// Back to Needs approval (only from approved).
+router.post('/:id/unapprove', protect, lifecycleRoute('unapprove', 'We could not change this post. Please try again.'));
+// Scheduled back to approved; its campaign goes back to draft so the scheduler does not send it.
+router.post('/:id/unschedule', protect, lifecycleRoute('unschedule', 'We could not unschedule this post. Please try again.'));
+// Archive: out of the way, restorable any time. Posted items can be archived; scheduled ones must be unscheduled first.
+router.post('/:id/archive', protect, lifecycleRoute('archive', 'We could not archive this post. Please try again.'));
+// Restore from the Bin (within 14 days) or from Archived.
+router.post('/:id/restore', protect, lifecycleRoute('restore', 'We could not restore this item. Please try again.'));
 
 const ContentCalendar = require('../models/ContentCalendar');
 const backgroundQueue = require('../services/backgroundQueue');
@@ -314,8 +355,9 @@ router.post('/:id/reject', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Draft not found' });
     }
 
-    draft.status = 'archived';
-    await draft.save();
+    // Reject is an archive (restorable any time) that also marks the calendar day rejected.
+    const archived = await actions().archive(userId, req.params.id);
+    if (archived.status !== 200) return send(res, archived);
 
     // If it is linked to a ContentCalendar, update its status
     if (draft.contentCalendarId && draft.calendarDay) {
@@ -355,6 +397,9 @@ router.post('/:id/regenerate', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Draft not found' });
     }
 
+    if (draft.status === 'scheduled' || draft.status === 'binned') {
+      return res.status(409).json({ success: false, message: draft.status === 'scheduled' ? postLifecycle.MSG.unscheduleFirst : postLifecycle.MSG.restoreFromBin });
+    }
     if (!draft.contentCalendarId || !draft.calendarDay) {
       return res.status(400).json({ success: false, message: 'Draft is not associated with a calendar item' });
     }
@@ -378,7 +423,8 @@ router.post('/:id/regenerate', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Calendar item not found' });
     }
 
-    // Archive current draft
+    // Archive current draft (restorable, like any archive)
+    draft.archivedFrom = String(draft.status || 'draft');
     draft.status = 'archived';
     await draft.save();
 
@@ -460,6 +506,7 @@ router.post('/upload-media', protect, mediaUpload.single('file'), async (req, re
       hashtags: [],
       platforms: platformList,
       status: 'completed', // media already exists — nothing to generate
+      origin: 'manual',
       sourceType: 'post',
       contentType: 'post',
       imageUrl: isVideo ? '' : mediaUrl,
@@ -639,6 +686,7 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
       imagePrompt: prompt || '',
       theme: String(theme || '').replace(/\s+/g, ' ').trim().slice(0, 60),
       status: 'processing',
+      origin: 'manual',
       sourceType: type === 'campaign' ? 'campaign' : 'post',
       contentType: type === 'campaign' ? 'campaign' : 'post',
       language: language || 'English',

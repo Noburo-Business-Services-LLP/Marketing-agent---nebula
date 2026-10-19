@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { requireFeature, requireFeatureWhen, wantsScheduling } = require('../middleware/requireFeature');
+const { campaignApprovalBlock } = require('../services/postLifecycle');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
 const { walletBalance } = require('../services/agency');
 const { getTextModelChain, isModelRetiredError, markModelRetired } = require('../services/geminiTextModels');
@@ -2749,6 +2750,7 @@ router.post('/', protect, requireFeatureWhen('schedule', wantsScheduling), async
         tone: campaign.tone || '',
         scheduledDate: campaign.scheduling?.startDate || null,
         status: 'draft',
+        origin: 'manual',
         sourceType: 'campaign',
         campaignId: campaign._id,
         creative: campaign.creative || {}
@@ -2939,6 +2941,12 @@ router.put('/:id', protect, requireFeatureWhen('schedule', wantsScheduling), asy
       updatePayload.socialPostIds = Object.keys(nextSocialPostIds).length > 0 ? nextSocialPostIds : null;
     }
 
+    // Scheduling (or marking live) a campaign that belongs to an automation post needs the post approved first.
+    if (['scheduled', 'active'].includes(String(updatePayload.status || '').toLowerCase())) {
+      const notApproved = await campaignApprovalBlock({ _id: req.params.id }, userId);
+      if (notApproved) return res.status(notApproved.status).json({ success: false, message: notApproved.message });
+    }
+
     const campaign = await Campaign.findOneAndUpdate(
       { _id: req.params.id, userId },
       { $set: updatePayload },
@@ -3053,6 +3061,9 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
     if (!campaign) {
       return res.status(404).json({ success: false, message: 'Campaign not found' });
     }
+    // A campaign that belongs to an automation post goes out only once the post is approved.
+    const notApproved = await campaignApprovalBlock(campaign, userId);
+    if (notApproved) return res.status(notApproved.status).json({ success: false, message: notApproved.message });
     
     // Get the user's Ayrshare profile key for posting to their connected accounts
     const user = await User.findById(userId);

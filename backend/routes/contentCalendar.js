@@ -306,6 +306,7 @@ router.post('/items/:itemId/auto-generate', protect, async (req, res) => {
           $set: {
             title: String(item.headline || `Day ${item.day} reel`).substring(0, 50),
             status: 'processing',
+            origin: 'automation',
             sourceType: 'reel',
             contentType: 'reel',
             'generationProgress.step': 'Queued in background',

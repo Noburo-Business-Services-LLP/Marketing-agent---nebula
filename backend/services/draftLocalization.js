@@ -3,6 +3,7 @@
 // localizeCampaignContent (unchanged). That function has no price in config/apiCosts.js and the
 // existing /api/content/localize-campaign route takes no Quarks, so this charges nothing either.
 const mongoose = require('mongoose');
+const { originOf } = require('./draftStatus');
 const { BASE_LANGUAGES, MAX_ADDITIONAL_LANGUAGES, baseOf, isBaseLanguage, languageLabel } = require('./languageSupport');
 
 const reply = (status, json) => ({ status, json });
@@ -57,6 +58,8 @@ function buildVariant(source, code, localized) {
     contentCalendarId: null,
     scheduledDate: null,
     status: 'draft',
+    // A language version of an automation post needs approval like the original; one of a manual post does not.
+    origin: originOf(source),
     language: code,
     languageVariantOf: source._id,
   };

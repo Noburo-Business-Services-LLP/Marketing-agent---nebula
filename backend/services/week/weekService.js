@@ -166,13 +166,14 @@ function defaultDeps() {
       }
       const p = user.businessProfile || {};
       const idx = Number(String(item.id).split(':')[1]) || 0;
-      const day = dayOfMonth(weekDays(String(item.id).split(':')[0])[idx % 7]);
+      const plannedOn = weekDays(String(item.id).split(':')[0])[idx % 7];
+      const day = dayOfMonth(plannedOn);
       const calendar = {
         userId: user._id, _id: null,
         businessName: p.businessName || p.name || '', niche: p.niche || '',
         businessVertical: p.businessVertical || p.industry || '', language: p.language || 'English'
       };
-      const row = { day, headline: item.topic, creativeConcept: item.topic, format: 'image post', cta: '', objective: 'awareness' };
+      const row = { day, plannedOn, headline: item.topic, creativeConcept: item.topic, format: 'image post', cta: '', objective: 'awareness' };
       return { calendar, find: () => row, weekNumber: 1 };
     },
     // First approved week: stamped once, never overwritten.

@@ -187,6 +187,7 @@ router.post('/generate-stream', protect, checkTrial, async (req, res) => {
       aspectRatio,
       sourceType: 'carousel',
       contentType: 'carousel',
+      origin: 'manual',
       theme: String(themeIn || '').replace(/\s+/g, ' ').trim().slice(0, 60),
       status: 'processing',
       carouselStyleGuide: styleGuide,
