@@ -27,6 +27,16 @@ module.exports = Object.freeze({
   DB_TIMEOUT_MS,
   WORST_CASE_MS,
   STALE_MS: WORST_CASE_MS + 3 * 60 * 1000,
+  // The background sweep (services/homeDrafts/index.js): how often it runs, how many lost requests and how many
+  // refund retries it handles per run (one server at a time, under a lease).
+  SWEEP_EVERY_MS: 2 * 60 * 1000,
+  SWEEP_BATCH: 20,
+  SWEEP_LEASE_MS: 5 * 60 * 1000,
+  // A refund that did not land is tried again by the sweep: at most this many times, waiting REFUND_RETRY_BASE_MS,
+  // then twice as long each time. After the last failure a person is alerted. A claimed retry holds the row this long.
+  REFUND_RETRY_MAX: 5,
+  REFUND_RETRY_BASE_MS: 2 * 60 * 1000,
+  REFUND_RETRY_HOLD_MS: 10 * 60 * 1000,
   // The writing call and the check call each have this long.
   CALL_TIMEOUT_MS,
   WRITE_MAX_TOKENS: 700,

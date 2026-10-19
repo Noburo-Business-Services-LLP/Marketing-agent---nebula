@@ -20,6 +20,8 @@ const express = require('express');
 const assert = require('assert');
 
 const PREFIX = 'zz.homedraftschk-';
+// The background sweep is checked with its real OpsState lease under a key of its own (removed in cleanup).
+const CHECK_LEASE = 'zz_home_drafts_sweep_check_lease';
 const DEV_DB = 'nebulaa_dev';
 const DAY = 864e5;
 const HOUR = 36e5;
@@ -73,6 +75,8 @@ async function cleanup(db) {
     const c = (await db.collection('users').deleteMany({ _id: { $in: ids } })).deletedCount;
     if (c) removed.users = c;
   }
+  const lease = (await db.collection('ops_state').deleteMany({ key: CHECK_LEASE })).deletedCount;
+  if (lease) removed.ops_state = lease;
   if (spent.usd > 0) {
     await db.collection('ai_spend_days').updateOne({ day: spent.day }, { $inc: { totalUsd: -spent.usd, 'byProvider.home_drafts': -spent.usd } });
     removed.estimated_spend_usd = Math.round(spent.usd * 1e4) / 1e4;
@@ -82,6 +86,7 @@ async function cleanup(db) {
   const left = {};
   for (const [name, field] of Object.entries(OWNED)) left[name] = ids.length ? await db.collection(name).countDocuments({ [field]: { $in: ids } }) : 0;
   left.quark_ledger = ids.length ? await require('../models/QuarkLedger').countDocuments({ $or: [{ user: { $in: ids } }, { workspace: { $in: ids } }] }) : 0;
+  left.ops_state = await db.collection('ops_state').countDocuments({ key: CHECK_LEASE });
   left.users = await db.collection('users').countDocuments({ email: { $regex: `^${PREFIX.replace(/\./g, '\\.')}` } }) + (ids.length ? await db.collection('users').countDocuments({ _id: { $in: ids } }) : 0);
   console.log('left', JSON.stringify(left));
   const { estimated_spend_usd: _, ...rows } = removed;
@@ -483,6 +488,106 @@ async function runChecks() {
       assert.strictEqual(await balanceOf(staleNoSpend._id), before - COMMENT, 'only the new draft was charged; nothing came back for the lost row');
     });
 
+    section = '(10) review 2026-10-19 fixes:';
+    const qb = require('../services/quarkBuckets');
+    const { createHomeDrafts } = require('../services/homeDrafts/service');
+    const { createLease } = require('../services/competitors/lease');
+    // The sweep reads every account in the database; here it only sees this run's throwaway accounts.
+    const scopedDraft = () => {
+      const ours = async () => throwawayIds(db);
+      return {
+        find: (f) => { let n = 20; const c = { limit: (x) => { n = x; return c; }, lean: () => ours().then((ids) => HomeDraft.find({ ...f, userId: { $in: ids } }).limit(n).lean()) }; return c; },
+        findOne: (...a) => HomeDraft.findOne(...a), findOneAndUpdate: (...a) => HomeDraft.findOneAndUpdate(...a), updateOne: (...a) => HomeDraft.updateOne(...a), create: (...a) => HomeDraft.create(...a), countDocuments: (...a) => HomeDraft.countDocuments(...a)
+      };
+    };
+    const sweeper = () => createHomeDrafts({ ...fakes, env: { ENABLE_COMPETITOR_DRAFTS: 'on' }, Draft: scopedDraft, lease: createLease({ key: CHECK_LEASE, ttlMs: 60000 }), alertNow: () => {} });
+    const historyOf = async (id) => (((await User.findById(id).select('credits.history').lean()) || {}).credits || {}).history || [];
+    const failLedgerWrites = async (fn) => {
+      const orig = QuarkLedger.create;
+      QuarkLedger.create = () => Promise.reject(new Error('simulated ledger write failure'));
+      const warn = console.warn; console.warn = () => {};
+      try { return await fn(); } finally { await sleep(200); QuarkLedger.create = orig; console.warn = warn; }
+    };
+    const lostAt = () => new Date(Date.now() - caps.STALE_MS - 60000);
+
+    await check('S2: a ledger write that fails after the debit leaves the ref in the history entry of the same update', async () => {
+      const u = await mkUser('proof');
+      const r = await failLedgerWrites(() => qb.spend(u._id, COMMENT, { action: 'home_witty_comment', ref: `proof-${stamp}` }));
+      charged(1);
+      assert.strictEqual(r.success, true);
+      assert.strictEqual(await QuarkLedger.countDocuments({ ref: `proof-${stamp}` }), 0, 'no ledger row');
+      const h = (await historyOf(u._id)).find((x) => x.ref === `proof-${stamp}`);
+      assert.ok(h && h.amount === -COMMENT, 'history entry with the ref');
+      const proof = await qb.chargeProof(`proof-${stamp}`, { userId: String(u._id) });
+      assert.deepStrictEqual(proof.spend, { payer: String(u._id), workspace: '', quarks: COMMENT, source: 'history' });
+    });
+
+    await check('S2+S3: the background sweep refunds, once, a lost request of an account that never asks again, proven only by the history', async () => {
+      const u = await mkUser('sweep-lost');
+      const at = lostAt();
+      const lost = await HomeDraft.create({ userId: u._id, key: `sweep-lost-${stamp}`, kind: 'witty_comment', day: istDay(at), status: 'started', inFlight: true, chargedConfirmed: false, attempts: 0, quarks: COMMENT, payerId: String(u._id), startedAt: at, leaseAt: at, createdAt: at });
+      await failLedgerWrites(() => qb.spend(u._id, COMMENT, { action: 'home_witty_comment', ref: String(lost._id) }));
+      charged(1);
+      const before = await balanceOf(u._id);
+      const out = await sweeper().sweep();
+      assert.ok(out.closed >= 1, JSON.stringify(out));
+      const row = await HomeDraft.findById(lost._id).lean();
+      assert.strictEqual(row.outcome, 'stale'); assert.strictEqual(row.refunded, true); assert.strictEqual(row.inFlight, undefined);
+      assert.strictEqual(await balanceOf(u._id), before + COMMENT);
+      await sweeper().sweep();
+      assert.strictEqual(await balanceOf(u._id), before + COMMENT, 'a second sweep pays nothing');
+      assert.strictEqual(await eventually(() => QuarkLedger.countDocuments({ type: 'refund', ref: String(lost._id) })), 1);
+      return `balance ${before} -> ${before + COMMENT}`;
+    });
+
+    await check('S3: while another server holds the real lease the sweep does nothing; after the release it runs', async () => {
+      const other = createLease({ key: CHECK_LEASE, ttlMs: 60000 });
+      const token = await other.claim(new Date());
+      assert.ok(token, 'the other server got the lease');
+      assert.deepStrictEqual(await sweeper().sweep(), { skipped: true });
+      await other.release(token);
+      assert.ok(!(await sweeper().sweep()).skipped);
+    });
+
+    await check('S4: a refund that did not land is retried by the sweep, lands once and the flag is cleared', async () => {
+      const u = await mkUser('retry');
+      await User.updateOne({ _id: u._id }, { $inc: { 'credits.balance': -COMMENT } }); // charged, refund failed
+      const at = new Date(Date.now() - 60000);
+      const row = await HomeDraft.create({ userId: u._id, key: `retry-${stamp}`, kind: 'witty_comment', day: istDay(at), status: 'blocked', outcome: 'blocked_model', chargedConfirmed: true, attempts: 2, quarks: COMMENT, payerId: String(u._id), refunded: false, refundFailed: true, startedAt: at, leaseAt: at, createdAt: at });
+      const before = await balanceOf(u._id);
+      const out = await sweeper().sweep();
+      assert.strictEqual(out.retried, 1, JSON.stringify(out));
+      const after = await HomeDraft.findById(row._id).lean();
+      assert.strictEqual(after.refunded, true); assert.strictEqual(after.refundFailed, undefined); assert.strictEqual(after.refundAttempts, 1);
+      assert.strictEqual(await balanceOf(u._id), before + COMMENT);
+      await sweeper().sweep();
+      assert.strictEqual(await balanceOf(u._id), before + COMMENT, 'paid once');
+    });
+
+    await check('S4: a refund that landed but was reported as failed is found by its history proof and never paid twice', async () => {
+      const u = await mkUser('landed');
+      const at = new Date(Date.now() - 60000);
+      const row = await HomeDraft.create({ userId: u._id, key: `landed-${stamp}`, kind: 'witty_comment', day: istDay(at), status: 'failed', outcome: 'write_failed', chargedConfirmed: true, attempts: 1, quarks: COMMENT, payerId: String(u._id), refunded: false, refundFailed: true, startedAt: at, leaseAt: at, createdAt: at });
+      await failLedgerWrites(() => qb.refundTo(String(u._id), COMMENT, { action: 'home_witty_comment_refund', ref: String(row._id), payerId: String(u._id) }));
+      const before = await balanceOf(u._id);
+      await sweeper().sweep();
+      const after = await HomeDraft.findById(row._id).lean();
+      assert.strictEqual(after.refunded, true); assert.strictEqual(after.refundFailed, undefined);
+      assert.strictEqual(await balanceOf(u._id), before, 'nothing paid again');
+    });
+
+    await check('M7: a key used for a comment is not replayed for a response post, and nothing is charged', async () => {
+      reset();
+      await sleep(1100);
+      const k = key();
+      const a = await call('POST', '/api/home/witty-comment', T(other), { key: k, ref: OTHER_REF });
+      assert.strictEqual(a.status, 200, a.text.slice(0, 160)); charged(1);
+      const before = await balanceOf(other._id);
+      const b = await call('POST', '/api/home/response-post', T(other), { key: k, ref: OTHER_REF });
+      assert.strictEqual(b.status, 409); assert.strictEqual(b.body.keyReused, true); assert.strictEqual(b.body.draft, undefined);
+      assert.strictEqual(await balanceOf(other._id), before);
+    });
+
     section = '(8) bounded queries:';
     await check('the cap and ledger queries use indexes and read only this account\'s rows', async () => {
       const explain = async (q) => { const e = await q.explain('executionStats'); const s = JSON.stringify(e.queryPlanner.winningPlan); return { collscan: /COLLSCAN/.test(s), examined: e.executionStats.totalDocsExamined }; };
@@ -491,7 +596,10 @@ async function runChecks() {
         await explain(HomeDraft.find({ userId: daily._id, day, attempts: { $gt: 0 } })),
         await explain(HomeDraft.find({ userId: owner._id, key: 'x' })),
         await explain(HomeDraft.find({ userId: owner._id, inFlight: true })),
-        await explain(HomeDraft.find({ userId: owner._id, createdAt: { $gte: new Date(Date.now() - 60000) } }))
+        await explain(HomeDraft.find({ userId: owner._id, createdAt: { $gte: new Date(Date.now() - 60000) } })),
+        // the background sweep across all accounts
+        await explain(HomeDraft.find({ inFlight: true, leaseAt: { $lt: new Date(Date.now() - caps.STALE_MS) } })),
+        await explain(HomeDraft.find({ refundFailed: true, refunded: false, inFlight: { $ne: true }, refundGaveUp: { $ne: true }, $or: [{ refundRetryAt: { $exists: false } }, { refundRetryAt: { $lte: new Date() } }] }))
       ];
       assert.ok(qs.every((q) => !q.collscan), JSON.stringify(qs));
       assert.ok(qs[0].examined <= caps.MAX_DRAFTS_PER_DAY + 1, `examined ${qs[0].examined}`);

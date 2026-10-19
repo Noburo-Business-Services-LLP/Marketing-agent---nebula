@@ -511,3 +511,123 @@ test('STALE_MS is longer than the worst case of one request, computed from the t
   assert.ok(caps.STALE_MS > worst, `${caps.STALE_MS} must exceed ${worst}`);
   assert.ok(caps.STALE_MS > caps.WORST_CASE_MS);
 });
+
+// ---- review 2026-10-19: the history proof (S2), the background sweep (S3), the refund retry (S4), scoped keys (M7) ----
+const openLease = () => ({ claims: 0, async claim() { this.claims += 1; return { value: 'v' }; }, async release() {} });
+const sweepWorld = (opts = {}) => { const w = world(opts); w.deps.lease = openLease(); w.deps.alertNow = (k) => w.alerts.push(k); return { ...w, svc: createHomeDrafts(w.deps) }; };
+const refunds = (w) => w.money.filter((m) => m.type === 'refund');
+
+test('S2: by default a stale unconfirmed row is settled from the charge proof (history entry when the ledger row is missing)', async () => {
+  const qb = require('../services/quarkBuckets');
+  const orig = qb.chargeProof;
+  const seen = [];
+  qb.chargeProof = async (ref, o) => { seen.push([ref, o.userId]); return { spend: { payer: U1, workspace: '', quarks: COMMENT, source: 'history' }, refunded: false }; };
+  try {
+    const w = world();
+    delete w.deps.findSpend; delete w.deps.findRefund;
+    w.Draft.rows.push(lostRow(NOW.getTime()));
+    await createHomeDrafts(w.deps).recoverStale(U1);
+    assert.deepStrictEqual(refunds(w).map((m) => [m.ref, m.cost, m.payer]), [['crash1', COMMENT, U1]]);
+    assert.ok(seen.every(([ref, uid]) => ref === 'crash1' && uid === U1));
+  } finally { qb.chargeProof = orig; }
+});
+
+test('S3: the background sweep settles a lost request of an account that never asks again, once', async () => {
+  const w = sweepWorld();
+  w.Draft.rows.push(lostRow(NOW.getTime()));
+  w.Draft.rows.push(lostRow(NOW.getTime(), { _id: 'crash2', userId: U2, key: 'crash-key-9', chargedConfirmed: true, status: 'charged', payerId: U2 }));
+  w.Draft.rows.push(lostRow(NOW.getTime(), { _id: 'young', userId: CLIENT, key: 'young-key-1', leaseAt: new Date(NOW.getTime() - 1000) }));
+  await w.deps.spend(U1, COMMENT, { action: 'home_witty_comment', ref: 'crash1' });
+  await w.deps.spend(U2, COMMENT, { action: 'home_witty_comment', ref: 'crash2' });
+  const out = await w.svc.sweep();
+  assert.strictEqual(out.closed, 2);
+  assert.deepStrictEqual(refunds(w).map((m) => m.ref).sort(), ['crash1', 'crash2']);
+  assert.strictEqual(net(w, U1), 0); assert.strictEqual(net(w, U2), 0);
+  assert.strictEqual(w.Draft.rows.find((r) => r._id === 'young').inFlight, true, 'a live request is left alone');
+  await w.svc.sweep();
+  assert.strictEqual(refunds(w).length, 2, 'never refunded twice');
+});
+
+test('S3: the sweep does nothing without the single-runner lease, and works on a bounded batch', async () => {
+  const w = sweepWorld();
+  w.deps.lease = { async claim() { return null; }, async release() {} };
+  const svc = createHomeDrafts(w.deps);
+  w.Draft.rows.push(lostRow(NOW.getTime()));
+  await w.deps.spend(U1, COMMENT, { action: 'home_witty_comment', ref: 'crash1' });
+  assert.deepStrictEqual(await svc.sweep(), { skipped: true });
+  assert.strictEqual(w.Draft.rows[0].inFlight, true); assert.strictEqual(refunds(w).length, 0);
+  const v = sweepWorld();
+  for (let i = 0; i < caps.SWEEP_BATCH + 5; i += 1) v.Draft.rows.push(lostRow(NOW.getTime(), { _id: `many${i}`, userId: `6a00000000000000000001${String(i).padStart(2, '0')}`, key: `many-key-${i}` }));
+  assert.strictEqual((await v.svc.sweep()).closed, caps.SWEEP_BATCH);
+});
+
+test('S3: the sweep is started with the server and runs on a timer, off with a switch', () => {
+  const src = require('node:fs').readFileSync(require.resolve('../server-main.js'), 'utf8');
+  assert.match(src, /require\('\.\/services\/homeDrafts'\)\.startHomeDraftsSweep\(\)/);
+  const { startHomeDraftsSweep } = require('../services/homeDrafts');
+  assert.strictEqual(startHomeDraftsSweep({ env: { ENABLE_HOME_DRAFTS_SWEEP: 'off' } }), null);
+  const t = startHomeDraftsSweep({ env: {}, service: () => ({ sweep: async () => ({}) }) });
+  assert.ok(t); clearInterval(t);
+});
+
+test('S4: a refund that failed is retried by the sweep, lands once, and the flag is cleared', async () => {
+  const w = sweepWorld({ checks: [NOT_DECENT, NOT_DECENT] });
+  const ok = w.deps.refundTo;
+  w.deps.refundTo = async () => ({ ok: false });
+  let svc = createHomeDrafts(w.deps);
+  await svc.make(w.user(), 'witty_comment', { ref: REF, key: key() });
+  const row = w.Draft.rows[0];
+  assert.strictEqual(row.refundFailed, true); assert.strictEqual(net(w), -COMMENT);
+  w.deps.refundTo = ok;
+  svc = createHomeDrafts(w.deps);
+  const out = await svc.sweep();
+  assert.strictEqual(out.retried, 1);
+  assert.strictEqual(net(w), 0);
+  assert.strictEqual(row.refunded, true); assert.strictEqual(row.refundFailed, undefined);
+  await svc.sweep();
+  assert.strictEqual(refunds(w).length, 1, 'paid once');
+});
+
+test('S4: a retry never pays twice: a refund that landed but reported a failure is found by its proof', async () => {
+  const w = sweepWorld({ checks: [NOT_DECENT, NOT_DECENT] });
+  const ok = w.deps.refundTo;
+  w.deps.refundTo = async (...a) => { await ok(...a); throw new Error('reply lost'); };
+  let svc = createHomeDrafts(w.deps);
+  await quiet(() => svc.make(w.user(), 'witty_comment', { ref: REF, key: key() }));
+  assert.strictEqual(w.Draft.rows[0].refundFailed, true); assert.strictEqual(net(w), 0, 'the money did land');
+  w.deps.refundTo = ok;
+  svc = createHomeDrafts(w.deps);
+  await svc.sweep();
+  assert.strictEqual(refunds(w).length, 1); assert.strictEqual(net(w), 0);
+  assert.strictEqual(w.Draft.rows[0].refunded, true); assert.strictEqual(w.Draft.rows[0].refundFailed, undefined);
+});
+
+test('S4: retries back off, stop after REFUND_RETRY_MAX attempts with an alert, and two sweeps at once claim once', async () => {
+  let t = NOW.getTime();
+  const w = sweepWorld({ checks: [NOT_DECENT, NOT_DECENT], now: () => new Date(t) });
+  let tries = 0;
+  w.deps.refundTo = async () => { tries += 1; return { ok: false }; };
+  const svc = createHomeDrafts(w.deps);
+  await quiet(() => svc.make(w.user(), 'witty_comment', { ref: REF, key: key() }));
+  tries = 0;
+  await quiet(() => Promise.all([svc.sweep(), createHomeDrafts(w.deps).sweep()]));
+  assert.strictEqual(tries, 1, 'one claim wins');
+  await quiet(() => svc.sweep());
+  assert.strictEqual(tries, 1, 'not again before the back-off');
+  for (let i = 0; i < caps.REFUND_RETRY_MAX + 3; i += 1) { t += 24 * 3600000; await quiet(() => svc.sweep()); }
+  assert.strictEqual(tries, caps.REFUND_RETRY_MAX);
+  const row = w.Draft.rows[0];
+  assert.strictEqual(row.refundGaveUp, true); assert.strictEqual(row.refundFailed, true); assert.strictEqual(row.refunded, false);
+  assert.ok(w.alerts.includes('home_draft_refund_gave_up'));
+});
+
+test('M7: a key used for one draft is not replayed for another kind or another post', async () => {
+  const w = world();
+  const k = key();
+  assert.strictEqual((await w.svc.make(w.user(), 'witty_comment', { ref: REF, key: k })).status, 200);
+  const other = await w.svc.make(w.user(), 'response_post', { ref: REF, key: k });
+  assert.strictEqual(other.status, 409); assert.strictEqual(other.body.draft, undefined); assert.strictEqual(other.body.message, MESSAGES.keyReused);
+  const otherPost = await w.svc.make(w.user(), 'witty_comment', { ref: `${C1}.p-ABC2`, key: k });
+  assert.strictEqual(otherPost.status, 409);
+  assert.strictEqual(w.calls.spend, 1);
+});

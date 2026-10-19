@@ -800,6 +800,14 @@ const startServer = async () => {
       console.warn('Photoshoot resume failed to start:', schedulerError.message);
     }
 
+    // Close Home drafts a restart left open (refunding their Quarks) and retry refunds that did not land
+    // (off with ENABLE_HOME_DRAFTS_SWEEP=off)
+    try {
+      require('./services/homeDrafts').startHomeDraftsSweep();
+    } catch (schedulerError) {
+      console.warn('Home drafts sweep failed to start:', schedulerError.message);
+    }
+
     // Pick up weekly posts a restart left half-made (off with ENABLE_WEEK_RECOVERY=off)
     try {
       require('./services/week/weekRecovery').startWeekRecovery();

@@ -7,12 +7,14 @@ const cmp = (a, b) => (a instanceof Date || b instanceof Date ? new Date(a).getT
 
 function matches(doc, filter) {
   for (const [k, cond] of Object.entries(filter || {})) {
+    if (k === '$or') { if (!cond.some((f) => matches(doc, f))) return false; continue; }
     const v = doc[k];
     if (cond && typeof cond === 'object' && !(cond instanceof Date) && !Array.isArray(cond) && Object.keys(cond).some((x) => x.startsWith('$'))) {
       for (const [op, arg] of Object.entries(cond)) {
         if (op === '$gt' && !(v !== undefined && v !== null && cmp(v, arg) > 0)) return false;
         if (op === '$gte' && !(v !== undefined && v !== null && cmp(v, arg) >= 0)) return false;
         if (op === '$lt' && !(v !== undefined && v !== null && cmp(v, arg) < 0)) return false;
+        if (op === '$lte' && !(v !== undefined && v !== null && cmp(v, arg) <= 0)) return false;
         if (op === '$in' && !arg.some((a) => same(a, v))) return false;
         if (op === '$exists' && (v !== undefined) !== Boolean(arg)) return false;
         if (op === '$ne' && same(v, arg)) return false;

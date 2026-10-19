@@ -32,6 +32,11 @@ const homeDraftSchema = new mongoose.Schema({
   chargedConfirmed: { type: Boolean },
   refunded: { type: Boolean, default: false },
   refundFailed: { type: Boolean },
+  // The sweep's retries of a refund that did not land: tries so far, when the next one is due (also the hold while a
+  // retry runs), and true once it gave up and a person was alerted.
+  refundAttempts: { type: Number },
+  refundRetryAt: { type: Date },
+  refundGaveUp: { type: Boolean },
   result: { type: resultSchema, default: undefined },
   startedAt: { type: Date, default: Date.now }, // set once, when the row is created
   leaseAt: { type: Date, default: Date.now },   // refreshed at each step; a row is only reaped when this is old
@@ -44,5 +49,8 @@ homeDraftSchema.index({ userId: 1, key: 1 }, { unique: true });
 homeDraftSchema.index({ userId: 1 }, { unique: true, partialFilterExpression: { inFlight: true }, name: 'one_in_flight_per_account' });
 homeDraftSchema.index({ day: 1, userId: 1 });
 homeDraftSchema.index({ userId: 1, createdAt: -1 });
+// The background sweep across all accounts: open requests by lease age, and refunds waiting for another try.
+homeDraftSchema.index({ leaseAt: 1 }, { partialFilterExpression: { inFlight: true }, name: 'sweep_in_flight' });
+homeDraftSchema.index({ refundRetryAt: 1 }, { partialFilterExpression: { refundFailed: true }, name: 'sweep_refund_retry' });
 
 module.exports = mongoose.models.HomeDraft || mongoose.model('HomeDraft', homeDraftSchema);

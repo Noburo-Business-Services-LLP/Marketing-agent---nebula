@@ -42,6 +42,7 @@ const MESSAGES = Object.freeze({
   input: 'Choose a competitor post to start from.',
   notFound: 'We could not find that post. Please reload the page and try again.',
   inProgress: 'A draft is already being written. Please wait for it to finish.',
+  keyReused: 'That request was already used for another draft. Please reload the page and try again.',
   perMinute: 'Please wait a minute before asking for another draft.',
   perDay: `You have made today's ${caps.MAX_DRAFTS_PER_DAY} drafts. You can make more tomorrow.`,
   blockedDay: 'We could not write several drafts for you today. Please try again tomorrow.',
@@ -78,8 +79,15 @@ function defaultDeps() {
     settle: (userId) => quarks().settleWallet(userId).catch(() => null),
     refundTo: (userId, q, opts) => quarks().refundTo(userId, q, opts),
     // The Quark ledger rows of one draft (ref = the draft row id): its spend, and any refund already made.
-    findSpend: (ref) => m('QuarkLedger').findOne({ type: 'spend', ref }).select('user workspace quarks').maxTimeMS(20000).lean(),
-    findRefund: (ref) => m('QuarkLedger').findOne({ type: 'refund', ref }).select('_id').maxTimeMS(20000).lean(),
+    // Read through quarkBuckets.chargeProof: the ledger row first, else the credits.history entry written in the same
+    // update as the balance change (the ledger row is written after it and may be missing).
+    findSpend: async (ref, userId) => {
+      const p = await quarks().chargeProof(ref, { userId });
+      return p.spend ? { user: p.spend.payer, workspace: p.spend.workspace || undefined, quarks: -p.spend.quarks } : null;
+    },
+    findRefund: async (ref, userId) => ((await quarks().chargeProof(ref, { userId })).refunded ? { proof: true } : null),
+    // One sweep at a time across all server processes (an OpsState lease, like the competitor tracker).
+    lease: require('../competitors/lease').createLease({ key: 'home_drafts_sweep_lease', ttlMs: caps.SWEEP_LEASE_MS }),
     guard: (action) => require('../spendGuard').check(action),
     write: ({ system, user, language }) => {
       const { callTextLLM, textModelFor } = llm();
@@ -87,6 +95,14 @@ function defaultDeps() {
     },
     check: ({ system, user }) => require('../openAI').callTextLLM(user, { systemMessage: system, jsonMode: true, model: checkModel(), noFallback: true, maxTokens: caps.CHECK_MAX_TOKENS, timeout: caps.CALL_TIMEOUT_MS }),
     alert: (key, text) => { try { require('../opsAlerts').recordFailure(key, text); } catch (_) { /* best effort */ } },
+    // A refund the sweep gave up on: a person must finish it, so one occurrence is enough to send the alert.
+    alertNow: (key, text) => {
+      try {
+        const ops = require('../opsAlerts');
+        ops.recordFailure(key, text);
+        ops.notify({ key: `${key}:${text}`, subject: 'Nebulaa alert: a Home draft refund needs a person', text: `${text}\n\nSee docs/superpowers/ops/home-drafts.md (refunds that did not land).` });
+      } catch (_) { /* best effort */ }
+    },
     env: process.env,
     now: () => new Date()
   };
@@ -122,8 +138,10 @@ function createHomeDrafts(given = {}) {
   const locks = new Set();
   const Draft = () => deps.Draft();
 
-  /** The answer for a replayed key: the stored outcome, never a new charge. */
-  function replayOf(row) {
+  /** The answer for a replayed key: the stored outcome, never a new charge. A key used for another kind or another post
+   *  is refused, so a reused key never returns an earlier, unrelated draft. */
+  function replayOf(row, kind, ref) {
+    if (kind && (row.kind !== kind || (ref && `${String(row.competitorId || '')}.${row.postKey || ''}` !== ref))) return reply(409, { keyReused: true, message: MESSAGES.keyReused });
     if (row.status === 'done' && row.result) return reply(200, { replay: true, kind: row.kind, draft: draftOut(row.kind, row.result), quarks: row.quarks, price: priceText(row.quarks) });
     if (row.inFlight) return reply(409, { inProgress: true, message: MESSAGES.inProgress });
     if (row.status === 'blocked') return reply(422, { replay: true, blocked: true, refunded: true, message: MESSAGES.notHappy });
@@ -147,7 +165,7 @@ function createHomeDrafts(given = {}) {
     if (known) { amount = known.amount; payer = known.payerId; }
     else if (row.chargedConfirmed === false) {
       let spent; let back;
-      try { [spent, back] = [await deps.findSpend(String(row._id)), null]; if (spent) back = await deps.findRefund(String(row._id)); } catch (_) { return { ok: false, lookupFailed: true }; }
+      try { [spent, back] = [await deps.findSpend(String(row._id), userId), null]; if (spent) back = await deps.findRefund(String(row._id), userId); } catch (_) { return { ok: false, lookupFailed: true }; }
       const mine = spent && (String(spent.user) === userId || String(spent.workspace || '') === userId);
       if (!mine || !(Number(spent.quarks) < 0) || back) return { ok: true, none: true };
       amount = -Number(spent.quarks); payer = String(spent.user);
@@ -180,14 +198,72 @@ function createHomeDrafts(given = {}) {
   }
 
   /** Requests whose lease ran out (nothing touched the row for STALE_MS: a restart) are closed as failed and their Quarks
-   *  returned. Rows from before the lease existed are judged by startedAt. */
-  async function recoverStale(userId) {
+   *  returned. Rows from before the lease existed are judged by startedAt. With no userId: every account (the sweep). */
+  async function recoverStale(userId, limit = 5) {
     const before = new Date(deps.now().getTime() - caps.STALE_MS);
+    const who = userId ? { userId } : {};
     const [a, b] = await Promise.all([
-      Draft().find({ userId, inFlight: true, leaseAt: { $lt: before } }).limit(5).lean().catch(() => []),
-      Draft().find({ userId, inFlight: true, leaseAt: { $exists: false }, startedAt: { $lt: before } }).limit(5).lean().catch(() => [])
+      Draft().find({ ...who, inFlight: true, leaseAt: { $lt: before } }).limit(limit).lean().catch(() => []),
+      Draft().find({ ...who, inFlight: true, leaseAt: { $exists: false }, startedAt: { $lt: before } }).limit(limit).lean().catch(() => [])
     ]);
-    for (const r of [...a, ...b].slice(0, 5)) await finish(r, { status: 'failed', outcome: 'stale' }, { userId, action: ACTION[r.kind], refund: true });
+    let closed = 0;
+    for (const r of [...a, ...b].slice(0, limit)) {
+      const out = await finish(r, { status: 'failed', outcome: 'stale' }, { userId: String(r.userId), action: ACTION[r.kind], refund: true });
+      if (!out.lookupFailed) closed += 1;
+    }
+    return closed;
+  }
+
+  // A refund that did not land (refundFailed) and is due for another try. Never a row still running.
+  const retryDue = (now) => ({
+    refundFailed: true, refunded: false, inFlight: { $ne: true }, refundGaveUp: { $ne: true },
+    $or: [{ refundRetryAt: { $exists: false } }, { refundRetryAt: { $lte: now } }]
+  });
+
+  /**
+   * Tries the refunds that did not land again. Each row is claimed first (one conditional update moves its retry time
+   * forward and counts the attempt), so two sweeps never both try it. Before paying, the proof is read: a refund that
+   * landed but reported a failure is only marked, never paid twice. A failed try waits twice as long as the last one;
+   * after REFUND_RETRY_MAX tries the row is left for a person and an alert is sent.
+   */
+  async function retryRefunds(limit = caps.SWEEP_BATCH) {
+    const now = deps.now();
+    const due = await Draft().find(retryDue(now)).limit(limit).lean().catch(() => []);
+    let retried = 0;
+    for (const r of due.slice(0, limit)) {
+      const claimed = await Draft().findOneAndUpdate({ _id: r._id, ...retryDue(now) }, { $set: { refundRetryAt: new Date(now.getTime() + caps.REFUND_RETRY_HOLD_MS) }, $inc: { refundAttempts: 1 } }, { new: true }).catch(() => null);
+      if (!claimed) continue;
+      const ref = String(claimed._id); const userId = String(claimed.userId); const amount = Number(claimed.quarks) || 0;
+      const done = () => Draft().updateOne({ _id: claimed._id, refundFailed: true }, { $set: { refunded: true }, $unset: { refundFailed: 1, refundRetryAt: 1 } }).catch(() => null);
+      let landed;
+      try { landed = Boolean(await deps.findRefund(ref, userId)); } catch (_) { continue; } // unknown: the hold runs out, tried later
+      if (landed || !(amount > 0)) { await done(); continue; }
+      let back = { ok: false };
+      try { back = await deps.refundTo(userId, amount, { action: `${ACTION[claimed.kind]}_refund`, ref, payerId: claimed.payerId || '' }); } catch (_) { back = { ok: false }; }
+      if (back && back.ok) { await done(); retried += 1; continue; }
+      const tries = Number(claimed.refundAttempts) || 1;
+      if (tries >= caps.REFUND_RETRY_MAX) {
+        await Draft().updateOne({ _id: claimed._id }, { $set: { refundGaveUp: true }, $unset: { refundRetryAt: 1 } }).catch(() => null);
+        console.error(`[home drafts] gave up refunding ${amount} Quarks for draft ${ref} after ${tries} tries`);
+        deps.alertNow('home_draft_refund_gave_up', `Home draft ${ref}: the refund of ${amount} Quarks to ${claimed.payerId || userId} did not land after ${tries} tries. Return it by hand.`);
+      } else {
+        await Draft().updateOne({ _id: claimed._id }, { $set: { refundRetryAt: new Date(now.getTime() + caps.REFUND_RETRY_BASE_MS * 2 ** (tries - 1)) } }).catch(() => null);
+      }
+    }
+    return retried;
+  }
+
+  /** The background sweep (every SWEEP_EVERY_MS, one server at a time): lost requests of every account, then refund retries. */
+  async function sweep() {
+    const token = await deps.lease.claim(deps.now());
+    if (!token) return { skipped: true };
+    try {
+      const closed = await recoverStale(null, caps.SWEEP_BATCH);
+      const retried = await retryRefunds(caps.SWEEP_BATCH);
+      return { closed, retried };
+    } finally {
+      await deps.lease.release(token);
+    }
   }
 
   async function capsProblem(userId, now) {
@@ -287,7 +363,7 @@ function createHomeDrafts(given = {}) {
 
     if (locks.has(userId)) {
       const same = await Draft().findOne({ userId, key }).lean().catch(() => null);
-      return same && same.status === 'done' ? replayOf(same) : reply(409, { inProgress: true, message: MESSAGES.inProgress });
+      return same && same.status === 'done' ? replayOf(same, kind, b.ref) : reply(409, { inProgress: true, message: MESSAGES.inProgress });
     }
     locks.add(userId);
     let row = null;
@@ -295,7 +371,7 @@ function createHomeDrafts(given = {}) {
       const now = deps.now();
       await recoverStale(userId);
       const existing = await Draft().findOne({ userId, key }).lean();
-      if (existing) return replayOf(existing);
+      if (existing) return replayOf(existing, kind, b.ref);
       if (await Draft().findOne({ userId, inFlight: true }).select('_id').lean()) return reply(409, { inProgress: true, message: MESSAGES.inProgress });
       const capped = await capsProblem(userId, now);
       if (capped) return capped;
@@ -315,7 +391,7 @@ function createHomeDrafts(given = {}) {
       } catch (e) {
         if (e && e.code === 11000) {
           const again = await Draft().findOne({ userId, key }).lean().catch(() => null);
-          return again ? replayOf(again) : reply(409, { inProgress: true, message: MESSAGES.inProgress });
+          return again ? replayOf(again, kind, b.ref) : reply(409, { inProgress: true, message: MESSAGES.inProgress });
         }
         return reply(503, { message: MESSAGES.ledger });
       }
@@ -413,7 +489,7 @@ function createHomeDrafts(given = {}) {
     return rows.map((r) => ({ kind: r._id.kind, outcome: r._id.outcome || 'running', count: r.n }));
   }
 
-  return { options, make, dailyCounts, recoverStale, _locks: locks };
+  return { options, make, dailyCounts, recoverStale, retryRefunds, sweep, _locks: locks };
 }
 
 module.exports = { createHomeDrafts, checkModel, prices, istDay, MESSAGES, ACTION, REF_RE };
