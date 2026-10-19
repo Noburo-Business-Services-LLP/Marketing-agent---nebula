@@ -45,7 +45,9 @@ async function runBinPurgeOnce({
   deleteAssets = realDeleteAssets,
   now = () => new Date(),
   batch = Number(process.env.BIN_PURGE_BATCH) || DEFAULT_BATCH,
-  log = console
+  log = console,
+  // Extra conditions on which rows may be removed, for scripts/approval-check.js (its own throwaway accounts only).
+  only = null
 } = {}) {
   const at = now();
   const token = await lease.claim(at);
@@ -53,7 +55,7 @@ async function runBinPurgeOnce({
   const out = { purged: 0, skipped: 0, files: 0, fileErrors: 0 };
   try {
     const cutoff = new Date(at.getTime() - BIN_DAYS * DAY_MS);
-    const rows = await Draft.find({ status: 'binned', binnedAt: { $lt: cutoff } }).limit(Math.max(1, Math.min(500, batch))).lean();
+    const rows = await Draft.find({ ...(only || {}), status: 'binned', binnedAt: { $lt: cutoff } }).limit(Math.max(1, Math.min(500, batch))).lean();
     if (!rows.length) return out;
 
     // Which linked campaigns may go with their post; a post whose campaign is scheduled or sent is never touched.

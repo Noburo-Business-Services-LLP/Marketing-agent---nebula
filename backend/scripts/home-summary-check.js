@@ -173,7 +173,8 @@ async function runChecks() {
     const other = await mkUser('other');
     const fresh = await mkUser('new', { plan: { tier: 'free' }, onboardingCompleted: false, businessProfile: {}, connectedSocials: [], credits: { balance: 0 } });
 
-    const mkDraft = (u, status, sourceType = 'post', extra = {}) => ({ userId: u._id, title: `Draft ${status}`, caption: 'caption', status, sourceType, contentType: sourceType === 'reel' ? 'reel' : 'post', platforms: ['instagram'], imageUrl: 'https://example.com/d.jpg', ...extra });
+    // Drafts waiting counts automation posts only (made by the weekly plan or the calendar), so the seed is automation.
+    const mkDraft = (u, status, sourceType = 'post', extra = {}) => ({ userId: u._id, origin: 'automation', title: `Draft ${status}`, caption: 'caption', status, sourceType, contentType: sourceType === 'reel' ? 'reel' : 'post', platforms: ['instagram'], imageUrl: 'https://example.com/d.jpg', ...extra });
     // 7 waiting posts (draft x3, completed x2, failed, processing) plus legacy ready and pending, and others that must not count.
     const midDrafts = [
       ...['draft', 'draft', 'draft', 'completed', 'completed', 'failed', 'processing'].map((s) => mkDraft(mid, s)),
@@ -250,7 +251,7 @@ async function runChecks() {
     // Independent expectations, from the raw collections, with plain JS.
     const rawDrafts = await db.collection('drafts').find({ userId: mid._id }).toArray();
     const queue = new Set(['pending', 'draft', 'ready', 'processing', 'failed', 'completed']);
-    const expDrafts = rawDrafts.filter((d) => { const src = String(d.sourceType || d.contentType || 'post'); return src !== 'reel' && src !== 'video' && queue.has(d.status || 'draft'); }).length;
+    const expDrafts = rawDrafts.filter((d) => { const src = String(d.sourceType || d.contentType || 'post'); const auto = d.origin === 'automation' || (!d.origin && (Boolean(d.contentCalendarId) || typeof d.calendarDay === 'number')); return auto && src !== 'reel' && src !== 'video' && queue.has(d.status || 'draft'); }).length;
     const rawCamps = await db.collection('campaigns').find({ userId: mid._id }).toArray();
     const between = (d, a, b) => d && d.getTime() >= a && d.getTime() < b;
     const expPub = rawCamps.filter((c) => c.status === 'posted' && between(c.publishedAt, M, M + 7 * DAY)).length;
@@ -559,11 +560,11 @@ async function runChecks() {
       const st = e.executionStats;
       return { label, collscan: /COLLSCAN/.test(stages), examined: st.totalDocsExamined, keys: st.totalKeysExamined, returned: st.nReturned, ms: st.executionTimeMillis, plan: [...new Set(stages.match(/"stage":"[A-Z_]+"/g) || [])].join(' ').replace(/"stage":/g, '') };
     };
-    const { awaitingFilter } = require('../services/draftStatus');
+    const { needsApprovalFilter } = require('../services/draftStatus');
     await check('every query uses an index (no collection scan) and examines no other account\'s rows', async () => {
       const uid = big._id;
       const qs = [
-        await explainOf('drafts waiting', Draft.find(awaitingFilter(uid))),
+        await explainOf('drafts waiting', Draft.find(needsApprovalFilter(uid))),
         await explainOf('campaigns published this week', Campaign.find({ userId: uid, status: 'posted', publishedAt: { $gte: new Date(M), $lt: new Date(M + 7 * DAY) } })),
         await explainOf('campaigns scheduled this week', Campaign.find({ userId: uid, status: 'scheduled', scheduledFor: { $gte: new Date(M), $lt: new Date(M + 7 * DAY) } })),
         await explainOf('campaigns today', Campaign.find({ $or: [{ userId: uid, scheduledFor: { $gte: new Date(D), $lt: new Date(D + DAY) } }, { userId: uid, publishedAt: { $gte: new Date(D), $lt: new Date(D + DAY) } }] }).sort({ scheduledFor: 1 }).limit(6)),
