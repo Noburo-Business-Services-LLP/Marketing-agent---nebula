@@ -4745,6 +4745,11 @@ export const inboxAPI = {
   },
 };
 
+/** The answer of the approve, unapprove, unschedule, archive and restore routes (and DELETE, which moves to the Bin). */
+export interface DraftActionResult { success: boolean; message?: string }
+/** GET /drafts/counts: posts in each Library view. */
+export interface DraftCounts { needsApproval: number; drafts: number; approved: number; scheduled: number; posted: number; archived: number; binned: number }
+
 export const draftsAPI = {
   saveDraft: async (data: any): Promise<{ draft: Draft }> => {
     return apiCall('/drafts/save', {
@@ -4798,10 +4803,47 @@ export const draftsAPI = {
     }, true);
   },
 
-  deleteDraft: async (id: string): Promise<{ success: boolean }> => {
+  /** Moves the post to the Bin (restorable for 14 days). Posted items cannot go to the Bin; scheduled ones are unscheduled first. */
+  deleteDraft: async (id: string): Promise<DraftActionResult> => {
     return apiCall(`/drafts/${encodeURIComponent(id)}`, {
       method: 'DELETE'
     }, true);
+  },
+
+  /** Approve: "this is good to go out". Never posts. Scheduled for its planned date when the account can schedule,
+   *  otherwise it waits as approved (outcome). Free on every plan. */
+  approveDraft: async (id: string): Promise<DraftActionResult & { outcome?: 'approved' | 'scheduled'; draft?: Draft }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/approve`, { method: 'POST' }, true);
+  },
+
+  /** Approved back to Needs approval. */
+  unapproveDraft: async (id: string): Promise<DraftActionResult> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/unapprove`, { method: 'POST' }, true);
+  },
+
+  /** Scheduled back to approved; the time is kept as its planned date. */
+  unscheduleDraft: async (id: string): Promise<DraftActionResult> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/unschedule`, { method: 'POST' }, true);
+  },
+
+  /** Archived: out of the way, restorable at any time. */
+  archiveDraft: async (id: string): Promise<DraftActionResult & { draft?: Draft }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/archive`, { method: 'POST' }, true);
+  },
+
+  /** Back from the Bin (within 14 days) or from Archived, to where it was. */
+  restoreDraft: async (id: string): Promise<DraftActionResult & { restoredTo?: string }> => {
+    return apiCall(`/drafts/${encodeURIComponent(id)}/restore`, { method: 'POST' }, true);
+  },
+
+  /** How many posts are in each Library view. needsApproval is the badge. */
+  getDraftCounts: async (): Promise<{ success: boolean; counts: DraftCounts }> => {
+    return apiCall('/drafts/counts', { method: 'GET' }, true);
+  },
+
+  /** What is in the Bin (it is never part of the normal list). */
+  getBin: async (): Promise<{ drafts: Draft[] }> => {
+    return apiCall('/drafts?status=binned', { method: 'GET' }, true);
   },
 
   rejectDraft: async (id: string): Promise<{ success: boolean; message: string }> => {

@@ -213,7 +213,14 @@ export interface Draft {
   tone?: string;
   objective?: string;
   scheduledDate?: string;
-  status: 'draft' | 'scheduled' | 'published' | 'archived' | 'processing' | 'completed' | 'failed';
+  status: 'draft' | 'approved' | 'scheduled' | 'published' | 'archived' | 'binned' | 'processing' | 'completed' | 'failed';
+  /** 'manual' (made by the customer) or 'automation' (Nebulaa made it; needs approval). Old rows have none. */
+  origin?: 'manual' | 'automation';
+  /** the date the plan meant it for; approving schedules it then */
+  plannedDate?: string | null;
+  approvedAt?: string | null;
+  /** when it went to the Bin (removed for good 14 days later) */
+  binnedAt?: string | null;
   errorMessage?: string;
   generationProgress?: {
     jobId?: string;
