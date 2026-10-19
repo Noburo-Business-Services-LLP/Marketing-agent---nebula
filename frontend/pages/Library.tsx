@@ -22,6 +22,8 @@ import {
 import { fillRows } from '../utils/rowSpans';
 import '../components/library/library.css';
 import PageHeader from '../components/PageHeader';
+import GravityApprove from './GravityApprove';
+import type { User } from '../types';
 
 const KINDS: Array<{ key: LibraryFilters['kind']; label: string }> = [
   { key: 'all', label: 'All' }, { key: 'image', label: 'Images' }, { key: 'video', label: 'Videos' },
@@ -39,7 +41,7 @@ const select = 'h-9 rounded-lg border border-[var(--gv-border-default)] bg-[var(
 const fmtDate = (t: number) => (t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
 /** Everything you have made, images and videos together, in views: Needs approval, Approved, Scheduled, Posted, All, Archived, Bin. */
-const Library: React.FC = () => {
+const Library: React.FC<{ user?: User | null }> = ({ user }) => {
   const navigate = useNavigate();
   const confirmDialog = useConfirm();
   const quarkCosts = useQuarkCosts();
@@ -55,11 +57,21 @@ const Library: React.FC = () => {
   const [countsLoaded, setCountsLoaded] = useState(false);
   const [notice, setNotice] = useState<PostNoticeValue | null>(null);
   const view: LibraryView = defaultView(params.get('view'), countsLoaded ? counts?.needsApproval : 0);
+  // Review one by one (the old Review and approve page) is drawn here for the Needs approval view: &mode=one.
+  const oneByOne = view === 'approve' && params.get('mode') === 'one';
   const setView = (v: LibraryView) => {
     const next = new URLSearchParams(params);
     next.set('view', v);
+    next.delete('mode');
     setParams(next, { replace: true });
     setNotice(null);
+  };
+  // Opening the one-by-one review adds a history entry, so the browser back button returns to the grid.
+  const setOneByOne = (on: boolean) => {
+    const next = new URLSearchParams(params);
+    next.set('view', 'approve');
+    if (on) next.set('mode', 'one'); else next.delete('mode');
+    setParams(next, { replace: !on });
   };
 
   const loadCounts = useCallback(async () => {
@@ -102,6 +114,12 @@ const Library: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); loadCounts(); }, [load, loadCounts]);
+  // A post action anywhere on the page (also inside Review one by one) refreshes the list and the counts.
+  useEffect(() => {
+    const onChange = () => { load(true); loadCounts(); };
+    window.addEventListener('nebulaa-posts-changed', onChange);
+    return () => window.removeEventListener('nebulaa-posts-changed', onChange);
+  }, [load, loadCounts]);
   useEffect(() => { if (view === 'bin') loadBin(); }, [view, loadBin]);
   // A message belongs to the view it was shown in.
   useEffect(() => { setNotice(null); }, [view]);
@@ -206,7 +224,7 @@ const Library: React.FC = () => {
             );
           })}
         </div>
-        <div className="flex flex-wrap items-center gap-2" data-testid="library-filter-row">
+        {!oneByOne && <div className="flex flex-wrap items-center gap-2" data-testid="library-filter-row">
           <div className="shrink-0 inline-flex items-center gap-0.5 rounded-full border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-0.5" role="group" aria-label="Type">
             {KINDS.map((k) => <button key={k.key} type="button" aria-pressed={filters.kind === k.key} onClick={() => set({ kind: k.key })} className={seg(filters.kind === k.key)}>{k.label}</button>)}
           </div>
@@ -222,13 +240,15 @@ const Library: React.FC = () => {
             <option value="">All platforms</option>
             {platforms.map((p) => <option key={p} value={p}>{platformLabel(p)}</option>)}
           </select>
-        </div>
+        </div>}
       </div>
 
-      {view === 'approve' && needs !== null && needs > 0 && (
+      {oneByOne && <GravityApprove user={user} embedded onBack={() => setOneByOne(false)} />}
+
+      {!oneByOne && view === 'approve' && needs !== null && needs > 0 && (
         <div className="nb-lib-band" data-tone="approve">
           <p><strong>{needs} {needs === 1 ? 'post waits' : 'posts wait'} for your approval.</strong> Approving never posts by itself: a post with a planned date is scheduled for it, the others wait as Approved.</p>
-          <button type="button" className="nb-pa-btn" onClick={() => navigate('/drafts')}>Review one by one</button>
+          <button type="button" className="nb-pa-btn" onClick={() => setOneByOne(true)}>Review one by one</button>
         </div>
       )}
       {view === 'bin' && (
@@ -240,7 +260,7 @@ const Library: React.FC = () => {
       <PostNotice notice={notice} onClose={() => setNotice(null)} />
       {problems.length > 0 && <p role="status" className="text-[13px] text-[var(--gv-text-secondary)]">We could not load your {problems.join(' and ')} just now. The rest are shown below.</p>}
 
-      {listLoading ? (
+      {oneByOne ? null : listLoading ? (
         <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[var(--gv-accent)]" aria-label="Loading your library" /></div>
       ) : shown.length === 0 ? (
         <div className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] py-14 px-4 text-center space-y-3">

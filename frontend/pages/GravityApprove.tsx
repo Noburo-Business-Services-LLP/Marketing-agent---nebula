@@ -45,7 +45,12 @@ const formatScheduleDate = (d?: string | null) => {
   return `${day} · ${time}`;
 };
 
-const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
+/**
+ * Review one by one. Since navigation phase 5 it is drawn inside the Library (`/library?view=approve&mode=one`,
+ * `embedded`): the Library's header and views sit above it, so it draws no header of its own and offers a way back to
+ * the grid. The old drafts address redirects to the Library's Needs approval view.
+ */
+const GravityApprove: React.FC<{ user?: User | null; embedded?: boolean; onBack?: () => void }> = ({ user, embedded = false, onBack }) => {
   const navigate = useNavigate();
   // Regenerate re-runs the full generation pipeline, so it costs the same
   // Quarks as the original — campaign-type drafts are billed through the
@@ -230,13 +235,18 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   const goNext = () => setIndex((i) => Math.min(total - 1, i + 1));
 
   useEffect(() => {
+    // Arrows move between posts only in the one-by-one view, and never while typing or inside a dialog.
+    if (reviewView !== 'single') return undefined;
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="tablist"]'))) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
       if (e.key === 'ArrowLeft') goPrev();
       if (e.key === 'ArrowRight') goNext();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [total]);
+  }, [total, reviewView]);
 
   // After an action: a post that left the queue (approved, archived, moved to the Bin) is taken out; Make again
   // reloads so the new picture shows when it is ready.
@@ -331,16 +341,24 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
 
   // The page-level header, same shape as every other top-level page —
   // TabBar sits below it, not instead of it.
-  const Header = () => (
+  const Header = () => (embedded ? null : (
     <PageHeader
       eyebrow="Review and approve"
       title={<>Review your <PageEmphasis>posts</PageEmphasis> before they go out</>}
       description="Posts Nebulaa prepared for you wait here for your approval. Approving never posts by itself: a post with a planned date is scheduled for it, the others wait as Approved in the Library."
     />
-  );
+  ));
 
   // Everything that is not waiting for your OK (approved, scheduled, posted, your own posts) is in the Library.
-  const TabBar = () => (
+  const TabBar = () => (embedded ? (
+    <div className="mb-5 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13.5px] text-[var(--gv-text-secondary)]">One post at a time: approve it, change it or make it again, then move to the next.</p>
+        {onBack && <button type="button" onClick={onBack} className="nb-pa-btn">Back to all posts that need approval</button>}
+      </div>
+      <PostNotice notice={notice} onClose={() => setNotice(null)} />
+    </div>
+  ) : (
     <div className="mb-6 space-y-3">
       <div className="flex flex-wrap items-center gap-3 text-[13px] text-[var(--gv-text-secondary)]">
         <span className="inline-flex items-center h-9 px-5 rounded-full bg-[var(--gv-surface-3)] border border-[var(--gv-border-subtle)] font-semibold text-[var(--gv-text-primary)]">Needs approval{total ? ` · ${total}` : ''}</span>
@@ -353,7 +371,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
       </div>
       <PostNotice notice={notice} onClose={() => setNotice(null)} />
     </div>
-  );
+  ));
 
   if (loading) {
     return (
@@ -370,7 +388,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
 
   if (total === 0) {
     return (
-      <div className="max-w-[1100px] mx-auto pb-24">
+      <div className={embedded ? 'pb-12' : 'max-w-[1100px] mx-auto pb-24'}>
         <Header />
         <TabBar />
         <div className="max-w-[720px] mx-auto text-center py-16">
@@ -394,7 +412,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   }
 
   return (
-    <div className="max-w-[1180px] mx-auto pb-16">
+    <div className={embedded ? 'pb-12' : 'max-w-[1180px] mx-auto pb-16'}>
       <Header />
       <TabBar />
       {/* Header row */}

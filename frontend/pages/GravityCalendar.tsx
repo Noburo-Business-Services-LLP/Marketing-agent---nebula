@@ -60,13 +60,16 @@ const GravityCalendar: React.FC = () => {
   // The posts behind the calendar entries: clicking one opens its post sheet (the shared post actions), not a list.
   const [drafts, setDrafts] = useState<any[]>([]);
   const [openDraft, setOpenDraft] = useState<any | null>(null);
+  // The same count as the Library's Needs approval and the menu badge (GET /drafts/counts), not the unsent campaigns.
+  const [awaitingApproval, setAwaitingApproval] = useState(0);
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      const [res, posts] = await Promise.allSettled([apiService.getCampaigns(), draftsAPI.getDrafts()]);
+      const [res, posts, counts] = await Promise.allSettled([apiService.getCampaigns(), draftsAPI.getDrafts(), draftsAPI.getDraftCounts()]);
       if (res.status === 'fulfilled') setCampaigns(Array.isArray(res.value?.campaigns) ? res.value.campaigns : []);
       if (posts.status === 'fulfilled') setDrafts(Array.isArray(posts.value?.drafts) ? posts.value.drafts : []);
+      setAwaitingApproval(counts.status === 'fulfilled' ? Number(counts.value?.counts?.needsApproval) || 0 : 0);
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -137,7 +140,6 @@ const GravityCalendar: React.FC = () => {
     return all.reduce((sum, d) => sum + postsFor(d).length, 0);
   }, [weeks, postsByDay]);
 
-  const awaitingApproval = campaigns.filter((c: any) => String(c.status || '').toLowerCase() === 'draft').length;
 
   const today = new Date();
 
@@ -191,8 +193,10 @@ const GravityCalendar: React.FC = () => {
           {awaitingApproval > 0 && (
             <>
               <span className="mx-2 text-[var(--gv-text-muted)]">·</span>
-              <span className="text-[var(--gv-accent-text)] font-semibold tabular-nums">{awaitingApproval}</span>
-              <span> awaiting approval</span>
+              <button type="button" onClick={() => navigate('/library?view=approve')} className="underline underline-offset-2">
+                <span className="text-[var(--gv-accent-text)] font-semibold tabular-nums">{awaitingApproval}</span>
+                <span> awaiting approval</span>
+              </button>
             </>
           )}
         </div>
