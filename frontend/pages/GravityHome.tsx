@@ -1,34 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Sparkles } from 'lucide-react';
-import { apiService, draftsAPI } from '../services/api';
-import { Draft, Campaign, User } from '../types';
+import { apiService } from '../services/api';
+import { HomeSummary, User } from '../types';
 import AgencyUsage from '../components/AgencyUsage';
 import SetupCard from '../components/SetupCard';
 import ThisWeekCard from '../components/ThisWeekCard';
 import { isAgencyUser } from '../utils/agency';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
+import { isHomeSummary, readCachedSummary, writeCachedSummary, todayRows, stackCards, weekPostsLine, platformsLine } from '../utils/home';
+import { changeText, formatCount } from '../utils/formatCount';
 
-// Gravity Home — matches the prototype's Home screen exactly, wired to
-// real backend data (drafts, campaigns, credits) so it drops in as
-// /dashboard without losing information.
+// Gravity Home. The page reads ONE small answer, GET /api/home/summary (numbers, this week, today's posts, recent
+// artwork), instead of downloading every draft and campaign. Weeks are Monday to Sunday in India time, counted by the
+// server. The control-room layout is the next task; this keeps the existing structure on real data.
 
 const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTH_LABELS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-function startOfDay(d: Date) { const c = new Date(d); c.setHours(0,0,0,0); return c; }
-function isSameDay(a: Date, b: Date) { return startOfDay(a).getTime() === startOfDay(b).getTime(); }
-function isThisWeek(a: Date) {
-  const now = new Date();
-  const start = startOfDay(now);
-  start.setDate(start.getDate() - start.getDay());
-  const end = new Date(start); end.setDate(end.getDate() + 7);
-  return a >= start && a < end;
-}
-function formatTime12h(d: Date) {
-  let h = d.getHours(); const m = d.getMinutes();
-  const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
-  return `${h}:${String(m).padStart(2, '0')} ${ampm}`;
+// Today's date as the India calendar shows it (not the browser's own timezone).
+function istDateLabel(now: Date) {
+  const d = new Date(now.getTime() + 330 * 60000);
+  return `${DAY_LABELS[d.getUTCDay()]}, ${MONTH_LABELS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -43,156 +36,49 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 };
 
 const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
-  const [drafts, setDrafts] = useState<Draft[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const userId = String((user as any)?._id || (user as any)?.id || '');
+  const [summary, setSummary] = useState<HomeSummary | null>(() => readCachedSummary(userId));
+  const [loading, setLoading] = useState(() => !readCachedSummary(userId));
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    // Show the last answer at once when there is a fresh one, then read the latest quietly.
+    const cached = readCachedSummary(userId);
+    if (cached) { setSummary(cached); setLoading(false); }
     (async () => {
       try {
-        const [d, c] = await Promise.all([
-          draftsAPI.getDrafts().catch(() => ({ drafts: [] as Draft[] })),
-          apiService.getCampaigns().catch(() => ({ campaigns: [] as Campaign[] })),
-        ]);
-        if (!cancelled) {
-          setDrafts(Array.isArray(d?.drafts) ? d.drafts : []);
-          setCampaigns(Array.isArray(c?.campaigns) ? c.campaigns : []);
-        }
+        const res = await apiService.getHomeSummary();
+        if (cancelled) return;
+        // An answer that is not a summary (an old server) counts as a failed load, never as numbers.
+        if (!isHomeSummary(res)) throw new Error('unexpected answer');
+        setSummary(res);
+        setFailed(false);
+        writeCachedSummary(userId, res);
+      } catch {
+        if (!cancelled) setFailed(!cached);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userId]);
 
-  const pendingDrafts = useMemo(
-    () => drafts.filter((d: any) => ['pending', 'draft', 'ready', 'processing'].includes(String(d?.status || '').toLowerCase()) === false ? false : true),
-    [drafts]
-  );
+  const todaysPlan = useMemo(() => todayRows(summary?.today), [summary]);
 
-  const todaysPlan = useMemo(() => {
-    const today = new Date();
-    return campaigns
-      .map((c: any) => {
-        const raw = c?.scheduling?.startDate || c?.scheduling?.scheduledFor || c?.scheduledDate;
-        if (!raw) return null;
-        const d = new Date(raw);
-        if (!isSameDay(d, today)) return null;
-        return {
-          id: c._id,
-          time: formatTime12h(d),
-          title: c.name || c.creative?.textContent?.slice(0, 60) || 'Untitled post',
-          subtitle: (c.creative?.textContent || '').slice(0, 80),
-          image: (c.creative?.imageUrls && c.creative.imageUrls[0]) || null,
-          status: (c.status || 'scheduled'),
-        };
-      })
-      .filter(Boolean)
-      .sort((a: any, b: any) => a.time.localeCompare(b.time))
-      .slice(0, 6);
-  }, [campaigns]);
-
-  const weeklyStats = useMemo(() => {
-    const posted = campaigns.filter((c: any) => {
-      const raw = c?.scheduling?.startDate || c?.scheduledDate;
-      if (!raw) return false;
-      return isThisWeek(new Date(raw)) && ['posted', 'published'].includes(String(c.status || '').toLowerCase());
-    });
-    const totalPosts = campaigns.filter((c: any) => {
-      const raw = c?.scheduling?.startDate || c?.scheduledDate;
-      return raw && isThisWeek(new Date(raw));
-    }).length;
-    const platforms = new Set<string>();
-    campaigns.forEach((c: any) => (c.platforms || []).forEach((p: string) => platforms.add(p)));
-    return { postedCount: posted.length, totalPosts, platforms: Array.from(platforms).slice(0, 4) };
-  }, [campaigns]);
-
-  // Must match what the Approve page counts, or the hero and the sidebar
-  // badge disagree. Anything already published/scheduled/rejected is done.
-  const AWAITING = new Set(['pending', 'draft', 'ready', 'processing', 'failed', 'completed']);
-  const heroReadyCount = drafts.filter((d: any) => {
-    const status = String(d?.status || 'draft').toLowerCase();
-    const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
-    if (source === 'reel' || source === 'video') return false;
-    return AWAITING.has(status);
-  }).length;
+  const published = summary?.numbers.postsPublishedThisWeek;
+  const planned = summary?.week.posts.planned ?? null;
+  const readyCount = summary?.numbers.draftsWaiting.available ? summary.numbers.draftsWaiting.value : null;
+  const heroReadyCount = readyCount ?? 0;
+  const platformCount = summary?.connected.platforms.length ?? 0;
+  const lastWeek = published?.available ? changeText(published.changePct) : '';
 
   const now = new Date();
-  const dateLabel = `${DAY_LABELS[now.getDay()]}, ${MONTH_LABELS[now.getMonth()]} ${now.getDate()}`;
+  const dateLabel = istDateLabel(now);
 
-  // Shown only when the account has made nothing yet. Deliberately marked as
-  // examples on the card: an unlabelled stack of stock imagery on a personal
-  // dashboard reads as "these are your posts", which would be a lie.
-  const SAMPLE_STACK = [
-    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&q=80&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?w=400&q=80&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&q=80&auto=format&fit=crop',
-  ];
-
-  // Card stack — real artwork, real platform, real date. Previously the
-  // labels were hardcoded to "IG · TOMORROW/THU/FRI/SAT" regardless of what
-  // was actually scheduled, which made the whole panel decorative.
-  //
-  // Drafts come first and campaigns second: the artwork this account actually
-  // generated lives on drafts, so sourcing campaigns alone left the stack as
-  // four empty gradient blocks for anyone who had made posts but not yet run
-  // a scheduled campaign.
-  const stackCards = useMemo(() => {
-    // While the fetch is still in flight, drafts/campaigns are both still
-    // their initial empty arrays — indistinguishable from a genuinely empty
-    // account. Rendering SAMPLE_STACK here was a real bug, not the
-    // documented empty-state fallback: on every mount (including navigating
-    // back to this tab, which remounts the component and resets this state
-    // to []) it flashed real stock photography for however long the fetch
-    // took, before snapping to the actual state. Four blank placeholder
-    // cards keep the layout stable without claiming to be anyone's content.
-    if (loading) {
-      return [{ img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }, { img: '', tag: '', sample: false }];
-    }
-
-    const fromDrafts = drafts
-      .map((d: any) => ({
-        img: d?.imageUrl || d?.creative?.imageUrls?.[0] || '',
-        platform: (d?.platforms?.[0] || '').toString(),
-        when: d?.scheduledDate || d?.createdAt || null,
-      }))
-      .filter((d: any) => d.img);
-
-    const fromCampaigns = campaigns
-      .map((c: any) => ({
-        img: c?.creative?.imageUrls?.[0] || '',
-        platform: (c?.platforms?.[0] || '').toString(),
-        when: c?.scheduling?.startDate || c?.scheduledDate || null,
-      }))
-      .filter((c: any) => c.img);
-
-    const real = [...fromDrafts, ...fromCampaigns];
-
-    if (real.length === 0) {
-      return SAMPLE_STACK.map((img) => ({ img, tag: 'EXAMPLE', sample: true }));
-    }
-
-    const upcoming = real
-      .sort((a: any, b: any) => new Date(b.when || 0).getTime() - new Date(a.when || 0).getTime())
-      .slice(0, 4);
-
-    return upcoming.map((c: any) => {
-      let label = '';
-      if (c.when) {
-        const d = new Date(c.when);
-        if (!isNaN(d.getTime())) {
-          const today = new Date(); today.setHours(0, 0, 0, 0);
-          const day = new Date(d); day.setHours(0, 0, 0, 0);
-          const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
-          label = diff === 0 ? 'TODAY' : diff === 1 ? 'TOMORROW' : DAY_LABELS[d.getDay()];
-        }
-      }
-      const platform = c.platform ? c.platform.slice(0, 2).toUpperCase() : '';
-      return { img: c.img, tag: [platform, label].filter(Boolean).join(' · '), sample: false };
-    });
-  }, [drafts, campaigns, loading]);
+  // The artwork stack shows the customer's own recent posts only. With none, it is left out: no stock photos.
+  // While the first answer is on its way, four blank cards keep the layout steady.
+  const stack = useMemo(() => (loading ? [{ img: '', tag: '' }, { img: '', tag: '' }, { img: '', tag: '' }, { img: '', tag: '' }] : stackCards(summary?.recent, new Date())), [summary, loading]);
 
   // A CSM pass shows the client's account: the This week card shows, the Setup card does not. Staff see neither.
   const csmPass = (() => { try { return Boolean(localStorage.getItem('csmReturnToken')); } catch { return false; } })();
@@ -214,12 +100,20 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
             align="left"
             eyebrow={dateLabel}
             headline={
-              <>
-                {heroReadyCount === 0 ? <span>No</span> : <span className="tabular-nums">{heroReadyCount}</span>} {heroReadyCount === 1 ? 'post' : 'posts'}<br />
-                <span>{heroReadyCount === 1 ? 'is' : 'are'} waiting for </span>
-                <GravityEmphasis>your review</GravityEmphasis>
-                <span>.</span>
-              </>
+              readyCount === null ? (
+                <>
+                  <span>Review and approve</span><br />
+                  <GravityEmphasis>your posts</GravityEmphasis>
+                  <span>.</span>
+                </>
+              ) : (
+                <>
+                  {heroReadyCount === 0 ? <span>No</span> : <span className="tabular-nums">{heroReadyCount}</span>} {heroReadyCount === 1 ? 'post' : 'posts'}<br />
+                  <span>{heroReadyCount === 1 ? 'is' : 'are'} waiting for </span>
+                  <GravityEmphasis>your review</GravityEmphasis>
+                  <span>.</span>
+                </>
+              )
             }
             subcopy="Nebulaa prepares your content for the week ahead. Review each post, approve the ones you want, and Nebulaa schedules and publishes them for you."
             className="!mb-8"
@@ -243,11 +137,12 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
           </div>
         </div>
 
-        {/* Photo card stack */}
+        {/* Photo card stack: the customer's own recent posts only; left out when there are none */}
+        {stack.length > 0 && (
         <div className="relative w-[440px] h-[300px] hidden lg:block">
           {/* Ambient glow — gold-toned, unchanged by theme */}
           <div className="absolute inset-[-40px] rounded-full blur-3xl opacity-70" style={{ background: 'radial-gradient(60% 50% at 50% 50%, rgba(245,166,35,0.20), transparent 70%)' }} />
-          {stackCards.map(({ img, tag, sample }: any, i) => {
+          {stack.map(({ img, tag }, i) => {
             const angle = (i - 1.5) * 6;
             const offsetX = (i - 1.5) * 60;
             const z = i === 2 ? 4 : i === 1 ? 3 : i === 3 ? 2 : 1;
@@ -269,15 +164,14 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
                 {tag && (
                   <div className="absolute inset-x-0 bottom-0 flex items-center justify-between px-2 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
                     <span className="text-[9px] font-semibold tracking-widest text-white bg-black/75 rounded px-1.5 py-0.5">{tag}</span>
-                    {!sample && (
-                      <span className="text-[9px] text-white bg-black/75 rounded px-1.5 py-0.5 tabular-nums">{i + 1}/{stackCards.length}</span>
-                    )}
+                    <span className="text-[9px] text-white bg-black/75 rounded px-1.5 py-0.5 tabular-nums">{i + 1}/{stack.length}</span>
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+        )}
       </div>
 
       {/* TODAY'S PLAN + THIS WEEK */}
@@ -287,7 +181,7 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
           <div className="flex items-center justify-between mb-5">
             <div className="gravity-label">Today's plan</div>
             <div className="text-[11px] text-[var(--gv-text-muted)]">
-              {todaysPlan.length} post{todaysPlan.length !== 1 ? 's' : ''} · {weeklyStats.platforms.length} platform{weeklyStats.platforms.length !== 1 ? 's' : ''}
+              {todaysPlan.length} post{todaysPlan.length !== 1 ? 's' : ''} · {platformCount} platform{platformCount !== 1 ? 's' : ''}
             </div>
           </div>
           {todaysPlan.length === 0 ? (
@@ -326,7 +220,7 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="gravity-label">This week</div>
-            <div className="text-[11px] text-[var(--gv-text-muted)]">Compared with the last 7 days</div>
+            <div className="text-[11px] text-[var(--gv-text-muted)]">{lastWeek ? `${lastWeek} compared with last week` : 'Monday to Sunday'}</div>
           </div>
 
           <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6 relative overflow-hidden">
@@ -337,38 +231,25 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
                   render postedCount * 12.4 as "reach") is worse than blank. */}
               <div className="gravity-label mb-3">Published this week</div>
               <div className="flex items-baseline gap-2">
-                <span className="font-serif-display text-[56px] leading-none text-[var(--gv-text-primary)] tabular-nums">
-                  {weeklyStats.postedCount}
-                </span>
-                {weeklyStats.totalPosts > 0 && (
-                  <span className="text-[15px] text-[var(--gv-text-tertiary)]">of {weeklyStats.totalPosts} planned</span>
+                {published?.available ? (
+                  <span className="font-serif-display text-[56px] leading-none text-[var(--gv-text-primary)] tabular-nums">
+                    {formatCount(published.value)}
+                  </span>
+                ) : (
+                  <span className="text-[14px] text-[var(--gv-text-tertiary)]">
+                    {loading ? 'Loading' : failed ? 'We could not load this. Please try again.' : (published?.reason || '')}
+                  </span>
+                )}
+                {published?.available && planned !== null && planned > 0 && (
+                  <span className="text-[15px] text-[var(--gv-text-tertiary)]">of {formatCount(planned)} planned</span>
                 )}
               </div>
               <div className="text-[12px] text-[var(--gv-text-tertiary)] mt-3">
-                {weeklyStats.platforms.length > 0
-                  ? `Published across ${weeklyStats.platforms.join(', ')}`
-                  : 'No platforms are connected yet.'}
+                {[weekPostsLine(summary?.week.posts), platformsLine(summary?.connected.platforms)].filter(Boolean).join(' · ')}
               </div>
             </div>
           </div>
 
-          {campaigns.slice(0, 1).map((c: any) => (
-            <Link to="/campaigns" key={c._id} className="block rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 hover:bg-[var(--gv-surface-2)] transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-subtle)] overflow-hidden flex-shrink-0">
-                  {c.creative?.imageUrls?.[0] && <img src={c.creative.imageUrls[0]} alt="" className="w-full h-full object-cover" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13.5px] font-semibold text-[var(--gv-text-primary)] truncate">{c.name || 'Recent campaign'}</div>
-                  {/* Real fields only. This line used to read "24.8K reach ·
-                      3,184 likes" for every campaign — both hardcoded. */}
-                  <div className="text-[11px] text-[var(--gv-text-tertiary)] capitalize">
-                    {[c.status, (c.platforms || []).join(', ')].filter(Boolean).join(' · ') || 'No platforms are set'}
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
         </section>
       </div>
     </div>

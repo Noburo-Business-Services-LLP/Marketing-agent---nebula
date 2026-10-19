@@ -1,5 +1,6 @@
 import PlatformIcon from '../components/PlatformIcon';
 import { priceWithWorth } from '../utils/plans';
+import { isAwaitingReview } from '../utils/draftStatus';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, RotateCcw, ChevronLeft, ChevronRight, Loader2, Sparkles, Instagram, Facebook, Linkedin, Youtube, AlertCircle, X, Pencil, LayoutGrid, Rows } from 'lucide-react';
@@ -160,27 +161,15 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
 
   const detailImage = (d: any) => d?.imageUrl || d?.creative?.imageUrls?.[0] || '';
 
-  // Statuses that mean "still awaiting user action" (i.e. show in Approve).
-  // Includes 'completed' — completed = image ready, but not yet approved.
-  // A draft only leaves the queue when the user approves/rejects/publishes it.
-  const APPROVABLE_STATUSES = new Set([
-    'pending', 'draft', 'ready', 'processing', 'failed', 'completed'
-  ]);
+  // What belongs in the queue (waiting and failed posts, never videos) is defined once in utils/draftStatus.ts,
+  // the same rule Home and the server use to count "posts waiting".
 
   const loadDrafts = async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
       const res = await draftsAPI.getDrafts();
       setVersionRows((Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => d?.languageVariantOf));
-      const filtered = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => {
-        const status = String(d?.status || 'draft').toLowerCase();
-        const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
-        // Skip reels/videos — they belong in the AI Reels flow, not here.
-        if (source === 'reel' || source === 'video') return false;
-        // Skip drafts that have already been published/scheduled/rejected.
-        if (['published', 'posted', 'scheduled', 'rejected', 'approved'].includes(status)) return false;
-        return APPROVABLE_STATUSES.has(status);
-      });
+      const filtered = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => isAwaitingReview(d));
       setDrafts(filtered);
       // Preserve index if possible so we don't jump around while polling
       setIndex((prev) => Math.min(prev, Math.max(0, filtered.length - 1)));
@@ -203,13 +192,7 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
     if (anyProcessing && !pollTimerRef.current) {
       pollTimerRef.current = setInterval(() => {
         draftsAPI.getDrafts().then((res) => {
-          const list = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => {
-            const status = String(d?.status || 'draft').toLowerCase();
-            const source = String(d?.sourceType || d?.contentType || 'post').toLowerCase();
-            if (source === 'reel' || source === 'video') return false;
-            if (['published', 'posted', 'scheduled', 'rejected', 'approved'].includes(status)) return false;
-            return APPROVABLE_STATUSES.has(status);
-          });
+          const list = (Array.isArray(res?.drafts) ? res.drafts : []).filter((d: any) => isAwaitingReview(d));
           setDrafts(list);
         }).catch(() => {});
       }, 6000);

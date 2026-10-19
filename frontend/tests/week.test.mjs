@@ -74,3 +74,45 @@ test('slow items are noticed after three minutes and polling slows down', () => 
   assert.equal(pollDelay(10 * 1000), 5000);
   assert.equal(pollDelay(4 * 60 * 1000), 15000);
 });
+
+// ---- Monday-start India weeks (the same rules as backend/services/weekIst.js) ----
+import { istWeek, istDay, parseTimeOfDay, compareTimeOfDay } from '../utils/week.ts';
+import backendWeek from '../../backend/services/weekIst.js';
+
+test('the India week starts on Monday, also for late Sunday and early Monday', () => {
+  assert.equal(istWeek(new Date('2026-10-12T00:30:00+05:30')).start, '2026-10-12');
+  assert.equal(istWeek(new Date('2026-10-18T23:59:00+05:30')).start, '2026-10-12');
+  assert.equal(istWeek(new Date('2026-10-19T00:00:00+05:30')).start, '2026-10-19');
+  assert.equal(istWeek(new Date('2026-10-11T20:00:00Z')).start, '2026-10-12');
+  const w = istWeek(new Date('2026-10-14T10:00:00Z'));
+  assert.equal(w.end, '2026-10-19');
+  assert.equal(w.startsAt.toISOString(), '2026-10-11T18:30:00.000Z');
+  assert.equal(w.endsAt.toISOString(), '2026-10-18T18:30:00.000Z');
+  assert.deepEqual(w.days, ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']);
+  assert.equal(w.previousStart, '2026-10-05');
+});
+test('a bad date falls back to now', () => {
+  assert.match(istWeek('nonsense').start, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(istWeek(undefined).start, /^\d{4}-\d{2}-\d{2}$/);
+});
+test('the browser week and the server week agree for every hour of three weeks', () => {
+  const from = Date.parse('2026-10-01T00:00:00Z');
+  for (let h = 0; h < 24 * 21; h++) {
+    const at = new Date(from + h * 3600000);
+    const a = istWeek(at); const b = backendWeek.istWeek(at);
+    assert.equal(a.start, b.start, at.toISOString());
+    assert.equal(a.end, b.end);
+    assert.equal(a.startsAt.getTime(), b.startsAt.getTime());
+    assert.equal(istDay(at).date, backendWeek.istDay(at).date);
+  }
+});
+test('times of day sort as times, not as text', () => {
+  assert.equal(parseTimeOfDay('9:00 AM'), 540);
+  assert.equal(parseTimeOfDay('12:00 AM'), 0);
+  assert.equal(parseTimeOfDay('12:30 PM'), 750);
+  assert.equal(parseTimeOfDay('18:45'), 1125);
+  assert.equal(parseTimeOfDay('soon'), null);
+  assert.equal(parseTimeOfDay('13:00 PM'), null);
+  assert.deepEqual(['10:00 AM', '9:00 AM', '1:15 PM', '12:05 AM', 'x'].sort(compareTimeOfDay), ['12:05 AM', '9:00 AM', '10:00 AM', '1:15 PM', 'x']);
+  for (const t of ['9:00 AM', '10:15 pm', '23:59', '12:00 PM', '0:00', 'zz', '']) assert.equal(parseTimeOfDay(t), backendWeek.parseTimeOfDay(t), t);
+});

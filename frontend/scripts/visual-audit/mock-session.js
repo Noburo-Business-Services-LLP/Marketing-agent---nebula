@@ -75,6 +75,21 @@
   // error = fails to load; locked = no Inbox add-on (403); waiting = scored before, next weekly check pending.
   if (params.get('listenstate')) sessionStorage.setItem('audit-listen-state', params.get('listenstate'));
   var LSTATE = sessionStorage.getItem('audit-listen-state') || 'ready';
+  // ?homestate= full | new | nosocials | building | client | free | error | slow picks the Home summary variant (kept for the tab):
+  // full = a settled paid account with data, new = nothing yet and an unfinished profile, nosocials = paid but nothing connected,
+  // building = the plan is being built, client = an agency client workspace, free = a free account, error = the summary fails,
+  // slow = the summary answers after 4 seconds. The agency-client session mode shows the client variant by itself.
+  if (params.get('homestate')) sessionStorage.setItem('audit-home-state', params.get('homestate'));
+  var HSTATE = sessionStorage.getItem('audit-home-state') || 'full';
+  // ?weekstate= ready | partly | approved | top_up | no_plan | skipped | not_eligible picks the This week card variant (kept for the tab).
+  if (params.get('weekstate')) sessionStorage.setItem('audit-week-state', params.get('weekstate'));
+  var WSTATE = sessionStorage.getItem('audit-week-state') || 'ready';
+  // ?setupstate= mid | fresh | done picks the Setup card variant (kept for the tab).
+  if (params.get('setupstate')) sessionStorage.setItem('audit-setup-state', params.get('setupstate'));
+  var SSTATE = sessionStorage.getItem('audit-setup-state') || 'mid';
+  // ?planstate= ready | old | building | failed | stale | none picks the My plan variant (kept for the tab).
+  if (params.get('planstate')) sessionStorage.setItem('audit-plan-state', params.get('planstate'));
+  var PSTATE = sessionStorage.getItem('audit-plan-state') || 'ready';
   var INSIDE = false;
   if (AGENCY) {
     try {
@@ -273,6 +288,163 @@
     };
     return o;
   });
+
+  // ---- Home summary (GET /home/summary), shaped exactly like backend/services/homeSummary.js ----------------------------
+  var num = function (value, previous, changePct, extra) { return Object.assign({ value: value, previous: previous, changePct: changePct, available: true, reason: null, unit: 'count' }, extra || {}); };
+  var none = function (reason) { return { value: null, previous: null, changePct: null, available: false, reason: reason }; };
+  var atIst = function (h, m) { var d = new Date(now); d.setUTCHours(h - 5, m - 30, 0, 0); return d.toISOString(); }; // today at h:m India time
+  function homeSummary() {
+    var client = HSTATE === 'client' || (AGENCY && INSIDE);
+    var st = client ? 'client' : HSTATE;
+    var s = {
+      generatedAt: now.toISOString(),
+      account: { tier: 'starter', free: false, paidTier: true, agencyOwner: false, clientWorkspace: false, managed: false, staff: false, pass: false, frozen: false, showsPostsNotQuarks: false },
+      features: { inbox: true, competitors: true, publish: true },
+      numbers: {
+        reach: num(48200, 41000, 17.6, { asOf: ymd(-1), stale: false }),
+        engagement: num(4.2, 3.8, 10.5, { unit: 'percent', asOf: ymd(-1), stale: false }),
+        followers: num(12450, 12200, 2, { change: 250, asOf: ymd(-1), stale: false }),
+        postsPublishedThisWeek: num(3, 5, -40),
+        draftsWaiting: num(4, null, null),
+        unrepliedMessages: num(6, null, null)
+      },
+      nextActions: [
+        { id: 'approve_week', kind: 'week', title: "Make this week's 5 posts", detail: 'Nothing goes out until you approve it.', to: '/dashboard#this-week', count: 5 },
+        { id: 'review_drafts', kind: 'drafts', title: 'Review 4 posts', detail: '4 posts are waiting for your approval.', to: '/drafts', count: 4 },
+        { id: 'reply_messages', kind: 'inbox', title: 'Reply to 6 messages', detail: '6 messages are unread.', to: '/inbox', count: 6 },
+        { id: 'confirm_competitor', kind: 'competitors', title: "Confirm your competitors' handles", detail: 'We only look at a page once you have confirmed it.', to: '/competitors', count: 2 },
+        { id: 'add_product_photo', kind: 'products', title: 'Add a photo to a product', detail: '1 product has no photo yet.', to: '/brand-assets?tab=products', count: 1 }
+      ],
+      week: { start: ymd(-((now.getDay() + 6) % 7)), end: ymd(7 - ((now.getDay() + 6) % 7)), proposal: 'proposed', topUp: false, posts: { planned: 5, made: 0, published: 3, scheduled: 2 }, counts: { posts: 5, carousels: 1, videos: 1 } },
+      plan: { state: 'ready', opened: true, eligible: true, stopped: false, completedAt: iso(-2) },
+      setup: { next: null, allDone: true, done: 4, total: 4 },
+      balance: { available: true, quarks: 4200, posts: 381, videos: 26, showQuarks: true, text: '4,200 Quarks (about 381 posts or 26 videos)', paused: false },
+      connected: { count: 2, platforms: ['instagram', 'facebook'] },
+      competitors: { held: true, tracked: 4, needHandle: 2 },
+      products: { count: 2, withPhotos: 1 },
+      // Deliberately out of order (10:00 AM before 9:00 AM) to prove the page sorts by the real time.
+      today: [
+        { id: 't2', at: atIst(10, 0), title: 'Sourdough Sunday', subtitle: 'Fresh out of the oven at 7am. Come early, they go fast.', image: IMG2, status: 'scheduled', platform: 'instagram' },
+        { id: 't1', at: atIst(9, 0), title: 'Weekend croissant drop', subtitle: 'Butter croissants, all morning.', image: IMG1, status: 'posted', platform: 'instagram' },
+        { id: 't3', at: atIst(18, 30), title: 'Birthday cake orders open', subtitle: 'Order two days ahead for the weekend.', image: null, status: 'scheduled', platform: 'facebook' }
+      ],
+      recent: [
+        { image: IMG1, platform: 'instagram', when: iso(0) }, { image: IMG2, platform: 'facebook', when: iso(1) },
+        { image: IMG3, platform: 'instagram', when: iso(2) }, { image: IMG1, platform: 'instagram', when: iso(3) }
+      ],
+      degraded: []
+    };
+    if (st === 'new' || st === 'free') {
+      s.account = Object.assign(s.account, { tier: 'free', free: true, paidTier: false });
+      s.features = { inbox: false, competitors: false, publish: false };
+      var why = 'Connecting accounts comes with a paid plan.';
+      s.numbers = { reach: none(why), engagement: none(why), followers: none(why), postsPublishedThisWeek: num(0, 0, null), draftsWaiting: num(0, null, null), unrepliedMessages: none('Messages are part of the Inbox add-on.') };
+      s.nextActions = [
+        { id: 'finish_profile', kind: 'setup', title: 'Finish your business details', detail: 'Your plan and your posts are built from them.', to: '/settings?tab=business' },
+        { id: 'choose_plan', kind: 'billing', title: 'Choose a plan', detail: 'Pick the plan that fits to get your plan and weekly posts.', to: '/trial-expired' },
+        { id: 'connect_account', kind: 'setup', title: 'Connect your accounts', detail: 'You can still make posts without it. Connecting lets them go out for you.', to: '/connect-socials' }
+      ];
+      if (st === 'free') s.nextActions.shift();
+      s.week = { start: s.week.start, end: s.week.end, proposal: 'none', topUp: false, posts: { planned: null, made: null, published: 0, scheduled: 0 }, counts: null };
+      s.plan = { state: 'none', opened: false, eligible: false, stopped: false, completedAt: null };
+      s.setup = { next: 'profile', allDone: false, done: 0, total: 3 };
+      s.balance = { available: true, quarks: 0, posts: 0, videos: 0, showQuarks: true, text: '0 Quarks', paused: false };
+      s.connected = { count: 0, platforms: [] };
+      s.competitors = { held: false, tracked: 0, needHandle: 0 };
+      s.products = { count: 0, withPhotos: 0 };
+      s.today = []; s.recent = [];
+    }
+    if (st === 'nosocials') {
+      var c = 'Connect an account to see this.';
+      s.numbers.reach = none(c); s.numbers.engagement = none(c); s.numbers.followers = none(c); s.numbers.unrepliedMessages = none(c);
+      s.nextActions = [s.nextActions[1], { id: 'connect_account', kind: 'setup', title: 'Connect your accounts', detail: 'You can still make posts without it. Connecting lets them go out for you.', to: '/connect-socials' }];
+      s.connected = { count: 0, platforms: [] };
+      s.week.posts.published = 0; s.numbers.postsPublishedThisWeek = num(0, 2, -100);
+    }
+    if (st === 'building') {
+      s.plan = { state: 'building', opened: false, eligible: true, stopped: false, completedAt: null };
+      s.week = Object.assign(s.week, { proposal: 'none', posts: { planned: null, made: null, published: 0, scheduled: 0 }, counts: null });
+      s.nextActions = [{ id: 'plan_building', kind: 'plan', title: 'Your plan is being built', detail: 'It usually takes a few minutes. You do not need to wait.', to: null, info: true }];
+      s.numbers.followers = none('Your first numbers arrive within a day of connecting.'); s.numbers.reach = none('Your first numbers arrive within a day of connecting.'); s.numbers.engagement = none('Your first numbers arrive within a day of connecting.');
+      s.numbers.draftsWaiting = num(0, null, null); s.recent = []; s.today = [];
+    }
+    if (st === 'client') {
+      s.account = Object.assign(s.account, { tier: 'agency', clientWorkspace: true, pass: true, showsPostsNotQuarks: true });
+      s.balance = { available: true, quarks: null, posts: 381, videos: 26, showQuarks: false, text: 'about 381 posts or 26 videos', paused: false };
+      s.nextActions = [s.nextActions[0], s.nextActions[1]];
+    }
+    return s;
+  }
+
+  // ---- This week and Setup, shaped like backend/routes/week.js ----
+  function weekItems(status) {
+    var topics = ['Behind the oven: the 5am bake', 'Customer of the week', 'New: millet cookies', 'Festive pre-orders open', 'Sourdough Sunday'];
+    var items = topics.map(function (t, i) { return { id: 'wk-' + (i + 1), kind: 'post', topic: t, channel: i % 2 ? 'facebook' : 'instagram', pillar: ['Product', 'Community', 'Behind the scenes'][i % 3], source: 'plan', status: status, ref: null, error: null }; });
+    items.push({ id: 'wk-6', kind: 'carousel', topic: 'Five ways to serve sourdough', channel: 'instagram', pillar: 'Product', source: 'plan', status: status === 'made' ? 'proposed' : status, ref: null, error: null });
+    items.push({ id: 'wk-7', kind: 'video', topic: 'Kneading sourdough, start to finish', channel: 'instagram', pillar: 'Behind the scenes', source: 'plan', status: status === 'made' ? 'proposed' : status, ref: null, error: null });
+    return items;
+  }
+  function weekAnswer() {
+    var weekStart = ymd(-((now.getDay() + 6) % 7));
+    var counts = { posts: 5, carousels: 1, videos: 1 };
+    if (WSTATE === 'not_eligible') return { success: true, eligible: false, reason: 'free', proposal: null };
+    if (WSTATE === 'no_plan') return { success: true, eligible: false, reason: 'no_plan', proposal: null };
+    if (WSTATE === 'top_up') return { success: true, eligible: true, topUp: true, proposal: { weekStart: weekStart, status: 'proposed', items: [], counts: { posts: 0, carousels: 0, videos: 0 }, scaledDown: false, removed: { posts: 5, carousels: 1, videos: 1 }, empty: true } };
+    if (WSTATE === 'skipped') return { success: true, eligible: true, proposal: { weekStart: weekStart, status: 'skipped', items: weekItems('skipped'), counts: counts } };
+    if (WSTATE === 'approved') return { success: true, eligible: true, proposal: { weekStart: weekStart, status: 'approved', items: weekItems('made').map(function (i) { return i.kind === 'post' ? i : Object.assign(i, { status: 'made' }); }), counts: counts } };
+    if (WSTATE === 'partly') { var it = weekItems('made'); it[3].status = 'proposed'; it[4].status = 'failed'; it[4].error = 'no_pool'; return { success: true, eligible: true, proposal: { weekStart: weekStart, status: 'approved', items: it, counts: counts } }; }
+    return { success: true, eligible: true, proposal: { weekStart: weekStart, status: 'proposed', items: weekItems('proposed'), counts: counts } };
+  }
+  function setupAnswer() {
+    var steps = [
+      { id: 'profile', title: 'Complete your business profile', done: SSTATE !== 'fresh', reason: 'Your plan is built from it.', minutes: 5 },
+      { id: 'socials', title: 'Connect your social accounts', done: SSTATE === 'done', reason: 'So posts can go out for you. You can make posts without it.', minutes: 2 },
+      { id: 'plan', title: 'Read your plan', done: SSTATE === 'done', reason: 'See what we will do for your business and why.', minutes: 3 },
+      { id: 'week', title: 'Approve your first week', done: SSTATE === 'done', reason: 'Nothing goes out until you say so.', minutes: 1 }
+    ];
+    var next = steps.filter(function (x) { return !x.done; })[0];
+    return { success: true, steps: steps, next: next ? next.id : null, allDone: !next };
+  }
+
+  // ---- My plan: a realistic plan (claims carry tags; effort and roadmap as the planner writes them) ----
+  var claim = function (text, tag) { return { text: text, tag: tag || 'proposed' }; };
+  function planResult() {
+    var plan = {
+      promise: claim('A steady month of bakery content that shows how each loaf is made, so nearby families trust the shop.'),
+      positioning: {
+        audience: [claim('Young families and office workers within a short walk of the shop', 'inference')],
+        territory: { name: 'The neighbourhood bakery that bakes at dawn', rationale: claim('Fresh every morning is something the large chains cannot say.', 'inference'), risk: claim('It only works if the opening hours stay early.') },
+        line: claim('Baked at dawn, on your table by breakfast.')
+      },
+      whereToday: [claim('You post on Instagram a few times a month.', 'verified'), claim('Your website lists the menu but not the opening hours.', 'verified')],
+      competitors: [{ name: 'Daily Bread Co', observations: [claim('Posts mostly photos of finished loaves.', 'inference')] }],
+      pillars: [{ name: 'Behind the scenes', why: claim('People like seeing how the bread is made.'), example: 'The 5am bake' }, { name: 'Product', why: claim('Shows what is fresh today.'), example: 'Croissants out of the oven' }, { name: 'Community', why: claim('Regulars bring in new customers.'), example: 'Customer of the week' }],
+      calendar: Array.from({ length: 30 }, function (_, i) { return { day: i + 1, pillar: ['Behind the scenes', 'Product', 'Community'][i % 3], format: ['Post', 'Carousel', 'Reel', 'Post'][i % 4], hook: claim('Day ' + (i + 1) + ' idea for the shop') }; }),
+      offers: [],
+      channels: [{ channel: 'Instagram', role: claim('Your main shop window: daily photos and short reels.', 'inference'), priority: 1 }, { channel: 'Facebook', role: claim('Reaches parents and local groups.'), priority: 2 }, { channel: 'WhatsApp', role: claim('Pre-orders and festival offers to regulars.'), priority: 3 }],
+      icp: { who: [claim('Parents within 3 km who buy bread several times a week', 'inference')], pains: [claim('Supermarket bread goes stale by the next day.')], where: [claim('Local Facebook groups and Instagram.')], triggers: [claim('A birthday, a festival or a weekend guest.')] },
+      effort: [
+        { channel: 'Instagram', organicPct: 80, paidPct: 20, nebulaaDoes: ['posts', 'videos'], youDo: [claim('Reply to comments in the morning.'), claim('Tag the shop location on every post.')] },
+        { channel: 'Facebook', organicPct: 100, paidPct: 0, nebulaaDoes: ['posts'], youDo: [claim('Share the weekly post to two local groups.')] },
+        { channel: 'WhatsApp', organicPct: 100, paidPct: 0, nebulaaDoes: [], youDo: [claim('Send the festival menu to your regular customers.')] }
+      ],
+      roadmap: [
+        { phase: 'foundation', focus: claim('Set up the basics and post three times a week.'), actions: [claim('Connect Instagram and Facebook.'), claim('Add photos of your best five products.')], measure: [claim('Posts go out every week without gaps.')] },
+        { phase: 'storytelling', focus: claim('Show the people and the process.'), actions: [claim('Film one reel a week at the oven.')], measure: [claim('More saves and shares than last month.')] },
+        { phase: 'growth', focus: claim('Turn regular viewers into regular buyers.'), actions: [claim('Open pre-orders for weekends.')], measure: [claim('Pre-orders each weekend.')] }
+      ],
+      firstSteps: [claim('Approve this week\'s posts.'), claim('Add a photo to each product.'), claim('Confirm your competitors\' pages.')]
+    };
+    if (PSTATE === 'old') { delete plan.icp; delete plan.effort; delete plan.roadmap; delete plan.calendar; delete plan.pillars; }
+    return { version: 1, plan: plan, pages: [] };
+  }
+  function planAnswer() {
+    var base = { success: true, plan: null, running: false, failed: false, stopped: null, nextRefreshAt: null, eligible: true, reason: '', missing: [], freeBlueprint: null, lastRunAt: iso(-2), lastStatus: 'completed' };
+    if (PSTATE === 'building') return Object.assign(base, { running: true, lastStatus: 'processing' });
+    if (PSTATE === 'failed') return Object.assign(base, { failed: true, lastStatus: 'failed' });
+    if (PSTATE === 'none') return Object.assign(base, { lastRunAt: null, lastStatus: null });
+    return Object.assign(base, { plan: { id: 'audit-plan-1', completedAt: iso(PSTATE === 'stale' ? -60 : -2), stale: PSTATE === 'stale', result: planResult() }, nextRefreshAt: iso(5) });
+  }
 
   // [method or '*', RegExp on pathname after /api, response object or function(ctx) -> object|{__status,body}]
   var ROUTES = [
@@ -590,7 +762,15 @@
       return ok({ competitor: { id: id, name: row.name, handle: h, handleStatus: 'confirmed' } });
     }],
     // My plan with a finished plan, so the competitor card shows there too (the card follows ?compstate=).
-    ['GET', /^\/plan$/, ok({ plan: { id: 'audit-plan-1', completedAt: iso(-2), stale: false, result: {} }, running: false, failed: false, stopped: null, nextRefreshAt: iso(5), eligible: true, reason: '', missing: [], freeBlueprint: null, lastRunAt: iso(-2), lastStatus: 'completed' })],
+    ['GET', /^\/plan$/, function () { return planAnswer(); }],
+    ['GET', /^\/home\/summary/, function () {
+      if (HSTATE === 'error') return { __status: 500, body: { success: false, message: 'We could not load your home page numbers. Please try again.' } };
+      var out = { __status: 200, body: Object.assign({ success: true, cached: false }, homeSummary()) };
+      if (HSTATE === 'slow') out.__delay = 4000;
+      return out;
+    }],
+    ['GET', /^\/week$/, function () { return weekAnswer(); }],
+    ['GET', /^\/setup$/, function () { return setupAnswer(); }],
     ['POST', /^\/competitors\/(add-manual|auto-discover)$/, function () {
       if (CSTATE === 'locked') return { __status: 403, body: { success: false, upgradeRequired: true, reason: 'addon', feature: 'competitors', message: 'Competitor insights is an add-on.' } };
       return { __status: 200, body: { success: false, message: 'Audit stub: nothing was sent.' } };

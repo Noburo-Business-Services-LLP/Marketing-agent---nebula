@@ -113,3 +113,62 @@ export const COLLAPSED_ROWS = 4;
 export function visibleCount(total: number, expanded: boolean): number {
   return total > COLLAPSE_AFTER && !expanded ? COLLAPSED_ROWS : total;
 }
+
+// ---- Monday-start weeks and days in India time (IST, UTC+5:30) ----------------------------------------------------
+// The same rules as backend/services/weekIst.js (a test compares them hour by hour), so Home, the weekly proposal and
+// the server never disagree about "this week". These do not use the browser's own timezone.
+export const IST_OFFSET_MINUTES = 330;
+const DAY_MS = 86400000;
+const OFFSET_MS = IST_OFFSET_MINUTES * 60000;
+
+export interface IstWeek { start: string; end: string; startsAt: Date; endsAt: Date; previousStart: string; previousStartsAt: Date; days: string[] }
+export interface IstDay { date: string; startsAt: Date; endsAt: Date }
+
+const asDate = (value?: Date | number | string | null): Date => {
+  const d = value instanceof Date ? value : new Date(value === undefined || value === null ? Date.now() : value);
+  return Number.isFinite(d.getTime()) ? d : new Date();
+};
+const isoDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+const istMidnight = (d: Date): number => Math.floor((d.getTime() + OFFSET_MS) / DAY_MS) * DAY_MS - OFFSET_MS;
+
+export function istDay(now?: Date | number | string | null): IstDay {
+  const start = istMidnight(asDate(now));
+  return { date: isoDay(start + OFFSET_MS), startsAt: new Date(start), endsAt: new Date(start + DAY_MS) };
+}
+
+export function istWeek(now?: Date | number | string | null): IstWeek {
+  const dayStart = istMidnight(asDate(now));
+  const weekday = new Date(dayStart + OFFSET_MS).getUTCDay();
+  const startMs = dayStart - ((weekday + 6) % 7) * DAY_MS;
+  const endMs = startMs + 7 * DAY_MS;
+  const prevMs = startMs - 7 * DAY_MS;
+  return {
+    start: isoDay(startMs + OFFSET_MS), end: isoDay(endMs + OFFSET_MS), startsAt: new Date(startMs), endsAt: new Date(endMs),
+    previousStart: isoDay(prevMs + OFFSET_MS), previousStartsAt: new Date(prevMs),
+    days: Array.from({ length: 7 }, (_, i) => isoDay(startMs + i * DAY_MS + OFFSET_MS))
+  };
+}
+
+/** "9:00 AM", "12:30 pm" or "18:45" as minutes after midnight; null when it is not a time. */
+export function parseTimeOfDay(text: unknown): number | null {
+  const m = /^\s*(\d{1,2}):(\d{2})\s*([AaPp][Mm])?\s*$/.exec(String(text === undefined || text === null ? '' : text));
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  if (min > 59) return null;
+  if (m[3]) {
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (m[3].toLowerCase() === 'pm' ? 12 : 0);
+  } else if (h > 23) return null;
+  return h * 60 + min;
+}
+
+/** Sort comparator for times of day ("10:00 AM" after "9:00 AM"). Anything that is not a time goes last. */
+export function compareTimeOfDay(a: unknown, b: unknown): number {
+  const x = parseTimeOfDay(a);
+  const y = parseTimeOfDay(b);
+  if (x === null && y === null) return 0;
+  if (x === null) return 1;
+  if (y === null) return -1;
+  return x - y;
+}

@@ -1,4 +1,4 @@
-import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply, WeekResponse, WeekWriteResponse, CompetitorInsightsResponse, ListeningResponse, SetupResponse } from '../types';
+import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply, WeekResponse, WeekWriteResponse, CompetitorInsightsResponse, ListeningResponse, SetupResponse, HomeSummaryResponse } from '../types';
 import { apiErrorFrom } from '../utils/plans';
 import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
@@ -1438,6 +1438,8 @@ export const apiService = {
     try { await apiCall('/tour', { method: 'PUT', body: JSON.stringify(step ? { action, step } : { action }) }, true); } catch { /* best effort */ }
   },
   getSetup: async (): Promise<SetupResponse> => apiCall('/setup', { method: 'GET' }, true),
+  /** Everything Home needs in one small read-only answer. `refresh` skips the server's 60 second cache. */
+  getHomeSummary: async (opts?: { refresh?: boolean }): Promise<HomeSummaryResponse> => apiCall(`/home/summary${opts && opts.refresh ? '?refresh=1' : ''}`, { method: 'GET' }, true),
   getPlan: async (): Promise<PlanView> => apiCall('/plan', { method: 'GET' }, true),
   refreshPlan: async (): Promise<PlanRefreshReply> => apiCall('/plan/refresh', { method: 'POST' }, true),
   getClientPlan: async (id: string): Promise<PlanView> => apiCall(`/staff/clients/${id}/plan`, { method: 'GET' }, true),

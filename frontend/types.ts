@@ -586,3 +586,30 @@ export interface WeekPrefill { itemId: string; target: 'carousel' | 'video'; rou
 export interface WeekWriteResponse { success: boolean; message?: string; proposal?: WeekProposal | null; prefills?: WeekPrefill[] }
 export interface SetupStep { id: string; title: string; done: boolean; reason: string; minutes: number }
 export interface SetupResponse { success?: boolean; steps: SetupStep[]; next: string | null; allDone: boolean }
+
+// ---- GET /api/home/summary (see docs/superpowers/ops/home-summary.md) ----
+export interface HomeNumber {
+  value: number | null; previous: number | null; changePct: number | null; change?: number | null;
+  available: boolean; reason: string | null; unit?: 'count' | 'percent'; asOf?: string | null; stale?: boolean;
+}
+export type HomeActionKind = 'setup' | 'billing' | 'plan' | 'week' | 'drafts' | 'inbox' | 'competitors' | 'products';
+export interface HomeAction { id: string; kind: HomeActionKind; title: string; detail: string; to: string | null; count?: number; info?: boolean }
+export type HomePlanState = 'none' | 'building' | 'ready' | 'failed' | 'stale';
+export interface HomeSummary {
+  generatedAt: string;
+  account: { tier: string; free: boolean; paidTier: boolean; agencyOwner: boolean; clientWorkspace: boolean; managed: boolean; staff: boolean; pass: boolean; frozen: boolean; showsPostsNotQuarks: boolean };
+  features: { inbox: boolean; competitors: boolean; publish: boolean };
+  numbers: { reach: HomeNumber; engagement: HomeNumber; followers: HomeNumber; postsPublishedThisWeek: HomeNumber; draftsWaiting: HomeNumber; unrepliedMessages: HomeNumber };
+  nextActions: HomeAction[];
+  week: { start: string; end: string; proposal: string; topUp: boolean; posts: { planned: number | null; made: number | null; published: number | null; scheduled: number | null }; counts: WeekCounts | null };
+  plan: { state: HomePlanState; opened: boolean; eligible: boolean; stopped: boolean; completedAt: string | null; unknown?: boolean };
+  setup: { next: string | null; allDone: boolean; done: number; total: number };
+  balance: { available: boolean; quarks: number | null; posts: number | null; videos: number | null; showQuarks: boolean; text: string; paused: boolean };
+  connected: { count: number; platforms: string[] };
+  competitors: { held: boolean; tracked: number; needHandle: number };
+  products: { count: number; withPhotos: number };
+  today: Array<{ id: string; at: string | null; title: string; subtitle: string; image: string | null; status: string; platform: string | null }>;
+  recent: Array<{ image: string; platform: string | null; when: string | null }>;
+  degraded: string[];
+}
+export interface HomeSummaryResponse extends HomeSummary { success: boolean; cached?: boolean }
