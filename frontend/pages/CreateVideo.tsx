@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, ChevronDown, Download, Loader2, Package, Image as ImageIcon, User as UserIcon, Wand2, Trash2, Sparkles, Music } from 'lucide-react';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 import IdeaBoxTools from '../components/IdeaBoxTools';
@@ -675,10 +674,6 @@ const CreateVideo: React.FC = () => {
           </div>
         </section>
       )}
-
-      <p className="mt-10 text-center text-[12px] text-[var(--gv-text-muted)]">
-        Looking for the old step-by-step maker? <Link to="/reels/studio" className="underline underline-offset-2">Open it here</Link>.
-      </p>
 
       <CalendarIdeaPicker
         open={ideaPickerOpen}
