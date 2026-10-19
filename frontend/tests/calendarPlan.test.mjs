@@ -83,9 +83,12 @@ test('the picture is used only when it is a real address that has not failed to 
 });
 
 test('both cover spots use the fallback component, which handles a broken picture', () => {
-  const page = readFileSync(new URL('../pages/ContentCalendar.tsx', import.meta.url), 'utf8');
+  // The month cards (ContentCalendar) and the month hero (MonthHero, list and detail views).
+  const page = readFileSync(new URL('../pages/ContentCalendar.tsx', import.meta.url), 'utf8')
+    + readFileSync(new URL('../components/calendar/MonthHero.tsx', import.meta.url), 'utf8');
   const cover = readFileSync(new URL('../components/calendar/CalendarCover.tsx', import.meta.url), 'utf8');
   assert.equal((page.match(/<CalendarCover /g) || []).length, 2);
+  assert.match(page, /tone="light"/);
   assert.match(cover, /onError=/);
   assert.match(cover, /font-serif-display/);
 });

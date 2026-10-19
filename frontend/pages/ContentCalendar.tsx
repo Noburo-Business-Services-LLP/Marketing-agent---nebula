@@ -1,21 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowLeft,
   Check,
-  ChevronDown,
-  ChevronUp,
-  Edit3,
   Loader2,
-  RefreshCw,
   RotateCcw,
-  Save,
   Sparkles,
   ToggleLeft,
   ToggleRight,
   ImageIcon,
-  X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarCover } from '../components/calendar/CalendarCover';
+import { MonthHero, PlanInputsCard } from '../components/calendar/MonthHero';
+import { indiaMonthKey, nextPlanMonth, pickHeroCalendar, heroAction, monthCounts, weekOfMonth, allItems as allPlanItems } from '../utils/calendarHero';
+import { fillRows } from '../utils/rowSpans';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -30,8 +28,6 @@ const monthLabel = (month = '') => {
 import { contentCalendarAPI, draftsAPI } from '../services/api';
 import { CONTENT_LANGUAGES } from '../constants/languages';
 import { ContentCalendar as ContentCalendarType, ContentCalendarItem, Draft } from '../types';
-import { getThemeClasses, useTheme } from '../context/ThemeContext';
-import { GravityHero, GravityEmphasis } from '../components/gravity';
 import StrategyDocumentView from '../components/StrategyDocumentView';
 import { startBackgroundReel } from '../utils/backgroundReel';
 import { useConfirm } from '../context/ConfirmContext';
@@ -53,8 +49,6 @@ const editableFields: Array<keyof ContentCalendarItem> = [
 ];
 
 const ContentCalendar: React.FC = () => {
-  const { isDarkMode } = useTheme();
-  const theme = getThemeClasses(isDarkMode);
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [calendar, setCalendar] = useState<ContentCalendarType | null>(null);
@@ -68,6 +62,12 @@ const ContentCalendar: React.FC = () => {
   const [loadingWeeklyDrafts, setLoadingWeeklyDrafts] = useState(false);
   const [history, setHistory] = useState<ContentCalendarType[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
+  // True while "Plan next month" is running (the request takes about a minute); the hero shows it.
+  const [generating, setGenerating] = useState(false);
+  // Month cards and weekly drafts: columns follow the grid's real width, the last row is filled.
+  const [cardCols, setCardCols] = useState(1);
+  const cardsRef = React.useRef<HTMLUListElement | null>(null);
+  const draftsRef = React.useRef<HTMLUListElement | null>(null);
 
   const loadWeeklyDrafts = async () => {
     if (!calendar) return;
@@ -87,13 +87,18 @@ const ContentCalendar: React.FC = () => {
     }
   };
 
-  const getActiveWeekNumber = (): number => {
-    const day = new Date().getDate();
-    if (day <= 7) return 1;
-    if (day <= 14) return 2;
-    if (day <= 21) return 3;
-    return 4;
-  };
+  const getActiveWeekNumber = (): number => weekOfMonth(new Date().getDate());
+  useEffect(() => {
+    const el = cardsRef.current || draftsRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => {
+      const w = e.contentRect.width;
+      setCardCols(w >= 900 ? 3 : w >= 560 ? 2 : 1);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [viewMode, loading, history.length, activeDetailTab, weeklyDrafts.length, loadingWeeklyDrafts]);
+  const draftSpans = useMemo(() => fillRows(weeklyDrafts.map(() => 1), cardCols), [weeklyDrafts, cardCols]);
 
   const handleGenerateWeekContent = async () => {
     if (!calendar) return;
@@ -125,7 +130,7 @@ const ContentCalendar: React.FC = () => {
     // view) — either can be mid-render when this page loads.
     const anyPending = calendar?.coverStatus === 'pending' || history.some((c) => c.coverStatus === 'pending');
     if (!anyPending) return;
-    const id = setInterval(() => { loadCalendar(); }, 6000);
+    const id = setInterval(() => { loadCalendar(true); }, 6000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendar?.coverStatus, calendar?._id, history]);
@@ -148,8 +153,9 @@ const ContentCalendar: React.FC = () => {
     [calendar]
   );
 
-  const loadCalendar = async () => {
-    setLoading(true);
+  // `quiet` keeps the page on screen (the cover check every few seconds, the reload after planning).
+  const loadCalendar = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     setError('');
     try {
       const response = await contentCalendarAPI.getHistory();
@@ -166,16 +172,18 @@ const ContentCalendar: React.FC = () => {
   };
 
   const handleGenerateNextMonth = async () => {
-    setLoading(true);
+    if (generating) return;
+    setGenerating(true);
     setError('');
     try {
       const response = await contentCalendarAPI.generateNextMonth(planLanguage || undefined, planFocus.trim() || undefined);
-      await loadCalendar();
+      await loadCalendar(true);
       setCalendar(response.calendar);
       setViewMode('detail');
     } catch (err: any) {
       setError(err?.message || 'Failed to generate next month plan');
-      setLoading(false);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -325,210 +333,194 @@ const ContentCalendar: React.FC = () => {
     updateCalendar(async () => contentCalendarAPI.createDraft(item._id, false), `draft-${item._id}`);
   };
 
-  if (loading) {
+  const todayMonth = indiaMonthKey(Date.now());
+  const nextMonth = nextPlanMonth(history, todayMonth);
+  const heroCal = pickHeroCalendar(history, todayMonth);
+  const weekNow = weekOfMonth(new Date().getDate());
+  const sortedHistory = useMemo(
+    () => history.slice().sort((x, y) => String(y.month || '').localeCompare(String(x.month || ''))),
+    [history]
+  );
+  const cardSpans = useMemo(() => fillRows(sortedHistory.map(() => 1), cardCols), [sortedHistory, cardCols]);
+  const openPlan = (cal: ContentCalendarType) => { setCalendar(cal); setViewMode('detail'); setActiveDetailTab('calendar'); };
+
+  if (loading && !history.length && !generating) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-[#F5A623]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#C77A0A]" aria-label="Loading your plans" />
       </div>
     );
   }
 
   if (viewMode === 'list') {
     return (
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <GravityHero
-            align="left"
-            eyebrow="Smart Calendar"
-            headline={<>The month, <GravityEmphasis>planned</GravityEmphasis></>}
-            subcopy="Manage your monthly content strategies."
-            className="!mb-0"
+      <div className="nb-cal space-y-5">
+        <MonthHero
+          calendar={generating ? null : heroCal}
+          month={generating || !heroCal ? nextMonth : undefined}
+          businessName={heroCal?.businessName || history[0]?.businessName}
+          generating={generating}
+          primary={heroCal && !generating
+            ? { label: heroAction(heroCal, { inList: true, week: weekNow }).label, onClick: () => openPlan(heroCal) }
+            : { label: heroAction(null, { inList: true, week: weekNow, nextMonth }).label, onClick: handleGenerateNextMonth }}
+        />
+
+        {heroCal && !generating && <PlanInputsCard calendar={heroCal} />}
+
+        {error && <div className="nb-cal-error" role="alert">{error}</div>}
+
+        {/* Plan the month after the newest plan. Language empty means "use my account setting"; the focus is
+            optional (left blank, the plan uses brand memory and recent Idea Inbox items). */}
+        <div className="nb-cal-next">
+          <p className="nb-cal-next-title">{history.length ? `Plan ${monthLabel(nextMonth)}` : 'Before you plan'}</p>
+          <select
+            value={planLanguage}
+            onChange={(e) => setPlanLanguage(e.target.value)}
+            className="nb-cal-field"
+            aria-label="Language for the next plan"
+          >
+            <option value="">My default language</option>
+            {CONTENT_LANGUAGES.map((l) => (
+              <option key={l.value} value={l.value}>{l.label}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={planFocus}
+            onChange={(e) => setPlanFocus(e.target.value)}
+            placeholder="Anything specific to focus on this month? (optional)"
+            aria-label="Focus for the next plan (optional)"
+            className="nb-cal-field"
           />
-          <div className="flex flex-col items-stretch sm:items-end gap-2">
-            <div className="flex items-center gap-2">
-              {/* Per-plan language. Empty means "use my account setting", so this
-                  does not force a choice on people happy with their default. */}
-              <select
-                value={planLanguage}
-                onChange={(e) => setPlanLanguage(e.target.value)}
-                className="gravity-bare px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none"
-                title="Language for the next plan"
-              >
-                <option value="">My default language</option>
-                {CONTENT_LANGUAGES.map((l) => (
-                  <option key={l.value} value={l.value}>{l.label}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleGenerateNextMonth}
-                disabled={loading}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-[#F5A623] text-black hover:bg-[#ffb833] transition-colors"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                Generate Next Month Plan
-              </button>
-            </div>
-            {/* Optional — a launch, event, offer, or pillar to lean into this
-                month. Left blank, the AI still has brand memory and recent
-                Idea Inbox items to work from, just no specific steer. */}
-            <input
-              type="text"
-              value={planFocus}
-              onChange={(e) => setPlanFocus(e.target.value)}
-              placeholder="Anything specific to focus on this month? (optional)"
-              className="gravity-bare w-full sm:w-[360px] px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[13px] text-[#F5F4F1] outline-none placeholder:text-white/30"
-            />
-          </div>
+          {history.length > 0 && (
+            <button type="button" onClick={handleGenerateNextMonth} disabled={generating} className="nb-cal-primary">
+              {generating ? <Loader2 className="nb-cal-spin w-4 h-4" aria-hidden="true" /> : <Sparkles className="w-4 h-4" aria-hidden="true" />}
+              Plan {MONTH_NAMES[Number(nextMonth.slice(5, 7)) - 1] || 'next month'}
+            </button>
+          )}
         </div>
-        
-        {history.length === 0 && !loading && (
-          <div className="p-8 text-center border rounded-xl border-slate-800 bg-slate-900/50 text-slate-400">
-            No plans were found. Generate your first plan to see it here.
-          </div>
-        )}
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {history.map((cal) => (
-            <div
-              key={cal._id}
-              onClick={() => { setCalendar(cal); setViewMode('detail'); }}
-              className="cursor-pointer group relative rounded-xl border border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04] transition-all overflow-hidden"
-            >
-              {/* Cover thumbnail. Same source as the detail banner, so a
-                  month reads the same whether you're browsing the grid or
-                  already inside it. */}
-              <div className="relative h-28 bg-[#151515]">
-                <CalendarCover imageUrl={cal.coverImageUrl} month={cal.month} businessName={cal.businessName} pending={cal.coverStatus === 'pending'} />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-                {cal.approved && (
-                  <span title="Approved" className="absolute top-2.5 right-2.5">
-                    <Check className="w-5 h-5 text-emerald-400 bg-emerald-500/20 backdrop-blur p-1 rounded-full" />
-                  </span>
-                )}
-              </div>
 
-              <div className="p-5 pt-4">
-              <h3 className="font-serif-display text-[20px] text-[#F5F4F1] group-hover:text-[#F5A623] transition-colors">
-                {monthLabel(cal.month)}
-              </h3>
-              {cal.themeTitle ? (
-                <p className="text-[13px] text-[#F5A623]/90 mb-3 mt-0.5 line-clamp-1">{cal.themeTitle}</p>
-              ) : (
-                <p className="text-[13px] text-white/50 mb-3 mt-0.5">{cal.businessName || 'Business Plan'}</p>
-              )}
-              <div className="flex items-center gap-2 text-[11px] text-white/45 mb-4">
-                <span className="px-2 py-1 rounded-md bg-white/[0.04]">{cal.language}</span>
-                <span className="px-2 py-1 rounded-md bg-white/[0.04]">{cal.weeks?.length || 0} Weeks</span>
-              </div>
+        {sortedHistory.length > 0 && (
+          <section aria-labelledby="nb-cal-months">
+            <div className="nb-cal-section-head">
+              <h3 id="nb-cal-months">All months</h3>
+              <span>{sortedHistory.length} {sortedHistory.length === 1 ? 'plan' : 'plans'}</span>
+            </div>
+            <ul ref={cardsRef} className="nb-cal-cards" style={{ ['--nb-cal-cols' as any]: cardCols }} data-testid="calendar-month-cards">
+              {sortedHistory.map((cal, n) => {
+                const counts = monthCounts(allPlanItems(cal));
+                return (
+                  <li key={cal._id} className="nb-cal-card" data-current={cal._id === heroCal?._id || undefined} data-wide={(cardCols > 1 && cardSpans[n] === cardCols) || undefined} style={cardSpans[n] > 1 ? { gridColumn: `span ${cardSpans[n]}` } : undefined}>
+                    <button type="button" className="nb-cal-card-open" onClick={() => openPlan(cal)} aria-label={`Open ${monthLabel(cal.month)}`}>
+                      {/* Same cover as the hero, so a month reads the same in the list and inside it. */}
+                      <span className="nb-cal-card-cover">
+                        <CalendarCover imageUrl={cal.coverImageUrl} month={cal.month} businessName={cal.businessName} pending={cal.coverStatus === 'pending'} tone="light" />
+                        {cal.approved && <span className="nb-cal-card-chip"><Check className="w-3 h-3" aria-hidden="true" />Approved</span>}
+                      </span>
+                      <span className="nb-cal-card-body">
+                        <span className="nb-cal-card-month">{monthLabel(cal.month)}</span>
+                        <span className="nb-cal-card-theme">{cal.themeTitle || cal.businessName || 'Monthly plan'}</span>
+                        <span className="nb-cal-card-meta">
+                          <span>{counts.planned} planned</span>
+                          <span>{counts.approved} approved</span>
+                          <span>{counts.published} published</span>
+                          {cal.language && <span>{cal.language.charAt(0).toUpperCase() + cal.language.slice(1)}</span>}
+                        </span>
+                      </span>
+                    </button>
 
-              {/* Auto Generation used to live only inside a plan, so anyone
-                  told to "turn on Smart Calendar" landed here and found no
-                  control at all. stopPropagation keeps the card's own click
-                  (open the plan) from firing when you hit the switch. */}
-              <div
-                className="flex items-center justify-between gap-3 pt-3 border-t border-white/[0.06]"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="min-w-0">
-                  <div className="gravity-label">Auto Generation</div>
-                  <div className={`text-[12px] mt-0.5 ${cal.autoGenerate ? 'text-emerald-400' : 'text-white/40'}`}>
-                    {cal.autoGenerate ? 'A draft a day, for review' : 'Off'}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={!!cal.autoGenerate}
-                  aria-label={`Toggle auto generation for ${monthLabel(cal.month)}`}
-                  disabled={saving === `auto-${cal._id}`}
-                  onClick={() => toggleAutoGenerateForPlan(cal)}
-                  className={`relative flex-shrink-0 w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${cal.autoGenerate ? 'bg-[#F5A623]' : 'bg-white/[0.15]'}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${cal.autoGenerate ? 'translate-x-6' : 'translate-x-0'}`} />
-                </button>
-              </div>
-
-              {/* How much it is allowed to make. Only worth showing once the
-                  switch is on — off, the number means nothing. */}
-              {cal.autoGenerate && (
-                <div className="mt-3 pt-3 border-t border-white/[0.06]" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="gravity-label">Limit</div>
-                      <div className="text-[12px] mt-0.5 text-white/45">
-                        {cal.autoGeneratedCount || 0} of {cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT} made
+                    {/* Auto Generation used to live only inside a plan, so anyone told to "turn on Smart Calendar"
+                        landed here and found no control at all. */}
+                    <div className="nb-cal-card-foot">
+                      <div className="nb-cal-row">
+                        <div className="min-w-0">
+                          <div className="nb-cal-row-label">Auto Generation</div>
+                          <div className="nb-cal-row-value" data-on={!!cal.autoGenerate}>{cal.autoGenerate ? 'A draft a day, for review' : 'Off'}</div>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={!!cal.autoGenerate}
+                          aria-label={`Toggle auto generation for ${monthLabel(cal.month)}`}
+                          disabled={saving === `auto-${cal._id}`}
+                          onClick={() => toggleAutoGenerateForPlan(cal)}
+                          className="nb-cal-switch"
+                        />
+                      </div>
+                      {/* How much it is allowed to make. Always in its place (so the cards of a row line up); it can be
+                          changed once the switch is on. */}
+                      <div className="nb-cal-row">
+                        <div className="min-w-0">
+                          <div className="nb-cal-row-label">Limit</div>
+                          <div
+                            className="nb-cal-row-value"
+                            title={cal.autoGenerate && (cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT) > AUTO_GENERATE_DEFAULT ? "Above a week's worth. Each post generates an image, so this will use Quarks faster." : undefined}
+                          >
+                            {cal.autoGenerate
+                              ? <>{cal.autoGeneratedCount || 0} of {cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT} made{(cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT) > AUTO_GENERATE_DEFAULT && <span className="nb-cal-warn"> · uses Quarks faster</span>}</>
+                              : 'Set once it is on'}
+                          </div>
+                        </div>
+                        <select
+                          value={cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT}
+                          disabled={!cal.autoGenerate || saving === `limit-${cal._id}`}
+                          onChange={(e) => setAutoGenerateLimit(cal, Number(e.target.value))}
+                          aria-label={`Posts auto generation may make in ${monthLabel(cal.month)}`}
+                          className="nb-cal-field"
+                          style={{ height: 32, flex: 'none' }}
+                        >
+                          {[3, 5, 7, 10, 14, 20, 30].map((n2) => (
+                            <option key={n2} value={n2}>{n2} posts</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
-                    <select
-                      value={cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT}
-                      disabled={saving === `limit-${cal._id}`}
-                      onChange={(e) => setAutoGenerateLimit(cal, Number(e.target.value))}
-                      className="gravity-bare flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[12.5px] text-[#F5F4F1] outline-none disabled:opacity-50"
-                    >
-                      {[3, 5, 7, 10, 14, 20, 30].map((n) => (
-                        <option key={n} value={n}>{n} posts</option>
-                      ))}
-                    </select>
-                  </div>
-                  {(cal.autoGenerateLimit ?? AUTO_GENERATE_DEFAULT) > AUTO_GENERATE_DEFAULT && (
-                    <p className="mt-2 text-[11.5px] text-[#F5A623]/90 leading-relaxed">
-                      Above a week's worth. Each post generates an image, so this
-                      will use Quarks faster.
-                    </p>
-                  )}
-                </div>
-              )}
-              </div>
-            </div>
-          ))}
-        </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </div>
     );
   }
 
   if (viewMode === 'detail' && !calendar) {
     return (
-      <div className={`p-6 rounded-lg border ${theme.bgCard} ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-        <p className={theme.textSecondary}>{error || 'No content calendar found.'}</p>
-        <button onClick={() => setViewMode('list')} className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700">
-          ← Back to Plans
-        </button>
+      <div className="nb-cal nb-cal-empty">
+        <p>{error || 'No content calendar found.'}</p>
+        <button type="button" onClick={() => setViewMode('list')} className="nb-cal-quiet mt-3">All months</button>
       </div>
     );
   }
 
-  
+  const detailAction = heroAction(calendar, { inList: false, week: getActiveWeekNumber() });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <button onClick={() => setViewMode('list')} className="mb-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#F5A623] text-black hover:bg-[#ffb833] transition-colors shadow-sm">
-        ← Back to Plans
+    <div className="nb-cal space-y-5">
+      <button type="button" onClick={() => setViewMode('list')} className="nb-cal-quiet">
+        <ArrowLeft className="w-4 h-4" aria-hidden="true" />All months
       </button>
 
-      {/* Tabs Navigation */}
-      <div className={`flex items-center gap-6 border-b px-2 mb-6 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-        <button
-          onClick={() => setActiveDetailTab('calendar')}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'calendar' ? 'border-[#F5A623] text-[#F5A623]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
-        >
-          Calendar View
-        </button>
-        <button
-          onClick={() => setActiveDetailTab('planning')}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'planning' ? 'border-[#F5A623] text-[#F5A623]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
-        >
-          Content Planning
-        </button>
-        <button
-          onClick={() => {
-            setActiveDetailTab('drafts');
-            loadWeeklyDrafts();
-          }}
-          className={`pb-3 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'drafts' ? 'border-[#F5A623] text-[#F5A623]' : 'border-transparent ' + theme.textSecondary + ' hover:' + theme.text}`}
-        >
-          Weekly Drafts
-        </button>
+      {/* Month hero: the cover, the business and month, the theme, the counts and the one next step
+          (approve the month, then make this week's posts). */}
+      <MonthHero
+        calendar={calendar}
+        primary={detailAction.kind === 'approve'
+          ? { label: detailAction.label, onClick: approveCalendar, busy: saving === 'approve-calendar', disabled: !!saving }
+          : { label: detailAction.label, onClick: handleGenerateWeekContent, busy: saving.startsWith('week-'), disabled: !!saving }}
+        extra={calendar.coverStatus === 'pending' ? undefined : (
+          <button type="button" onClick={requestCover} disabled={coverBusy} className="nb-cal-quiet">
+            <ImageIcon className="w-3.5 h-3.5" aria-hidden="true" />
+            {calendar.coverImageUrl ? 'New cover' : 'Make a cover'}
+          </button>
+        )}
+      />
+
+      <div className="nb-cal-tabs" role="tablist" aria-label="Plan views">
+        <button type="button" role="tab" aria-selected={activeDetailTab === 'calendar'} className="nb-cal-tab" onClick={() => setActiveDetailTab('calendar')}>Calendar View</button>
+        <button type="button" role="tab" aria-selected={activeDetailTab === 'planning'} className="nb-cal-tab" onClick={() => setActiveDetailTab('planning')}>Content Planning</button>
+        <button type="button" role="tab" aria-selected={activeDetailTab === 'drafts'} className="nb-cal-tab" onClick={() => { setActiveDetailTab('drafts'); loadWeeklyDrafts(); }}>Weekly Drafts</button>
       </div>
 
       {activeDetailTab === 'planning' && (
@@ -538,220 +530,95 @@ const ContentCalendar: React.FC = () => {
       )}
 
       {activeDetailTab === 'drafts' && (
-        <div className="space-y-6 mt-4">
-          <div className="flex items-center justify-between border-b pb-4 border-slate-800">
-            <div>
-              <h2 className="font-serif-display text-[22px] text-[#F5F4F1]">Week {getActiveWeekNumber()} Drafts</h2>
-              <p className={`text-xs ${theme.textMuted} mt-1`}>Review the drafts generated from your weekly content calendar.</p>
+        <div className="space-y-4">
+          <div>
+            <h2 className="font-serif-display text-[22px] text-[#2B1D0E]">Week {getActiveWeekNumber()} drafts</h2>
+            <p className="text-[12.5px] text-[#5E4A31] mt-1">Review the drafts generated from your weekly content calendar.</p>
+          </div>
+          {loadingWeeklyDrafts ? (
+            <div className="py-16 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-7 h-7 animate-spin text-[#C77A0A]" aria-hidden="true" />
+              <p className="text-[13px] text-[#5E4A31]">Loading weekly drafts...</p>
             </div>
-          </div>
-        {loadingWeeklyDrafts ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-[#F5A623]" />
-            <p className={`text-sm ${theme.textMuted}`}>Loading weekly drafts...</p>
-          </div>
-        ) : weeklyDrafts.length === 0 ? (
-          <div className={`text-center py-20 rounded-xl border border-dashed ${isDarkMode ? 'border-slate-805/50' : 'border-slate-300'} ${theme.bgCard}`}>
-            <h3 className={`text-lg font-bold ${theme.text}`}>No drafts found</h3>
-            <p className={`${theme.textSecondary} mb-6`}>There are no drafts generated for Week {getActiveWeekNumber()} of this calendar.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-350">
-            {weeklyDrafts.map((item) => (
-              <div 
-                key={item._id}
-                className={`group relative bg-slate-900/40 border rounded-2xl overflow-hidden transition-all flex flex-col hover:border-slate-700/80 hover:shadow-xl ${
-                  isDarkMode ? 'border-slate-800' : 'border-slate-200'
-                }`}
-              >
-                <div className="relative aspect-video w-full bg-slate-950 overflow-hidden flex items-center justify-center">
-                  {item.status === 'processing' ? (
-                    <div className="flex flex-col items-center gap-1.5 text-slate-400 text-xs">
-                      <Loader2 className="w-6 h-6 text-[#F5A623] animate-spin" />
-                      <span>Generating Image...</span>
-                    </div>
-                  ) : item.status === 'failed' ? (
-                    <div className="flex flex-col items-center gap-1.5 text-red-400 text-xs">
-                                            <span>Generation failed</span>
-                    </div>
-                  ) : item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="text-xs text-slate-500">No image available</div>
-                  )}
-                </div>
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <div>
-                    <div className="flex justify-between items-start gap-2">
-                      <h3 className="font-bold text-slate-200 line-clamp-1">
-                        {item.title || 'Untitled Draft'}
-                      </h3>
-                      {item.status === 'processing' && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded">
-                          Processing
-                        </span>
-                      )}
-                      {item.status === 'failed' && (
-                        <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 rounded">
-                          Failed
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-400 line-clamp-3 mt-2 leading-relaxed">
-                      {item.caption || <span className="italic text-slate-650">No caption defined</span>}
-                    </p>
-                  </div>
-                  <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs text-[#F5A623]">
-                    {item.status === 'failed' ? (
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          try {
-                            await draftsAPI.retryImageGeneration(item._id);
-                            loadWeeklyDrafts();
-                          } catch (err: any) {
-                            alert(err.message || 'Failed to retry generation.');
-                          }
-                        }}
-                        className="flex items-center gap-1 px-2 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
-                      >
-                        <RotateCcw className="w-3 h-3" />
-                        Retry
-                      </button>
-                    ) : item.status === 'processing' ? (
-                      <span className="text-slate-400">Processing...</span>
+          ) : weeklyDrafts.length === 0 ? (
+            <div className="nb-cal-empty">
+              <p className="font-semibold text-[#2B1D0E]">No drafts found</p>
+              <p className="mt-1">There are no drafts generated for Week {getActiveWeekNumber()} of this calendar.</p>
+            </div>
+          ) : (
+            <ul ref={draftsRef} className="nb-cal-drafts" style={{ ['--nb-cal-cols' as any]: cardCols }}>
+              {weeklyDrafts.map((item, n) => (
+                <li key={item._id} className="nb-cal-draft" style={draftSpans[n] > 1 ? { gridColumn: `span ${draftSpans[n]}` } : undefined}>
+                  <div className="nb-cal-draft-pic">
+                    {item.status === 'processing' ? (
+                      <span className="inline-flex items-center gap-1.5"><Loader2 className="w-4 h-4 animate-spin text-[#C77A0A]" aria-hidden="true" />Making the image...</span>
+                    ) : item.status === 'failed' ? (
+                      <span className="text-[#9A3412]">The image did not finish</span>
+                    ) : item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.title} loading="lazy" />
                     ) : (
-                      <span className="capitalize">{item.status}</span>
+                      <span>No image yet</span>
                     )}
-                    <span>➜</span>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                  <div className="nb-cal-draft-body">
+                    <div className="nb-cal-draft-title">{item.title || 'Untitled Draft'}</div>
+                    <p className="nb-cal-draft-caption">{item.caption || 'No caption yet'}</p>
+                    <div className="nb-cal-draft-foot">
+                      {item.status === 'failed' ? (
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await draftsAPI.retryImageGeneration(item._id);
+                              loadWeeklyDrafts();
+                            } catch (err: any) {
+                              alert(err.message || 'Failed to retry generation.');
+                            }
+                          }}
+                          className="nb-cal-quiet"
+                          style={{ height: 30 }}
+                        >
+                          <RotateCcw className="w-3 h-3" aria-hidden="true" />
+                          Retry
+                        </button>
+                      ) : item.status === 'processing' ? (
+                        <span>Processing...</span>
+                      ) : (
+                        <span>{item.status}</span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
       {activeDetailTab === 'calendar' && (
         <>
-      {/* Month banner. The cover is art for the month's own theme, so it sits
-          behind the month name rather than beside it — and the scrim keeps the
-          type readable whatever the image turns out to be. */}
-      <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] bg-[#141414] mb-5">
-        <div className="absolute inset-0">
-          <CalendarCover variant="banner" imageUrl={calendar.coverImageUrl} month={calendar.month} businessName={calendar.businessName} pending={calendar.coverStatus === 'pending'} />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/40" />
-        </div>
-
-        <div className="relative px-6 py-7 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div className="min-w-0">
-            <div className="gravity-label text-[#F5A623] mb-1.5">Smart Calendar</div>
-            <h2 className="font-serif-display text-[34px] leading-[1.05] text-[#F5F4F1]">
-              {monthLabel(calendar.month)}
-            </h2>
-            {calendar.themeTitle && (
-              <div className="mt-2 text-[14px] font-semibold text-[#F5A623]">{calendar.themeTitle}</div>
-            )}
-            {calendar.themeSummary && (
-              <p className="mt-1 text-[12.5px] text-white/60 max-w-[440px] leading-relaxed">
-                {calendar.themeSummary}
-              </p>
-            )}
-            <p className="mt-2.5 text-[11.5px] text-white/40">
-              {calendar.businessName || 'Your business'} · {calendar.businessVertical || 'Content'} · {calendar.language}
-            </p>
-          </div>
-
-          <div className="shrink-0">
-            {calendar.coverStatus === 'pending' ? (
-              <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-white/55 border border-white/[0.12]">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#F5A623]" />
-                Making the cover…
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={requestCover}
-                disabled={coverBusy}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold border border-white/[0.12] text-[#F5F4F1] hover:bg-white/[0.06] hover:border-[#F5A623]/40 transition-all disabled:opacity-40"
-              >
-                <ImageIcon className="w-3.5 h-3.5 text-[#F5A623]" />
-                {calendar.coverImageUrl ? 'New cover' : 'Make a cover'}
-              </button>
-            )}
-          </div>
-        </div>
+      <div className="nb-cal-toolbar">
+        {/* Same optional focus as "Plan next month": Regenerate is the other place a focus matters. */}
+        <input
+          type="text"
+          value={planFocus}
+          onChange={(e) => setPlanFocus(e.target.value)}
+          placeholder="Anything specific to focus on this month? (optional, used by Regenerate)"
+          aria-label="Focus for Regenerate (optional)"
+          className="nb-cal-field"
+        />
+        <button type="button" onClick={toggleAutoGenerate} disabled={!!saving} aria-pressed={!!calendar.autoGenerate} className="nb-cal-quiet">
+          {calendar.autoGenerate ? <ToggleRight className="w-5 h-5" aria-hidden="true" /> : <ToggleLeft className="w-5 h-5" aria-hidden="true" />}
+          Auto Generation{calendar.autoGenerate ? ' on' : ''}
+        </button>
+        <button type="button" onClick={regenerate} disabled={!!saving} className="nb-cal-quiet">
+          {saving === 'regenerate' ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <RotateCcw className="w-4 h-4" aria-hidden="true" />}
+          Regenerate
+        </button>
       </div>
 
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-[#F5A623]" />
-            <h2 className="font-serif-display text-[18px] text-[#F5F4F1]">This month's plan</h2>
-          </div>
-        </div>
-
-        <div className="flex flex-col items-stretch lg:items-end gap-2">
-          {/* Same optional focus used by "Generate Next Month Plan" — shown
-              here too since Regenerate is the other place a focus matters. */}
-          <input
-            type="text"
-            value={planFocus}
-            onChange={(e) => setPlanFocus(e.target.value)}
-            placeholder="Anything specific to focus on this month? (optional, used by Regenerate)"
-            className="gravity-bare w-full lg:w-[380px] px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[12.5px] text-[#F5F4F1] outline-none placeholder:text-white/30"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-
-          <button
-            type="button"
-            onClick={approveCalendar}
-            disabled={!!saving || calendar.approved}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold ${calendar.approved ? 'bg-emerald-500/15 text-emerald-400' : 'bg-[#F5A623] text-black'}`}
-          >
-            <Check className="w-4 h-4" />
-            {calendar.approved ? 'Approved' : 'Approve'}
-          </button>
-          <button
-            type="button"
-            onClick={toggleAutoGenerate}
-            disabled={!!saving}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-all duration-300 ${calendar.autoGenerate ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]' : isDarkMode ? 'border-slate-700 text-slate-200 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-slate-50'}`}
-          >
-            {calendar.autoGenerate ? <ToggleRight className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" /> : <ToggleLeft className="w-5 h-5 opacity-70" />}
-            Auto Generation
-          </button>
-          <button
-            type="button"
-            onClick={regenerate}
-            disabled={!!saving}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border ${isDarkMode ? 'border-slate-700 text-slate-200' : 'border-slate-300 text-slate-800'}`}
-          >
-            {saving === 'regenerate' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-            Regenerate
-          </button>
-          {calendar.approved && (
-            <button
-              type="button"
-              onClick={handleGenerateWeekContent}
-              disabled={!!saving}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-500 hover:to-indigo-550 text-white shadow-md hover:shadow-lg transition-all disabled:opacity-50"
-            >
-              {saving.startsWith('week-') ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              Generate Week {getActiveWeekNumber()} Content
-            </button>
-          )}
-
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {error}
-        </div>
-      )}
+      {error && <div className="nb-cal-error" role="alert">{error}</div>}
 
       <PlanMonthGrid month={calendar.month} items={allItems} />
       <PlanDayList

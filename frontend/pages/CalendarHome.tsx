@@ -24,14 +24,17 @@ const CalendarHome: React.FC = () => {
     <div className="max-w-[1440px] mx-auto pb-16">
       {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
           toggle — the one tab control style the whole app should share. */}
-      <div className="mb-8 overflow-x-auto">
-        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
+      <div className="mb-5 overflow-x-auto">
+        <div role="tablist" aria-label="Calendar views" className="inline-flex items-center gap-1 p-1 rounded-full bg-[var(--gv-panel)] border border-[var(--gv-border-default)]">
           {TABS.map((t) => (
             <button
               key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
-              className={`whitespace-nowrap h-9 px-5 rounded-full text-[13px] font-semibold transition-colors ${
-                tab === t.key ? 'bg-white/[0.10] text-[#F5F4F1]' : 'text-white/55 hover:text-white/80'
+              className={`whitespace-nowrap h-8 px-5 rounded-full text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A4A00] ${
+                tab === t.key ? 'bg-[#FFF1D2] text-[#2B1D0E] shadow-[inset_0_0_0_1px_#F5A623]' : 'text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'
               }`}
             >
               {t.label}
@@ -44,24 +47,24 @@ const CalendarHome: React.FC = () => {
           internal state (which month card is expanded, which detail tab)
           would otherwise reset every time someone flips back from Schedule. */}
       <div className={tab === 'plan' ? '' : 'hidden'}>
+        <ContentCalendar />
         <div
-          className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl p-5"
+          className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-3.5"
           style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)' }}
         >
           <div className="min-w-0 flex-1">
-            <h2 className="text-[16px] font-semibold" style={{ color: 'var(--gv-text-primary)' }}>Brand Growth Blueprint</h2>
-            <p className="mt-1 text-[13.5px] leading-relaxed" style={{ color: 'var(--gv-text-secondary)' }}>
+            <h2 className="text-[14.5px] font-semibold" style={{ color: 'var(--gv-text-primary)' }}>Brand Growth Blueprint</h2>
+            <p className="mt-0.5 text-[13px] leading-relaxed" style={{ color: 'var(--gv-text-secondary)' }}>
               Build a 90-day plan from your website and Instagram page, then use it to plan your calendar.
             </p>
           </div>
           <Link
             to="/blueprint/new"
-            className="shrink-0 inline-flex items-center justify-center px-5 py-2.5 rounded-lg text-[13px] font-semibold bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)]"
+            className="shrink-0 inline-flex items-center justify-center px-4 py-2 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] bg-[var(--gv-panel)] text-[var(--gv-text-primary)] hover:border-[var(--gv-border-strong)]"
           >
             Create a Blueprint
           </Link>
         </div>
-        <ContentCalendar />
       </div>
       <div className={tab === 'schedule' ? '' : 'hidden'}>
         <GravityCalendar />
