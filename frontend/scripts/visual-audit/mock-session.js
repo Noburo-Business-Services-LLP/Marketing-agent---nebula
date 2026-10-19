@@ -1386,6 +1386,85 @@
     for (var e = extra.length - 1; e >= 0; e--) ROUTES.unshift(extra[e]);
   })();
 
+  // ---- Performance view (GET /analytics/performance, ?perfstate=full|oneplatform|empty|notconnected|error). Separate
+  // block, only active with a perfstate; the older states (latest, oneday, partial) answer as full, nosocials as
+  // notconnected and new as empty. Shapes follow backend/services/performance/view.js.
+  (function () {
+    var PS = sessionStorage.getItem('audit-perf-state') || '';
+    if (!PS) return;
+    PS = { nosocials: 'notconnected', 'new': 'empty' }[PS] || ({ oneplatform: 1, empty: 1, notconnected: 1, error: 1 }[PS] ? PS : 'full');
+    var pic = function (n) { return location.origin + '/assets/showcase/' + n + '.webp'; };
+    var Y = function (v, p, extra) { var o = { value: v, previous: p === undefined ? null : p, change: p === undefined || p === null ? null : Math.round((v - p) * 100) / 100, changePct: p ? Math.round(((v - p) / p) * 1000) / 10 : null, available: true, reason: null }; for (var k in (extra || {})) o[k] = extra[k]; return o; };
+    var N = function (r) { return { value: null, previous: null, change: null, changePct: null, available: false, reason: r }; };
+    var LABEL = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', twitter: 'X' };
+    var WORDS = { week: 'this week', month: 'this month', '90d': 'in the last 90 days' };
+    var DAYS = { week: 7, month: 30, '90d': 90 };
+    var names = ['Weekend croissant drop', 'Sourdough Sunday', 'Birthday cake orders open', 'Morning coffee combo', 'Millet cookie launch', 'Behind the oven at 5am', 'Customer of the week', 'Festive sweets box', 'How we laminate dough'];
+    var fmts = ['video', 'image', 'carousel', 'image', 'video', 'text', 'carousel', 'image', 'video'];
+    var plats = ['instagram', 'instagram', 'facebook', 'instagram', 'linkedin', 'facebook', 'instagram', 'linkedin', 'instagram'];
+    var posts = names.map(function (n, i) {
+      var likes = [320, 210, 64, 120, 45, 30, 150, 38, 260][i], comments = [24, 11, 6, 9, 7, 2, 14, 5, 31][i], shares = [12, 4, 3, 2, 6, 1, 5, 2, 9][i], reach = [5200, 3900, 1500, 2500, 1100, 700, 2800, 900, 4600][i];
+      return { id: 'pv-' + i, campaignId: 'pv-c' + i, platform: plats[i], platformLabel: LABEL[plats[i]], title: n, thumbnail: fmts[i] === 'text' ? null : pic(['food-1', 'food-2', 'food-3', 'hospitality-1'][i % 4]), url: 'https://www.' + plats[i] + '.com/p/pv' + i, publishedAt: iso(-(i * 3 + 1)), date: ymd(-(i * 3 + 1)), format: fmts[i], metric: 'likes', value: likes, metrics: { likes: likes, comments: comments, shares: shares, reach: reach, engagement: likes + comments + shares } };
+    });
+    var build = function (range, platform) {
+      var full = PS === 'full', one = PS === 'oneplatform', none = PS === 'empty' || PS === 'notconnected';
+      var connected = full ? ['instagram', 'facebook', 'linkedin'] : one ? ['instagram'] : [];
+      var f = { week: 0.3, month: 1, '90d': 2.6 }[range] || 1;
+      var spark = function (start, step, n) { var a = []; for (var i = 0; i < n; i++) a.push(Math.round(start + step * i + Math.sin(i / 2) * step * 2)); return a; };
+      var nDays = Math.min(DAYS[range] || 30, 30);
+      var mine = posts.filter(function (p) { return connected.indexOf(p.platform) >= 0 && (!platform || p.platform === platform); });
+      if (range === 'week') mine = mine.slice(0, 3);
+      var sum = function (k) { return mine.reduce(function (a, p) { return a + p.metrics[k]; }, 0); };
+      var platformRow = function (p) {
+        if (connected.indexOf(p) < 0) return { platform: p, label: LABEL[p], connected: false, state: 'notconnected', reason: PS === 'empty' ? 'Connecting accounts comes with a paid plan.' : 'Connect ' + LABEL[p] + ' to see its numbers here.', asOf: null, postsMeasured: 0, metrics: {}, spark: {} };
+        var base = { instagram: 12480, facebook: 3120, linkedin: 860 }[p], gain = Math.round({ instagram: 240, facebook: 41, linkedin: 18 }[p] * f);
+        var mp = posts.filter(function (x) { return x.platform === p; });
+        var s = function (k) { return mp.reduce(function (a, x) { return a + x.metrics[k]; }, 0); };
+        return { platform: p, label: LABEL[p], connected: true, state: 'ready', reason: null, asOf: ymd(0), postsMeasured: mp.length, metrics: {
+          followers: Y(base, base - gain, { asOf: ymd(0) }), reach: p === 'facebook' ? N('Facebook has not reported this yet.') : Y(Math.round(base * 0.42 * f), Math.round(base * 0.38 * f)), engagementRate: Y({ instagram: 4.2, facebook: 2.1, linkedin: 3.4 }[p], { instagram: 3.8, facebook: 2.3, linkedin: 3.1 }[p], { unit: 'percent' }),
+          likes: Y(Math.round(s('likes') * f), Math.round(s('likes') * f * 0.8)), comments: Y(Math.round(s('comments') * f), null), shares: Y(Math.round(s('shares') * f), null), posts: Y(Math.max(1, Math.round(mp.length * f)), Math.max(1, Math.round(mp.length * f) - 1)) },
+          spark: { followers: spark(base - gain, gain / nDays, nDays) } };
+      };
+      var platforms = ['instagram', 'facebook', 'linkedin', 'twitter'].map(platformRow);
+      var scope = platform ? platforms.filter(function (x) { return x.platform === platform; }) : platforms.filter(function (x) { return x.connected; });
+      var connectR = PS === 'empty' ? 'Connecting accounts comes with a paid plan.' : 'Connect an account to see this.';
+      var tot = function (k) { var ok = scope.filter(function (x) { return x.metrics[k] && x.metrics[k].available; }); if (!ok.length) return N(none ? connectR : 'Your connected accounts have not reported this yet.'); return Y(ok.reduce(function (a, x) { return a + x.metrics[k].value; }, 0), ok.reduce(function (a, x) { return a + x.metrics[k].previous; }, 0)); };
+      var rank = function (k) { return mine.slice().sort(function (a, b) { return b.metrics[k] - a.metrics[k]; }).slice(0, 3).map(function (p) { var c = JSON.parse(JSON.stringify(p)); c.metric = k; c.value = p.metrics[k]; return c; }); };
+      var noPosts = none ? 'Nothing was published in this period.' : null;
+      var lists = {}; ['engagement', 'likes', 'comments', 'reach'].forEach(function (k) { lists[k] = { posts: rank(k), reason: mine.length ? null : (noPosts || 'Your posts from this period have not been measured yet. Each post is measured a day, three days and a week after it goes out.') }; });
+      var fmtRows = [['video', 'Videos'], ['carousel', 'Carousels'], ['image', 'Image posts'], ['text', 'Text posts']].map(function (r) { var ps = mine.filter(function (p) { return p.format === r[0]; }); return { format: r[0], label: r[1], posts: ps.length, average: ps.length ? Math.round(ps.reduce(function (a, p) { return a + p.metrics.likes; }, 0) / ps.length * 10) / 10 : null }; }).filter(function (r) { return r.posts; }).sort(function (a, b) { return b.average - a.average; });
+      var enough = mine.length >= 8;
+      var dayRows = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(function (d, i) { return { weekday: i, label: d, posts: enough ? [1, 2, 0, 1, 2, 3, 0][i] : 0, average: enough ? [80, 140, null, 95, 120, 260, null][i] : null }; });
+      var timeRows = [['morning', 'Morning', '6 am to 12 pm', 3, 110], ['afternoon', 'Afternoon', '12 pm to 5 pm', 2, 90], ['evening', 'Evening', '5 pm to 9 pm', 3, 230], ['night', 'Night', '9 pm to 6 am', 1, 60]].map(function (r) { return { key: r[0], label: r[1], hours: r[2], posts: enough ? r[3] : 0, average: enough ? r[4] : null }; });
+      var insights = full && !platform && range !== 'week' ? [
+        { id: 'format-video-image', kind: 'format', tone: 'gold', text: 'Videos got 3.2 times the likes of image posts ' + WORDS[range] + ' (from 6 posts).', source: 'post_performance', evidence: { posts: 6 }, action: { kind: 'video', mode: 'single', platform: 'instagram', brief: 'A new video in the style of "Weekend croissant drop": the same kind of picture and caption, with a fresh angle.' } },
+        { id: 'top-pv-0', kind: 'top_post', tone: 'coral', text: '"Weekend croissant drop" got the most likes ' + WORDS[range] + ': 320 likes, 3.1 times the average of your other posts (from 9 posts).', source: 'post_performance', evidence: { posts: 9 }, action: { kind: 'video', mode: 'single', platform: 'instagram', brief: 'A new video for Instagram in the style of "Weekend croissant drop".' } },
+        { id: 'time-evening', kind: 'time', tone: 'gold', text: 'Posts published in the evening (5 pm to 9 pm, India time) got 1.9 times your average engagement ' + WORDS[range] + ' (3 posts then, from 9 posts).', source: 'post_performance', evidence: { posts: 9 }, action: { kind: 'post', mode: 'carousel', platform: null, brief: 'A new carousel in the style of "Sourdough Sunday".' } },
+        { id: 'platform-instagram-linkedin', kind: 'platform', tone: 'lilac', text: 'Your Instagram posts got 4.6 times the likes of your LinkedIn posts ' + WORDS[range] + ' (from 7 posts).', source: 'post_performance', evidence: { posts: 7 }, action: { kind: 'post', mode: 'single', platform: 'instagram', brief: 'A new image post for Instagram in the style of "Morning coffee combo".' } },
+        { id: 'followers-instagram', kind: 'followers', tone: 'lilac', text: 'Instagram gained ' + Math.round(240 * f) + ' followers ' + WORDS[range] + ' (from ' + nDays + ' daily numbers).', source: 'account_snapshots', evidence: { days: nDays }, action: null }
+      ] : one && !platform ? [{ id: 'followers-instagram', kind: 'followers', tone: 'lilac', text: 'Instagram gained ' + Math.round(240 * f) + ' followers ' + WORDS[range] + ' (from ' + nDays + ' daily numbers).', source: 'account_snapshots', evidence: { days: nDays }, action: null }] : [];
+      var pubN = none ? 0 : Math.max(mine.length, Math.round(mine.length * f));
+      return {
+        success: true, cached: false,
+        range: { key: range, days: DAYS[range], from: iso(-DAYS[range]), to: iso(0), previousFrom: iso(-2 * DAYS[range]), words: WORDS[range] },
+        platform: platform || null, account: { free: PS === 'empty', canConnect: PS !== 'empty', clientWorkspace: false, staff: false },
+        connected: { count: connected.length, platforms: connected },
+        overall: { followers: tot('followers'), reach: tot('reach'), engagementRate: scope.length && !none ? Y(3.6, 3.2, { unit: 'percent' }) : N(none ? connectR : 'Your connected accounts have not reported this yet.'), likes: mine.length ? Y(Math.round(sum('likes') * f), Math.round(sum('likes') * f * 0.8)) : N('Likes show once your posts from this period are measured.'), posts: Y(pubN, Math.max(0, pubN - 2)), postsMeasured: Y(mine.length), spark: none ? {} : { followers: spark(14000, 9, nDays), reach: spark(5200, 40, nDays), engagementRate: null, posts: [1, 2, 1, 3, 0, 2] } },
+        platforms: platforms, topPosts: { measured: mine.length, reason: mine.length ? null : (noPosts || 'Your posts from this period have not been measured yet.'), lists: lists },
+        byFormat: { available: mine.length >= 6, reason: mine.length >= 6 ? null : 'Comparing formats needs at least 3 measured posts in each of two formats. So far: ' + (fmtRows.map(function (r) { return r.label.toLowerCase() + ' ' + r.posts; }).join(', ') || 'none with numbers') + '.', metric: 'likes', minPerGroup: 3, rows: fmtRows },
+        byDay: { available: enough, reason: enough ? null : (none ? 'Nothing was published in this period.' : 'The best day and time show once at least 8 posts in this period have numbers. So far: ' + mine.length + '.'), metric: 'engagement', average: 130, posts: mine.length, rows: dayRows, best: enough ? { weekday: 5, label: 'Saturday', posts: 3, average: 260, lift: 2 } : null },
+        byTime: { available: enough, reason: null, metric: 'engagement', average: 130, posts: mine.length, rows: timeRows, best: enough ? { key: 'evening', label: 'Evening', hours: '5 pm to 9 pm', posts: 3, average: 230, lift: 1.8 } : null },
+        insights: insights, insightsReason: insights.length ? null : (mine.length < 5 ? 'Findings show once at least 5 posts from this period have been measured. So far: ' + mine.length + '.' : 'Nothing stands out clearly yet. Your posts in this period performed about the same.'),
+        degraded: []
+      };
+    };
+    ROUTES.unshift(['GET', /^\/analytics\/performance/, function (c) {
+      if (PS === 'error') return { __status: 500, body: { success: false, message: 'We could not load your performance numbers. Please try again.' } };
+      var r = c.url.searchParams.get('range') || 'month';
+      return build(DAYS[r] ? r : 'month', c.url.searchParams.get('platform') || '');
+    }]);
+  })();
+
   var GENERIC_GET = function () {
     return ok({ data: [], items: [], results: [], list: [], total: 0, count: 0 });
   };

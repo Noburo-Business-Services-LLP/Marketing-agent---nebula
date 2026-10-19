@@ -19,6 +19,8 @@
   "pages/BlueprintView.tsx",
   "pages/BlueprintRoutes.tsx",
   "utils/performanceView.ts",
+  "utils/performanceInsights.ts",
+  "components/performance/PerformanceSections.tsx",
   "utils/brandTiles.ts",
   "components/brand/BrandGlance.tsx",
   "components/brand/BlueprintTiles.tsx",

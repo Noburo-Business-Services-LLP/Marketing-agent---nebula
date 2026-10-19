@@ -2581,6 +2581,10 @@ export const apiService = {
   },
 
   // Get historical analytics snapshots for trend charts
+  // The Performance page in one answer (backend/routes/performanceView.js): range week, month or 90d, optional platform.
+  getPerformanceView: async (range: string = 'month', platform?: string | null): Promise<any> => apiCall<any>(
+    `/analytics/performance?range=${encodeURIComponent(range)}${platform ? `&platform=${encodeURIComponent(platform)}` : ''}`, { method: 'GET' }, true),
+
   getAnalyticsHistory: async (days: number = 30): Promise<any> => {
     return await apiCall<any>(
       `/analytics/history?days=${days}`,
