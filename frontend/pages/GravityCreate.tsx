@@ -1132,10 +1132,18 @@ const GravityCreate: React.FC = () => {
 
   return (
     <div className="max-w-[960px] mx-auto pb-24">
-      {/* What to make: five cover tiles in one even row (two columns on a phone), each a small poster with
+      {/* What to make: five cover tiles in one even row, Video first (two columns on a phone), each a small poster with
           the art filling it. The four modes only set the mode; Video is made on its own page, so its tile opens that page. */}
       <div className="mt-1 mb-3">
         <TileGrid columns={5} size="small" label="What do you want to create?">
+          <CoverTile
+            title={VIDEO_ENTRY.title}
+            subtitle={VIDEO_ENTRY.subtitle}
+            price={videoEntryCost(quarkCosts) || undefined}
+            palette="ink"
+            art={VIDEO_ART}
+            to={VIDEO_ENTRY.to}
+          />
           {CREATE_TILES.map((t) => (
             <CoverTile
               key={t.key}
@@ -1148,14 +1156,6 @@ const GravityCreate: React.FC = () => {
               onClick={() => setMode(t.key)}
             />
           ))}
-          <CoverTile
-            title={VIDEO_ENTRY.title}
-            subtitle={VIDEO_ENTRY.subtitle}
-            price={videoEntryCost(quarkCosts) || undefined}
-            palette="ink"
-            art={VIDEO_ART}
-            to={VIDEO_ENTRY.to}
-          />
         </TileGrid>
       </div>
 
