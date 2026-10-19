@@ -259,3 +259,14 @@ Total: about 7 to 9 working days. Phases 1 and 2 give the uniform buttons. Phase
 6. **D6, permanent delete.** **Not offered. Archive only; archived items stay restorable.** The alternative adds "Delete for good" with a confirmation.
 7. **D7, the top-bar Search button, which does nothing today.** **Remove it now.** The alternative is to wire it to Library search.
 8. **D8, posting videos without the Publish add-on**, which currently slips through on the Hero and reel routes. **Gate it like posts. Accounts that used it in the last 30 days get a note.** The alternative leaves it open as a goodwill exception.
+
+
+## OWNER DECISIONS (2026-10-19, final; these override the recommended defaults above where they differ)
+1. **Approve means "this is good enough to publish or schedule"** (not "post now"). If the post has a planned date and the account can publish, approving schedules it for that date; otherwise it waits as Approved and the card offers Schedule, Post now and Download.
+2. **Calendar becomes a tab inside Plan** (assistant's call, accepted by the owner's "you suggest"): the calendar is the schedule of the plan, so one place.
+3. **Who needs approval:** anything the customer creates by hand (Create content, Videos, Photoshoot, Upload and schedule) can be posted or scheduled straight away, no approval step. Anything the AUTOMATION generates for the customer (weekly plan posts, auto-generated drafts, calendar auto-generation, automatic replies drafts) needs the customer's approval before it can go out. So the approval queue (Library "Needs approval") only holds automation-made items. Photoshoot photos made by the customer: no approval.
+4. **Sidebar sub-items:** yes, show the open category's tabs indented under its entry.
+5. **Brand memory is renamed "What Nebulaa learned"** (the owner is lukewarm: "Okayyyyy??": keep it plain, easy to change).
+6. **Delete:** no instant permanent delete. Archive keeps the item (restorable any time). "Delete" moves it to a **Bin** where it can be restored for **14 days**, then it is permanently removed by a background purge (also remove stored files/thumbnails; honour the data-retention rules; document the job).
+7. **Top bar Search button:** it does nothing today (it was meant to search pages, posts and conversations). Remove it for now; wire it to a real search later (Library and Inbox search) only if the owner asks.
+8. **Video posting follows the same Publish add-on rule as posts** (gate it, tell accounts that used it in the last 30 days).

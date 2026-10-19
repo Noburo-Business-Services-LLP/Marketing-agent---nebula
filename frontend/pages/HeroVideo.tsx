@@ -570,9 +570,9 @@ const HeroVideoInner: React.FC = () => {
   // ---- a new version of a finished video: just the prompt, then make it ----
   if (tweakSource && !incomingBrief) {
     return (
-      <div className="hero-studio max-w-[920px] mx-auto pb-16 pt-6 space-y-8">
+      <div className="hero-studio max-w-[920px] mx-auto pb-16 space-y-8">
         <style>{LIGHT_FIX}</style>
-        <PageHeader eyebrow="Hero Studio" title="Make a new" emphasis="version" description="Edit the prompt and make another video from it." className="!mb-0" />
+        <PageHeader eyebrow="Hero Studio" title="Make a new" emphasis="version" description="Edit the prompt and make another video from it." className="!mb-0 !mt-0" />
         {!jobId && <HeroTweak source={tweakSource} onStarted={(id) => { setJobId(id); setJobStatus('queued'); startPolling(id); }} />}
         {jobPanel}
         {historyList}
@@ -583,14 +583,14 @@ const HeroVideoInner: React.FC = () => {
   // ---- no brief: the quick flow (three crisp ideas), or an error loading the chosen one ----
   if (!incomingBrief || prepError) {
     return (
-      <div className="hero-studio max-w-[920px] mx-auto pb-16 pt-6 space-y-8">
+      <div className="hero-studio max-w-[920px] mx-auto pb-16 space-y-8">
         <style>{LIGHT_FIX}</style>
         <PageHeader
           eyebrow="Hero Studio"
           title="Create a"
           emphasis="Hero video"
           description="One crisp 15-second clip: a hook, three short beats and a clear closing call to action. For a longer video of 30 to 60 seconds, use the step-by-step video in Videos."
-          className="!mb-0"
+          className="!mb-0 !mt-0"
         />
         {prepError && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{prepError}</p>}
         <HeroQuickStart
@@ -618,7 +618,7 @@ const HeroVideoInner: React.FC = () => {
   const brandEmpty = !brand || (!brand.name && !brand.logoUrl && !brand.heroProduct && !brand.colors.length);
 
   return (
-    <div className="hero-studio max-w-[960px] mx-auto pb-16 pt-2">
+    <div className="hero-studio max-w-[960px] mx-auto pb-16">
       <style>{LIGHT_FIX}</style>
       <PageHeader
         eyebrow="Hero Studio"
