@@ -3,13 +3,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { pricingExtras } = require('../services/costList');
+const { pricingExtras, visibleCosts } = require('../services/costList');
 const { STUDIO_CLIP_SECONDS, QUARK_COSTS } = require('../config/apiCosts');
 const { MAX_CLIPS } = require('../services/studioVideo');
 const { PACKS } = require('../config/photoshootPacks');
 
 test('the price list extras come from the configs and carry no price of their own', () => {
-  const x = pricingExtras();
+  const x = pricingExtras({ ENABLE_PHOTOSHOOT: 'on' });
   assert.equal(x.videoPartSeconds, STUDIO_CLIP_SECONDS);
   assert.equal(x.videoMaxParts, MAX_CLIPS);
   assert.equal(x.photoshootPacks.length, PACKS.length);
@@ -29,5 +29,19 @@ test('GET /api/credits sends the extras next to the costs and units, in both ans
   const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'credits.js'), 'utf8');
   const hits = src.match(/pricing: pricingExtras\(\)/g) || [];
   assert.equal(hits.length, 2);
+  assert.equal((src.match(/costs: visibleCosts\(CREDIT_COSTS\)/g) || []).length, 2);
   assert.ok(src.includes("require('../services/costList')"));
+});
+
+test('Photoshoot rows are hidden while ENABLE_PHOTOSHOOT is off, shown when it is on', () => {
+  const costs = { image_generated: 5, photoshoot_image: 10 };
+  for (const env of [{}, { ENABLE_PHOTOSHOOT: 'off' }, { ENABLE_PHOTOSHOOT: '' }, { ENABLE_PHOTOSHOOT: 'true' }]) {
+    assert.ok(!('photoshoot_image' in visibleCosts(costs, env)));
+    assert.ok(!('photoshootPacks' in pricingExtras(env)));
+    assert.equal(pricingExtras(env).videoPartSeconds, STUDIO_CLIP_SECONDS);
+  }
+  const on = { ENABLE_PHOTOSHOOT: ' On ' };
+  assert.equal(visibleCosts(costs, on).photoshoot_image, 10);
+  assert.ok(pricingExtras(on).photoshootPacks.length > 0);
+  assert.ok('photoshoot_image' in costs, 'input not mutated');
 });

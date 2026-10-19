@@ -9,12 +9,26 @@ const { STUDIO_CLIP_SECONDS } = require('../config/apiCosts');
 const { MAX_CLIPS } = require('./studioVideo');
 const { PACKS } = require('../config/photoshootPacks');
 
-function pricingExtras() {
-  return {
+const caps = require('../config/photoshoot');
+
+/** Same reading of the Photoshoot switch as the photoshoot service: only the exact word "on" opens it. */
+const photoshootOn = (env = process.env) => String((env && env[caps.SWITCH_ENV]) || '').trim().toLowerCase() === 'on';
+
+/** While Photoshoot is off the packs are not sent, so the price list shows no Photoshoot rows. */
+function pricingExtras(env = process.env) {
+  const out = {
     videoPartSeconds: STUDIO_CLIP_SECONDS,
     videoMaxParts: MAX_CLIPS,
-    photoshootPacks: PACKS.map((p) => ({ key: p.key, title: p.title, photos: p.defaultCount, counts: p.counts.slice() })),
   };
+  if (photoshootOn(env)) out.photoshootPacks = PACKS.map((p) => ({ key: p.key, title: p.title, photos: p.defaultCount, counts: p.counts.slice() }));
+  return out;
 }
 
-module.exports = { pricingExtras };
+/** The cost map for the price list: without the photo price while Photoshoot is off. The input is never changed. */
+function visibleCosts(costs, env = process.env) {
+  if (photoshootOn(env)) return costs;
+  const { photoshoot_image: _hidden, ...rest } = costs || {};
+  return rest;
+}
+
+module.exports = { pricingExtras, visibleCosts, photoshootOn };

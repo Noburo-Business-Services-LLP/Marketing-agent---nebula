@@ -4939,7 +4939,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {choicesFor('video').map(({ key: platform, label, soon, video }) => {
                     const active = selectedPlatforms.includes(platform);
-                    const blocked = Boolean(soon) || !video;
+                    const blocked = !video || soon === true;
                     return (
                       <button
                         key={platform}
@@ -4953,7 +4953,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                             : 'bg-white border-slate-300 text-slate-700'
                           } ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        <span className="inline-flex items-center gap-2"><PlatformIcon platform={platform} />{label}{blocked ? ' (soon)' : ''}</span>
+                        <span className="inline-flex items-center gap-2"><PlatformIcon platform={platform} />{label}</span>
                       </button>
                     );
                   })}
@@ -5035,7 +5035,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   <div className="mt-2 flex flex-wrap gap-2">
                     {choicesFor('video').map(({ key: platform, label, soon, video }) => {
                       const active = selectedPlatforms.includes(platform);
-                      const blocked = Boolean(soon) || !video;
+                      const blocked = !video || soon === true;
                       return (
                         <button
                           key={platform}
@@ -5045,7 +5045,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                           onClick={() => togglePlatform(platform)}
                           className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold ${active ? 'bg-[#F5A623] text-black border-[#F5A623]' : 'bg-white border-slate-300 text-slate-700'} ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                          <PlatformIcon platform={platform} />{label}{blocked ? ' (soon)' : ''}
+                          <PlatformIcon platform={platform} />{label}
                         </button>
                       );
                     })}

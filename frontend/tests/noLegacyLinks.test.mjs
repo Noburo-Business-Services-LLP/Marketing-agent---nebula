@@ -19,7 +19,7 @@ const FORBIDDEN_TEXT = [
   'old step-by-step', 'Open it here', 'old maker', 'old version', 'old dashboard', 'classic version',
   'classic dashboard', 'switch to the old', 'try the new', 'previous version', 'legacy version',
   // Owner decisions 2026-10-19: Hero video stays hidden; one Videos flow; nothing that leads nowhere.
-  'Hero videos', 'Create a Hero video', 'Step-by-step videos', 'step-by-step video', 'Coming soon', 'legacy copy',
+  'Hero videos', 'Create a Hero video', 'Step-by-step videos', 'step-by-step video', 'Coming soon', 'legacy copy', '(soon)',
 ];
 // The hidden Hero feature itself (its page and parts) may use its own name; nothing else may.
 const HERO_OWN = /^(pages\/HeroVideo\.tsx|components\/Hero[A-Za-z]*\.tsx)$/;

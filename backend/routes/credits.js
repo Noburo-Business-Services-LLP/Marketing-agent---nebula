@@ -6,7 +6,7 @@ const { CREDIT_COSTS, ACTION_UNITS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const quarkBuckets = require('../services/quarkBuckets');
 const agencyRules = require('../services/agency');
-const { pricingExtras } = require('../services/costList');
+const { pricingExtras, visibleCosts } = require('../services/costList');
 
 // Inside a client, only the shared pool's balance is shown: never the agency's history, buckets or other clients' spend.
 // A frozen client (over the agency's limit) is refused outright.
@@ -39,7 +39,7 @@ router.get('/', protect, async (req, res) => {
           parts: { plan: 0, planExpiresAt: null, topup: 0, topupExpiresAt: null, held: 0, kept: pool.balance }
         },
         trial: { startDate: user.trial?.startDate || user.createdAt, isExpired: false },
-        costs: CREDIT_COSTS,
+        costs: visibleCosts(CREDIT_COSTS),
         units: ACTION_UNITS,
         pricing: pricingExtras()
       });
@@ -65,7 +65,7 @@ router.get('/', protect, async (req, res) => {
         // No expiry date or day count is shown any more.
         isExpired: false
       },
-      costs: CREDIT_COSTS,
+      costs: visibleCosts(CREDIT_COSTS),
       // Prices are per unit, and the unit differs per action (per slide,
       // per scene, per post). Shipping the units alongside the numbers is
       // what stops the UI rendering "Carousel 4.5" as if that were the

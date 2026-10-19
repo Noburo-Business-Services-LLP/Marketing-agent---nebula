@@ -18,7 +18,7 @@ test('every cost key the server prices is on the list or deliberately hidden, ne
 });
 
 test('the list prices every row from the server map, with videos by length and the Photoshoot packs', () => {
-  const groups = buildCostList(QUARK_COSTS, pricingExtras());
+  const groups = buildCostList(QUARK_COSTS, pricingExtras({ ENABLE_PHOTOSHOOT: 'on' }));
   const by = Object.fromEntries(groups.map((g) => [g.id, g]));
   assert.deepEqual(groups.map((g) => g.id), ['posts', 'carousels', 'campaigns', 'videos', 'photoshoot', 'competitors', 'blueprint', 'edits']);
   const row = (g, label) => by[g].rows.find((r) => r.label === label);
@@ -26,7 +26,7 @@ test('the list prices every row from the server map, with videos by length and t
   assert.equal(row('carousels', '5-slide carousel').quarks, 5 * QUARK_COSTS.carousel_generated);
   for (const s of [10, 20, 30]) assert.equal(row('videos', `${s} second video`).quarks, (s / STUDIO_CLIP_SECONDS) * QUARK_COSTS.studio_video);
   assert.equal(row('photoshoot', 'One photo').quarks, QUARK_COSTS.photoshoot_image);
-  for (const pk of pricingExtras().photoshootPacks) assert.equal(row('photoshoot', pk.title).quarks, pk.photos * QUARK_COSTS.photoshoot_image);
+  for (const pk of pricingExtras({ ENABLE_PHOTOSHOOT: 'on' }).photoshootPacks) assert.equal(row('photoshoot', pk.title).quarks, pk.photos * QUARK_COSTS.photoshoot_image);
   assert.equal(row('competitors', 'Post in response').quarks, QUARK_COSTS.home_response_post);
   assert.equal(row('competitors', 'Witty comment').quarks, QUARK_COSTS.home_witty_comment);
   assert.equal(row('blueprint', 'Growth Blueprint').quarks, QUARK_COSTS.blueprint);
@@ -58,4 +58,14 @@ test('Settings draws the list from the mapping, without emoji icons', () => {
   const src = fs.readFileSync(new URL('../pages/Settings.tsx', import.meta.url), 'utf8');
   assert.ok(src.includes('QuarkCostList'));
   assert.ok(!src.includes('ACTION_LABELS'));
+});
+
+test('Photoshoot rows are on the list only while the server sends them (ENABLE_PHOTOSHOOT)', () => {
+  const { visibleCosts } = require('../../backend/services/costList.js');
+  const off = buildCostList(visibleCosts(QUARK_COSTS, {}), pricingExtras({}));
+  assert.ok(!off.some((g) => g.id === 'photoshoot'));
+  const on = buildCostList(visibleCosts(QUARK_COSTS, { ENABLE_PHOTOSHOOT: 'on' }), pricingExtras({ ENABLE_PHOTOSHOOT: 'on' }));
+  assert.ok(on.some((g) => g.id === 'photoshoot'));
+  // Every other group is the same either way.
+  assert.deepEqual(off.map((g) => g.id), on.map((g) => g.id).filter((id) => id !== 'photoshoot'));
 });

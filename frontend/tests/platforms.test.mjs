@@ -19,6 +19,9 @@ test('a platform marked as not available yet is left out of every picker', () =>
 test('every picker draws from one list that includes X and Google Business', () => {
   const keys = PLATFORM_CHOICES.map((p) => p.key);
   assert.ok(keys.includes('twitter') && keys.includes('gmb'));
-  assert.ok(choicesFor('video').some((p) => p.key === 'gmb' && p.video === false));
+  assert.ok(choicesFor('image').some((p) => p.key === 'gmb'));
+  // Google Business cannot take video, so the video pickers simply do not offer it.
+  assert.ok(!choicesFor('video').some((p) => p.key === 'gmb'));
+  assert.ok(choicesFor('video').every((p) => p.video));
   assert.ok(!choicesFor('image').some((p) => p.key === 'youtube'));
 });

@@ -28,9 +28,9 @@ export function platformLabel(key: string): string {
   return found ? found.label : k.charAt(0).toUpperCase() + k.slice(1);
 }
 
-/** Choices for a picker: images skip YouTube; a platform that is not available yet is not offered at all. */
+/** Choices for a picker: images skip YouTube, videos skip a platform that cannot take video (Google Business); one not available yet is not offered at all. */
 export function choicesFor(kind: 'image' | 'video'): PlatformChoice[] {
-  return PLATFORM_CHOICES.filter((p) => !p.soon && (kind === 'video' ? true : p.key !== 'youtube'));
+  return PLATFORM_CHOICES.filter((p) => !p.soon && (kind === 'video' ? p.video : p.key !== 'youtube'));
 }
 
 export interface PickerItem {
