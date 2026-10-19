@@ -5,6 +5,7 @@ import CoverTile from '../components/CoverTile';
 import { PackProductArt, PackMarketplaceArt, PackFestivalArt, PackLifestyleArt, PackFlatLayArt, PackWhiteArt } from '../components/art/packs';
 import { photoshootAPI } from '../services/api';
 import { setPrefill } from '../utils/prefill';
+import { packPhoto } from '../utils/samplePhotos';
 import {
   PACK_PALETTE, createState, isFinished, lockedNote, minutesFor, minutesText, newKey, packTileLines, photoAlt, photoTotal,
   photosLine, priceLine, progressText, redoLabel, resultNotice, selectionFor, toggleProduct, uploadProblem, versionOf,
@@ -208,7 +209,7 @@ const Photoshoot: React.FC = () => {
             const lines = packTileLines(p, costs, postsOnly);
             return (
               <CoverTile key={p.key} title={p.title} subtitle={`${p.subtitle}. ${lines.subtitle}`} price={lines.price || undefined}
-                palette={PACK_PALETTE[p.key] || 'gold'} art={PACK_ART[p.key] || <PackProductArt />}
+                palette={PACK_PALETTE[p.key] || 'gold'} art={PACK_ART[p.key] || <PackProductArt />} image={packPhoto(p.key)}
                 selected={sel.pack?.key === p.key} onClick={() => pickPack(p)} dataAttrs={{ 'data-pack': p.key }} />
             );
           })}

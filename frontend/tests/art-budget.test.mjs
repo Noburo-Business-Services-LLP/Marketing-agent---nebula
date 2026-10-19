@@ -104,3 +104,22 @@ test('Tile, TileGrid, DarkPanel and the art never use dangerouslySetInnerHTML', 
     assert.ok(!fs.readFileSync(path.join(ROOT, f), 'utf8').includes('dangerouslySetInnerHTML'), f);
   }
 });
+
+test('the cover tile sample photos in public/samples count as tile photos: over 40 KB fails, a small one passes', () => {
+  let r = checkBudget(fixture({ ...base, 'public/samples/pack-product.webp': Buffer.alloc(LIMITS.raster + 1) }));
+  assert.ok(r.violations.some((v) => /public\/samples\/pack-product\.webp/.test(v) && /40 KB/.test(v)), r.violations.join('\n'));
+  r = checkBudget(fixture({ ...base, 'public/samples/pack-product.webp': Buffer.alloc(36 * 1024) }));
+  assert.deepEqual(r.violations, []);
+  assert.equal(r.rasters.length, 1);
+});
+
+test('SamplePhoto and CoverTile must build their photo with rasterAttrs()', () => {
+  const bad = "export default () => <img src={p.src} className=\"nb-photo-img\" />;";
+  let r = checkBudget(fixture({ ...base, 'components/SamplePhoto.tsx': bad }));
+  assert.ok(r.violations.some((v) => /SamplePhoto\.tsx/.test(v) && /rasterAttrs/.test(v)));
+  r = checkBudget(fixture({ ...base, 'components/SamplePhoto.tsx': TILE, 'components/CoverTile.tsx': 'export default () => null;' }));
+  assert.deepEqual(r.violations, []);
+  const real = fs.readFileSync(path.join(ROOT, 'components/SamplePhoto.tsx'), 'utf8');
+  assert.ok(real.includes('<img {...rasterAttrs(photo)}'), 'the real component spreads the helper first');
+  assert.ok(!/<img\b/.test(fs.readFileSync(path.join(ROOT, 'components/CoverTile.tsx'), 'utf8')), 'CoverTile draws no photo of its own');
+});

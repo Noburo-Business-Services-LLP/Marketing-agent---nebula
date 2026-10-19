@@ -5,16 +5,21 @@
 //   node scripts/art-budget.mjs <dir>    check another frontend-shaped folder (used by the tests)
 //
 // Rules: each file in components/art/ at most 2 KB raw; the whole set at most 40 KB gzip (sum of each
-// file's gzip, which is the stricter way to count); each photo in public/assets/tiles/ at most 40 KB;
+// file's gzip, which is the stricter way to count); each photo in public/assets/tiles/ and in public/samples/ (the cover
+// tile sample photos, made by backend/scripts/generate-sample-photos.js) at most 40 KB;
 // no external image, no inner HTML, no text (fonts), no scripts and at most one gradient in a piece;
-// Tile must build photo attributes with rasterAttrs(), which must set lazy loading, async decoding,
-// width and height.
+// Tile, CoverTile and SamplePhoto must build photo attributes with rasterAttrs(), which must set lazy loading,
+// async decoding, width and height.
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 export const LIMITS = { pieceRaw: 2048, totalGzip: 40 * 1024, raster: 40 * 1024 };
+/** The folders whose photos count as tile photos. */
+export const RASTER_DIRS = ['public/assets/tiles', 'public/samples'];
+/** The components that may show a tile photo: each <img> in them must spread rasterAttrs(). */
+export const PHOTO_COMPONENTS = ['components/Tile.tsx', 'components/CoverTile.tsx', 'components/SamplePhoto.tsx'];
 
 const RASTER_EXT = /\.(png|jpe?g|webp|avif|gif|svg)$/i;
 const kb = (n) => (n / 1024).toFixed(2);
@@ -58,20 +63,21 @@ export function checkBudget(root = path.resolve(path.dirname(fileURLToPath(impor
   const totalRaw = art.reduce((s, a) => s + a.raw, 0);
   if (totalGzip > LIMITS.totalGzip) violations.push(`The whole set is ${kb(totalGzip)} KB gzip, over the 40 KB limit`);
 
-  const rasters = walk(path.join(root, 'public/assets/tiles'))
+  const rasters = RASTER_DIRS.flatMap((d) => walk(path.join(root, d)))
     .filter((f) => RASTER_EXT.test(f))
     .sort()
     .map((f) => ({ file: path.relative(root, f), bytes: fs.statSync(f).size }));
   for (const r of rasters) if (r.bytes > LIMITS.raster) violations.push(`${r.file} is ${kb(r.bytes)} KB, over the 40 KB limit for one photo tile`);
 
   // Photos must go through the helper that makes them lazy and fixed in size.
-  const tilePath = path.join(root, 'components/Tile.tsx');
-  if (fs.existsSync(tilePath)) {
-    const tile = fs.readFileSync(tilePath, 'utf8');
-    const imgs = tile.match(/<img\b[^>]*>/g) || [];
-    if (imgs.some((i) => !i.includes('{...rasterAttrs('))) violations.push('components/Tile.tsx has an <img> that does not use rasterAttrs()');
-    if (imgs.length && !tile.includes('rasterAttrs(')) violations.push('components/Tile.tsx must call rasterAttrs()');
-    if (/dangerouslySetInnerHTML/.test(tile)) violations.push('components/Tile.tsx contains dangerouslySetInnerHTML');
+  for (const rel of PHOTO_COMPONENTS) {
+    const full = path.join(root, rel);
+    if (!fs.existsSync(full)) continue;
+    const src = fs.readFileSync(full, 'utf8');
+    const imgs = src.match(/<img\b[^>]*>/g) || [];
+    if (imgs.some((i) => !i.includes('{...rasterAttrs('))) violations.push(`${rel} has an <img> that does not use rasterAttrs()`);
+    if (imgs.length && !src.includes('rasterAttrs(')) violations.push(`${rel} must call rasterAttrs()`);
+    if (/dangerouslySetInnerHTML/.test(src)) violations.push(`${rel} contains dangerouslySetInnerHTML`);
   }
   const helperPath = path.join(root, 'utils/tiles.ts');
   if (fs.existsSync(helperPath)) {
@@ -97,7 +103,7 @@ function printTable(r) {
   if (r.rasters.length) {
     console.log('\nPhoto tiles');
     for (const f of r.rasters) console.log(`${pad(path.basename(f.file), 34)}${num(kb(f.bytes), 9)}  ${f.bytes > LIMITS.raster ? 'OVER' : 'ok'}`);
-  } else console.log('\nNo photo tiles registered in public/assets/tiles/.');
+  } else console.log('\nNo photo tiles yet in public/assets/tiles/ or public/samples/.');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

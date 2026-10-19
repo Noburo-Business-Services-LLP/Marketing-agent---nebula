@@ -1,0 +1,16 @@
+/* ============================================================
+   Sample photos over the drawn art (components/SamplePhoto.tsx). The layer fills its tile's picture area;
+   the photo stays invisible until it has loaded, then covers the art. Without a photo the art shows as before.
+   Plain CSS; the fade only runs when the visitor has not asked for reduced motion.
+   ============================================================ */
+.nb-photo { position: absolute; inset: 0; display: block; overflow: hidden; border-radius: inherit; }
+.nb-photo-fallback { display: contents; }
+.nb-photo[data-photo="ready"] > .nb-photo-fallback { visibility: hidden; }
+.nb-photo-img {
+  position: absolute; inset: 0; display: block; width: 100%; height: 100%; max-width: none;
+  object-fit: cover; object-position: center; opacity: 0;
+}
+.nb-photo[data-photo="ready"] > .nb-photo-img { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .nb-photo-img { transition: opacity 0.3s ease, transform 0.35s ease; }
+}

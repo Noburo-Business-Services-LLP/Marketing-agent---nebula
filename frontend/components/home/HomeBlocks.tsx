@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarCheck, Check, ClipboardCheck, Eye, Heart, ImageIcon, MessageCircle, Minus, Users, Wallet } from 'lucide-react';
 import type { HomeSummary } from '../../types';
-import Tile from '../Tile';
+import CoverTile, { type CoverPalette } from '../CoverTile';
 import TileGrid from '../TileGrid';
 import { SinglePostArt, CarouselArt, CampaignArt, VideoArt, PhotoshootArt } from '../art';
 import { PackProductArt, PackMarketplaceArt, PackFestivalArt, PackLifestyleArt, PackFlatLayArt, PackWhiteArt } from '../art/packs';
 import { photoshootAPI } from '../../services/api';
-import type { PhotoshootCatalogue } from '../../utils/photoshoot';
+import { PACK_PALETTE, type PhotoshootCatalogue } from '../../utils/photoshoot';
+import { createPhoto, packPhoto } from '../../utils/samplePhotos';
 import { setPrefill } from '../../utils/prefill';
 import { todayRows } from '../../utils/home';
 import {
@@ -155,6 +156,8 @@ export const DoThisNext: React.FC<{ summary: HomeSummary; planBannerShown: boole
 const CREATE_ART: Record<HomeCreateKey, React.ReactNode> = {
   single: <SinglePostArt />, carousel: <CarouselArt />, campaign: <CampaignArt />, video: <VideoArt />, photoshoot: <PhotoshootArt />,
 };
+// The same colour grade per kind as on Create content.
+const HOME_PALETTE: Record<HomeCreateKey, CoverPalette> = { single: 'gold', carousel: 'teal', campaign: 'coral', video: 'ink', photoshoot: 'plum' };
 const PACK_ART: Record<string, React.ReactNode> = {
   product: <PackProductArt />, marketplace: <PackMarketplaceArt />, festival: <PackFestivalArt />,
   lifestyle: <PackLifestyleArt />, flatlay: <PackFlatLayArt />, white: <PackWhiteArt />,
@@ -205,10 +208,11 @@ export const CreateToday: React.FC<{ language?: string | null; postsOnly?: boole
     <section className="nb-home-card nb-home-create" aria-labelledby="home-create-title">
       <div className="nb-home-label"><h2 id="home-create-title">What will you create today?</h2></div>
       <TileGrid columns={5} size="small" label="Choose what to make">
+        {/* Compact cover tiles with the same sample photos as Create content (the drawn art until a photo has loaded). */}
         {HOME_CREATE_TILES.map((t) => (
           t.key === 'video' || t.key === 'photoshoot'
-            ? <Tile key={t.key} variant="choice" title={t.title} subtitle={t.subtitle} accent={t.accent} art={CREATE_ART[t.key]} to={createTileHandoff(t.key).route} />
-            : <Tile key={t.key} variant="choice" title={t.title} subtitle={t.subtitle} accent={t.accent} art={CREATE_ART[t.key]} onClick={() => open(t.key)} />
+            ? <CoverTile key={t.key} title={t.title} subtitle={t.subtitle} palette={HOME_PALETTE[t.key]} art={CREATE_ART[t.key]} image={createPhoto(t.key)} overlay={t.key === 'video' ? 'play' : undefined} to={createTileHandoff(t.key).route} />
+            : <CoverTile key={t.key} title={t.title} subtitle={t.subtitle} palette={HOME_PALETTE[t.key]} art={CREATE_ART[t.key]} image={createPhoto(t.key)} overlay={t.key === 'carousel' ? 'slides' : undefined} onClick={() => open(t.key)} />
         ))}
       </TileGrid>
       <form className="nb-home-describe nb-ideabox" onSubmit={submit}>
@@ -253,7 +257,7 @@ export const CreateToday: React.FC<{ language?: string | null; postsOnly?: boole
           <div className="nb-home-packs-rail" role="list">
             {rail.map((r) => (
               <div key={r.key} role="listitem" className="nb-home-packs-item">
-                <Tile variant="choice" title={r.title} subtitle={r.line} footer={r.price || undefined} accent="photoshoot" art={PACK_ART[r.key] || <PhotoshootArt />} to={r.to} />
+                <CoverTile title={r.title} subtitle={r.line} price={r.price || undefined} palette={PACK_PALETTE[r.key] || 'plum'} art={PACK_ART[r.key] || <PhotoshootArt />} image={packPhoto(r.key)} to={r.to} />
               </div>
             ))}
           </div>

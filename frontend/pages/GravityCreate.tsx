@@ -13,8 +13,8 @@ import { DEFAULT_LOGO_POSITION, logoPositionFor } from '../utils/logoChoice';
 import { OptionGroup, TileRadioRow, ShapeArt, LogoPostArt, LogoPositionTile, LanguageTile, PlatformTiles, LOOK_ART, tileClass } from '../components/CreateOptions';
 import PostDesignPanel from '../components/PostDesignPanel';
 import CoverTile, { type CoverPalette } from '../components/CoverTile';
-import TileGrid from '../components/TileGrid';
 import { SinglePostArt, CampaignArt, CarouselArt, LinkedInArt, VideoArt, PhotoshootArt } from '../components/art';
+import { createPhoto } from '../utils/samplePhotos';
 import { CREATE_TILES, VIDEO_ENTRY, PHOTOSHOOT_ENTRY, actionCostKey, createTileCost, videoEntryCost, photoshootEntryCost } from '../utils/createTiles';
 import IdeaBoxTools, { ReadUpload } from '../components/IdeaBoxTools';
 import { appendText, mergeDetails } from '../utils/ideaFiles';
@@ -1094,17 +1094,20 @@ const GravityCreate: React.FC = () => {
 
   return (
     <div className="max-w-[960px] mx-auto pb-24">
-      {/* What to make: six cover tiles in one even row, Video first and Photoshoot second (two columns on a phone), each a
-          small poster with the art filling it. The four modes only set the mode; Video and Photoshoot are made on their own
-          pages, so their tiles open those pages. The tile text is the only description of each kind. */}
+      {/* What to make: six cover tiles in two rows of three (three rows of two on a phone), all the same height, Video
+          first and Photoshoot second, each a small poster with a sample photo (the drawn art until the photo has loaded,
+          or if its file is missing). The four modes only set the mode; Video and Photoshoot are made on their own pages,
+          so their tiles open those pages. The tile text is the only description of each kind. */}
       <div className="mt-1 mb-8">
-        <TileGrid columns={6} size="small" label="What do you want to create?">
+        <div className="nb-cover-grid" role="group" aria-label="What do you want to create?">
           <CoverTile
             title={VIDEO_ENTRY.title}
             subtitle={VIDEO_ENTRY.subtitle}
             price={videoEntryCost(quarkCosts) || undefined}
             palette="ink"
             art={VIDEO_ART}
+            image={createPhoto('video')}
+            overlay="play"
             to={VIDEO_ENTRY.to}
           />
           <CoverTile
@@ -1113,6 +1116,7 @@ const GravityCreate: React.FC = () => {
             price={photoshootEntryCost(quarkCosts) || undefined}
             palette="plum"
             art={<PhotoshootArt />}
+            image={createPhoto('photoshoot')}
             to={PHOTOSHOOT_ENTRY.to}
           />
           {CREATE_TILES.map((t) => (
@@ -1123,11 +1127,13 @@ const GravityCreate: React.FC = () => {
               price={createTileCost(t.key, quarkCosts) || undefined}
               palette={PALETTE_FOR_MODE[t.key]}
               art={ART_FOR_MODE[t.key]}
+              image={createPhoto(t.key)}
+              overlay={t.key === 'carousel' ? 'slides' : undefined}
               selected={mode === t.key}
               onClick={() => setMode(t.key)}
             />
           ))}
-        </TileGrid>
+        </div>
       </div>
 
       {/* The brief: a small heading with the optional shortcuts beside it, then the idea box. */}

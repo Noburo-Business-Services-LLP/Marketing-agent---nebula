@@ -46,9 +46,11 @@
   .nb-ps-product-name { font-size: 11.5px; }
   .nb-ps-add { min-height: 96px; }
 }
-.nb-ps-packs { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 560px) { .nb-ps-packs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 900px) { .nb-ps-packs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* The six packs fill their rows exactly (1, 2 or 3 columns), every tile the same height, the sample photo filling it. */
+.nb-ps-packs { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 148px; }
+.nb-ps-packs > .nb-cover { height: 100%; }
+@media (min-width: 560px) { .nb-ps-packs { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 156px; } }
+@media (min-width: 900px) { .nb-ps-packs { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 164px; gap: 12px; } }
 
 /* products */
 .nb-ps-products { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }

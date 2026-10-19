@@ -54,7 +54,7 @@ test('the copy follows the voice rules', () => {
 
 test('Create content shows the mode tiles and keeps the modes and their behaviour', () => {
   const page = read('pages/GravityCreate.tsx');
-  assert.ok(page.includes("import CoverTile, { type CoverPalette } from '../components/CoverTile'") && page.includes("import TileGrid from '../components/TileGrid'"));
+  assert.ok(page.includes("import CoverTile, { type CoverPalette } from '../components/CoverTile'") && page.includes("import { createPhoto } from '../utils/samplePhotos'"));
   assert.ok(page.includes('CREATE_TILES.map'), 'tiles are built from the list');
   assert.ok(page.includes('onClick={() => setMode(t.key)}'), 'a tile sets the mode like the old tabs did');
   assert.ok(page.includes('selected={mode === t.key}'), 'the current mode is marked');
@@ -81,10 +81,12 @@ test('Video is offered as an entry that opens the existing Videos page, with its
   assert.ok(read('App.tsx').includes('path="/reels"'), 'the destination route exists');
 });
 
-test('the six choices are cover tiles of one structure in one row, and the theme field is gone', () => {
+test('the six choices are cover tiles of one structure in two rows of three, and the theme field is gone', () => {
   const page = read('pages/GravityCreate.tsx');
-  // Photoshoot joined on 2026-10-19 (its page exists now), second after Video.
-  assert.ok(page.includes('<TileGrid columns={6} size="small"'), 'one even row of six');
+  // Photoshoot joined on 2026-10-19 (its page exists now), second after Video. Owner 2026-10-19: one row of six was too
+  // small to see the pictures, so two rows of three (three rows of two on a phone); the grid rules are in coverPhotos.test.mjs.
+  assert.ok(page.includes('<div className="nb-cover-grid" role="group" aria-label="What do you want to create?">'), 'the 2 x 3 grid');
+  assert.ok(!page.includes('<TileGrid columns={6}'), 'no longer one row of six');
   assert.equal((page.match(/<CoverTile\b/g) || []).length, 3, 'the mode tiles, the Video tile and the Photoshoot tile use the same cover tile');
   assert.ok(!/<Tile\b/.test(page), 'no compact tile left on the chooser');
   assert.ok(page.includes("palette=\"ink\"") && /single: 'gold', campaign: 'coral', carousel: 'teal', linkedin: 'blue'/.test(page), 'each type has its own colour grade');

@@ -224,3 +224,8 @@ main:has(> .nb-home) { container-type: inline-size; --nb-area-pad: 16px; overflo
 /* Equal row heights, and five tiles never leave one alone in a row: the last one spans the full width of its row. */
 .nb-home-create .nb-tile-grid { grid-auto-rows: 1fr; }
 .nb-home-create .nb-tile-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* The create tiles and the packs rail are compact cover tiles (components/CoverTile.tsx) with sample photos: equal heights. */
+.nb-home-create .nb-tile-grid > .nb-cover { height: 116px; }
+.nb-home-create .nb-tile-grid .nb-cover-title { font-size: 17px; }
+.nb-home-packs-item > .nb-cover { height: 128px; }
+@media (max-width: 639px) { .nb-home-create .nb-tile-grid > .nb-cover { height: 112px; } }
