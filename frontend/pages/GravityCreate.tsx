@@ -12,7 +12,7 @@ import { takePrefill, nearestLanguage } from '../utils/prefill';
 import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
 import PostDesignPanel from '../components/PostDesignPanel';
 import ModeExplainer from '../components/ModeExplainer';
-import Tile from '../components/Tile';
+import CoverTile, { type CoverPalette } from '../components/CoverTile';
 import TileGrid from '../components/TileGrid';
 import { SinglePostArt, CampaignArt, CarouselArt, LinkedInArt, VideoArt } from '../components/art';
 import { CREATE_TILES, VIDEO_ENTRY, actionCostKey, createTileCost, videoEntryCost } from '../utils/createTiles';
@@ -52,6 +52,8 @@ const ART_FOR_MODE: Record<CreateMode, React.ReactNode> = {
   single: <SinglePostArt />, campaign: <CampaignArt />, carousel: <CarouselArt />, linkedin: <LinkedInArt />,
 };
 const VIDEO_ART = <VideoArt />;
+// Each type has its own colour grade on its cover (warm gold, coral, teal, LinkedIn blue, deep violet for video).
+const PALETTE_FOR_MODE: Record<CreateMode, CoverPalette> = { single: 'gold', campaign: 'coral', carousel: 'teal', linkedin: 'blue' };
 // The small optional shortcuts beside the heading (calendar idea, prompts, products).
 // The small option pickers (shape, logo, look): one height, a light border, gold when chosen.
 const PICK = 'inline-flex h-[52px] items-center justify-center rounded-lg border text-[12px] font-semibold transition-colors';
@@ -1130,29 +1132,27 @@ const GravityCreate: React.FC = () => {
 
   return (
     <div className="max-w-[960px] mx-auto pb-24">
-      {/* What to make: five small tiles in one even row (two columns on a phone). The four modes only set
-          the mode; Video is made on its own page, so its tile opens that page. Same structure for all five. */}
+      {/* What to make: five cover tiles in one even row (two columns on a phone), each a small poster with
+          the art filling it. The four modes only set the mode; Video is made on its own page, so its tile opens that page. */}
       <div className="mt-1 mb-3">
         <TileGrid columns={5} size="small" label="What do you want to create?">
           {CREATE_TILES.map((t) => (
-            <Tile
+            <CoverTile
               key={t.key}
-              variant="choice"
               title={t.title}
               subtitle={t.subtitle}
-              footer={createTileCost(t.key, quarkCosts) || undefined}
-              accent={t.accent}
+              price={createTileCost(t.key, quarkCosts) || undefined}
+              palette={PALETTE_FOR_MODE[t.key]}
               art={ART_FOR_MODE[t.key]}
               selected={mode === t.key}
               onClick={() => setMode(t.key)}
             />
           ))}
-          <Tile
-            variant="choice"
+          <CoverTile
             title={VIDEO_ENTRY.title}
             subtitle={VIDEO_ENTRY.subtitle}
-            footer={videoEntryCost(quarkCosts) || undefined}
-            accent={VIDEO_ENTRY.accent}
+            price={videoEntryCost(quarkCosts) || undefined}
+            palette="ink"
             art={VIDEO_ART}
             to={VIDEO_ENTRY.to}
           />

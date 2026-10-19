@@ -54,7 +54,7 @@ test('the copy follows the voice rules', () => {
 
 test('Create content shows the mode tiles and keeps the modes and their behaviour', () => {
   const page = read('pages/GravityCreate.tsx');
-  assert.ok(page.includes("import Tile from '../components/Tile'") && page.includes("import TileGrid from '../components/TileGrid'"));
+  assert.ok(page.includes("import CoverTile, { type CoverPalette } from '../components/CoverTile'") && page.includes("import TileGrid from '../components/TileGrid'"));
   assert.ok(page.includes('CREATE_TILES.map'), 'tiles are built from the list');
   assert.ok(page.includes('onClick={() => setMode(t.key)}'), 'a tile sets the mode like the old tabs did');
   assert.ok(page.includes('selected={mode === t.key}'), 'the current mode is marked');
@@ -81,10 +81,12 @@ test('Video is offered as an entry that opens the existing Videos page, with its
   assert.ok(read('App.tsx').includes('path="/reels"'), 'the destination route exists');
 });
 
-test('the five choices are small tiles of one structure in one row, and the theme field is gone', () => {
+test('the five choices are cover tiles of one structure in one row, and the theme field is gone', () => {
   const page = read('pages/GravityCreate.tsx');
   assert.ok(page.includes('<TileGrid columns={5} size="small"'), 'one even row of five');
-  assert.equal((page.match(/variant="choice"/g) || []).length, 2, 'the mode tiles and the Video tile use the same small variant');
+  assert.equal((page.match(/<CoverTile\b/g) || []).length, 2, 'the mode tiles and the Video tile use the same cover tile');
+  assert.ok(!/<Tile\b/.test(page), 'no compact tile left on the chooser');
+  assert.ok(page.includes("palette=\"ink\"") && /single: 'gold', campaign: 'coral', carousel: 'teal', linkedin: 'blue'/.test(page), 'each type has its own colour grade');
   assert.ok(!/Theme or festival|create-theme|setTheme/.test(page), 'no theme or festival field');
   assert.ok(!/theme: theme/.test(page), 'no theme value is sent');
 });

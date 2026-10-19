@@ -62,6 +62,7 @@
   "components/GuidedTour.tsx",
   "components/HelpMenu.tsx",
   "components/Tile.tsx",
+  "components/CoverTile.tsx",
   "components/TileGrid.tsx",
   "components/DarkPanel.tsx",
   "utils/tiles.ts",

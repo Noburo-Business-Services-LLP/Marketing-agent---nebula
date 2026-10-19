@@ -1,0 +1,99 @@
+/* ============================================================
+   Cover tiles (components/CoverTile.tsx): the illustration fills the card like a poster or a video
+   thumbnail, on a colour-graded background with a soft glow, a light streak and a fine grain.
+   The title, one line and the price sit over a dark scrim; white text there is at least 4.5 to 1
+   even over the brightest part of the art (tests/coverTile.test.mjs computes it).
+   Plain CSS: nothing here is compiled at start-up. Motion only without reduced motion.
+   ============================================================ */
+.nb-cover {
+  --cover-mid: #C77A0A; --cover-deep: #2A1602; --cover-deep-rgb: 30 15 2; --cover-glow-rgb: 255 196 64;
+  --art-h: 128%; --art-right: -26px; --art-top: -10%; --art-rot: -5deg;
+  position: relative; isolation: isolate; display: block; box-sizing: border-box; width: 100%; min-width: 0; height: 132px;
+  margin: 0; padding: 0; overflow: hidden; border: 0; border-radius: 16px; text-align: left; text-decoration: none;
+  font: inherit; color: #FFFFFF; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  background:
+    radial-gradient(55% 85% at 82% 22%, rgb(var(--cover-glow-rgb) / 0.75), transparent 70%),
+    radial-gradient(40% 60% at 8% 0%, rgb(255 255 255 / 0.10), transparent 70%),
+    linear-gradient(160deg, var(--cover-mid) 0%, var(--cover-deep) 78%);
+  box-shadow: 0 1px 2px rgb(20 32 58 / 0.10), 0 8px 20px -10px rgb(var(--cover-glow-rgb) / 0.55);
+}
+.nb-cover[data-palette="gold"] { --cover-mid: #E8920C; --cover-deep: #3A1C02; --cover-deep-rgb: 34 16 2; --cover-glow-rgb: 255 210 80; }
+.nb-cover[data-palette="coral"] { --cover-mid: #C93E22; --cover-deep: #2C0B0C; --cover-deep-rgb: 30 7 8; --cover-glow-rgb: 255 128 84; }
+.nb-cover[data-palette="teal"] { --cover-mid: #128079; --cover-deep: #031F20; --cover-deep-rgb: 2 20 21; --cover-glow-rgb: 80 214 202; }
+.nb-cover[data-palette="blue"] { --cover-mid: #0B5DB8; --cover-deep: #041631; --cover-deep-rgb: 3 14 32; --cover-glow-rgb: 60 150 245; }
+.nb-cover[data-palette="ink"] { --cover-mid: #4630A0; --cover-deep: #0B0A24; --cover-deep-rgb: 8 7 26; --cover-glow-rgb: 150 120 255; }
+
+/* Light streaks across the cover, and a fine grain (an SVG noise, under 400 bytes). */
+.nb-cover::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.10) 38%, transparent 46%),
+    linear-gradient(115deg, transparent 50%, rgb(255 255 255 / 0.06) 53%, transparent 57%);
+}
+.nb-cover::after {
+  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0.16; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* The art, scaled up past the edges and anchored right, like a poster crop. Sized by the height and offset in pixels, so a wide tile keeps the same crop. */
+.nb-cover-art { position: absolute; z-index: 1; top: var(--art-top); right: var(--art-right); height: var(--art-h); aspect-ratio: 4 / 3; display: block; transform: rotate(var(--art-rot)); transform-origin: 60% 40%; }
+.nb-cover-art > svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 10px 14px rgb(0 0 0 / 0.38)); }
+/* The frame's pale background blob becomes a soft light halo behind the object. */
+.nb-cover-art > svg > path:first-of-type { fill: rgb(255 255 255 / 0.14); }
+.nb-cover[data-palette="gold"] .nb-cover-art { --art-h: 126%; --art-right: -33px; --art-top: -8%; --art-rot: 6deg; }
+.nb-cover[data-palette="coral"] .nb-cover-art { --art-h: 124%; --art-right: -36px; --art-top: -8%; --art-rot: -5deg; }
+.nb-cover[data-palette="teal"] .nb-cover-art { --art-h: 130%; --art-right: -36px; --art-top: -12%; --art-rot: 4deg; }
+.nb-cover[data-palette="blue"] .nb-cover-art { --art-h: 128%; --art-right: -110px; --art-top: -2%; --art-rot: -6deg; }
+.nb-cover[data-palette="ink"] .nb-cover-art { --art-h: 126%; --art-right: -56px; --art-top: -20%; --art-rot: -4deg; }
+
+/* Dark-to-clear scrim from the bottom left, in the tile's own deepest tone, so the white text always reads. */
+.nb-cover-scrim {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background:
+    linear-gradient(to top, rgb(var(--cover-deep-rgb) / 0.94) 0%, rgb(var(--cover-deep-rgb) / 0.88) 34%, rgb(var(--cover-deep-rgb) / 0.62) 52%, rgb(var(--cover-deep-rgb) / 0.20) 68%, transparent 80%),
+    linear-gradient(to right, rgb(var(--cover-deep-rgb) / 0.40), transparent 55%);
+}
+
+.nb-cover-text { position: absolute; z-index: 4; left: 12px; right: 12px; bottom: 11px; display: flex; flex-direction: column; gap: 3px; }
+.nb-cover-title {
+  display: block; font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 19px; line-height: 1.05;
+  letter-spacing: 0.012em; color: #FFFFFF; text-shadow: 0 1px 2px rgb(0 0 0 / 0.55), 0 0 18px rgb(0 0 0 / 0.35); overflow-wrap: anywhere;
+}
+.nb-cover-sub {
+  display: block; font-size: 11.5px; font-weight: 500; line-height: 1.3; color: rgb(255 255 255 / 0.90);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.6); overflow-wrap: anywhere;
+}
+/* The price, top left like a poster credit on a small dark glass chip: the amount in bold, the rest of the same words below it. */
+.nb-cover-price {
+  position: absolute; z-index: 4; left: 9px; top: 9px; max-width: calc(100% - 38px); box-sizing: border-box; display: flex; flex-direction: column;
+  padding: 4px 8px 5px; border-radius: 9px; font-size: 10px; font-weight: 500; line-height: 1.25; color: rgb(255 255 255 / 0.90);
+  background: rgb(var(--cover-deep-rgb) / 0.70); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.14), 0 4px 12px rgb(0 0 0 / 0.25);
+  -webkit-backdrop-filter: blur(8px) saturate(1.3); backdrop-filter: blur(8px) saturate(1.3);
+}
+.nb-cover-price > b { white-space: nowrap; font-size: 11px; font-weight: 700; letter-spacing: 0.01em; color: #FFFFFF; }
+.nb-cover-check {
+  position: absolute; z-index: 4; right: 9px; top: 9px; display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 999px; background: #F5A623; color: #14203A; box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+/* Selected: a gold ring that reads on the dark cover (inner, bright) and on the light page (outer). */
+.nb-cover[data-selected="true"] {
+  box-shadow: inset 0 0 0 2px #FFCB2E, 0 0 0 2px #F5A623, 0 10px 26px -8px rgb(245 166 35 / 0.65);
+}
+.nb-cover:focus-visible { outline: 3px solid #14203A; outline-offset: 3px; }
+.nb-cover[data-selected="true"]:focus-visible { outline-offset: 5px; }
+.nb-cover:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* On a phone the grid has two columns: a fifth tile on its own row spans both, as a wide title card. */
+@media (max-width: 639px) {
+  .nb-cover { height: 124px; }
+  .nb-tile-grid > .nb-cover:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nb-cover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  .nb-cover-art { transition: transform 0.35s ease; }
+  .nb-cover:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 2px 4px rgb(20 32 58 / 0.10), 0 16px 32px -10px rgb(var(--cover-glow-rgb) / 0.75); }
+  .nb-cover[data-selected="true"]:hover:not(:disabled) { box-shadow: inset 0 0 0 2px #FFCB2E, 0 0 0 2px #F5A623, 0 16px 32px -10px rgb(245 166 35 / 0.75); }
+  .nb-cover:hover:not(:disabled) .nb-cover-art { transform: rotate(var(--art-rot)) scale(1.06); }
+}
