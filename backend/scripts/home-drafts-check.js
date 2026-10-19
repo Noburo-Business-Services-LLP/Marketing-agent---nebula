@@ -208,6 +208,8 @@ async function runChecks() {
     const blockedDay = await mkUser('blockedday');
     const twin = await mkUser('twin');
     const stale = await mkUser('stale');
+    const staleUnconfirmed = await mkUser('stale-unconfirmed');
+    const staleNoSpend = await mkUser('stale-nospend');
 
     const ownerComp = await mkComp(owner, 'ZZ Sweet Rival', 'zz_sweetrival');
     const REF = await mkSnap(owner, ownerComp);
@@ -220,6 +222,7 @@ async function runChecks() {
     const refsFor = async (u) => mkSnap(u, await mkComp(u, `ZZ Rival ${u.firstName}`, `zz_r_${String(u._id).slice(-6)}`));
     const poorRef = await refsFor(poor); const minuteRef = await refsFor(minute); const dailyRef = await refsFor(daily);
     const blockedRef = await refsFor(blockedDay); const twinRef = await refsFor(twin); const staleRef = await refsFor(stale);
+    const staleUnconfirmedRef = await refsFor(staleUnconfirmed); const staleNoSpendRef = await refsFor(staleNoSpend);
     const T = (u) => generateToken(u._id);
 
     // =================================================================================================================
@@ -418,11 +421,11 @@ async function runChecks() {
     });
 
     section = '(7) a request lost in a restart:';
-    await check('a row left running is closed on the next request and its Quarks go back once', async () => {
+    await check(`a row whose lease ran out (older than ${Math.round(caps.STALE_MS / 1000)} s) and whose charge was confirmed is closed on the next request and its Quarks go back once`, async () => {
       reset();
       await User.updateOne({ _id: stale._id }, { $inc: { 'credits.balance': -COMMENT } }); // as if it had been charged
       const lostAt = new Date(Date.now() - caps.STALE_MS - 60000);
-      const lost = await HomeDraft.create({ userId: stale._id, key: `lost-${stamp}`, kind: 'witty_comment', day: istDay(lostAt), status: 'charged', inFlight: true, attempts: 1, quarks: COMMENT, payerId: String(stale._id), startedAt: lostAt, createdAt: lostAt });
+      const lost = await HomeDraft.create({ userId: stale._id, key: `lost-${stamp}`, kind: 'witty_comment', day: istDay(lostAt), status: 'charged', inFlight: true, chargedConfirmed: true, attempts: 1, quarks: COMMENT, payerId: String(stale._id), startedAt: lostAt, leaseAt: lostAt, createdAt: lostAt });
       const before = await balanceOf(stale._id);
       const r = await draft(T(stale), 'witty-comment', { ref: staleRef });
       assert.strictEqual(r.status, 200, r.text.slice(0, 200));
@@ -430,6 +433,54 @@ async function runChecks() {
       const row = await HomeDraft.findById(lost._id).lean();
       assert.strictEqual(row.outcome, 'stale'); assert.strictEqual(row.refunded, true); assert.strictEqual(row.inFlight, undefined);
       assert.strictEqual(await balanceOf(stale._id), before + COMMENT - COMMENT, 'the lost charge came back, the new one was taken');
+    });
+
+    await check('a lost row younger than the stale limit (lease renewed recently) is left running and nothing is refunded', async () => {
+      reset();
+      const u = await mkUser('stale-young');
+      const ref = await refsFor(u);
+      const young = new Date(Date.now() - Math.floor(caps.STALE_MS / 2));
+      const row = await HomeDraft.create({ userId: u._id, key: `young-${stamp}`, kind: 'witty_comment', day: istDay(young), status: 'charged', inFlight: true, chargedConfirmed: true, attempts: 1, quarks: COMMENT, payerId: String(u._id), startedAt: new Date(Date.now() - caps.STALE_MS - 60000), leaseAt: young, createdAt: young });
+      const r = await draft(T(u), 'witty-comment', { ref });
+      assert.notStrictEqual(r.status, 200, 'one request at a time per account: the live row blocks the new one');
+      const after = await HomeDraft.findById(row._id).lean();
+      assert.strictEqual(after.inFlight, true); assert.ok(!after.refunded); assert.strictEqual((await ledgerOf(u._id)).filter((l) => l.type === 'refund').length, 0);
+    });
+
+    await check('an unconfirmed-charge lost row with a real ledger spend row is refunded exactly once, to the spend row user', async () => {
+      reset();
+      const lostAt = new Date(Date.now() - caps.STALE_MS - 60000);
+      const lost = await HomeDraft.create({ userId: staleUnconfirmed._id, key: `lost-unc-${stamp}`, kind: 'witty_comment', day: istDay(lostAt), status: 'started', inFlight: true, chargedConfirmed: false, attempts: 0, quarks: COMMENT, payerId: String(staleUnconfirmed._id), startedAt: lostAt, leaseAt: lostAt, createdAt: lostAt });
+      // The charge landed (balance down, spend row written with ref = row id) but the process died before the mark.
+      await User.updateOne({ _id: staleUnconfirmed._id }, { $inc: { 'credits.balance': -COMMENT, 'credits.totalUsed': COMMENT } });
+      await QuarkLedger.create({ user: staleUnconfirmed._id, type: 'spend', quarks: -COMMENT, action: 'home_witty_comment', ref: String(lost._id) });
+      const before = await balanceOf(staleUnconfirmed._id);
+      const r = await draft(T(staleUnconfirmed), 'witty-comment', { ref: staleUnconfirmedRef });
+      assert.strictEqual(r.status, 200, r.text.slice(0, 200));
+      charged(1);
+      const row = await HomeDraft.findById(lost._id).lean();
+      assert.strictEqual(row.outcome, 'stale'); assert.strictEqual(row.refunded, true); assert.strictEqual(row.inFlight, undefined);
+      const refunds = await eventually(async () => { const l = await QuarkLedger.find({ type: 'refund', ref: String(lost._id) }).lean(); return l.length ? l : null; });
+      assert.ok(refunds && refunds.length === 1, `expected one refund row, got ${refunds && refunds.length}`);
+      assert.strictEqual(String(refunds[0].user), String(staleUnconfirmed._id)); assert.strictEqual(refunds[0].quarks, COMMENT);
+      assert.strictEqual(await balanceOf(staleUnconfirmed._id), before, 'refund came back once, the new draft charge was taken');
+      await sleep(300);
+      assert.strictEqual(await QuarkLedger.countDocuments({ type: 'refund', ref: String(lost._id) }), 1, 'still exactly one refund');
+    });
+
+    await check('an unconfirmed-charge lost row with NO ledger spend row closes with no refund', async () => {
+      reset();
+      const lostAt = new Date(Date.now() - caps.STALE_MS - 60000);
+      const lost = await HomeDraft.create({ userId: staleNoSpend._id, key: `lost-nospend-${stamp}`, kind: 'witty_comment', day: istDay(lostAt), status: 'started', inFlight: true, chargedConfirmed: false, attempts: 0, quarks: COMMENT, payerId: String(staleNoSpend._id), startedAt: lostAt, leaseAt: lostAt, createdAt: lostAt });
+      const before = await balanceOf(staleNoSpend._id);
+      const r = await draft(T(staleNoSpend), 'witty-comment', { ref: staleNoSpendRef });
+      assert.strictEqual(r.status, 200, r.text.slice(0, 200));
+      charged(1);
+      const row = await HomeDraft.findById(lost._id).lean();
+      assert.strictEqual(row.outcome, 'stale'); assert.ok(!row.refunded); assert.strictEqual(row.inFlight, undefined);
+      await sleep(300);
+      assert.strictEqual(await QuarkLedger.countDocuments({ type: 'refund', ref: String(lost._id) }), 0);
+      assert.strictEqual(await balanceOf(staleNoSpend._id), before - COMMENT, 'only the new draft was charged; nothing came back for the lost row');
     });
 
     section = '(8) bounded queries:';

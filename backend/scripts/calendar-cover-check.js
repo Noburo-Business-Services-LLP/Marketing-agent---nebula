@@ -48,10 +48,10 @@ async function runChecks() {
     weeks: [{ weekNumber: 1, items: [{ day: 1, headline: 'Check post', format: 'Post' }] }], ...extra
   });
 
-  const spend = { checks: 0, recorded: 0, async check() { this.checks += 1; return { ok: true }; }, async record() { this.recorded += 1; } };
+  const spend = { checks: 0, recorded: 0, text: 0, image: 0, rendered: 0, async check() { this.checks += 1; return { ok: true }; }, async record(a) { this.recorded += 1; if (a === 'campaign_text') this.text += 1; if (a === 'image_generated') this.image += 1; } };
   const gen = { calls: [], outcome: 'ready' };
   const generate = async (cal) => {
-    gen.calls.push(String(cal._id));
+    gen.calls.push(String(cal._id)); spend.rendered += 1;
     // Same writes the real generator makes, without any model call.
     if (gen.outcome === 'ready') await CC.updateOne({ _id: cal._id }, { $set: { coverStatus: 'ready', coverImageUrl: 'https://example.test/zz-cover.jpg' } });
     else await CC.updateOne({ _id: cal._id }, { $set: { coverStatus: 'failed' } });
@@ -65,12 +65,14 @@ async function runChecks() {
     return r;
   };
   const fresh = (id) => CC.findById(id).lean();
-  const T0 = new Date();
+  // A fixed moment (15 Oct 2026, India time) so "this month" and "next month" are known: 2026-10 and 2026-11.
+  const T0 = new Date('2026-10-15T06:00:00Z');
+  const M0 = '2026-10'; const M1 = '2026-11'; const OLD = '2026-09';
+  // The unique key is userId+month, so each scenario that needs its own current month gets its own throwaway user.
+  const users = {};
+  const U = async (s) => (users[s] = users[s] || await mkUser(s));
 
-  const a = await mkUser('a');
-  const b = await mkUser('b');
-
-  const pend = await mkCal(a, '2026-08', { coverStatus: 'pending', lastCoverAttemptAt: new Date(T0 - 30 * MIN) });
+  const pend = await mkCal(await U('pend'), M0, { coverStatus: 'pending', lastCoverAttemptAt: new Date(T0 - 30 * MIN) });
   await check('stale pending cover is retried once, becomes ready, and is then left alone', async () => {
     gen.outcome = 'ready'; gen.calls = [];
     const r = await run(pend._id, T0);
@@ -78,11 +80,12 @@ async function runChecks() {
     assert.strictEqual(gen.calls.length, 1);
     const d = await fresh(pend._id);
     assert.strictEqual(d.coverStatus, 'ready'); assert.ok(d.lastCoverRetryAt, 'lastCoverRetryAt not stored');
+    assert.strictEqual(d.autoCoverRetries, 1);
     const again = await run(pend._id, new Date(T0.getTime() + 5 * MIN));
     assert.strictEqual(again.retried, false); assert.strictEqual(gen.calls.length, 1);
   });
 
-  const young = await mkCal(a, '2026-07', { coverStatus: 'pending', lastCoverAttemptAt: new Date(T0 - 2 * MIN) });
+  const young = await mkCal(await U('young'), M0, { coverStatus: 'pending', lastCoverAttemptAt: new Date(T0 - 2 * MIN) });
   await check('a pending cover younger than 10 minutes is not touched', async () => {
     gen.calls = [];
     const r = await run(young._id, T0);
@@ -90,7 +93,8 @@ async function runChecks() {
     assert.strictEqual((await fresh(young._id)).coverStatus, 'pending');
   });
 
-  const fail = await mkCal(a, '2026-09', { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 2 * 60 * MIN) });
+  const failUser = await U('fail');
+  const fail = await mkCal(failUser, M0, { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 2 * 60 * MIN) });
   await check('failed cover is retried once; if it fails again it is NOT retried a second time the same day', async () => {
     gen.outcome = 'failed'; gen.calls = [];
     const r1 = await run(fail._id, T0);
@@ -110,7 +114,7 @@ async function runChecks() {
     assert.strictEqual((await fresh(fail._id)).coverStatus, 'ready');
   });
 
-  const race = await mkCal(a, '2026-06', { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 60 * MIN) });
+  const race = await mkCal(await U('race'), M0, { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 60 * MIN) });
   await check('two page loads at the same moment start only one render', async () => {
     gen.outcome = 'ready'; gen.calls = [];
     const [d1, d2] = await Promise.all([CC.findById(race._id), CC.findById(race._id)]);
@@ -120,7 +124,7 @@ async function runChecks() {
     assert.strictEqual(rs.filter((r) => r.retried).length, 1); assert.strictEqual(gen.calls.length, 1);
   });
 
-  const other = await mkCal(b, '2026-09', { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 5 * DAY) });
+  const other = await mkCal(await U('b'), M0, { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 5 * DAY) });
   await check("another account's failed cover is untouched when only this account's calendars are processed", async () => {
     gen.calls = [];
     const before = await fresh(other._id);
@@ -135,10 +139,74 @@ async function runChecks() {
     assert.strictEqual(r.retried, true); assert.deepStrictEqual(gen.calls, [String(other._id)]);
   });
 
+  const nextM = await mkCal(await U('next'), M1, { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 2 * 60 * MIN) });
+  await check('next month (India time) is retried too', async () => {
+    gen.outcome = 'ready'; gen.calls = [];
+    const r = await run(nextM._id, T0);
+    assert.strictEqual(r.retried, true, `expected a retry, got ${r.reason}`);
+  });
+
+  const oldU = await U('old');
+  const old1 = await mkCal(oldU, OLD, { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 5 * DAY) });
+  const old2 = await mkCal(oldU, '2026-08', { coverStatus: 'pending', lastCoverAttemptAt: new Date(T0 - 5 * DAY) });
+  await check('an old month is never retried, failed or stuck pending, and nothing is written', async () => {
+    gen.calls = [];
+    for (const c of [old1, old2]) {
+      const r = await run(c._id, T0);
+      assert.strictEqual(r.retried, false); assert.strictEqual(r.reason, 'old-month');
+      const d = await fresh(c._id);
+      assert.strictEqual(d.coverStatus, c.coverStatus); assert.ok(!d.autoCoverRetries);
+    }
+    assert.strictEqual(gen.calls.length, 0);
+  });
+  await check('the month is judged in India time: 20:00 UTC on 30 Sep is already October there, 17:00 UTC is not', async () => {
+    const edge = await mkCal(await U('edge'), '2026-10', { coverStatus: 'failed', lastCoverAttemptAt: new Date('2026-09-20T00:00:00Z') });
+    gen.calls = [];
+    const r = await run(edge._id, new Date('2026-09-30T20:00:00Z'));
+    assert.strictEqual(r.retried, true, `got ${r.reason}`); // IST 1 Oct: this month
+    const lateSep = await mkCal(await U('edge2'), '2026-08', { coverStatus: 'failed', lastCoverAttemptAt: new Date('2026-09-01T00:00:00Z') });
+    const r2 = await run(lateSep._id, new Date('2026-09-30T17:00:00Z')); // IST 30 Sep: Aug is old
+    assert.strictEqual(r2.reason, 'old-month');
+  });
+
+  const cap = await mkCal(await U('cap'), M0, { coverStatus: 'failed', lastCoverAttemptAt: new Date(T0 - 5 * DAY), autoCoverRetries: 2 });
+  await check('lifetime cap: 3 automatic retries per calendar, then never again, however many days pass', async () => {
+    gen.outcome = 'failed'; gen.calls = [];
+    const r3 = await run(cap._id, T0);
+    assert.strictEqual(r3.retried, true, `third retry should run, got ${r3.reason}`);
+    assert.strictEqual((await fresh(cap._id)).autoCoverRetries, 3);
+    for (let i = 2; i <= 6; i++) {
+      const r = await run(cap._id, new Date(T0.getTime() + i * 2 * DAY));
+      assert.strictEqual(r.retried, false); assert.strictEqual(r.reason, 'retry-limit');
+    }
+    assert.strictEqual(gen.calls.length, 1); assert.strictEqual((await fresh(cap._id)).autoCoverRetries, 3);
+  });
+
+  await check('manual "Make a cover": 3 a day per account across months (real model, fake generator), a 4th is refused, a new day resets', async () => {
+    const { startManualCover } = require('../services/contentCalendarService');
+    const mu = await U('manual');
+    const docs = [];
+    for (const m of [M0, M1, OLD, '2026-08']) docs.push(await mkCal(mu, m, { coverStatus: 'ready', lastCoverAttemptAt: new Date(T0 - 60 * MIN) }));
+    gen.outcome = 'ready'; gen.calls = [];
+    const deps = { generate, spendGuard: spend };
+    const go = async (d, now) => { const r = await startManualCover(await CC.findById(d._id), {}, { now, deps }); await settle(); return r; };
+    for (const d of docs.slice(0, 3)) assert.strictEqual((await go(d, T0)).started, true);
+    const fourth = await go(docs[3], T0);
+    assert.strictEqual(fourth.started, false); assert.strictEqual(fourth.reason, 'daily-cap');
+    assert.strictEqual(gen.calls.length, 3);
+    const total = (await CC.find({ userId: mu._id }).lean()).reduce((n, c) => n + Number((c.manualCoverDays || {})['2026-10-15'] || 0), 0);
+    assert.strictEqual(total, 3);
+    const next = await go(docs[3], new Date(T0.getTime() + DAY));
+    assert.strictEqual(next.started, true, `new day should reset, got ${next.reason}`);
+  });
+
   await check('the spend check ran before every render and was recorded once per finished cover', async () => {
     assert.ok(spend.checks >= 5, `only ${spend.checks} spend checks`);
     assert.ok(spend.recorded >= 1);
-    return `${spend.checks} checks, ${spend.recorded} recorded, 0 real model calls`;
+    // Every render is recorded as one text call (campaign_text) plus one image when it produced a cover.
+    assert.strictEqual(spend.text, spend.rendered, 'one campaign_text per render');
+    assert.ok(spend.image >= 1 && spend.image <= spend.text, 'image recorded only for covers that were made');
+    return `${spend.checks} checks, ${spend.text} text + ${spend.image} image recorded, 0 real model calls`;
   });
 }
 
