@@ -7,7 +7,7 @@ const stub = (rel, exports) => {
   const id = require.resolve(path.join('..', rel));
   require.cache[id] = { id, filename: id, loaded: true, exports };
 };
-let publishResult = { success: true, postId: 'p1', platformPostIds: {}, data: {} };
+let publishResult = { success: true, postId: 'p1', platformPostIds: { facebook: '123456_654321' }, data: {} };
 let published = [];
 stub('services/campaignPublisher', { publishCampaignToSocial: async (c) => { published.push(String(c._id)); return publishResult; } });
 stub('services/aiCampaignLearning', { learnCampaignPublish: async () => {} });
@@ -22,7 +22,7 @@ const { processDueCampaigns } = require('../services/campaignScheduler');
 let campaigns, drafts;
 function setup({ campaign = {}, draft } = {}) {
   published = [];
-  publishResult = { success: true, postId: 'p1', platformPostIds: {}, data: {} };
+  publishResult = { success: true, postId: 'p1', platformPostIds: { facebook: '123456_654321' }, data: {} };
   campaigns = [{ _id: 'c1', status: 'scheduled', platforms: ['instagram', 'facebook'], scheduling: { startDate: new Date(0), frequency: 'once' }, ...campaign }];
   drafts = draft ? [{ _id: 'd1', campaignId: 'c1', ...draft }] : [];
 }
