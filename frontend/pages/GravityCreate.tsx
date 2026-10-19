@@ -1,15 +1,16 @@
-import PlatformPicker from '../components/PlatformPicker';
 import { priceWithWorth } from '../utils/plans';
 import PlatformIcon from '../components/PlatformIcon';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, Package, Globe } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, Package } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
 import { CONTENT_LANGUAGES, OFFERED_LANGUAGE_VALUES } from '../constants/languages';
 import { takePrefill, nearestLanguage } from '../utils/prefill';
-import { LOGO_GRID, LOGO_GRID_LABELS, LogoGridPosition } from '../constants/logoPositions';
+import type { LogoGridPosition } from '../constants/logoPositions';
+import { DEFAULT_LOGO_POSITION, logoPositionFor } from '../utils/logoChoice';
+import { OptionGroup, TileRadioRow, ShapeArt, LogoPostArt, LogoPositionTile, LanguageTile, PlatformTiles, LOOK_ART, tileClass } from '../components/CreateOptions';
 import PostDesignPanel from '../components/PostDesignPanel';
 import ModeExplainer from '../components/ModeExplainer';
 import CoverTile, { type CoverPalette } from '../components/CoverTile';
@@ -34,6 +35,13 @@ const ASPECTS = [
   { key: '16:9', label: '16:9', hint: 'Wide', use: 'YouTube and Facebook', w: 16, h: 9 },
 ];
 
+// How full the design is; the key is what the request sends as density.
+const LOOKS = [
+  { key: 'clean', label: 'Clean', hint: 'Calm and simple' },
+  { key: 'balanced', label: 'Balanced', hint: 'A clear message with support' },
+  { key: 'rich', label: 'Rich', hint: 'Festive and full' },
+] as const;
+
 // Direct fetch to the streaming endpoint — apiService doesn't expose SSE.
 const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
   ? '/api'
@@ -55,10 +63,6 @@ const VIDEO_ART = <VideoArt />;
 // Each type has its own colour grade on its cover (warm gold, coral, teal, LinkedIn blue, deep violet for video).
 const PALETTE_FOR_MODE: Record<CreateMode, CoverPalette> = { single: 'gold', campaign: 'coral', carousel: 'teal', linkedin: 'blue' };
 // The small optional shortcuts beside the heading (calendar idea, prompts, products).
-// The small option pickers (shape, logo, look): one height, a light border, gold when chosen.
-const PICK = 'inline-flex h-[52px] items-center justify-center rounded-lg border text-[12px] font-semibold transition-colors';
-const PICK_ON = 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]';
-const PICK_OFF = 'border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:border-[var(--gv-border-default)]';
 const SHORTCUT = 'inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[12.5px] font-medium border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-colors';
 
 const DURATIONS = ['1 week', '2 weeks', '3 weeks', '4 weeks'];
@@ -111,12 +115,13 @@ const OptionPopover: React.FC<{
   options: string[];
   onPick: (v: string) => void;
   onClose: () => void;
-}> = ({ open, options, onPick, onClose }) => {
+  className?: string;
+}> = ({ open, options, onPick, onClose, className = 'right-0' }) => {
   if (!open) return null;
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] shadow-2xl z-50 overflow-hidden">
+      <div className={`absolute top-full left-0 ${className} mt-2 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] shadow-2xl z-50 overflow-hidden`}>
         {options.map((o) => (
           <button
             key={o}
@@ -193,51 +198,6 @@ const PendingSlot: React.FC<{ position: number; active: boolean; etaSeconds: num
           </>
         )}
       </div>
-    </div>
-  );
-};
-
-/** A small "where does the logo go" control: one compact button that opens a 3 x 2 grid on hover or tap. */
-const LogoPositionPicker: React.FC<{ value: LogoGridPosition; onChange: (p: LogoGridPosition) => void }> = ({ value, onChange }) => {
-  const [open, setOpen] = useState(false);
-  const index = LOGO_GRID.indexOf(value);
-  return (
-    <div className="relative h-full" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        onBlur={(e) => { if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) setOpen(false); }}
-        aria-haspopup="true"
-        aria-expanded={open}
-        className="h-full flex-col justify-center inline-flex items-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-2.5 text-[12px] font-semibold text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"
-      >
-        <span className="grid grid-cols-3 grid-rows-2 gap-px w-[30px] h-[20px] rounded-[3px] border border-[var(--gv-border-default)] p-px" aria-hidden="true">
-          {LOGO_GRID.map((pos, i) => <span key={pos} className={i === index ? 'rounded-[1px] bg-[var(--gv-accent)]' : ''} />)}
-        </span>
-        {LOGO_GRID_LABELS[value]}
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-30 w-max pt-1.5">
-          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel,var(--gv-surface-1))] p-2.5 shadow-xl" role="radiogroup" aria-label="Logo position">
-            {LOGO_GRID.map((pos) => (
-              <button
-                key={pos}
-                type="button"
-                role="radio"
-                aria-checked={value === pos}
-                aria-label={LOGO_GRID_LABELS[pos]}
-                title={LOGO_GRID_LABELS[pos]}
-                onClick={() => { onChange(pos); setOpen(false); }}
-                className={`w-11 h-11 min-w-0 rounded-lg border flex items-center justify-center transition-colors ${
-                  value === pos ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'
-                }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-sm ${value === pos ? 'bg-[var(--gv-accent)]' : 'bg-[var(--gv-surface-3)]'}`} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -328,7 +288,7 @@ const GravityCreate: React.FC = () => {
   // Brand logo choice, pulled from Brand Assets. Applied AFTER the image is
   // generated — handing a logo to an image model gets it redrawn and smeared.
   const [logos, setLogos] = useState<Array<{ id: string; url: string; name: string; defaultPosition: LogoGridPosition }>>([]);
-  const [logoPosition, setLogoPosition] = useState<LogoGridPosition>('bottom-right');
+  const [logoPosition, setLogoPosition] = useState<LogoGridPosition>(DEFAULT_LOGO_POSITION);
   const [selectedLogo, setSelectedLogo] = useState<string>('');
   // The look of the post: style, exact text, a picture to copy, saved header and footer.
   const [design, setDesign] = useState<PostDesign>(DEFAULT_DESIGN);
@@ -386,14 +346,14 @@ const GravityCreate: React.FC = () => {
             id: String(a._id || a.id || a.url),
             url: a.url || a.imageUrl || '',
             name: a.name || 'Logo',
-            defaultPosition: (a.defaultPosition || 'bottom-right') as LogoGridPosition
+            defaultPosition: logoPositionFor(a.defaultPosition)
           }))
           .filter((a: any) => a.url);
         setLogos(list);
         const primary = (res?.assets || res?.logos || []).find((a: any) => a.isPrimary);
         if (primary?.url) {
           setSelectedLogo(primary.url);
-          setLogoPosition((primary.defaultPosition || 'bottom-right') as LogoGridPosition);
+          setLogoPosition(logoPositionFor(primary.defaultPosition));
         }
       } catch { /* no logos configured — picker just stays empty */ }
     })();
@@ -1211,8 +1171,8 @@ const GravityCreate: React.FC = () => {
         focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : mode === 'linkedin' ? 'linkedin.content' : 'single.content'}
       />
 
-      {/* The idea box: a plain white card with a light border; it turns gold while you type. */}
-      <div className="rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-4 pt-3.5 pb-3 transition-[border-color,box-shadow] focus-within:border-[rgb(var(--gv-accent-rgb)/0.55)] focus-within:shadow-[0_0_0_3px_rgb(var(--gv-accent-rgb)/0.10)]">
+      {/* The idea box: styled like the other text boxes on Create and Videos (soft border, same radius); it turns gold while you type. */}
+      <div className="rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-4 pt-3.5 pb-3 transition-[border-color,box-shadow] focus-within:border-[var(--gv-accent)] focus-within:shadow-[0_0_0_3px_rgb(var(--gv-accent-rgb)/0.10)]">
           <div className="flex items-baseline gap-3 mb-2">
             <span className="gravity-label text-[var(--gv-accent-text)]">{mode === 'campaign' ? 'Campaign' : mode === 'linkedin' ? 'LinkedIn post' : 'Post'}</span>
             <input
@@ -1292,134 +1252,99 @@ const GravityCreate: React.FC = () => {
           </div>
         )}
 
-        {/* Language (every mode: a single post or a carousel is just as often made in a regional language)
-            and the platforms (not in LinkedIn mode, where the platform is implicit and there is no image step). */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 [overflow-x:clip]">
-          <div className="relative w-full sm:w-[240px]">
-            <MetaBox label="Language" value={language} Icon={Globe} onClick={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
-            <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} />
-          </div>
-          {mode !== 'linkedin' && (
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="gravity-label">Platforms</span>
-              <PlatformPicker items={PLATFORMS.map(({ key, label, soon }) => ({ key, label, soon }))} selected={selectedPlatforms} onToggle={togglePlatform} kind="image" />
-              {mode === 'campaign' && (
-                <span className="text-[12px] text-[var(--gv-text-tertiary)]">
-                  <span className="tabular-nums font-semibold text-[var(--gv-text-primary)]">~{estimate.total} posts</span>
-                  <span className="mx-1.5 text-[var(--gv-text-muted)]">·</span>
-                  <span>{estimate.perWeek} per week</span>
-                </span>
-              )}
+        {/* Language, platforms, shape, logo and look: small picture tiles of one height, in one row that wraps
+            (onto a few lines on a phone). Platforms, shape and logo are not in LinkedIn mode, which has no image step. */}
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+          {/* Every mode: a single post or a carousel is just as often made in a regional language. */}
+          <OptionGroup label="Language">
+            <div className="relative">
+              <LanguageTile value={language} open={openPopover === 'language'} onToggle={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
+              <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} className="min-w-[220px]" />
             </div>
+          </OptionGroup>
+
+          {mode !== 'linkedin' && (
+            <OptionGroup
+              label="Platforms"
+              hint={mode === 'campaign' ? (
+                <>
+                  <span className="tabular-nums font-semibold text-[var(--gv-text-primary)]">~{estimate.total} posts</span>
+                  <span className="mx-1.5">·</span>{estimate.perWeek} per week
+                </>
+              ) : undefined}
+            >
+              <PlatformTiles items={PLATFORMS.map(({ key, label, soon }) => ({ key, label, soon }))} selected={selectedPlatforms} onToggle={togglePlatform} />
+            </OptionGroup>
+          )}
+
+          {mode !== 'linkedin' && (
+            <OptionGroup label="Aspect ratio" hint={ASPECTS.find((a) => visualStyle.startsWith(a.key))?.use}>
+              <TileRadioRow
+                label="Shape of the picture"
+                width="w-[56px]"
+                value={ASPECTS.find((a) => visualStyle.startsWith(a.key))?.key || '4:5'}
+                onChange={setAspect}
+                choices={ASPECTS.map((a) => ({
+                  value: a.key,
+                  name: a.label,
+                  description: `${a.hint}, ${a.use.toLowerCase()}`,
+                  art: <ShapeArt w={a.w} h={a.h} on={visualStyle.startsWith(a.key)} />,
+                }))}
+              />
+            </OptionGroup>
+          )}
+
+          {mode !== 'linkedin' && (
+            <OptionGroup
+              label="Logo"
+              note={logos.length === 0 ? <>· none in Brand assets</> : undefined}
+              hint={selectedLogo ? 'Added after the picture is made' : undefined}
+            >
+              <TileRadioRow
+                label="Logo on the picture"
+                width="w-[64px]"
+                value={selectedLogo}
+                onChange={(url) => {
+                  setSelectedLogo(url);
+                  const l = logos.find((x) => x.url === url);
+                  if (l) setLogoPosition(l.defaultPosition);
+                }}
+                choices={[
+                  { value: '', name: 'No logo', art: <LogoPostArt /> },
+                  ...logos.map((l) => ({
+                    value: l.url,
+                    name: logos.length > 1 ? l.name : 'Your logo',
+                    description: l.name,
+                    art: <LogoPostArt position={selectedLogo === l.url ? logoPosition : l.defaultPosition} logoUrl={l.url} />,
+                  })),
+                ]}
+                after={
+                  <>
+                    {/* Only once a logo is going on the picture. Starts on that logo's Brand assets position. */}
+                    {selectedLogo && <LogoPositionTile value={logoPosition} logoUrl={selectedLogo} onChange={setLogoPosition} />}
+                    {logos.length === 0 && (
+                      <button type="button" onClick={() => navigate('/brand-assets')} className={`${tileClass(false, 'w-[76px]')} !justify-center text-[11.5px] font-semibold text-[var(--gv-accent-text)]`}>
+                        Add a logo
+                      </button>
+                    )}
+                  </>
+                }
+              />
+            </OptionGroup>
+          )}
+
+          {mode !== 'linkedin' && (
+            <OptionGroup label="Look" hint={LOOKS.find((l) => l.key === density)?.hint}>
+              <TileRadioRow
+                label="How full the design is"
+                width="w-[72px]"
+                value={density}
+                onChange={(v) => setDensity(v as typeof density)}
+                choices={LOOKS.map((l) => ({ value: l.key, name: l.label, description: l.hint, art: LOOK_ART[l.key] }))}
+              />
+            </OptionGroup>
           )}
         </div>
-
-        {/* Shape, logo and look: small pickers on one row (they wrap on a phone). Not in LinkedIn mode,
-            which has no image step at generation time. */}
-        {mode !== 'linkedin' && (
-          <div className="flex flex-wrap items-start gap-x-7 gap-y-4">
-            <div className="min-w-0">
-              <div className="gravity-label mb-1.5">Aspect ratio</div>
-              <div className="flex gap-1.5" role="radiogroup" aria-label="Shape of the picture">
-                {ASPECTS.map((a) => {
-                  const active = visualStyle.startsWith(a.key);
-                  // A small shape drawn at the real proportions: the longer side is 18 pixels.
-                  const scale = 18 / Math.max(a.w, a.h);
-                  return (
-                    <button
-                      key={a.key}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      aria-label={`${a.label}, ${a.hint}`}
-                      onClick={() => setAspect(a.key)}
-                      title={`${a.hint}: ${a.use}`}
-                      className={`${PICK} w-[50px] flex-col gap-1 ${active ? PICK_ON : PICK_OFF}`}
-                    >
-                      <span className="flex h-[18px] items-center justify-center">
-                        <span
-                          aria-hidden="true"
-                          className={`block rounded-[2px] border-[1.5px] ${active ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-current opacity-70'}`}
-                          style={{ width: Math.round(a.w * scale), height: Math.round(a.h * scale) }}
-                        />
-                      </span>
-                      <span className="text-[11.5px] font-semibold leading-none">{a.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-1.5 text-[11.5px] text-[var(--gv-text-muted)]">{ASPECTS.find((a) => visualStyle.startsWith(a.key))?.use}</p>
-            </div>
-
-            <div>
-              <div className="gravity-label mb-1.5">
-                Logo {logos.length === 0 && <span className="text-[var(--gv-text-muted)] normal-case">· none in Brand assets</span>}
-              </div>
-              <div className="flex h-[52px] items-stretch gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedLogo('')}
-                  aria-pressed={!selectedLogo}
-                  className={`${PICK} px-3 ${!selectedLogo ? PICK_ON : PICK_OFF}`}
-                >
-                  No logo
-                </button>
-                {logos.map((l) => (
-                  <button
-                    key={l.id}
-                    type="button"
-                    onClick={() => { setSelectedLogo(l.url); setLogoPosition(l.defaultPosition); }}
-                    aria-pressed={selectedLogo === l.url}
-                    title={l.name}
-                    className={`aspect-square h-full rounded-lg border overflow-hidden bg-[var(--gv-surface-2)] transition-colors ${
-                      selectedLogo === l.url ? 'border-[var(--gv-accent)] ring-1 ring-[var(--gv-accent)]' : 'border-[var(--gv-border-subtle)] hover:border-[var(--gv-border-strong)]'
-                    }`}
-                  >
-                    <img src={l.url} alt={l.name} className="w-full h-full object-contain p-1" />
-                  </button>
-                ))}
-                {/* Only relevant once a logo is actually going on the image. Defaults to that
-                    logo's own Brand assets position; a small hover/tap popover keeps it out of the page flow. */}
-                {selectedLogo && <LogoPositionPicker value={logoPosition} onChange={setLogoPosition} />}
-                {logos.length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => navigate('/brand-assets')}
-                    className="text-[11.5px] text-[var(--gv-text-muted)] hover:text-[var(--gv-accent-text)] underline underline-offset-2"
-                  >
-                    Add one
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="min-w-0 w-full sm:w-auto">
-              <div className="gravity-label mb-1.5">Look</div>
-              <div className="grid grid-cols-3 gap-1.5 sm:flex" role="radiogroup" aria-label="How full the design is">
-                {([
-                  ['clean', 'Clean', 'Calm and simple'],
-                  ['balanced', 'Balanced', 'A clear message with support'],
-                  ['rich', 'Rich', 'Festive and full'],
-                ] as const).map(([key, label, hint]) => {
-                  const on = density === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      role="radio"
-                      aria-checked={on}
-                      onClick={() => setDensity(key)}
-                      className={`${PICK} min-w-0 sm:w-[124px] flex-col items-start px-2.5 text-left ${on ? PICK_ON : PICK_OFF}`}
-                    >
-                      <span className="block text-[12px] font-semibold leading-tight">{label}</span>
-                      <span className="block text-[10.5px] leading-tight opacity-80">{hint}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* The look of the post: style with sample pictures, the exact text, a reference picture, header and footer.
