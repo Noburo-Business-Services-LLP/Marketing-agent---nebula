@@ -204,6 +204,21 @@ The owner saw big titles on Videos and Review and approve and small ones on Dash
 - **One background.** Every page uses the same plain cream (`--gv-bg`). No glow behind the page: the body's ambient gold glow, the Home greeting glow and the page glows of My plan, Inbox, Performance, What Nebulaa learned and Photoshoot are removed, and the hero blocks (My plan, Performance, What Nebulaa learned) are plain cards. Colour stays on cards, tiles, covers and chips (the gold "Do this next" card, cover tiles, status tiles, the Create idea box halo).
 - **Guard.** `frontend/tests/pageFrame.test.mjs` scans the menu pages for page-column wrappers, the page stylesheets for a root width or a `::before` glow, the hero blocks for gradients, and `index.html` for the body glow.
 
+## Post cards (owner, 2026-10-19): fixed size, flowing, never stretched
+
+The full-width rule is for the page structure, not for post cards. A single post once became one huge card with giant text because the Library widened the last card of a row (`fillRows`).
+
+- **Grid.** Posts, images and videos sit in `grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))` (150 px on a phone, so two a row), `align-items: stretch`. The `auto-fill` keeps empty tracks, so one post stays one card wide. Never `fillRows` or a `grid-column: span` on a post card; the symmetry rule's "fill the row" applies to tiles of known count (stats, options, groups), not to post grids.
+- **Card.** At most 340 px wide, a 4:5 picture area (`aspect-ratio: 4 / 5`, the image `object-fit: cover`), cards of a row share one height (flex column, actions at the foot). PostActions stay on post cards.
+- **Order.** Newest first (`applyFilters` sorts by date), so a new post appears at the start and the rest move along.
+- **Where.** Library (every view, images and videos: `components/library/library.css`), the Calendar's weekly drafts (`.nb-cal-drafts` in `components/calendar/calendarHero.css`), the Create results and the cards being made (`POST_GRID` in `pages/GravityCreate.tsx`, 240 px minimum; a single result keeps its own 448 px preview). Guarded in `tests/library.test.mjs`.
+- **Library filters.** One row: the views, the All/Images/Videos toggle and, only when posts are for two or more platforms, the platform filter. No search box and no source dropdown (owner, 2026-10-19).
+
+## Help page and the price list (2026-10-20)
+
+- **Help** (`pages/Help.tsx`, `components/help/help.css`, content in `utils/help.ts`, tested in `tests/help.test.mjs`): the menu's Setup > Help opens it (it was a mail link). A flex row of 2 or 3 equal tiles (Take the tour again for a business's own account, How Quarks work, Contact support with the address shown and a copy button), then 8 quick answers in a container-query grid of 1, 2 or 4 equal cards. Accent bars: plan teal, create gold, inbox blue.
+- **Settings > Billing, What things cost** (`components/QuarkCostList.tsx`, `components/quarkCostList.css`, names and groups in `constants/quarks.ts`): tiles of 1, 2 or 4 columns by the list's own width (8 groups fill every row), a coloured dot per group (no emoji), the "Free of Quarks" tile across the full width. Every price from `GET /api/credits` (`costs` and `pricing`).
+
 ## Create options rows (owner, 2026-10-19)
 
 Two rows under the idea box: Language and Platforms, then Aspect ratio, Logo and Look (`.nb-opt-rows > .nb-opt-row[data-row]` in `GravityCreate.tsx`, layout in `createOptions.css`). Each row runs the full width of the idea box; groups share it in proportion to their tiles (`--w`, 64 px a share), tiles of a group are equal columns, every tile is 88 px tall with 12 px names, so "Instagram" and "Your logo" are never cut off. On a phone each group takes its own full line.
