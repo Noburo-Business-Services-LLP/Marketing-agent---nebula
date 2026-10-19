@@ -209,5 +209,7 @@ campaignSchema.index({ instagramAccountKey: 1, status: 1, scheduledFor: 1 });
 
 // Indexes for the staff Usage page. Skipped by automatic index builds; created on purpose by scripts/create-staff-indexes.js.
 require('../config/staffIndexes').declareStaffIndexes(campaignSchema, 'Campaign');
+// Indexes for the Home summary. Also script-only: scripts/create-home-indexes.js.
+require('../config/homeIndexes').declareHomeIndexes(campaignSchema, 'Campaign');
 
 module.exports = mongoose.model('Campaign', campaignSchema);

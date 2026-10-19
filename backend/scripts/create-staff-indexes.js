@@ -65,8 +65,8 @@ function diskVerdict({ estimateBytes, freeBytes }) {
   return { known: true, ok: estimateBytes <= freeBytes * 0.5, estimateBytes, freeBytes };
 }
 
-/** Does the work. Returns the exit code. `say`, `fail` and `mongoose` are injected so the tests can run it against a fake database. */
-async function run({ argv, env, say = (m = '') => console.log(m), fail = (m) => console.error(m), mongoose = require('mongoose') }) {
+/** Does the work. Returns the exit code. `say`, `fail` and `mongoose` are injected so the tests can run it against a fake database. `indexes` is the list to build (the staff list by default; scripts/create-home-indexes.js passes the Home list). */
+async function run({ argv, env, say = (m = '') => console.log(m), fail = (m) => console.error(m), mongoose = require('mongoose'), indexes: INDEXES = STAFF_INDEXES }) {
   const decision = decideMode({ argv, env });
   if (!decision.ok) { fail(decision.message); return 2; }
   const uri = env.MONGODB_URI;
@@ -81,7 +81,7 @@ async function run({ argv, env, say = (m = '') => console.log(m), fail = (m) => 
   try {
     const existing = {}; const counts = {};
     let estimate = 0;
-    for (const collection of [...new Set(STAFF_INDEXES.map((d) => d.collection))]) {
+    for (const collection of [...new Set(INDEXES.map((d) => d.collection))]) {
       let indexes = [];
       try { indexes = await db.collection(collection).indexes(); } catch (error) { if (error.codeName !== 'NamespaceNotFound' && error.code !== 26) throw error; }
       existing[collection] = indexes;
@@ -93,7 +93,7 @@ async function run({ argv, env, say = (m = '') => console.log(m), fail = (m) => 
     }
     say();
 
-    const plan = planIndexes(STAFF_INDEXES, existing);
+    const plan = planIndexes(INDEXES, existing);
     for (const step of plan) {
       const n = counts[step.def.collection] || 0;
       step.estimateBytes = n * BYTES_PER_ENTRY;

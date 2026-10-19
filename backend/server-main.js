@@ -409,6 +409,10 @@ app.use((req, res, next) => {
   next();
 });
 
+// Home summary cache: a write that succeeded clears the signed-in account's cached Home numbers (60 s cache).
+const homeCacheWatch = require('./routes/home').watch;
+app.use('/api', homeCacheWatch);
+
 // Routes - Admin (no trial/credit guard)
 app.use('/api/admin', authLimiter, adminRoutes);
 app.use('/api/csm', csmRoutes);
@@ -480,6 +484,7 @@ app.use('/api/videos', protect, requireFeature('video', { when: (req) => req.met
 app.use('/api/videos', require('./routes/studioVideos'));
 app.use('/api/blueprint', blueprintRoutes);
 app.use('/api/plan', require('./routes/plan'));
+app.use('/api/home', require('./routes/home'));
 app.use('/api/week', require('./routes/week'));
 app.use('/api/setup', require('./routes/week').setupRouter);
 app.use('/api/tour', require('./routes/tour'));

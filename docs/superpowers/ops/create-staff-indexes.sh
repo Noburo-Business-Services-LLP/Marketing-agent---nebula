@@ -6,6 +6,7 @@
 #   bash docs/superpowers/ops/create-staff-indexes.sh                                  # DRY RUN: shows what it would do, changes nothing
 #   CONFIRM_CREATE_INDEXES=yes bash docs/superpowers/ops/create-staff-indexes.sh       # builds the missing indexes, one at a time
 #
+# For the Home page indexes use the same command with INDEX_SCRIPT=create-home-indexes.js in front.
 # Safe to run twice: indexes that exist are skipped. See docs/superpowers/ops/staff-pages-performance.md.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -16,4 +17,4 @@ export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
 SECRET="$(aws secretsmanager get-secret-value --secret-id "$SECRET_ID" --query SecretString --output text)"
 cd "$HERE/backend"
 MONGODB_URI="$(SECRET="$SECRET" python3 -c 'import json,os; print(json.loads(os.environ["SECRET"]).get("MONGODB_URI",""))')" \
-  exec node scripts/create-staff-indexes.js "$@"
+  exec node "scripts/${INDEX_SCRIPT:-create-staff-indexes.js}" "$@"

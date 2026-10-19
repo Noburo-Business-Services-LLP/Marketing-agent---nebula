@@ -11,6 +11,7 @@ const REVIEWED = new Set([
   'routes/credits.js', 'routes/dashboard.js', 'routes/content.js', 'routes/chat.js', 'routes/campaigns.js', 'routes/videoGeneration.js',
   'routes/studioVideos.js', 'routes/social.js', 'routes/payment.js', 'routes/csm.js', 'routes/staff.js', 'routes/auth.js',
   'services/staff/clientBulk.js', 'services/staff/clientList.js', 'services/staff/clientStatus.js',
+  'services/homeSummary.js', // read only: a client workspace's balance comes from agency.walletBalance (the shared pool), never its own field
   'services/agencyUsage.js' // reads the pool balance of the signed-in agency account only (the route refuses clients and passes)
 ]);
 
