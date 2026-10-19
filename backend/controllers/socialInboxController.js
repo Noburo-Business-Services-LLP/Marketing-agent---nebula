@@ -362,7 +362,16 @@ exports.registerWebhook = async (req, res) => {
   }
 };
 
+// Developer tools: they add made-up conversations (each runs a model call, and with automatic replies on a send attempt).
+// They never run on the live site.
+function refuseInProduction(res) {
+  if (process.env.NODE_ENV !== 'production') return false;
+  res.status(404).json({ success: false, message: 'Not found' });
+  return true;
+}
+
 exports.devIngest = async (req, res) => {
+  if (refuseInProduction(res)) return;
   try {
 
     const event = normalizeWebhookPayload(req.body?.platform || 'instagram', getUserId(req), req.body || {});
@@ -381,6 +390,7 @@ exports.devIngest = async (req, res) => {
 };
 
 exports.testWebhook = async (req, res) => {
+  if (refuseInProduction(res)) return;
   try {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });

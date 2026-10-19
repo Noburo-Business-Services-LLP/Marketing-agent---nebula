@@ -91,4 +91,51 @@ async function draftReply({ review, business, llm }) {
   return String(text || '').replace(/^["'\s]+|["'\s]+$/g, '').trim();
 }
 
-module.exports = { toAyrsharePlatform, normalizeReviews, needsHumanApproval, buildReplyPrompt, fetchReviews, draftReply };
+/** The account names we know of: direct connections and the last-known publishing accounts. */
+function knownPlatforms(user) {
+  const out = [];
+  for (const s of (user && user.connectedSocials) || []) if (s && s.platform) out.push(toAyrsharePlatform(s.platform));
+  for (const p of (user && user.ayrshare && user.ayrshare.activeSocialAccounts) || []) if (p) out.push(toAyrsharePlatform(p));
+  return out;
+}
+
+/** Whether a Google Business Profile is among the connected accounts we know of. */
+function hasGoogleProfile(user) {
+  return knownPlatforms(user).includes('gmb');
+}
+
+/**
+ * 'yes' when a Google profile is known to be connected, 'no' when the connected accounts are known and it is not there,
+ * 'unknown' when the accounts were never checked (then the provider is asked once).
+ */
+function googleProfileState(user) {
+  if (hasGoogleProfile(user)) return 'yes';
+  const a = (user && user.ayrshare) || {};
+  if (!a.profileKey) return 'no';
+  const neverChecked = !a.lastCheckedAt && knownPlatforms(user).length === 0;
+  return neverChecked ? 'unknown' : 'no';
+}
+
+const LOAD_FAILED_MESSAGE = 'Your reviews could not be loaded just now. Please try again in a few minutes.';
+
+/**
+ * What the Google reviews screen shows: not connected (no provider call), could not load (connected, the provider failed),
+ * or the reviews with the approval flag. `fetchReviews` is injectable for tests.
+ */
+async function reviewsView({ user, fetchReviews: fetchImpl = fetchReviews }) {
+  const state = googleProfileState(user);
+  if (state === 'no') return { connected: false, loadFailed: false, reviews: [], summary: null };
+  const result = await fetchImpl({ profileKey: (user && user.ayrshare && user.ayrshare.profileKey) || '' });
+  if (!result || !result.success) {
+    // Never checked and the provider says no: treat as not connected, as before. Known connected: say it failed.
+    return state === 'yes'
+      ? { connected: true, loadFailed: true, reviews: [], summary: null, message: LOAD_FAILED_MESSAGE }
+      : { connected: false, loadFailed: false, reviews: [], summary: null };
+  }
+  const reviews = (result.reviews || []).map((review) => ({ ...review, needsApproval: needsHumanApproval(review) }));
+  return { connected: true, loadFailed: false, reviews, summary: result.summary || null };
+}
+
+module.exports = {
+  toAyrsharePlatform, normalizeReviews, needsHumanApproval, buildReplyPrompt, fetchReviews, draftReply, hasGoogleProfile, googleProfileState, reviewsView
+};

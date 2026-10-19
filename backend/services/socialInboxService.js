@@ -6,10 +6,13 @@ const User = require('../models/User');
 const { generateWithLLM } = require('./llmRouter');
 const { emitToUser } = require('./socketHub');
 const { dispatchReply, isReplyPlatform, REPLY_PLATFORMS, NOT_AVAILABLE_YET } = require('./socialInboxProviderService');
+const { liveUpdatesOf } = require('./inboxWebhook');
+const { hasGoogleProfile } = require('./googleReviews');
 
 const NOT_AVAILABLE_MESSAGE = NOT_AVAILABLE_YET;
 const SAFE_RULE_TYPES = ['contains', 'sentiment', 'messageType', 'platform'];
 const MAX_AUTO_SEND_ATTEMPTS = 1;
+const FALLBACK_HOLD_REASON = 'The reply could not be drafted in your tone';
 const CONFIRM_AUTOMATIC_MESSAGE = 'Fully automatic replies send without your approval. Please confirm to turn them on.';
 
 function httpError(message, statusCode = 400) {
@@ -97,9 +100,10 @@ function analyzeEngagement(text = '') {
     suggestions: [
       'Thanks for reaching out. We appreciate your message and will help you with this.',
       'Happy to clarify. Could you share one more detail so we can guide you better?',
+      // General replies never claim stock, prices or dates: nothing here is known about the business.
       sentiment === 'negative'
-        ? 'Sorry about the experience. Please send us the order/details and we will prioritize this.'
-        : 'Absolutely. This is available, and we can help you pick the right option.'
+        ? 'Sorry about the experience. Please send us your order details and we will look into it.'
+        : 'Thank you for asking. Let us check this for you and get back to you shortly.'
     ]
   };
 }
@@ -398,6 +402,7 @@ Rules:
 - Do not invent policies, prices, inventory, or guarantees.
 - Ask for a clarifying detail if needed.
 - If the customer is upset, acknowledge and de-escalate.
+- Write every reply in the same language as the latest incoming message (for example Tamil for Tamil, Hindi for Hindi).
 - Return 3 reply options and one recommended reply.`;
 
   const schema = {
@@ -423,17 +428,21 @@ Rules:
       ? result.suggestedReplies.map(v => String(v || '').trim()).filter(Boolean).slice(0, 3)
       : [];
     const recommendedReply = String(result.recommendedReply || suggestedReplies[0] || '').trim();
+    // Anything the writing service left out is filled from the general replies, and then counts as a general reply.
+    const drafted = Boolean(recommendedReply && suggestedReplies.length);
     return {
       recommendedReply: recommendedReply || insights.suggestions[0],
       suggestedReplies: suggestedReplies.length ? suggestedReplies : insights.suggestions,
-      reason: String(result.reason || 'Generated from conversation context.')
+      reason: String(result.reason || 'Generated from conversation context.'),
+      source: drafted ? 'ai' : 'fallback'
     };
   } catch (error) {
     console.warn('Social inbox AI reply fallback:', error.message);
     return {
       recommendedReply: insights.suggestions[0],
       suggestedReplies: insights.suggestions,
-      reason: 'Fallback suggestion generated while AI provider was unavailable.'
+      reason: 'Fallback suggestion generated while AI provider was unavailable.',
+      source: 'fallback'
     };
   }
 }
@@ -588,14 +597,19 @@ async function ingestEvent(eventInput) {
     const user = await User.findById(event.userId);
     const settings = await getSettings(event.userId);
     aiResult = await generateAIReply({ user, conversation, message, settings, insights });
-    const decision = await decideAutomation({ settings, event, insights, conversation });
+    let decision = await decideAutomation({ settings, event, insights, conversation });
+    // A general reply (the writing service was unavailable) is never sent on its own: it waits for the owner.
+    if (decision.action === 'auto_reply' && aiResult.source !== 'ai') {
+      decision = { action: 'needs_approval', reason: FALLBACK_HOLD_REASON };
+    }
     message.ai = {
       suggestedReplies: aiResult.suggestedReplies,
       autoReplyCandidate: aiResult.recommendedReply,
       autoReplyStatus: decision.action === 'auto_reply' ? 'suggested' : decision.action === 'needs_approval' ? 'pending_approval' : decision.action === 'skip' ? 'skipped' : 'suggested',
       autoReplyReason: decision.reason,
       sendAttempts: 0,
-      generatedAt: new Date()
+      generatedAt: new Date(),
+      draftSource: aiResult.source === 'ai' ? 'ai' : 'fallback'
     };
     await message.save();
 
@@ -880,11 +894,15 @@ async function getConversationThread(userId, conversationId) {
     .sort({ createdAt: 1 })
     .limit(200);
 
-  const latestMessage = messages[messages.length - 1] || conversation.messages?.[conversation.messages.length - 1] || {};
-  const insights = analyzeEngagement(latestMessage.body || conversation.lastMessagePreview);
-  const aiSuggestions = latestMessage.ai?.suggestedReplies?.length
-    ? latestMessage.ai.suggestedReplies
-    : insights.suggestions;
+  const all = messages.length ? messages : (conversation.messages || []);
+  const latestMessage = all[all.length - 1] || {};
+  // Suggestions answer the person: read them from their latest message, not from a reply that already went out.
+  const latestInbound = [...all].reverse().find((m) => m && m.direction === 'inbound') || latestMessage;
+  const insights = analyzeEngagement(latestInbound.body || conversation.lastMessagePreview);
+  const stored = latestInbound.ai?.suggestedReplies?.length ? latestInbound.ai.suggestedReplies : null;
+  const aiSuggestions = stored || insights.suggestions;
+  // Drafted for this message, or the general replies (none stored, or stored while the writing service was unavailable).
+  const suggestionsSource = stored && latestInbound.ai?.draftSource !== 'fallback' ? 'drafted' : 'general';
 
   return {
     conversation,
@@ -892,7 +910,8 @@ async function getConversationThread(userId, conversationId) {
     ai: {
       ...insights,
       suggestions: aiSuggestions,
-      autoReplyCandidate: latestMessage.ai?.autoReplyCandidate || ''
+      suggestionsSource,
+      autoReplyCandidate: latestInbound.ai?.autoReplyCandidate || ''
     }
   };
 }
@@ -912,7 +931,10 @@ async function getSummary(user) {
     .lean();
   const settings = await getSettings(userId);
   const pendingCount = await countPending(userId);
-  const webhookRegistered = connectedPlatformCount > 0 && Boolean(user.ayrshare?.profileKey || user.connectedSocials?.some(s => s.accessToken));
+  // Live updates are on only after the comment and message hooks were registered successfully (inboxWebhook.js records it).
+  // Connections made before that record existed read as 'off' until they are registered once more.
+  const liveUpdates = connectedPlatformCount > 0 ? liveUpdatesOf(user) : 'off';
+  const webhookRegistered = liveUpdates === 'on';
 
   return {
     connectedPlatforms,
@@ -925,6 +947,8 @@ async function getSummary(user) {
     pendingCount,
     inboxEnabled: connectedPlatformCount > 0,
     inboxStatus: connectedPlatformCount > 0 ? (webhookRegistered ? 'active' : 'needs_setup') : 'disabled',
+    liveUpdates,
+    reviewsConnected: hasGoogleProfile(user),
     syncStatus: {
       status: connectedPlatformCount > 0 ? (latestConversation?.lastSyncedAt ? 'synced' : 'pending') : 'not_started',
       // The time of the latest comment or message received (there is no scheduled sync).

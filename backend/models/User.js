@@ -273,7 +273,10 @@ const userSchema = new mongoose.Schema({
     lastCheckedAt: { type: Date, default: null },
     lastError: { type: String, default: '' },
     // Private token carried in the inbox webhook address. Hidden from normal reads: ask for it with select('+ayrshare.webhookToken').
-    webhookToken: { type: String, default: '', select: false }
+    webhookToken: { type: String, default: '', select: false },
+    // When the Inbox comment and message hooks were last registered successfully, and the last failure (Inbox "live updates").
+    inboxWebhookAt: { type: Date, default: null },
+    inboxWebhookError: { type: String, default: '' }
   },
   // ICP & Channel Strategy (AI-generated, stored per user)
   icpStrategy: {

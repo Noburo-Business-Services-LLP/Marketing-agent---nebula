@@ -61,7 +61,9 @@ const socialInboxMessageSchema = new mongoose.Schema({
     },
     autoReplyReason: { type: String, default: '' },
     sendAttempts: { type: Number, default: 0 },
-    generatedAt: { type: Date, default: null }
+    generatedAt: { type: Date, default: null },
+    // 'ai' when the writing service drafted the reply, 'fallback' for the general replies used while it was unavailable.
+    draftSource: { type: String, enum: ['', 'ai', 'fallback'], default: '' }
   },
   autoReplied: { type: Boolean, default: false },
   rawPayload: { type: mongoose.Schema.Types.Mixed, default: {} },

@@ -71,13 +71,10 @@ router.post('/sync/:platform', requireFeature('inbox'), controller.syncPlatform)
 // Google Business Profile reviews: read-only list with a suggested reply for each one without a reply.
 router.get('/reviews', requireFeature('inbox'), async (req, res) => {
   try {
-    const { profileKey } = await loadReviewContext(req);
-    const result = await googleReviews.fetchReviews({ profileKey });
-    if (!result.success) {
-      return res.json({ success: true, connected: false, reviews: [], message: friendlyMessage(null, 'social') });
-    }
-    const reviews = result.reviews.map((review) => ({ ...review, needsApproval: googleReviews.needsHumanApproval(review) }));
-    return res.json({ success: true, connected: true, reviews, summary: result.summary || null });
+    const user = await User.findById(userIdOf(req)).lean();
+    // Not connected: no provider call. Connected but the provider failed: loadFailed, not "not connected".
+    const view = await googleReviews.reviewsView({ user });
+    return res.json({ success: true, ...view });
   } catch (error) {
     console.error('[reviews] list failed:', error.message);
     return res.status(500).json({ success: false, message: friendlyMessage(error, 'default') });

@@ -38,7 +38,10 @@ stub('models/User', User);
 stub('models/SocialInboxConversation', Conversation);
 stub('models/SocialInboxMessage', Message);
 stub('models/AutoReplySettings', Settings);
-stub('services/llmRouter', { generateWithLLM: async () => { throw new Error('no AI in tests'); } });
+// No AI by default (the general replies are used). Tests of automatic sending set a drafted reply, because a general
+// reply is held for approval and never sent on its own (inboxHonesty.test.js).
+let llm = async () => { throw new Error('no AI in tests'); };
+stub('services/llmRouter', { generateWithLLM: async (args) => llm(args) });
 stub('services/socketHub', { emitToUser: () => {}, addSseSubscriber: () => () => {}, isSocketReady: () => false });
 stub('services/socialMediaAPI', {
   replyToAyrshareComment: async (a) => { calls.comment.push(a); return commentResult; },
@@ -58,6 +61,7 @@ test.after(() => { Object.assign(console, quiet); });
 function reset() {
   [User, Conversation, Message, Settings].forEach((m) => m.reset());
   calls.comment.length = 0; calls.dm.length = 0; calls.post.length = 0; calls.hook.length = 0;
+  llm = async () => { throw new Error('no AI in tests'); };
   commentResult = { success: true, replyId: 'rc1' };
   dmResult = { success: true, messageId: 'dm1' };
 }
@@ -357,6 +361,7 @@ test('customers cannot add regex rules; a stored one can stay; assigned user is 
 });
 
 async function enableAutomatic(user) {
+  llm = async () => ({ recommendedReply: 'Yes, it is. Would you like one?', suggestedReplies: ['Yes, it is. Would you like one?'], reason: 'test' });
   await Settings.create({
     userId: user._id, enabled: true, automationMode: 'fully_automatic',
     channels: { messages: true, comments: true, mentions: true, replies: true },

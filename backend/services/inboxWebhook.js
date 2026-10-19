@@ -56,15 +56,47 @@ function buildWebhookUrl(baseUrl, path, userId, token) {
 async function registerInboxWebhook(user, { baseUrl = process.env.WEBHOOK_BASE_URL } = {}) {
   const profileKey = user?.ayrshare?.profileKey;
   if (!profileKey) return { success: false, error: 'No connected social profile for this user.' };
-  if (!baseUrl || !/^https:\/\//i.test(baseUrl)) return { success: false, error: 'WEBHOOK_BASE_URL must be a public https address.' };
+  if (!baseUrl || !/^https:\/\//i.test(baseUrl)) {
+    await recordRegistration(user._id, false, 'WEBHOOK_BASE_URL must be a public https address.');
+    return { success: false, error: 'WEBHOOK_BASE_URL must be a public https address.' };
+  }
   const token = await ensureWebhookToken(user._id);
-  if (!token) return { success: false, error: 'Could not create a webhook token.' };
+  if (!token) {
+    await recordRegistration(user._id, false, 'Could not create a webhook token.');
+    return { success: false, error: 'Could not create a webhook token.' };
+  }
   const results = [];
   for (const { action, path } of WEBHOOK_PATHS) {
     const result = await socialMediaAPI.setAyrshareWebhook(profileKey, buildWebhookUrl(baseUrl, path, user._id, token), action);
     results.push({ action, success: Boolean(result?.success) });
   }
-  return { success: results.every((r) => r.success), results };
+  const success = results.every((r) => r.success);
+  await recordRegistration(user._id, success, success ? '' : `Not registered: ${results.filter((r) => !r.success).map((r) => r.action).join(', ')}`);
+  return { success, results };
 }
 
-module.exports = { ensureWebhookToken, verifyWebhookToken, registerInboxWebhook, buildWebhookUrl, WEBHOOK_PATHS };
+/**
+ * Remember whether live updates were switched on, so the Inbox can say so (summary liveUpdates: on, off, failed).
+ * A success sets inboxWebhookAt and clears the error. A failure only writes the error: an earlier registration that
+ * worked keeps working (the hooks carry the same token). Never throws.
+ */
+async function recordRegistration(userId, success, error) {
+  try {
+    const set = success
+      ? { 'ayrshare.inboxWebhookAt': new Date(), 'ayrshare.inboxWebhookError': '' }
+      : { 'ayrshare.inboxWebhookError': String(error || 'Registration failed').slice(0, 200) };
+    await User.updateOne({ _id: userId }, { $set: set });
+  } catch (err) {
+    console.error('[Inbox] could not record the webhook registration:', err.message);
+  }
+}
+
+/** 'on' after a registration that worked, 'failed' when only failed tries are recorded, otherwise 'off'. */
+function liveUpdatesOf(user) {
+  const a = (user && user.ayrshare) || {};
+  if (a.inboxWebhookAt) return 'on';
+  if (a.inboxWebhookError) return 'failed';
+  return 'off';
+}
+
+module.exports = { ensureWebhookToken, verifyWebhookToken, registerInboxWebhook, buildWebhookUrl, liveUpdatesOf, WEBHOOK_PATHS };
