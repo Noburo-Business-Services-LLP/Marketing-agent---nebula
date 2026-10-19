@@ -14,7 +14,8 @@ Built 2026-10-18 on branch `nebulaa-redesign` (foundation of the visual refresh,
 | 22 illustrations plus the shared frame `Svg.tsx` and a barrel `index.ts` | `frontend/components/art/` |
 | Developer showcase (all pieces, every accent, variant and state, Tamil and Hindi titles) | `frontend/pages/ArtShowcase.tsx`, route `/art-showcase` (development and the sample-data preview only; not in a production build) |
 | Art budget | `frontend/scripts/art-budget.mjs`, enforced by `frontend/tests/art-budget.test.mjs` |
-| Create content type chooser (five `choice` tiles in one row) | `frontend/pages/GravityCreate.tsx`, `frontend/utils/createTiles.ts` |
+| Cover tile (the art fills the card like a poster; title, one line and price over a dark scrim) | `frontend/components/CoverTile.tsx`, styles in `frontend/components/CoverTile.css`, checked by `frontend/tests/coverTile.test.mjs` |
+| Create content type chooser (five cover tiles in one row) | `frontend/pages/GravityCreate.tsx`, `frontend/utils/createTiles.ts` |
 
 ## How to use a Tile
 
@@ -37,9 +38,30 @@ Variants: `standard` (picture above text), `hero` (spans two columns from 640 px
 
 The first Create content tiles (four 300 px picture tiles in a 2 by 2 grid plus a different-looking Video row) pushed the form far down and read as "so ugly, big blocks". Rules since then:
 
-- Above a form or on a working screen, use `choice` or `compact` tiles: about 96 to 120 px tall at desktop, all in one even row, every tile the same structure (Video looks exactly like the four modes even though it opens another page).
+- Above a form or on a working screen, use `choice`, `compact` or one row of cover tiles (below): about 96 to 120 px tall at desktop, all in one even row, every tile the same structure (Video looks exactly like the four modes even though it opens another page).
 - Big illustrated tiles (`standard`, `hero`) belong only on hero and landing areas, never above a form.
 - Show selection with a thin gold ring, not a big tick badge. Keep headings small, borders light and avoid big filled panels; the form must be visible without scrolling at 1280 by 800 once a type is chosen.
+
+### Cover tiles (owner, 2026-10-19): a marketing tool should market itself
+
+The five Create content choices were small tiles with a tiny framed picture, which read as boring. They are now cover tiles: the illustration fills the card edge to edge like a video thumbnail or a movie title card, on its own colour grade, with the white title (Playfair Display 700, slightly tracked), the one line and the price over a dark scrim.
+
+```tsx
+import CoverTile from '../components/CoverTile';
+<TileGrid columns={5} size="small" label="What do you want to create?">
+  <CoverTile title="Carousel" subtitle="Swipeable slides" price="4 Quarks for each slide"
+             palette="teal" art={<CarouselArt />} selected={mode === 'carousel'} onClick={() => setMode('carousel')} />
+</TileGrid>
+```
+
+- Props: `title`, `subtitle`, `price` (the chip at the top left; the amount is set in bold, the words are shown as given), `art` (any piece from `components/art`, no new files needed), `palette` (`gold`, `coral`, `teal`, `blue` for LinkedIn, `ink` for video), `to` or `onClick`, `selected`, `dataAttrs`.
+- Shape: wide and short, 132 px tall from 640 px up and 124 px on a phone, all the same height. In `TileGrid size="small"` that is five in a row at 1280 and two columns on a phone; an odd last tile spans both columns on a phone as a wide title card.
+- The art is sized by the tile height and offset in pixels per palette (`--art-h`, `--art-right`, `--art-top`, `--art-rot` in `CoverTile.css`), so a wide tile keeps the same crop. Keep the object that explains the option (the LinkedIn mark, the play button) in the clear upper right, away from the price chip and the title. The frame's pale blob becomes a soft white halo.
+- Background: a colour-graded gradient with a glow behind the art, two faint light streaks and a fine grain (an inline SVG noise in the stylesheet). No raster files.
+- Contrast: the scrim and the chip are in each palette's deepest tone. `tests/coverTile.test.mjs` computes white text over the scrim (and over the chip) laid over pure white art, the worst case: at least 4.5 to 1 for every palette (title about 5.2 to 5.7, description 4.6 to 5.0, price 6.0 to 7.7). If you move the text higher or lighten the scrim, keep that test green.
+- Selected: a gold ring that reads on the dark cover (inner, #FFCB2E) and on the light page (outer, #F5A623), plus a small gold tick. Focus: the 3 px ink ring, offset further when selected. Hover lift, glow and a slow art zoom only without reduced motion.
+- Where: Create content now, and later hero areas (a page's main two to five choices). Not for dense lists, dashboards or anything repeated many times on a screen: use `choice` or `compact` tiles there. At most one row of cover tiles on a screen.
+- A new palette needs a `.nb-cover[data-palette="..."]` rule (with `--cover-deep-rgb`), an entry in `COVER_PALETTES`, and an art offset rule; the test reads both lists.
 
 A `DarkPanel` takes `eyebrow`, `title`, text children and an `action`. Use two or three per page at most.
 
