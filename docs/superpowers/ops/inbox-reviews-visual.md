@@ -50,3 +50,12 @@ Preview: `cd frontend && AUDIT_PORT=3101 npx vite --config scripts/visual-audit/
 - `GET /social/inbox/reviews`: `connected: false` without a provider call when no Google profile is stored; `loadFailed: true` when a connected profile's reviews could not be read.
 - `GET /social/inbox/conversations/:id/messages`: `ai.suggestionsSource` is 'drafted' or 'general' (the general replies are used when the writing service was unavailable; they are never sent automatically and wait for approval instead).
 - Real-database check: `node backend/scripts/inbox-view-check.js` (nebulaa_dev only, no provider or model call): 8 of 8 on 2026-10-19.
+
+## Conversations panel, third pass (owner, 2026-10-19: "so ugly and cramped, difficult to understand")
+
+- List 300 to 380 px wide (the thread takes the rest), rows of at least 76 px with a two-line preview, an unread dot on the left and a bolder name, the selected row in soft gold with a gold edge.
+- Filter bar with labels: **Show** (All, Needs reply, Important; a segmented control) and **From** (All, Instagram, Facebook; chips with the platform marks). Needs reply asks the server for unread conversations; Important asks for high and urgent (`priority=important`, `priorityFilter` in `backend/services/socialInboxService.js`, unknown words ignored). On a narrow list the labels sit above the chips. The old Read and Replied choices are gone (Needs reply covers the work).
+- Thread header on one calm row: picture, name, then "@handle · Instagram · Comment" and only real mood or importance chips; Automatic replies is a labelled switch (`role="switch"`) that reads On or Off, and turning it on still asks first.
+- Suggested replies: a wrapped list of full-width cards with "Use this" (or "In your reply box"); nothing scrolls or clips sideways. The reply box is larger (at least 96 px, can be made taller).
+- Empty thread: the inbox drawing, "Pick a conversation to read it here" and what opening one shows.
+- The developer "Simulate" button is no longer on any customer screen: only a development build opened with `?devtools=1` shows "Add a test comment" (the backend route is 404 in production).
