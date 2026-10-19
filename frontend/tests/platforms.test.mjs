@@ -7,9 +7,13 @@ test('an icon says what it will do', () => {
   assert.equal(platformHint({ key: 'gmb', label: 'Google Business' }, 'image'), 'Post to Google Business');
 });
 
-test('a blocked or upcoming platform says why it cannot be chosen', () => {
+test('a blocked platform says why it cannot be chosen', () => {
   assert.equal(platformHint({ key: 'gmb', label: 'Google Business', blocked: true }, 'video'), 'Videos cannot be sent to Google Business yet');
-  assert.equal(platformHint({ key: 'x', label: 'X', soon: true }, 'image'), 'X: coming soon');
+});
+
+test('a platform marked as not available yet is left out of every picker', () => {
+  const soon = PLATFORM_CHOICES.filter((p) => p.soon);
+  for (const kind of ['image', 'video']) assert.ok(!choicesFor(kind).some((p) => p.soon) && soon.every((p) => !choicesFor(kind).includes(p)));
 });
 
 test('every picker draws from one list that includes X and Google Business', () => {

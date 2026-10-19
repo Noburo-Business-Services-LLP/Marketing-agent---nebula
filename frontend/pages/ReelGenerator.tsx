@@ -2587,24 +2587,6 @@ setCharacterAge(nextDraft?.characterAge || '');
               </button>
             )}
 
-            {step === 1 && (
-              <div className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Want something quick? Create a Hero video</div>
-                  <div className="text-[12px] text-[var(--gv-text-tertiary)]">
-                    One crisp 15-second clip in any style, from a polished brand ad to a casual creator video. For a longer step-by-step video of 30 to 60 seconds, carry on below.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate('/reels/hero')}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold transition-all border border-[rgb(var(--gv-accent-rgb)/0.45)] text-[var(--gv-accent-text)] hover:bg-[var(--gv-accent-fill)]"
-                >
-                  Create a Hero video
-                </button>
-              </div>
-            )}
-
             {error && (
               <div className="rounded-xl border border-red-500/30 bg-red-500/[0.08] px-5 py-3.5 flex items-start justify-between gap-4">
                 <div className="flex-1">

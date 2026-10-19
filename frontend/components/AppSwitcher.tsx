@@ -10,6 +10,9 @@ interface AppSwitcherProps {
 
 const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent-text)]';
 
+// Areas that are not built yet are not offered at all; with only one area left there is nothing to switch, so the switcher is hidden.
+const AREAS = NEBULAA_AREAS.filter((a) => a.available);
+
 const AppSwitcher: React.FC<AppSwitcherProps> = ({ onNavigate }) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -23,10 +26,10 @@ const AppSwitcher: React.FC<AppSwitcherProps> = ({ onNavigate }) => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  const current = NEBULAA_AREAS.find((a) => a.id === CURRENT_AREA_ID) ?? NEBULAA_AREAS[0];
+  const current = AREAS.find((a) => a.id === CURRENT_AREA_ID) ?? AREAS[0];
 
   const focusItem = (i: number) => itemRefs.current[i]?.focus();
-  const firstEnabled = () => NEBULAA_AREAS.findIndex((a) => a.available);
+  const firstEnabled = () => AREAS.findIndex((a) => a.available);
 
   const openAndFocusFirst = () => {
     setOpen(true);
@@ -62,7 +65,7 @@ const AppSwitcher: React.FC<AppSwitcherProps> = ({ onNavigate }) => {
   };
 
   const activate = (i: number) => {
-    const target = areaTarget(NEBULAA_AREAS[i]);
+    const target = areaTarget(AREAS[i]);
     if (!target) return;
     setOpen(false);
     navigate(target);
@@ -74,10 +77,10 @@ const AppSwitcher: React.FC<AppSwitcherProps> = ({ onNavigate }) => {
     const from = focused < 0 ? firstEnabled() : focused;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      focusItem(nextEnabledIndex(NEBULAA_AREAS, from, 1));
+      focusItem(nextEnabledIndex(AREAS, from, 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      focusItem(nextEnabledIndex(NEBULAA_AREAS, from, -1));
+      focusItem(nextEnabledIndex(AREAS, from, -1));
     } else if (e.key === 'Escape') {
       e.preventDefault();
       closeToButton();
@@ -88,6 +91,8 @@ const AppSwitcher: React.FC<AppSwitcherProps> = ({ onNavigate }) => {
       activate(focused);
     }
   };
+
+  if (AREAS.length < 2) return null;
 
   return (
     <div ref={rootRef} className="relative">
@@ -112,7 +117,7 @@ const AppSwitcher: React.FC<AppSwitcherProps> = ({ onNavigate }) => {
           onKeyDown={onMenuKeyDown}
           className="absolute left-0 right-0 top-full mt-1 z-40 p-1 rounded-xl bg-[var(--gv-panel)] border border-[var(--gv-border-default)] shadow-lg"
         >
-          {NEBULAA_AREAS.map((area, i) => {
+          {AREAS.map((area, i) => {
             const isCurrent = area.id === CURRENT_AREA_ID;
             return (
               <div
@@ -136,11 +141,6 @@ const AppSwitcher: React.FC<AppSwitcherProps> = ({ onNavigate }) => {
                     pill do not fit on one line, so the pill always sits below the label. */}
                 <span className="flex-1 min-w-0 flex flex-col items-start gap-0.5 py-1.5">
                   <span className="font-medium">{area.label}</span>
-                  {!area.available && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]">
-                      Coming soon
-                    </span>
-                  )}
                 </span>
               </div>
             );

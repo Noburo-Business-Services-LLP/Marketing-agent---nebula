@@ -101,7 +101,7 @@ const EnvironmentAssets: React.FC = () => {
           </h2>
           <p className="text-[12.5px] text-white/45 mt-1 max-w-[600px]">
             Photos of your shop, showroom, workshop or storefront. Nebulaa renders scenes inside
-            your real space instead of creating an imaginary one. You can choose these photos in the Environment step of the Videos wizard.
+            your real space instead of creating an imaginary one. You can choose these photos in the Environment step when you create a video.
           </p>
         </div>
         <span className="text-[11px] px-2.5 py-1 rounded-full border border-white/[0.10] bg-white/[0.03] text-white/55">

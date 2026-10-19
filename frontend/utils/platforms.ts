@@ -3,7 +3,7 @@
  * shown in one place and missing in another.
  *   key       what the server and Ayrshare receive ("twitter" is X)
  *   video     whether a video can be posted there
- *   soon      shown but not selectable yet
+ *   soon      not available yet: kept in the data, left out of every picker
  */
 export interface PlatformChoice {
   key: string;
@@ -28,9 +28,9 @@ export function platformLabel(key: string): string {
   return found ? found.label : k.charAt(0).toUpperCase() + k.slice(1);
 }
 
-/** Choices for a picker: videos skip networks that cannot take video; images skip YouTube. */
+/** Choices for a picker: images skip YouTube; a platform that is not available yet is not offered at all. */
 export function choicesFor(kind: 'image' | 'video'): PlatformChoice[] {
-  return PLATFORM_CHOICES.filter((p) => (kind === 'video' ? true : p.key !== 'youtube'));
+  return PLATFORM_CHOICES.filter((p) => !p.soon && (kind === 'video' ? true : p.key !== 'youtube'));
 }
 
 export interface PickerItem {
@@ -44,7 +44,6 @@ export interface PickerItem {
 
 /** The sentence shown when you point at a platform icon. */
 export function platformHint(item: PickerItem, kind: 'image' | 'video'): string {
-  if (item.soon) return `${item.label}: coming soon`;
   if (item.blocked) return `${kind === 'video' ? 'Videos' : 'Posts'} cannot be sent to ${item.label} yet`;
   return `Post to ${item.label}`;
 }

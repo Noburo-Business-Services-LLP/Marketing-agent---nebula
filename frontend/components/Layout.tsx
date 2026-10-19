@@ -194,7 +194,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     { path: '/dashboard',        label: 'Dashboard',         icon: LayoutDashboard },
     ...(showsMyPlan ? [{ path: '/plan', label: 'My plan', icon: ClipboardList }] : []),
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
-    { path: '/reels',            label: 'Videos',            icon: PlayCircle },
+    { path: '/reels',            label: 'Create video',      icon: PlayCircle },
     { path: '/photoshoot',       label: 'Photoshoot',        icon: Camera },
     { path: '/drafts',           label: 'Review and approve', icon: PenTool, badge: 'drafts' as const },
     { path: '/library',          label: 'Library',           icon: Images },
@@ -227,7 +227,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     if (pathname.startsWith('/plan')) return { title: 'My plan', crumb: '' };
     if (pathname.startsWith('/trial-expired')) return { title: 'Plans', crumb: '' };
     if (pathname.startsWith('/content-calendar')) return { title: 'Calendar', crumb: '' };
-    if (pathname.startsWith('/reels')) return { title: 'Videos', crumb: '' };
+    if (pathname.startsWith('/reels')) return { title: 'Create video', crumb: '' };
     if (pathname.startsWith('/influencer-portal')) return { title: 'Influencer Portal', crumb: '' };
     if (pathname.startsWith('/ad-campaigns')) return { title: 'Ad Campaigns', crumb: '' };
     if (pathname.startsWith('/staff')) return { title: 'Staff area', crumb: '' };
@@ -438,7 +438,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
 
           {/* Desktop top bar */}
           <header className="hidden md:flex items-center h-16 px-8 border-b border-[var(--gv-border-subtle)] bg-transparent">
-            <div className="w-[170px] mr-5 shrink-0"><AppSwitcher /></div>
+            <div className="w-[170px] mr-5 shrink-0 empty:hidden"><AppSwitcher /></div>
             <div className="w-[170px] mr-5 shrink-0 empty:hidden"><ClientSwitcher user={user} /></div>
             <div className={`${clientSwitcherShown ? 'hidden xl:flex' : 'flex'} items-baseline gap-3 min-w-0 flex-1`}>
               <h1 className="text-[15px] font-semibold text-[var(--gv-text-primary)] tracking-[-0.01em] truncate">{topBarMeta.title}</h1>

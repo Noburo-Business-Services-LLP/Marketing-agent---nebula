@@ -77,7 +77,7 @@ export function brandTiles(input: BrandInput): StatusTile[] {
 
   // People and places are brand asset rows of type character and environment.
   if (input.assets === null) {
-    tiles.push({ key: 'people', title: 'People', status: UNKNOWN, state: 'unknown', line: 'Open Videos to see them', thumbs: [], to: '/reels' });
+    tiles.push({ key: 'people', title: 'People', status: UNKNOWN, state: 'unknown', line: 'Open Create video to see them', thumbs: [], to: '/reels' });
     tiles.push({ key: 'places', title: 'Places', status: UNKNOWN, state: 'unknown', line: 'Open to see your places', thumbs: [], tab: 'environment' });
   } else {
     const people = ofType(input.assets, 'character');

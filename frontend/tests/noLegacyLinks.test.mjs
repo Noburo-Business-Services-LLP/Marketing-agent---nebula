@@ -18,17 +18,21 @@ const files = [...walk('pages'), ...walk('components')];
 const FORBIDDEN_TEXT = [
   'old step-by-step', 'Open it here', 'old maker', 'old version', 'old dashboard', 'classic version',
   'classic dashboard', 'switch to the old', 'try the new', 'previous version', 'legacy version',
+  // Owner decisions 2026-10-19: Hero video stays hidden; one Videos flow; nothing that leads nowhere.
+  'Hero videos', 'Create a Hero video', 'Step-by-step videos', 'step-by-step video', 'Coming soon', 'legacy copy',
 ];
+// The hidden Hero feature itself (its page and parts) may use its own name; nothing else may.
+const HERO_OWN = /^(pages\/HeroVideo\.tsx|components\/Hero[A-Za-z]*\.tsx)$/;
 // Links into the discarded pages (the routes still exist in App.tsx only).
-const FORBIDDEN_LINKS = [/['"`]\/[a-z-]+-classic['"`]/, /to=["']\/reels\/studio["']/, /navigate\(['"]\/reels\/studio['"]/];
+const FORBIDDEN_LINKS = [/['"`]\/[a-z-]+-classic['"`]/, /['"`]\/reels\/hero['"`]/, /to=["']\/reels\/studio["']/, /navigate\(['"]\/reels\/studio['"]/];
 
 test('customer screens show no link or banner to old versions', () => {
   assert.ok(files.length > 20);
   const hits = [];
   for (const f of files) {
     const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
-    for (const p of FORBIDDEN_TEXT) if (src.toLowerCase().includes(p.toLowerCase())) hits.push(`${f}: "${p}"`);
-    for (const re of FORBIDDEN_LINKS) if (re.test(src)) hits.push(`${f}: ${re}`);
+    for (const p of FORBIDDEN_TEXT) if (!(HERO_OWN.test(f) && /hero/i.test(p)) && src.toLowerCase().includes(p.toLowerCase())) hits.push(`${f}: "${p}"`);
+    for (const re of FORBIDDEN_LINKS) if (!(HERO_OWN.test(f) && /hero/.test(String(re))) && re.test(src)) hits.push(`${f}: ${re}`);
   }
   assert.deepEqual(hits, []);
 });
@@ -38,4 +42,17 @@ test('the old routes still resolve for existing bookmarks', () => {
   for (const r of ['/reels/studio', '/dashboard-classic', '/content-calendar-classic', '/campaigns-classic', '/analytics-classic']) {
     assert.ok(app.includes(`path="${r}"`), `route ${r} removed`);
   }
+});
+
+test('the left menu calls the video entry "Create video" and keeps "Create content"', () => {
+  const layout = fs.readFileSync(path.join(ROOT, 'components/Layout.tsx'), 'utf8');
+  assert.match(layout, /path: '\/reels',\s+label: 'Create video'/);
+  assert.match(layout, /path: '\/campaigns',\s+label: 'Create content'/);
+  assert.doesNotMatch(layout, /label: 'Videos'/);
+});
+
+test('the Library offers no Hero filter and names the video filter "Videos"', () => {
+  const lib = fs.readFileSync(path.join(ROOT, 'pages/Library.tsx'), 'utf8');
+  assert.doesNotMatch(lib, /key: 'hero'/);
+  assert.match(lib, /key: 'video-draft', label: 'Videos'/);
 });

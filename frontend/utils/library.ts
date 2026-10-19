@@ -136,7 +136,7 @@ export const STATUS_WORD: Record<LibraryStatus, string> = {
 
 /** Where an item came from, in words, for the source chip on its tile. */
 export const SOURCE_WORD: Record<LibrarySource, string> = {
-  post: 'Post', reel: 'Reel from your plan', 'video-draft': 'Step-by-step video', hero: 'Hero video', photoshoot: 'Photoshoot',
+  post: 'Post', reel: 'Reel from your plan', 'video-draft': 'Video', hero: 'Video', photoshoot: 'Photoshoot',
 };
 
 export type LibraryAction = 'open' | 'edit' | 'download';

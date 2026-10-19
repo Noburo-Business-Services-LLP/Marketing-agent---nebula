@@ -244,7 +244,7 @@ export const CreateToday: React.FC<{ language?: string | null; postsOnly?: boole
         )}
         </div>
         <div className="nb-home-describe-foot">
-          <span>{tab === 'post' ? 'Opens Create content with your idea filled in.' : tab === 'video' ? 'Opens Videos with your idea filled in.' : 'Opens Photoshoot, where you choose products and see the price first.'}</span>
+          <span>{tab === 'post' ? 'Opens Create content with your idea filled in.' : tab === 'video' ? 'Opens Create video with your idea filled in.' : 'Opens Photoshoot, where you choose products and see the price first.'}</span>
           <button type="submit" className="nb-home-btn" data-primary="true" disabled={tab !== 'photoshoot' && !text.trim()}>{tab === 'photoshoot' ? 'Open Photoshoot' : 'Continue'}<ArrowRight size={14} aria-hidden="true" /></button>
         </div>
       </form>

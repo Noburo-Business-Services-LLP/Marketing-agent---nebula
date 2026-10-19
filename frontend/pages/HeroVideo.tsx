@@ -589,7 +589,7 @@ const HeroVideoInner: React.FC = () => {
           eyebrow="Hero Studio"
           title="Create a"
           emphasis="Hero video"
-          description="One crisp 15-second clip: a hook, three short beats and a clear closing call to action. For a longer video of 30 to 60 seconds, use the step-by-step video in Videos."
+          description="One crisp 15-second clip: a hook, three short beats and a clear closing call to action."
           className="!mb-0 !mt-0"
         />
         {prepError && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{prepError}</p>}

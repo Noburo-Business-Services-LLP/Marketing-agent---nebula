@@ -2,15 +2,18 @@
 
 Owner rule: whatever is not in the product (discarded, hidden, kept aside) must not be shown on the working product. Routes stay for old bookmarks; only customer-facing links and banners go. Guard: `frontend/tests/noLegacyLinks.test.mjs`.
 
-| Path | Text | Decision | Reason |
+| Path | Text | Decision (owner, 2026-10-19) | Reason |
 |---|---|---|---|
-| `pages/CreateVideo.tsx` | "Looking for the old step-by-step maker? Open it here" (link to `/reels/studio`) | Removed | Old maker is not in the menu; users do not know it. Route kept. |
-| `pages/ReelGenerator.tsx` (route `/reels/studio`) | "Create a Hero video" banner, "step-by-step" wording | Keep (flag) | Page is reachable only by old bookmarks or a resumed job (`App.tsx` VideosEntry); no menu link points to it. |
-| `pages/HeroVideo.tsx` | Eyebrow "Hero Studio"; "use the step-by-step video in Videos" | Keep, FLAG | Hero is not a menu entry (menu has Videos only). It is reached from Library "Hero videos" for existing clips. The sentence points to a "step-by-step video in Videos" that Videos no longer offers by that name. Owner to decide: hide Hero or give it a menu entry. |
-| `pages/Library.tsx` | Filter "Step-by-step videos", source chip "Step-by-step video", Hero videos | Keep, FLAG | Describes existing saved items, not a link. Owner may want these renamed to "Videos". |
-| `components/AppSwitcher.tsx` | "Coming soon" pill on an unavailable area (Lead generation) | Keep, FLAG | Planned Outreach/Leads toggle; a placeholder leading nowhere. Owner to confirm whether to hide until built. |
-| `components/DraftPreviewModal.tsx`, `pages/UploadAndSchedule.tsx`, `utils/platforms.ts` | "Coming soon" on a platform not yet selectable | Keep, FLAG | Disabled platform with tooltip; owner to decide whether to hide unselectable platforms. |
-| `App.tsx` | `/dashboard-classic`, `/content-calendar-classic`, `/campaigns-classic`, `/analytics-classic` | Keep route | Nothing in `pages/` or `components/` links to them (checked by the guard test). |
-| `pages/PromptStudio` label "Carousels (legacy copy)" (`components/PromptStudio.tsx`) | "legacy copy" | Keep, FLAG | Likely staff/internal prompt tool; confirm it is not customer-facing. |
-| `pages/staff/*` | "older step-by-step video maker" | Keep | Staff-only screen, not customer-facing. |
-| Code comments mentioning legacy/classic | n/a | Keep | Not visible to users. |
+| `pages/CreateVideo.tsx` | "Looking for the old step-by-step maker? Open it here" | Removed | Route `/reels/studio` kept for bookmarks. |
+| `pages/ReelGenerator.tsx` | "Create a Hero video" banner | Removed | Hero stays hidden; no customer link to `/reels/hero`. |
+| `pages/HeroVideo.tsx` | "use the step-by-step video in Videos" sentence | Removed (sentence). Page and route kept | Hero stays hidden; page reachable only by old bookmarks. |
+| `pages/Library.tsx` | "Hero videos" filter, "Step-by-step videos" filter | Hero filter removed; "Step-by-step videos" renamed "Videos" | Existing saved Hero clips still appear as normal "Video" items and open in the Library panel (download, edit finish, share) without linking to the Hero page; "Make a new version from the prompt" link removed. |
+| Left menu (`components/Layout.tsx`) | "Videos" | Renamed "Create video" | "Create content" kept: it also covers carousels, campaigns and LinkedIn posts, so "Create image post" would be too narrow. |
+| `components/AppSwitcher.tsx` | "Coming soon" pill on Lead generation (and Outreach) | Entries hidden; switcher hidden while only Content exists | Led nowhere. Data in `utils/appSwitcher.ts` untouched. |
+| `utils/platforms.ts`, `DraftPreviewModal.tsx`, `UploadAndSchedule.tsx` | "Coming soon" platforms | Left out of every picker (`choicesFor`) | Data model untouched; no platform is flagged today. |
+| `components/PromptStudio.tsx` | "Carousels (legacy copy)", "Hero videos (prompt and style rules)" | Renamed "Carousels (captions)"; Hero group no longer listed | Customer-visible on Create. |
+| `App.tsx` | `/dashboard-classic`, `/content-calendar-classic`, `/campaigns-classic`, `/analytics-classic`, `/reels/hero`, `/reels/studio` | Keep routes | Nothing in `pages/` or `components/` links to them (guard test). |
+| `pages/staff/*` | "older step-by-step video maker" | Keep | Staff-only. |
+| Code comments mentioning legacy/classic | n/a | Keep | Not visible. |
+
+Open: the video platform picker in `ReelGenerator.tsx` still shows "(soon)" beside Google Business (it cannot take video; not a coming-soon platform in the data).

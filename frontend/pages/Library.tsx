@@ -28,7 +28,7 @@ const KINDS: Array<{ key: LibraryFilters['kind']; label: string }> = [
   { key: 'all', label: 'All' }, { key: 'image', label: 'Images' }, { key: 'video', label: 'Videos' },
 ];
 const SOURCES: Array<{ key: LibraryFilters['source']; label: string }> = [
-  { key: 'all', label: 'Everything' }, { key: 'hero', label: 'Hero videos' }, { key: 'video-draft', label: 'Step-by-step videos' }, { key: 'post', label: 'Posts and images' },
+  { key: 'all', label: 'Everything' }, { key: 'video-draft', label: 'Videos' }, { key: 'post', label: 'Posts and images' },
   { key: 'reel', label: 'Reels from your plan' }, { key: 'photoshoot', label: 'Photoshoots' },
 ];
 
@@ -67,9 +67,9 @@ const Library: React.FC = () => {
       });
     } else bad.push('posts and images');
     if (videos.status === 'fulfilled') (videos.value?.drafts || []).forEach((d: any) => { const c = fromVideoDraft(d); if (c) all.push(c); });
-    else bad.push('step-by-step videos');
+    else bad.push('videos');
     if (heroes.status === 'fulfilled') ((heroes.value as any)?.jobs || []).forEach((j: any) => { const c = fromHeroJob(j); if (c) all.push(c); });
-    else bad.push('Hero videos');
+    else if (!bad.includes('videos')) bad.push('videos');
     if (shoots.status === 'fulfilled') ((shoots.value as any)?.photos || []).forEach((p: any) => { const c = fromPhotoshootPhoto(p); if (c) all.push(c); });
     else bad.push('photoshoots');
     setItems(all); setProblems(bad); setLoading(false);
@@ -101,7 +101,7 @@ const Library: React.FC = () => {
 
   const goEdit = (i: LibraryItem) => {
     setOpen(null);
-    if (i.source === 'hero') navigate('/reels/hero');
+    if (i.source === 'hero') setOpen(i);
     else if (i.source === 'video-draft') navigate(`/reels?jobId=${encodeURIComponent(i.id)}`);
     else if (i.source === 'reel' && i.jobId) navigate(`/reels?jobId=${encodeURIComponent(i.jobId)}`);
     else if (i.source === 'photoshoot') navigate('/photoshoot');
@@ -248,7 +248,7 @@ const Library: React.FC = () => {
             {open.caption && <p className="text-[13.5px] text-[var(--gv-text-secondary)] whitespace-pre-wrap">{open.caption}</p>}
             <div className="flex flex-wrap items-center gap-4">
               {open.mediaUrl && <a href={open.mediaUrl} download target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)] hover:underline"><Download className="w-4 h-4" />Download</a>}
-              <GravityButton variant="ghost" onClick={() => goEdit(open)}>{open.status === 'draft' ? 'Edit' : 'Open'}</GravityButton>
+              {open.source !== 'hero' && <GravityButton variant="ghost" onClick={() => goEdit(open)}>{open.status === 'draft' ? 'Edit' : 'Open'}</GravityButton>}
               {canRemove(open) && (
                 <button type="button" onClick={() => remove(open)} disabled={removing} className="ml-auto inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-coral-text)] disabled:opacity-60">
                   {removing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}Delete
@@ -256,9 +256,6 @@ const Library: React.FC = () => {
               )}
             </div>
             {removeError && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{removeError}</p>}
-            {open.source === 'hero' && open.heroSource && (
-              <GravityButton variant="ghost" onClick={() => { const o = open; setOpen(null); navigate('/reels/hero', { state: { tweak: { title: o.title, prompt: o.heroSource!.prompt, finish: o.finish, tweak: o.heroSource!.tweak } } }); }}>Make a new version from the prompt</GravityButton>
-            )}
             {open.source === 'hero' && open.mediaUrl && <HeroEdit key={`edit-${open.id}`} jobId={open.id} current={open.finish} onUpdated={(url) => { setOpen((o) => (o ? { ...o, mediaUrl: url } : o)); load(true); }} />}
             {open.source === 'hero' && open.mediaUrl && <HeroShare key={open.id} jobId={open.id} onPosted={() => load(true)} />}
           </div>

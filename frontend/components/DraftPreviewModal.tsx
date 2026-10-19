@@ -612,23 +612,21 @@ export const DraftPreviewModal: React.FC<DraftPreviewModalProps> = ({ draft, onC
             <div>
               <label className="gravity-label text-[rgba(245,244,241,0.55)] block mb-2">Posting to</label>
               <div className="flex flex-wrap gap-2">
-                {platformChoices.map(({ key: platform, label, soon }) => {
+                {platformChoices.map(({ key: platform, label }) => {
                   const active = platforms.includes(platform);
                   return (
                     <button
                       key={platform}
                       type="button"
-                      disabled={Boolean(soon)}
-                      title={soon ? 'Coming soon' : undefined}
                       onClick={() => togglePlatform(platform)}
                       className={`inline-flex items-center gap-2 h-10 pl-3 pr-3.5 rounded-full border text-[12.5px] font-semibold transition-all ${
                         active
                           ? 'bg-[#F5A623] border-[#F5A623] text-black'
                           : 'bg-white/[0.03] border-white/[0.10] text-white/55 hover:text-white/85 hover:border-white/25'
-                      } ${soon ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      }`}
                     >
                       <PlatformIcon platform={platform} />
-                      {label}{soon ? ' (soon)' : ''}
+                      {label}
                     </button>
                   );
                 })}
