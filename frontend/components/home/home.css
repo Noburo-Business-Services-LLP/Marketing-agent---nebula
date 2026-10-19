@@ -210,4 +210,6 @@
 .nb-home-packs-item { flex: 0 0 min(78%, 250px); min-width: 0; scroll-snap-align: start; }
 @media (max-width: 639px) { .nb-home-ps-chip { min-height: 40px; } }
 /* Five create tiles on a phone: the last one spans both columns, so "Photoshoot" never breaks inside the word. */
-@media (max-width: 639px) { .nb-home-create .nb-tile-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; } }
+/* Equal row heights, and five tiles never leave one alone in a row: the last one spans the full width of its row. */
+.nb-home-create .nb-tile-grid { grid-auto-rows: 1fr; }
+.nb-home-create .nb-tile-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; }
