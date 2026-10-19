@@ -6,29 +6,30 @@ Plain steps, no coding. Use only your own accounts: Instagram nebulaa.os and one
 - The Inbox has **never been tested with real accounts**. Expect something to fail. That is what this test is for.
 - The Ayrshare Messaging add-on (needed for direct messages and comment-to-message) was **inactive** at last check (see ACCESS-REQUESTS-inbox.md). Direct messages probably will not work until it is bought. Comments may.
 - The automatic-reply path has **never run for real**.
-- **Warning about sending replies:** in the code, an approved reply is sent through the same call that creates a new post (backend/services/socialInboxProviderService.js and socialMediaAPI.js). The "reply to this comment" id is passed in but is not used by that call. So an approved reply may appear as a **new public post on your page**, not as a reply under the comment. This is why the sending tests below run only on the test account, and why you must be ready to delete a stray post.
+- Replies are sent with Ayrshare's reply-to-comment call (comments) and send-message call (direct messages); there is no fallback to a public post (fixed in code 2026-10-13, unproven live). Still, run the sending tests only on the test account and be ready to delete a stray post.
+- The screens say "Set up and ready to test" for automatic replies until this test passes (see the end of this sheet).
 
-## How new messages arrive (sync timing, from backend/services/socialInboxService.js)
-- New comments and messages arrive **only when Ayrshare sends a webhook** to our server. That should take seconds to a couple of minutes. If it never arrives, nothing else will fetch it.
-- The code has a "polling every 30 seconds" job, but its body is empty (it loops over users and does nothing). So there is **no fallback**. The Sync button only stamps a "last synced" time; it fetches nothing.
-- The app's "next sync in 15 minutes" figure is a made-up number, not a real schedule.
-- The webhook is registered when you connect an account (the app calls it after connecting). If a connection existed before, disconnect and connect again.
+## How new messages arrive (sync timing, from backend/services/socialInboxService.js and inboxWebhook.js)
+- New comments and messages arrive **only when Ayrshare sends a webhook** to our server. That should take seconds to a couple of minutes. If it never arrives, nothing else will fetch it: there is no polling and no Sync button.
+- The webhooks are registered when you connect an account (Connected accounts calls it). Since 2026-10-19 the result is **recorded**: the Inbox shows "Live updates are not on yet" (never registered, which is every connection made before this release) or "Live updates could not be switched on" (the last try failed) with a button that registers again. Registration needs `WEBHOOK_BASE_URL` set to the public https address of the server.
+- The Inbox shows "Last message received <time>" from the newest stored message; Refresh only reloads the list.
 
 ## Before you start
 1. Release is live. Your user has the Publish and the Inbox add-ons (or the Agency plan).
 2. Have a second Instagram account and a second Facebook profile (a friend's or a spare) to write comments from.
 3. Keep this sheet open and note the time of each step.
 
-## Test 1: connect
+## Test 1: connect and switch on live updates
 1. Open Connected accounts, connect Instagram nebulaa.os and your Facebook page.
-2. Expected: both show as connected; the Inbox menu item opens (not the empty "Connect an account" screen).
-3. If it fails, tell the assistant: "Connect step failed on [Instagram/Facebook], the message on screen was ..." Search logs for: `Ayrshare set webhook response`, `Webhook registration failed`, `Webhook registration error`.
+2. Open Inbox. Expected: the Messages and comments tile says **Connected**, and there is no "Live updates are not on yet" note.
+3. If the note shows (for example because the accounts were connected before the release), press **Switch on live updates** once. Expected: the note goes away and the tile says Connected.
+4. If it says "Live updates could not be switched on", tell the assistant: "Live updates failed, the message on screen was ..." Search logs for: `Ayrshare set webhook response`, `Webhook registration failed`, `Webhook registration error`, `[Inbox] could not record the webhook registration`. The usual cause is `WEBHOOK_BASE_URL` missing or not https.
 
 ## Test 2: a comment arrives
 1. Publish one ordinary post on nebulaa.os (or use an existing one).
 2. From the second account, comment: "Hi, what is the price?"
 3. Wait up to 5 minutes. Open Inbox, Messages and comments, press Refresh.
-4. Expected: a conversation from the second account with your comment, a sentiment and priority tag, and a few suggested replies on the right ("AI Assist").
+4. Expected: a conversation row from the second account (with the Instagram mark and a Comment chip; a Mood or Importance chip only if the words suggest one), and above the reply box a few chips under **Suggested replies**. If they are under **Quick replies to start from** instead, the writing service was unavailable and these are general replies; tell the assistant.
 5. If nothing shows after 5 minutes, tell the assistant: "Comment test: nothing arrived after 5 minutes at [time]". Search logs for: `RAW WEBHOOK`, `[Webhook] Received incoming webhook`, `Invalid webhook secret`, `Webhook signature verification failed`, `Webhook userId is required`.
    - Known risk: the webhook check looks for a signature that Ayrshare may not send in that form, so real events may be rejected with "Invalid webhook secret". If you see that phrase, that is the cause.
 
@@ -49,11 +50,17 @@ Plain steps, no coding. Use only your own accounts: Instagram nebulaa.os and one
 ## Test 5: automatic replies (test account only)
 1. Open Inbox, Automatic replies. Confirm the mode is "Suggested replies only" and automation is off. Nothing should be sent for you at this point.
 2. Only if Tests 2 and 3 worked: use the second account on **nebulaa.os only**. Turn on the Instagram comments toggle (the robot button in the conversation header, or the Automatic replies tab).
-3. Warning: the header toggle sets the mode to "Fully automatic" for the whole account in one click. Turn it back off straight after the test.
+3. The header toggle asks "Turn on automatic replies?" first and then sets the mode to "Fully automatic" for the whole account. Turn it back off straight after the test.
 4. From the second account, comment "Is this available?" on a test post.
 5. Expected: within 2 minutes one automatic reply goes out and the thread shows it as sent by the app. A comment with words like "refund" or "angry" must NOT get an automatic reply (it needs approval); a spam-like comment must be skipped; no more than 3 automatic replies per conversation per day.
 6. Turn automatic replies off again and confirm the toggle shows off after a page refresh.
-7. Search logs for: `Social inbox AI reply fallback` (the AI was unavailable, a generic reply was used), `Fully automatic mode`, `Daily auto-reply limit reached`, `Negative sentiment requires approval`.
+7. If the writing service is unavailable, no automatic reply goes out: a general reply waits in "Waiting for your approval" with the reason "The reply could not be drafted in your tone". That is intended.
+8. Search logs for: `Social inbox AI reply fallback` (the AI was unavailable), `Fully automatic mode`, `Daily auto-reply limit reached`, `Negative sentiment requires approval`.
+
+## Test 6: Google reviews (only if a Google Business Profile is connected)
+1. Open Inbox, Google reviews. Expected: your reviews with stars; a rating summary only if Ayrshare sends one.
+2. Press Draft a reply on one review, then Copy, and paste it into Google yourself. Nothing is posted to Google from Nebulaa.
+3. If it says "We could not load your reviews", the profile is connected but Ayrshare did not return them (the reviews call needs Ayrshare's Premium plan or higher). Tell the assistant.
 
 ## What to tell the assistant, per failure
 - Always include: the test number, the time, what you expected, what you saw, a screenshot, and the platform.
@@ -93,3 +100,16 @@ Nothing below has run against a real account. Tests use fakes only. Treat each a
 
 Log lines changed: the raw webhook body is no longer logged. Look for `Rejected a webhook call with a missing or wrong token`, `[Webhook] Processing event`, `[Inbox] comment reply failed`, `[Inbox] direct message failed`.
 Also fixed while there: a repeated webhook delivery used to flip a replied conversation back to unread; a repeat now changes nothing.
+
+## Found in the second pass (2026-10-19, `impact-maps/inbox-reviews.md`), fixed in code, unproven live
+- "Connected" and "arrive on their own" were shown whenever a profile key existed, even if the webhooks were never registered. Now the registration result is recorded and the Inbox shows Needs setup with a button until it works (Test 1).
+- Google reviews showed "not available yet" for any provider error. Now not connected, could not load and no reviews yet are separate (Test 6).
+- When the writing service failed, a general canned reply could be sent automatically, and one canned suggestion said "This is available". Now general replies wait for approval and claim nothing (Test 5, step 7).
+- Mood "Neutral", "Looks like spam 4%" and "Importance Normal" were shown as if measured. Now a chip shows only when the guess is not the default.
+- Suggested replies were hidden on screens narrower than 1280 px. Now they are chips above the reply box at every width.
+- The developer endpoints that add made-up conversations worked on the live site. Now they answer 404 in production.
+- Instagram and Facebook drafts had no language rule. Now they follow the language of the person's message.
+- Not changed: Google review drafts are free model calls with no daily cap (owner decision).
+
+## After the test passes
+Tell the assistant which tests passed. When Tests 2, 3 and 5 pass, a developer sets `INBOX_LIVE_PROVEN = true` in `frontend/utils/inboxOverview.ts`: the explainer then says Nebulaa reads each new comment and writes a reply, the badge goes, and the tile says "Replies go out on their own". Then the landing page inbox lines can be released (LANDING item in the ledger).
