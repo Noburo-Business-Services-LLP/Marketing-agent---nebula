@@ -606,7 +606,7 @@ const Competitors: React.FC = () => {
               return (
               <div
                 key={comp._id}
-                className={`flex w-full flex-col gap-1 rounded-lg border px-4 py-3 sm:w-auto sm:min-w-[300px] ${isDarkMode ? 'bg-[#070A12] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}
+                className={`flex w-full flex-col gap-1 rounded-lg border px-4 py-3 sm:w-auto sm:min-w-[300px] sm:flex-1 sm:basis-[300px] ${isDarkMode ? 'bg-[#070A12] border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-sm font-bold ${isDarkMode ? 'bg-[#F5A623]/20 text-[#F5A623]' : 'bg-[#F5A623]/20 text-amber-700'}`}>

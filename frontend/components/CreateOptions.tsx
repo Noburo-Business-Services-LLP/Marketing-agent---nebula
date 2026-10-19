@@ -9,12 +9,17 @@ import { SampleSceneArt } from './art/SampleScene';
 import { LookCleanArt } from './art/LookClean';
 import { LookBalancedArt } from './art/LookBalanced';
 import { LookRichArt } from './art/LookRich';
+import './createOptions.css';
 
 /**
  * The options under the idea box on Create content: language, platforms, shape, logo and look.
  * Every choice is one small picture tile of the same height, with a short title under the picture,
  * a light border, and a gold ring when it is chosen. Single choices are radio groups: Tab reaches the
  * chosen tile, the arrow keys move and choose.
+ *
+ * Symmetry (owner, 2026-10-19): the groups share the full row width in proportion to how many tiles they hold, the
+ * tiles of a group stretch evenly across it, and every tile is the same height. Rows that wrap (tablet, phone) are
+ * filled the same way. The layout lives in createOptions.css.
  */
 
 const TILE = 'relative flex h-[76px] shrink-0 flex-col items-center justify-between rounded-xl border px-1 pt-1.5 pb-[7px] outline-none transition-[border-color,box-shadow,background-color] focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--gv-bg)]';
@@ -28,8 +33,8 @@ export const tileClass = (on: boolean, width: string) => `${TILE} ${width} ${on 
 
 /** A small uppercase muted title over a group, with an optional quiet note beside it. */
 export const OptionGroup: React.FC<{ label: string; note?: React.ReactNode; hint?: React.ReactNode; className?: string; children: React.ReactNode }> = ({ label, note, hint, className = '', children }) => (
-  <div className={`min-w-0 ${className}`}>
-    <div className="gravity-label mb-1.5 text-[var(--gv-text-muted)]">
+  <div className={`nb-opt-group min-w-0 ${className}`}>
+    <div className="nb-opt-label gravity-label mb-1.5 text-[var(--gv-text-muted)]">
       {label}{note && <span className="ml-1 normal-case tracking-normal">{note}</span>}
     </div>
     {children}
@@ -65,7 +70,7 @@ export function TileRadioRow<T extends string>({ label, value, choices, onChange
     refs.current[next]?.focus();
   };
   return (
-    <div className={`flex flex-wrap gap-1.5 ${className}`} role="radiogroup" aria-label={label}>
+    <div className={`nb-opt-tiles ${className}`} role="radiogroup" aria-label={label}>
       {choices.map((c, i) => {
         const on = i === current;
         return (
@@ -92,12 +97,12 @@ export function TileRadioRow<T extends string>({ label, value, choices, onChange
   );
 }
 
-/** A frame drawn in the picture's real shape (the longer side 40 pixels) with a sample picture inside. */
+/** A frame drawn in the picture's real shape (the longer side 34 pixels) with a sample picture inside. */
 export const ShapeArt: React.FC<{ w: number; h: number; on: boolean }> = ({ w, h, on }) => {
-  const scale = 40 / Math.max(w, h);
+  const scale = 34 / Math.max(w, h);
   return (
     <span
-      className={`block overflow-hidden rounded-[4px] border ${on ? 'border-[var(--gv-accent)]' : 'border-[rgb(20_32_58/0.16)]'}`}
+      className={`nb-opt-shape block overflow-hidden rounded-[4px] border ${on ? 'border-[var(--gv-accent)]' : 'border-[rgb(20_32_58/0.16)]'}`}
       style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}
     >
       <SampleSceneArt />
@@ -170,9 +175,8 @@ export const LogoPositionTile: React.FC<{ value: LogoGridPosition; logoUrl?: str
         className={tileClass(false, 'w-[76px]')}
       >
         <span className={ART} aria-hidden="true"><LogoPostArt position={value} logoUrl={logoUrl} /></span>
-        <span className={`${NAME} inline-flex items-center gap-0.5 text-[var(--gv-text-secondary)]`}>
-          {LOGO_GRID_LABELS[value]}<ChevronDown className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />
-        </span>
+        <ChevronDown className="absolute right-1 top-1 h-3 w-3 text-[var(--gv-text-muted)]" aria-hidden="true" />
+        <span className={`${NAME} text-[var(--gv-text-secondary)]`}>{LOGO_GRID_LABELS[value]}</span>
       </button>
       {open && (
         <div style={left === null ? { right: 0 } : { left }} className="absolute top-full z-30 mt-1.5 w-max rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-2 shadow-xl">
@@ -213,7 +217,7 @@ export const LanguageTile: React.FC<{ value: string; open: boolean; onToggle: ()
     aria-expanded={open}
     aria-label={`Language: ${value}. Change`}
     title={value}
-    className={`${tileClass(false, 'w-[148px]')} !items-start !justify-center gap-1.5 !px-3`}
+    className={`${tileClass(false, 'w-full')} !items-start !justify-center gap-1.5 !px-3`}
   >
     <span className="flex items-center gap-2">
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--gv-accent-fill)]" aria-hidden="true">
@@ -233,7 +237,7 @@ export const PlatformTiles: React.FC<{
   selected: string[];
   onToggle: (key: string) => void;
 }> = ({ items, selected, onToggle }) => (
-  <div className="flex flex-wrap gap-1" role="group" aria-label="Platforms">
+  <div className="nb-opt-tiles" role="group" aria-label="Platforms">
     {items.map((item) => {
       const on = selected.includes(item.key);
       const disabled = Boolean(item.soon);

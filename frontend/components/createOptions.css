@@ -1,0 +1,28 @@
+/* Create content options row (components/CreateOptions.tsx). Symmetry rule, docs/superpowers/ops/tile-system.md.
+   Plain CSS, nothing compiled in the browser.
+
+   The row itself is drawn by the Create page; it is found here as the element that holds the option groups, so the
+   page needs no class of its own. It beats the page's Tailwind flex classes on specificity (element plus :has). */
+div:has(> .nb-opt-group) { display: flex; flex-wrap: wrap; align-items: stretch; column-gap: 10px; row-gap: 14px; }
+
+/* Each group takes a share of the row in proportion to the room its tiles need (--w, about one tile each), from a
+   basis of 54 px a share, so the row always ends flush with the idea box above and a wrapped row is filled too.
+   Language (one wider tile) counts one and a half; the four picture shapes need less room (3.25 for four); the logo
+   tiles with the position tile, whose labels are longer, count 1.1 each. */
+.nb-opt-group { --w: 1.5; flex: var(--w) 1 calc(var(--w) * 54px); }
+.nb-opt-group:has(.nb-opt-tiles > :nth-child(1)) { --w: 1; }
+.nb-opt-group:has(.nb-opt-tiles > :nth-child(2)) { --w: 2; }
+.nb-opt-group:has(.nb-opt-tiles > :nth-child(3)) { --w: 3; }
+.nb-opt-group:has(.nb-opt-tiles > :nth-child(4)) { --w: 4; }
+.nb-opt-group:has(.nb-opt-tiles > :nth-child(5)) { --w: 5; }
+.nb-opt-group:has(.nb-opt-tiles > :nth-child(6)) { --w: 6; }
+.nb-opt-group:has(.nb-opt-tiles > :nth-child(7)) { --w: 7; }
+.nb-opt-group.nb-opt-group:has(.nb-opt-tiles .nb-opt-shape) { --w: 3.25; }
+.nb-opt-group.nb-opt-group:has(.nb-opt-tiles > div:nth-child(3)) { --w: 3.3; }
+.nb-opt-group.nb-opt-group:has(.nb-opt-tiles > div:nth-child(4)) { --w: 4.4; }
+.nb-opt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Tiles of a group: equal columns across the whole group width, one height (the tile class sets 76 px). */
+.nb-opt-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+.nb-opt-tiles > button, .nb-opt-tiles > div > button { width: 100%; min-width: 0; }
+.nb-opt-tiles > button > span:last-child, .nb-opt-tiles > div > button > span:last-child { font-size: 10px; letter-spacing: -0.02em; }

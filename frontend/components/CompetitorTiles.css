@@ -21,7 +21,15 @@
 /* ---- tiles ---- */
 .nb-ct-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 0; padding: 0; list-style: none; }
 @media (min-width: 640px) { .nb-ct-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
-@media (min-width: 1024px) { .nb-ct-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* Symmetry rule: a short last row is filled (two columns: an odd last tile is full width; three columns, drawn as six
+   half columns: a last pair takes half each, a last single tile the full row). */
+@media (min-width: 640px) and (max-width: 1023px) { .nb-ct-grid > li:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+@media (min-width: 1024px) {
+  .nb-ct-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .nb-ct-grid > li { grid-column: span 2; }
+  .nb-ct-grid > li:last-child:nth-child(3n+1) { grid-column: 1 / -1; }
+  .nb-ct-grid > li:last-child:nth-child(3n+2), .nb-ct-grid > li:nth-last-child(2):nth-child(3n+1) { grid-column: span 3; }
+}
 .nb-ct-tile {
   position: relative; box-sizing: border-box; height: 100%; min-width: 0; display: flex; flex-direction: column; gap: 9px;
   padding: 12px 13px 12px 15px; border-radius: 14px; background: #FFFFFF; border: 1px solid var(--gv-border-subtle);
@@ -41,7 +49,7 @@ a.nb-ct-handle:hover { color: var(--gv-text-primary); text-decoration: underline
 .nb-ct-chip[data-tone="warn"] { background: #FFE3D0; color: #9A3A15; }
 .nb-ct-note { font-size: 12.5px; line-height: 1.45; color: var(--gv-text-secondary); }
 .nb-ct-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; }
-.nb-ct-stats > div { min-width: 0; }
+.nb-ct-stats > div { flex: 1 1 auto; min-width: 0; }
 .nb-ct-stats dt { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--gv-text-tertiary); }
 .nb-ct-stats dd { margin: 1px 0 0; display: flex; align-items: baseline; gap: 6px; font-size: 15px; font-weight: 650; color: var(--gv-text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .nb-ct-delta { padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 650; line-height: 17px; background: #F1ECE2; color: #4A4234; }

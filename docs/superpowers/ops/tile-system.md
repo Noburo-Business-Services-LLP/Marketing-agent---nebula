@@ -67,6 +67,18 @@ A `DarkPanel` takes `eyebrow`, `title`, text children and an `action`. **Do not 
 
 Text boxes where the customer describes an idea share one look: `components/ideaBox.css` (`.nb-ideabox` on the box, `.nb-ideabox-field gravity-bare` on the field): the values of Create content's idea box (12 px radius, soft default border, panel fill, gold border and light ring while typing, muted placeholder). Home uses it; Create content and Videos should move onto the same classes.
 
+## Symmetry rule (owner, 2026-10-19): equal-height rows, full rows, no masonry
+
+The owner: "I want everything symmetrical and properly filling the width or the height." It applies to every tiled screen from now on.
+
+- Every row of tiles is completely filled: no empty cell at the end of a row and no tile alone in a row unless it is full width. Where the count is not known, use one of: `fillRows(wants, columns)` from `utils/rowSpans.ts` (keeps the order, widens the last tile of a short row; tested), a flex row that wraps with `flex: 1 1 <basis>` children (a short last row stretches across), or count selectors (`:last-child:nth-child(odd)` full width on two columns; six half columns for three, so a last pair takes half each).
+- Tiles in one row have the same height: CSS grid or flex with `align-items: stretch`, the tile body a flex column, and its link or button at the foot (`margin-top: auto`). Never `align-items: start` on a tile grid; that is the masonry look the owner rejected.
+- Opening a tile's details grows that tile's whole row evenly (or opens inside the tile); it must not move tiles of other rows out of line.
+- Side-by-side columns end on one line (Home: the last card of the shorter column takes up the rest).
+- A row of option groups (Create content: Language, Platforms, Aspect ratio, Logo, Look) shares the full width in proportion to the room each group needs, its tiles stretch evenly across the group, every tile is the same height, and the row ends flush with the idea box above. When it wraps (tablet, phone), each line is filled the same way. See `components/createOptions.css`.
+- Prefer a container query over a screen-width media query for the column count of a tile grid inside the page, so the side menu does not leave narrow, tall tiles.
+- Check with measurements, not only by eye: for each row, `getBoundingClientRect()` on the tiles gives the same height, and the row's left and right edges meet the container, at 1280, 1024, 768 and 375 wide.
+
 ## Accent map (one colour per area)
 
 | Accent | Area | Bar | Tint |
@@ -122,7 +134,7 @@ The owner asked for My plan to be "all tiles and beautiful with images and anima
 - Colour: cream panels and the gold glow; one category tint per level from five soft tones (gold #FFF0C7, coral #FFE3D0, teal #D6F1EF, sage #E3EFD9, lilac #ECE6FB), each with a deep mark colour and a text colour that keeps 4.5 to 1 on the tint. No dark panels anywhere on the page.
 - Data drawings show stored numbers only: the donut's outer ring is the average organic and paid split of the channels that have one, the inner ring counts online and offline channels; without a split the ring stays dashed and the legend says "not split yet". The timeline marker sits on the real plan day. KPI tiles never show made-up values, only the metric and who reads it.
 - Channel marks are simple generic glyphs on a colour square, not copies of any logo; every mark colour keeps 4.5 to 1 against white so `gen-layer-lists.mjs` does not list it.
-- Layout: three columns from 1024 px (positioning and channels span two, the 90 days and the numbers the full row, a level that is not decided yet stays one column wide), two below, one under 640 px. Tiles align to the top so opening one does not stretch its neighbours. Detail cards are full width with tiles inside.
+- Layout: the columns follow the width the grid really has (a container query, because the side menu takes part of the screen): three from 900 px (positioning and channels span two, the 90 days and the numbers the full row), two from 560 px (those four full width), one below. Spans come from `fillRows()` in `utils/rowSpans.ts`, so a level that is not decided yet (one column) never leaves a hole: its neighbour widens. Tiles of a row have the same height and the details toggle sits at the foot; opening a tile grows its row evenly and leaves the other rows alone. Detail cards are full width with tiles inside, laid out under the symmetry rule below.
 - Motion (only without reduced motion): staggered rise on first render (fill mode `backwards`, so hover lift still works afterwards), donut and ready ring draw-in, timeline fill, a slow pulse on today's marker, the twinkling sparkle, hover lift.
 - Honesty: every claim keeps its tag in words, a missing level says "Not decided yet" with its reason behind "Why it is empty", and nothing is drawn for data the plan does not have.
 

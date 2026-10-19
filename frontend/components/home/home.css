@@ -98,9 +98,11 @@
 .nb-home-numbers-quiet p { margin: 0; flex: 1 1 240px; font-size: 13.5px; color: var(--gv-text-secondary); }
 
 /* ---- the two-column rows ---- */
-.nb-home-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+.nb-home-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: stretch; }
 @media (min-width: 1024px) { .nb-home-row { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); } }
 .nb-home-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* Symmetry rule: both columns end on one line; the last card of the shorter column takes up the rest. */
+.nb-home-col > :last-child { flex-grow: 1; }
 
 /* ---- Do this next: the one warm gold card (cream surface, soft gold tint, gold numbered badges, brown ink) ---- */
 .nb-home-next {

@@ -4,6 +4,7 @@ import { LEVEL_COPY, type LevelId, type LevelItem, type StrategyLevel } from '..
 import { channelCards, initialsOf, mixSegments, pillarChips, planDay, shapeCounts } from '../utils/planVisuals';
 import { ChipRow, LevelDetails, StatusChip, TagChip } from './plan/PlanBits';
 import { MixDonut, RoadTimeline } from './plan/PlanCharts';
+import { fillRows } from '../utils/rowSpans';
 import { PlatformMark, PostThumb } from './plan/PlanMarks';
 import { PlanShopArt } from './art/plan/Shop';
 import { PlanProductsArt } from './art/plan/Products';
@@ -28,7 +29,10 @@ const ART: Record<LevelId, React.FC> = {
 const TONE: Record<LevelId, string> = {
   business: 'gold', products: 'coral', customers: 'teal', positioning: 'gold', mix: 'lilac', channels: 'teal', content: 'coral', roadmap: 'sage', numbers: 'lilac',
 };
+// Columns each level asks for on the three-column (desktop) and two-column (tablet) grid. fillRows() then widens a
+// neighbour wherever a row would be left short, so every row is full (a level that is not decided yet asks for one).
 const SPAN: Partial<Record<LevelId, number>> = { positioning: 2, channels: 2, roadmap: 3, numbers: 3 };
+const SPAN_TWO: Partial<Record<LevelId, number>> = { positioning: 2, channels: 2, roadmap: 2, numbers: 2 };
 const CUSTOMER_TONE: Record<string, string> = { 'Who they are': 'teal', 'What bothers them': 'coral', 'Where they spend time': 'sage', 'What makes them buy': 'lilac', 'Who you speak to': 'teal' };
 const KPI_ICON: Record<string, React.FC<{ 'aria-hidden'?: boolean }>> = {
   Reach: Eye, Engagement: Heart, Followers: Users, 'Posts published': Send, Enquiries: MessageCircle, Reviews: Star, 'Website visits': Globe,
@@ -173,13 +177,13 @@ const Visual: React.FC<{ level: StrategyLevel; ctx: Ctx }> = ({ level, ctx }) =>
 /** Tiles whose drawing already says what the summary says do not repeat it. */
 const HIDE_SUMMARY = new Set<LevelId>(['products', 'positioning', 'mix', 'channels', 'roadmap', 'numbers']);
 
-const LevelTile: React.FC<{ level: StrategyLevel; index: number; open: boolean; onToggle: () => void; ctx: Ctx }> = ({ level, index, open, onToggle, ctx }) => {
+const LevelTile: React.FC<{ level: StrategyLevel; index: number; span3: number; span2: number; open: boolean; onToggle: () => void; ctx: Ctx }> = ({ level, index, span3, span2, open, onToggle, ctx }) => {
   const Art = ART[level.id];
   const missing = level.status === 'missing';
   const panelId = `funnel-panel-${level.id}`;
   const showSummary = missing || !HIDE_SUMMARY.has(level.id);
   return (
-    <li className="nb-plan-tile nb-plan-in" data-tone={TONE[level.id]} data-status={level.status} data-span={missing ? 1 : SPAN[level.id] || 1} style={{ ['--i' as any]: index }}>
+    <li className="nb-plan-tile nb-plan-in" data-tone={TONE[level.id]} data-status={level.status} data-span3={span3} data-span2={span2} style={{ ['--i' as any]: index }}>
       <div className="nb-plan-tile-head">
         <span className="nb-plan-tile-art"><Art /></span>
         <div className="nb-plan-tile-titles">
@@ -190,6 +194,7 @@ const LevelTile: React.FC<{ level: StrategyLevel; index: number; open: boolean; 
       </div>
       {showSummary && <p className="nb-plan-tile-sum" title={level.summary}>{level.summary}</p>}
       {!missing && <div className="nb-plan-tile-visual"><Visual level={level} ctx={ctx} /></div>}
+      {/* The toggle sits at the foot of the tile, so tiles of one row (stretched to the same height) line up. */}
       <button type="button" className="nb-plan-toggle" onClick={onToggle} aria-expanded={open} aria-controls={panelId} aria-describedby={`funnel-h-${level.id}`}>
         {open ? 'Hide details' : missing ? 'Why it is empty' : 'Show details'}<ChevronDown aria-hidden />
       </button>
@@ -203,6 +208,10 @@ const StrategyFunnel: React.FC<{ levels: StrategyLevel[]; plan?: unknown; now?: 
   const toggle = (id: LevelId) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allOpen = open.size === levels.length;
   const ctx = useMemo<Ctx>(() => ({ plan, now: now || new Date() }), [plan, now]);
+  const spans = useMemo(() => {
+    const want = (l: StrategyLevel, map: Partial<Record<LevelId, number>>) => (l.status === 'missing' ? 1 : map[l.id] || 1);
+    return { three: fillRows(levels.map((l) => want(l, SPAN)), 3), two: fillRows(levels.map((l) => want(l, SPAN_TWO)), 2) };
+  }, [levels]);
   return (
     <section aria-labelledby="funnel-h" className="nb-plan-strategy">
       <header className="nb-plan-section-head">
@@ -216,7 +225,7 @@ const StrategyFunnel: React.FC<{ levels: StrategyLevel[]; plan?: unknown; now?: 
         </div>
       </header>
       <ol className="nb-plan-grid">
-        {levels.map((l, i) => <LevelTile key={l.id} level={l} index={i} open={open.has(l.id)} onToggle={() => toggle(l.id)} ctx={ctx} />)}
+        {levels.map((l, i) => <LevelTile key={l.id} level={l} index={i} span3={spans.three[i]} span2={spans.two[i]} open={open.has(l.id)} onToggle={() => toggle(l.id)} ctx={ctx} />)}
       </ol>
     </section>
   );
