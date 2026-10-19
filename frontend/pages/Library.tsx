@@ -28,8 +28,11 @@ const SOURCES: Array<{ key: LibraryFilters['source']; label: string }> = [
   { key: 'reel', label: 'Reels from your plan' },
 ];
 
+const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--gv-bg,transparent)]';
 const chip = (on: boolean) =>
-  `h-9 px-4 rounded-full text-[13px] font-semibold border transition-colors ${on ? 'bg-[var(--gv-accent-fill)] border-[var(--gv-accent)] text-[var(--gv-text-primary)]' : 'border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`;
+  `shrink-0 whitespace-nowrap h-7 px-3 rounded-full text-[12px] font-medium border transition-colors ${focusRing} ${on ? 'bg-[var(--gv-accent-fill)] border-[var(--gv-accent)] text-[var(--gv-text-primary)] font-semibold' : 'border-transparent text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-border-subtle)]'}`;
+const seg = (on: boolean) =>
+  `shrink-0 whitespace-nowrap h-6 px-2.5 rounded-full text-[12px] font-medium transition-colors ${focusRing} ${on ? 'bg-[var(--gv-accent-fill)] text-[var(--gv-text-primary)] font-semibold shadow-[inset_0_0_0_1px_var(--gv-accent)]' : 'text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`;
 const select = 'h-9 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 text-[13px] text-[var(--gv-text-primary)]';
 
 const fmtDate = (t: number) => (t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
@@ -112,11 +115,14 @@ const Library: React.FC = () => {
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Type">
-          {KINDS.map((k) => <button key={k.key} type="button" aria-pressed={filters.kind === k.key} onClick={() => set({ kind: k.key })} className={chip(filters.kind === k.key)}>{k.label}</button>)}
-        </div>
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Status">
-          {STATUS_CHIPS.map((s) => <button key={s.key} type="button" aria-pressed={filters.status === s.key} onClick={() => set({ status: s.key })} className={chip(filters.status === s.key)}>{s.label}</button>)}
+        <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1 py-0.5" data-testid="library-filter-row">
+          <div className="shrink-0 inline-flex items-center gap-0.5 rounded-full border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-0.5" role="group" aria-label="Type">
+            {KINDS.map((k) => <button key={k.key} type="button" aria-pressed={filters.kind === k.key} onClick={() => set({ kind: k.key })} className={seg(filters.kind === k.key)}>{k.label}</button>)}
+          </div>
+          <span aria-hidden="true" className="shrink-0 w-px h-5 bg-[var(--gv-border-default)]" />
+          <div className="flex items-center gap-1" role="group" aria-label="Status">
+            {STATUS_CHIPS.map((s) => <button key={s.key} type="button" aria-pressed={filters.status === s.key} onClick={() => set({ status: s.key })} className={chip(filters.status === s.key)}>{s.label}</button>)}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="relative">

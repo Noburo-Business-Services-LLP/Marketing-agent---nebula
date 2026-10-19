@@ -65,3 +65,16 @@ test('a carousel uses its first rendered slide as the cover and reports how many
   assert.deepEqual(c.slides, ['https://i/1.jpg', 'https://i/2.jpg']);
   assert.equal(c.slideTotal, 3);
 });
+
+import { readFileSync } from 'node:fs';
+test('Library filters are one compact row with accessible groups', () => {
+  const src = readFileSync(new URL('../pages/Library.tsx', import.meta.url), 'utf8');
+  assert.equal((src.match(/data-testid="library-filter-row"/g) || []).length, 1);
+  assert.match(src, /role="group" aria-label="Type"/);
+  assert.match(src, /role="group" aria-label="Status"/);
+  assert.match(src, /aria-pressed=\{filters\.kind === k\.key\}/);
+  assert.match(src, /aria-pressed=\{filters\.status === s\.key\}/);
+  assert.match(src, /focus-visible:ring-2/);
+  assert.match(src, /overflow-x-auto/);
+  assert.ok(!/h-9 px-4 rounded-full/.test(src));
+});
