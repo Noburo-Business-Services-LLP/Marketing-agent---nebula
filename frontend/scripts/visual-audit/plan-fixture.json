@@ -624,5 +624,769 @@
     "tag": "proposed"
    }
   ]
+ },
+ "planWithAdditions": {
+  "promise": {
+   "text": "A steady month of cake content that shows how each order is made.",
+   "tag": "proposed"
+  },
+  "positioning": {
+   "audience": [
+    {
+     "text": "Families in Chennai are the people this content speaks to first.",
+     "tag": "inference",
+     "factIds": [
+      "F3"
+     ]
+    }
+   ],
+   "territory": {
+    "name": "Baked for your table",
+    "rationale": {
+     "text": "It fits cakes made to order and works for every product and every month.",
+     "tag": "proposed"
+    },
+    "risk": {
+     "text": "It may sound general unless each post shows a real cake.",
+     "tag": "proposed"
+    }
+   },
+   "line": {
+    "text": "Cakes made to order for the moments at your table.",
+    "tag": "proposed"
+   }
+  },
+  "whereToday": [
+   {
+    "text": "The business presents itself as a maker of custom cakes in Chennai.",
+    "tag": "inference",
+    "factIds": [
+     "F2",
+     "F7"
+    ]
+   },
+   {
+    "text": "The main goal is to receive more enquiries, so each post needs a clear way to ask.",
+    "tag": "inference",
+    "factIds": [
+     "F4"
+    ]
+   }
+  ],
+  "competitors": [
+   {
+    "name": "Rival Cakes",
+    "observations": [
+     {
+      "text": "The competitor presents itself with a focus on fresh bakes.",
+      "tag": "inference",
+      "factIds": [
+       "F9"
+      ]
+     }
+    ]
+   }
+  ],
+  "pillars": [
+   {
+    "name": "Everyday cakes",
+    "why": {
+     "text": "It keeps the plan close to what the business sells.",
+     "tag": "inference",
+     "factIds": [
+      "F2"
+     ]
+    },
+    "example": {
+     "text": "Show one cake from the day with a short description.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "name": "Made to order",
+    "why": {
+     "text": "It shows the custom side of the work.",
+     "tag": "inference",
+     "factIds": [
+      "F2",
+      "F7"
+     ]
+    },
+    "example": {
+     "text": "Show the steps from request to finished cake.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "name": "Celebrations at home",
+    "why": {
+     "text": "It connects cakes to the moments families plan for.",
+     "tag": "inference",
+     "factIds": [
+      "F3"
+     ]
+    },
+    "example": {
+     "text": "Show a cake on a family table.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "name": "Behind the oven",
+    "why": {
+     "text": "It lets people see how the work is done.",
+     "tag": "inference",
+     "factIds": [
+      "F8"
+     ]
+    },
+    "example": {
+     "text": "Show the oven and the tools in use.",
+     "tag": "proposed"
+    }
+   }
+  ],
+  "calendar": [
+   {
+    "day": 1,
+    "pillar": "Everyday cakes",
+    "format": "image post",
+    "hook": {
+     "text": "Show a fresh bake today.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 2,
+    "pillar": "Made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "Explain a finished cake in a short clip.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 3,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Introduce the baking table with a clear caption.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 4,
+    "pillar": "Behind the oven",
+    "format": "story",
+    "hook": {
+     "text": "Compare a customer order for a first time buyer.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 5,
+    "pillar": "Everyday cakes",
+    "format": "image post",
+    "hook": {
+     "text": "Walk through a tasting plate from the kitchen.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 6,
+    "pillar": "Made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "Share a fresh bake today.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 7,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Show a finished cake in a short clip.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 8,
+    "pillar": "Behind the oven",
+    "format": "story",
+    "hook": {
+     "text": "Explain the baking table with a clear caption.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 9,
+    "pillar": "Everyday cakes",
+    "format": "image post",
+    "hook": {
+     "text": "Introduce a customer order for a first time buyer.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 10,
+    "pillar": "Made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "Compare a tasting plate from the kitchen.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 11,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Walk through a fresh bake today.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 12,
+    "pillar": "Behind the oven",
+    "format": "story",
+    "hook": {
+     "text": "Share a finished cake in a short clip.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 13,
+    "pillar": "Everyday cakes",
+    "format": "image post",
+    "hook": {
+     "text": "Show the baking table with a clear caption.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 14,
+    "pillar": "Made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "Explain a customer order for a first time buyer.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 15,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Introduce a tasting plate from the kitchen.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 16,
+    "pillar": "Behind the oven",
+    "format": "story",
+    "hook": {
+     "text": "Compare a fresh bake today.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 17,
+    "pillar": "Everyday cakes",
+    "format": "image post",
+    "hook": {
+     "text": "Walk through a finished cake in a short clip.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 18,
+    "pillar": "Made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "Share the baking table with a clear caption.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 19,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Show a customer order for a first time buyer.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 20,
+    "pillar": "Behind the oven",
+    "format": "story",
+    "hook": {
+     "text": "Explain a tasting plate from the kitchen.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 21,
+    "pillar": "Everyday cakes",
+    "format": "image post",
+    "hook": {
+     "text": "Introduce a fresh bake today.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 22,
+    "pillar": "Made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "Compare a finished cake in a short clip.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 23,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Walk through the baking table with a clear caption.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 24,
+    "pillar": "Behind the oven",
+    "format": "story",
+    "hook": {
+     "text": "Share a customer order for a first time buyer.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 25,
+    "pillar": "Everyday cakes",
+    "format": "image post",
+    "hook": {
+     "text": "Show a tasting plate from the kitchen.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 26,
+    "pillar": "Made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "Explain a fresh bake today.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 27,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Introduce a finished cake in a short clip.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 28,
+    "pillar": "Behind the oven",
+    "format": "story",
+    "hook": {
+     "text": "Compare the baking table with a clear caption.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 29,
+    "pillar": "Everyday cakes",
+    "format": "image post",
+    "hook": {
+     "text": "Walk through a customer order for a first time buyer.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 30,
+    "pillar": "Made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "Share a tasting plate from the kitchen.",
+     "tag": "proposed"
+    }
+   }
+  ],
+  "offers": [
+   {
+    "factId": "F5",
+    "hook": {
+     "text": "Introduce the birthday cake as a simple way to plan a celebration.",
+     "tag": "proposed"
+    },
+    "cta": {
+     "text": "Send a message to order.",
+     "tag": "proposed"
+    }
+   }
+  ],
+  "channels": [
+   {
+    "channel": "Instagram",
+    "priority": 1,
+    "role": {
+     "text": "Show finished cakes and the work behind them.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "channel": "WhatsApp",
+    "priority": 2,
+    "role": {
+     "text": "Receive and confirm orders in a direct conversation.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "channel": "Google Business Profile",
+    "priority": 3,
+    "role": {
+     "text": "Help local families find the business and ask a question.",
+     "tag": "proposed"
+    }
+   }
+  ],
+  "icp": {
+   "who": [
+    {
+     "text": "Families in Chennai who order a cake for a birthday or a festival.",
+     "tag": "inference",
+     "factIds": [
+      "F3"
+     ]
+    }
+   ],
+   "pains": [
+    {
+     "text": "Finding a cake made to their own idea takes time.",
+     "tag": "proposed"
+    },
+    {
+     "text": "They are unsure a custom order will arrive on the day.",
+     "tag": "proposed"
+    }
+   ],
+   "where": [
+    {
+     "text": "Instagram and family WhatsApp groups.",
+     "tag": "proposed"
+    }
+   ],
+   "triggers": [
+    {
+     "text": "A birthday or a festival in the coming week.",
+     "tag": "proposed"
+    }
+   ]
+  },
+  "effort": [
+   {
+    "channel": "Instagram",
+    "mode": "online",
+    "organicPct": 80,
+    "paidPct": 20,
+    "nebulaaDoes": [
+     "posts",
+     "videos",
+     "captions and hashtags"
+    ],
+    "youDo": [
+     {
+      "text": "Reply to comments and messages on the same day.",
+      "tag": "proposed"
+     }
+    ]
+   },
+   {
+    "channel": "WhatsApp",
+    "mode": "online",
+    "organicPct": 100,
+    "paidPct": 0,
+    "nebulaaDoes": [],
+    "youDo": [
+     {
+      "text": "Confirm each order with a short message and a photo of the design.",
+      "tag": "proposed"
+     }
+    ]
+   },
+   {
+    "channel": "Google Business Profile",
+    "mode": "online",
+    "organicPct": 100,
+    "paidPct": 0,
+    "nebulaaDoes": [],
+    "youDo": [
+     {
+      "text": "Ask happy customers to leave a review after pickup.",
+      "tag": "proposed"
+     }
+    ]
+   }
+  ],
+  "roadmap": [
+   {
+    "phase": "foundation",
+    "focus": {
+     "text": "Set up a steady rhythm of posts around the four pillars.",
+     "tag": "proposed"
+    },
+    "actions": [
+     {
+      "text": "Publish on the days set in the calendar.",
+      "tag": "proposed"
+     },
+     {
+      "text": "Reply to every enquiry on the same day.",
+      "tag": "proposed"
+     }
+    ],
+    "measure": [
+     {
+      "text": "Count the enquiries that follow each pillar.",
+      "tag": "proposed"
+     }
+    ]
+   },
+   {
+    "phase": "storytelling",
+    "focus": {
+     "text": "Tell the story behind the work in more depth.",
+     "tag": "proposed"
+    },
+    "actions": [
+     {
+      "text": "Add a short video of one order from start to finish.",
+      "tag": "proposed"
+     }
+    ],
+    "measure": [
+     {
+      "text": "Note which stories bring replies.",
+      "tag": "proposed"
+     }
+    ]
+   },
+   {
+    "phase": "growth",
+    "focus": {
+     "text": "Repeat what worked and test one new idea.",
+     "tag": "proposed"
+    },
+    "actions": [
+     {
+      "text": "Run the strongest pillar twice as often.",
+      "tag": "proposed"
+     }
+    ],
+    "measure": [
+     {
+      "text": "Compare enquiries with the earlier phases.",
+      "tag": "proposed"
+     }
+    ]
+   }
+  ],
+  "firstSteps": [
+   {
+    "text": "Confirm the four pillars.",
+    "tag": "proposed"
+   },
+   {
+    "text": "Photograph three cakes for the first posts.",
+    "tag": "proposed"
+   },
+   {
+    "text": "Choose the days to publish.",
+    "tag": "proposed"
+   },
+   {
+    "text": "Prepare a standard reply for new enquiries.",
+    "tag": "proposed"
+   }
+  ],
+  "offline": [
+   {
+    "id": "referrals",
+    "channel": "Referrals and word of mouth",
+    "mode": "offline",
+    "spend": "organic",
+    "reason": {
+     "text": "Custom cakes for family celebrations are often chosen on a friend's advice.",
+     "tag": "proposed"
+    },
+    "youDo": [
+     {
+      "text": "Ask each customer who collects a cake to tell one friend.",
+      "tag": "proposed"
+     },
+     {
+      "text": "Keep a small card with the order details in every box.",
+      "tag": "proposed"
+     }
+    ],
+    "nebulaaDoes": []
+   },
+   {
+    "id": "counter",
+    "channel": "In-store and at-counter prompts",
+    "mode": "offline",
+    "spend": "organic",
+    "reason": {
+     "text": "Customers come to the counter to collect their orders.",
+     "tag": "proposed"
+    },
+    "youDo": [
+     {
+      "text": "Keep a stand at the counter that shows the next festival cakes.",
+      "tag": "proposed"
+     }
+    ],
+    "nebulaaDoes": []
+   },
+   {
+    "id": "partnerships",
+    "channel": "Partnerships with nearby businesses",
+    "mode": "offline",
+    "spend": "organic",
+    "reason": {
+     "text": "Party planners and decorators in the city serve the same families.",
+     "tag": "proposed"
+    },
+    "youDo": [
+     {
+      "text": "Offer a nearby party planner a sample cake for their next event.",
+      "tag": "proposed"
+     }
+    ],
+    "nebulaaDoes": []
+   }
+  ],
+  "metrics": [
+   {
+    "id": "enquiries",
+    "name": "Enquiries",
+    "meaning": "Calls, walk-ins and messages asking about what you sell.",
+    "where": "You count this",
+    "count": "you",
+    "why": {
+     "text": "The main goal is more enquiries, so this is the number that matters most.",
+     "tag": "proposed"
+    },
+    "start": {
+     "text": "Note every call, message and walk-in that asks about a cake in one notebook.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "id": "reach",
+    "name": "Reach",
+    "meaning": "How many people saw your posts.",
+    "where": "Performance",
+    "count": "nebulaa",
+    "why": {
+     "text": "It shows whether the posts are reaching families nearby.",
+     "tag": "proposed"
+    },
+    "start": null
+   },
+   {
+    "id": "posts_published",
+    "name": "Posts published",
+    "meaning": "How many posts went out on your pages.",
+    "where": "Performance",
+    "count": "nebulaa",
+    "why": {
+     "text": "A steady rhythm of posts comes before everything else in the first month.",
+     "tag": "proposed"
+    },
+    "start": null
+   },
+   {
+    "id": "reviews",
+    "name": "New reviews",
+    "meaning": "New reviews on your Google Business Profile.",
+    "where": "You count this",
+    "count": "you",
+    "why": {
+     "text": "Reviews help families who search for a cake on the map choose you.",
+     "tag": "proposed"
+    },
+    "start": {
+     "text": "Ask for a review when a customer collects an order.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "id": "referral_customers",
+    "name": "Customers from referrals",
+    "meaning": "New customers who came because someone sent them.",
+    "where": "You count this",
+    "count": "you",
+    "why": {
+     "text": "It shows whether asking customers to tell a friend is working.",
+     "tag": "proposed"
+    },
+    "start": {
+     "text": "Ask each new customer how they heard about the shop.",
+     "tag": "proposed"
+    }
+   }
+  ],
+  "mix": {
+   "channels": [
+    {
+     "channel": "Instagram",
+     "mode": "online",
+     "organicPct": 80,
+     "paidPct": 20
+    },
+    {
+     "channel": "WhatsApp",
+     "mode": "online",
+     "organicPct": 100,
+     "paidPct": 0
+    },
+    {
+     "channel": "Google Business Profile",
+     "mode": "online",
+     "organicPct": 100,
+     "paidPct": 0
+    },
+    {
+     "channel": "Referrals and word of mouth",
+     "mode": "offline",
+     "organicPct": 100,
+     "paidPct": 0
+    },
+    {
+     "channel": "In-store and at-counter prompts",
+     "mode": "offline",
+     "organicPct": 100,
+     "paidPct": 0
+    },
+    {
+     "channel": "Partnerships with nearby businesses",
+     "mode": "offline",
+     "organicPct": 100,
+     "paidPct": 0
+    }
+   ],
+   "online": 3,
+   "offline": 3,
+   "paidTag": "proposed",
+   "paidBy": "you"
+  }
  }
 }

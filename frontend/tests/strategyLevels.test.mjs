@@ -246,3 +246,56 @@ test('wording guard: the funnel component source has no banned words in its stri
     for (const re of [BANNED[0], BANNED[1], BANNED[2], BANNED[3], BANNED[5]]) assert.ok(!re.test(strings), `source matches ${re}`);
   }
 });
+
+// The shape the server stores since the planner additions (taken from the backend's own normalised output).
+test('a plan with the planner additions fills the offline rows, the mix and numbers to watch from the stored fields', () => {
+  const L = byId(levelsOf(stored(fixture.planWithAdditions), { now: NOW }));
+  const online = L.mix.items.find((i) => i.label === 'Online and offline');
+  assert.equal(online.text, '3 online channels and 3 offline. You do all the offline work yourself.');
+  const paid = L.mix.items.find((i) => i.label === 'Paid promotion');
+  assert.match(paid.text, /only a suggestion/);
+  assert.match(paid.text, /Nebulaa does not run paid ads/);
+  assert.equal(paid.tag, 'proposed');
+  const ref = L.channels.items.find((i) => i.label === 'Referrals and word of mouth');
+  assert.equal(ref.offline, true);
+  assert.equal(ref.tag, 'proposed');
+  assert.match(ref.text, /friend's advice/);
+  assert.deepEqual(ref.sub.map((s) => s.label), ['Nebulaa does', 'You do']);
+  assert.match(L.channels.summary, /Instagram, WhatsApp, Google Business Profile and 3 more/);
+  const nums = L.numbers.items.filter((i) => i.count);
+  assert.deepEqual(nums.map((i) => [i.label, i.count, i.where]), [
+    ['Enquiries', 'you', 'You count this'], ['Reach', 'nebulaa', 'Performance'], ['Posts published', 'nebulaa', 'Performance'],
+    ['New reviews', 'you', 'You count this'], ['Customers from referrals', 'you', 'You count this'],
+  ]);
+  const enq = nums[0];
+  assert.match(enq.text, /main goal is more enquiries/);
+  assert.deepEqual(enq.sub.map((s) => s.label), ['What it means', 'Where you see it', 'Suggested starting point']);
+  assert.equal(enq.sub[1].text, 'You count this yourself.');
+  assert.equal(nums[1].sub.find((s) => s.label === 'Where you see it').text, 'In Performance.');
+  assert.equal(L.numbers.status, 'ready');
+  assert.match(L.numbers.summary, /^Watch enquiries, reach, posts published, new reviews and customers from referrals/);
+});
+
+test('a paid offline row says it costs money and that the owner pays; a metric without its own line shows its meaning', () => {
+  const inner = {
+    ...fixture.planWithAdditions,
+    offline: [{ id: 'local_events', channel: 'Local events and stalls', spend: 'paid', reason: { text: 'Weekend fairs draw families.', tag: 'proposed' }, youDo: [] }],
+    metrics: [{ id: 'reach', name: 'Reach', meaning: 'How many people saw your posts.', where: 'Performance', count: 'nebulaa', why: null, start: null, auto: true }],
+  };
+  const L = byId(levelsOf(stored(inner), { now: NOW }));
+  const ev = L.channels.items.find((i) => i.label === 'Local events and stalls');
+  assert.ok(ev.sub.some((s) => s.label === 'Cost' && /You decide and pay for it yourself/.test(s.text)));
+  assert.match(L.mix.items.find((i) => i.label === 'Online and offline').text, /1 offline, 1 of them costs money/);
+  const reach = L.numbers.items.find((i) => i.label === 'Reach');
+  assert.equal(reach.text, 'How many people saw your posts.');
+  assert.ok(!reach.tag);
+});
+
+test('a plan stored before the additions keeps the honest empty states', () => {
+  const inner = { ...fixture.planWithAdditions };
+  delete inner.offline; delete inner.metrics; delete inner.mix;
+  const L = byId(levelsOf(stored(inner), { now: NOW }));
+  assert.match(L.mix.items.find((i) => i.label === 'Online and offline').text, /does not include offline activity yet/);
+  assert.ok(!L.numbers.items.some((i) => i.count), 'no structured numbers are invented');
+  assert.ok(L.numbers.items.length > 0, 'the roadmap measures still show');
+});

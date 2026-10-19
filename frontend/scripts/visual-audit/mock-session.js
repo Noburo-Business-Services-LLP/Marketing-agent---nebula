@@ -102,7 +102,7 @@
   // ?setupstate= mid | fresh | done picks the Setup card variant (kept for the tab).
   if (params.get('setupstate')) sessionStorage.setItem('audit-setup-state', params.get('setupstate'));
   var SSTATE = sessionStorage.getItem('audit-setup-state') || 'mid';
-  // ?planstate= ready | old | building | failed | stale | none picks the My plan variant (kept for the tab).
+  // ?planstate= ready | premix | old | building | failed | stale | none picks the My plan variant (kept for the tab).
   if (params.get('planstate')) sessionStorage.setItem('audit-plan-state', params.get('planstate'));
   var PSTATE = sessionStorage.getItem('audit-plan-state') || 'ready';
   // ?photoshootstate= ready | empty | nophoto | free | off | running | partial | failed | client | error picks the Photoshoot
@@ -617,6 +617,26 @@
       ],
       firstSteps: [claim('Approve this week\'s posts.'), claim('Add a photo to each product.'), claim('Confirm your competitors\' pages.')]
     };
+    // The planner additions (2026-10-19): offline rows, numbers to watch and the mix, in the shape the server stores.
+    var off = function (id, name, spend, reason, youDo) { return { id: id, channel: name, mode: 'offline', spend: spend, reason: claim(reason), youDo: youDo.map(function (t) { return claim(t); }), nebulaaDoes: [] }; };
+    var num = function (id, name, meaning, where, count, why, start) { return { id: id, name: name, meaning: meaning, where: where, count: count, why: why ? claim(why) : null, start: start ? claim(start) : null }; };
+    plan.offline = [
+      off('referrals', 'Referrals and word of mouth', 'organic', 'Regulars already bring friends to a bakery they trust.', ['Ask each regular to tell one friend about the weekend bakes.', 'Keep a small card with the shop name in every box.']),
+      off('counter', 'In-store and at-counter prompts', 'organic', 'Customers walk to the counter every morning.', ['Keep a stand at the counter that shows the next festival bakes.']),
+      off('print', 'Printed material and hoardings', 'paid', 'Families in the neighbourhood pass the shop on foot.', ['Put a simple poster for weekend pre-orders in the window.'])
+    ];
+    plan.metrics = [
+      num('enquiries', 'Enquiries', 'Calls, walk-ins and messages asking about what you sell.', 'You count this', 'you', 'The main goal is more orders, so this matters most.', 'Note every call, message and walk-in that asks about an order in one notebook.'),
+      num('reach', 'Reach', 'How many people saw your posts.', 'Performance', 'nebulaa', 'It shows whether the posts reach families nearby.'),
+      num('posts_published', 'Posts published', 'How many posts went out on your pages.', 'Performance', 'nebulaa', 'A steady rhythm comes first in the first month.'),
+      num('referral_customers', 'Customers from referrals', 'New customers who came because someone sent them.', 'You count this', 'you', 'It shows whether asking regulars to tell a friend is working.', 'Ask each new customer how they heard about the shop.')
+    ];
+    plan.mix = {
+      channels: plan.effort.map(function (e) { return { channel: e.channel, mode: 'online', organicPct: e.organicPct, paidPct: e.paidPct }; }).concat(plan.offline.map(function (o) { return { channel: o.channel, mode: 'offline', organicPct: o.spend === 'paid' ? 0 : 100, paidPct: o.spend === 'paid' ? 100 : 0 }; })),
+      online: plan.channels.length, offline: plan.offline.length, paidTag: 'proposed', paidBy: 'you'
+    };
+    // premix: a plan stored before the additions (no offline, metrics or mix); old: an even older one.
+    if (PSTATE === 'premix' || PSTATE === 'old') { delete plan.offline; delete plan.metrics; delete plan.mix; }
     if (PSTATE === 'old') { delete plan.icp; delete plan.effort; delete plan.roadmap; delete plan.calendar; delete plan.pillars; }
     return { version: 1, plan: plan, pages: [] };
   }
@@ -687,7 +707,7 @@
     }],
     ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user, actingAgency: user.actingAgency || null, actingCsm: null }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
-    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7, image_generated: 11, campaign_full: 11, carousel_generated: 8, campaign_text: 4, studio_video: 161, photoshoot_image: 10 }, units: {} })],
+    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 23, image_generated: 11, campaign_full: 11, carousel_generated: 8, campaign_text: 4, studio_video: 161, photoshoot_image: 10 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {
       var price = function (inr) { var gst = Math.round(inr * 18); return { inr: inr, gstPaise: gst, chargePaise: inr * 100 + gst }; };
       var feat = function (posts, videos) { return ['Up to ' + posts + ' posts a month, or', 'up to ' + videos + ' short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time']; };

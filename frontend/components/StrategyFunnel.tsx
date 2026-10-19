@@ -35,7 +35,8 @@ const SPAN: Partial<Record<LevelId, number>> = { positioning: 2, channels: 2, ro
 const SPAN_TWO: Partial<Record<LevelId, number>> = { positioning: 2, channels: 2, roadmap: 2, numbers: 2 };
 const CUSTOMER_TONE: Record<string, string> = { 'Who they are': 'teal', 'What bothers them': 'coral', 'Where they spend time': 'sage', 'What makes them buy': 'lilac', 'Who you speak to': 'teal' };
 const KPI_ICON: Record<string, React.FC<{ 'aria-hidden'?: boolean }>> = {
-  Reach: Eye, Engagement: Heart, Followers: Users, 'Posts published': Send, Enquiries: MessageCircle, Reviews: Star, 'Website visits': Globe,
+  Reach: Eye, Engagement: Heart, Followers: Users, 'New followers': Users, 'Posts published': Send, Enquiries: MessageCircle, Reviews: Star, 'New reviews': Star,
+  'Website visits': Globe, 'Messages and comments': MessageCircle, 'Customers from referrals': Users, 'Contacts from events': Flag,
 };
 const SHAPE_WORD: Record<string, [string, string]> = { image: ['image post', 'image posts'], carousel: ['carousel', 'carousels'], reel: ['reel', 'reels'], story: ['story', 'stories'] };
 
@@ -111,7 +112,7 @@ const Visual: React.FC<{ level: StrategyLevel; ctx: Ctx }> = ({ level, ctx }) =>
               <PlatformMark platform={c.platform} />
               <span className="nb-plan-chan-name">{c.name}</span>
               <span className="nb-plan-chan-who">
-                {c.offline && <span className="nb-plan-who" data-who="you">Offline, yours</span>}
+                {c.offline && <span className="nb-plan-who" data-who="you">{c.paid ? 'Offline, you pay' : 'Offline, yours'}</span>}
                 {!c.offline && c.makes.length > 0 && <span className="nb-plan-who" data-who="us">Nebulaa makes {c.makes.length === 1 ? c.makes[0] : `${c.makes[0]} and ${c.makes.length - 1} more`}</span>}
                 {c.youDo > 0 && <span className="nb-plan-who" data-who="you">You: {c.youDo} {c.youDo === 1 ? 'task' : 'tasks'}</span>}
               </span>
@@ -156,13 +157,13 @@ const Visual: React.FC<{ level: StrategyLevel; ctx: Ctx }> = ({ level, ctx }) =>
         <ul className="nb-plan-kpis">
           {items.map((it, i) => {
             const Icon = KPI_ICON[String(it.label)] || Flag;
-            const live = /connected accounts/.test(it.text);
-            const metric = !!KPI_ICON[String(it.label)];
+            const live = it.count ? it.count === 'nebulaa' : /connected accounts/.test(it.text);
+            const metric = !!it.count || !!KPI_ICON[String(it.label)];
             return (
               <li key={i} data-tone={metric ? (live ? 'teal' : 'gold') : ['sage', 'gold', 'coral'][i % 3]}>
                 <span className="nb-plan-kpi-icon"><Icon aria-hidden /></span>
                 <span className="nb-plan-kpi-label">{it.label}</span>
-                <span className="nb-plan-kpi-text">{metric ? (live ? 'Read from your accounts' : 'You track this') : it.text}</span>
+                <span className="nb-plan-kpi-text">{metric ? (live ? `See it in ${it.where || 'Performance'}` : 'You count this') : it.text}</span>
                 {!metric && it.bullets && it.bullets.length > 0 && <span className="nb-plan-kpi-more">and {it.bullets.length} more {it.bullets.length === 1 ? 'sign' : 'signs'}</span>}
               </li>
             );

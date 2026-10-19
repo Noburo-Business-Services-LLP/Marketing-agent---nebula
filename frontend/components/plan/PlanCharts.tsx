@@ -41,7 +41,8 @@ export const MixDonut: React.FC<{ mix: MixSegments }> = ({ mix }) => {
   const hasChannels = mix.online + mix.offline > 0;
   const label = [
     hasSplit ? `${mix.organic}% organic and ${mix.paid}% paid, on average over ${mix.splitChannels} ${mix.splitChannels === 1 ? 'channel' : 'channels'}` : 'Organic and paid not split yet',
-    hasChannels ? `${mix.online} online and ${mix.offline} offline` : '',
+    hasChannels ? `${mix.online} online and ${mix.offline} offline${mix.offlinePaid ? `, ${mix.offlinePaid} offline that ${mix.offlinePaid === 1 ? 'costs' : 'cost'} money` : ''}` : '',
+    hasSplit && (mix.paid as number) > 0 ? 'Paid is a suggestion you run yourself' : '',
   ].filter(Boolean).join('. ');
   return (
     <div className="nb-plan-donut">
@@ -68,7 +69,7 @@ export const MixDonut: React.FC<{ mix: MixSegments }> = ({ mix }) => {
           </>
         ) : <li className="is-empty"><i aria-hidden="true" />Organic and paid are not split yet</li>}
         <li><i style={{ background: ONLINE }} />Online<b>{mix.online} {mix.online === 1 ? 'channel' : 'channels'}</b></li>
-        <li><i style={{ background: OFFLINE }} />Offline<b>{mix.offline ? `${mix.offline}` : 'None yet'}</b></li>
+        <li><i style={{ background: OFFLINE }} />Offline<b>{mix.offline ? `${mix.offline}${mix.offlinePaid ? `, ${mix.offlinePaid} paid` : ''}` : 'None yet'}</b></li>
       </ul>
     </div>
   );

@@ -14,7 +14,7 @@ const BROKEN = [null, undefined, {}, { result: null }, { result: { plan: 'oops' 
 test('the donut segments are computed from the stored effort split and channel lists', () => {
   const m = mixSegments(FULL);
   // Instagram 80, WhatsApp 100, Google Business Profile 100: average 93 organic.
-  assert.deepEqual(m, { organic: 93, paid: 7, splitChannels: 3, online: 3, offline: 0 });
+  assert.deepEqual(m, { organic: 93, paid: 7, splitChannels: 3, online: 3, offline: 0, offlinePaid: 0 });
   const withOffline = mixSegments(stored({ ...fixture.plan, offline: [{ channel: 'Referrals' }, { channel: 'Posters' }, { channel: '' }] }));
   assert.equal(withOffline.offline, 2);
   assert.equal(withOffline.online, 3);
@@ -155,4 +155,16 @@ test('initials work for any script and empty names', () => {
   assert.equal(initialsOf(''), '');
   assert.equal(initialsOf(null), '');
   assert.equal(initialsOf('ராஜா பேக்கரி').length, 2);
+});
+
+test('a plan with the planner additions: offline rows and the paid ones are counted for the donut and the channel marks', () => {
+  const run = stored(fixture.planWithAdditions);
+  const m = mixSegments(run);
+  assert.deepEqual([m.online, m.offline, m.offlinePaid], [3, 3, 0]);
+  const printed = stored({ ...fixture.planWithAdditions, offline: [...fixture.planWithAdditions.offline, { id: 'print', channel: 'Printed material and hoardings', spend: 'paid', reason: { text: 'People pass the shop.', tag: 'proposed' }, youDo: [] }] });
+  assert.equal(mixSegments(printed).offlinePaid, 1);
+  const cards = channelCards(printed);
+  assert.deepEqual(cards.filter((c) => c.offline).map((c) => [c.name, !!c.paid, c.makes.length]), [
+    ['Referrals and word of mouth', false, 0], ['In-store and at-counter prompts', false, 0], ['Partnerships with nearby businesses', false, 0], ['Printed material and hoardings', true, 0],
+  ]);
 });

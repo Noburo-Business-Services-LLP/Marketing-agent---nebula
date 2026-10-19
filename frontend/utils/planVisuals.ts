@@ -15,6 +15,8 @@ export interface MixSegments {
   splitChannels: number;
   online: number;
   offline: number;
+  /** Offline rows that cost money (stalls, printing): a fixed reading of the activity, never a model figure. */
+  offlinePaid: number;
 }
 
 export interface Arc { key: string; value: number; length: number; offset: number }
@@ -23,6 +25,8 @@ export interface ChannelCard {
   name: string;
   platform: Platform;
   offline: boolean;
+  /** An offline activity that costs money (the owner pays). */
+  paid?: boolean;
   /** Organic share for this channel, or null when the plan does not split it. */
   organic: number | null;
   makes: string[];
@@ -72,7 +76,8 @@ export function mixSegments(input: unknown): MixSegments {
   const s = splits(p);
   const vals = Array.from(s.values());
   const organic = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
-  return { organic, paid: organic === null ? null : 100 - organic, splitChannels: vals.length, online: onlineNames(p).length, offline: offlineRows(p).length };
+  const off = offlineRows(p);
+  return { organic, paid: organic === null ? null : 100 - organic, splitChannels: vals.length, online: onlineNames(p).length, offline: off.length, offlinePaid: off.filter((o) => o.spend === 'paid').length };
 }
 
 /**
@@ -129,7 +134,7 @@ export function channelCards(input: unknown): ChannelCard[] {
     };
   });
   const offline: ChannelCard[] = offlineRows(p).map((o) => ({
-    name: words(o.channel), platform: 'offline' as Platform, offline: true, organic: null, makes: [], youDo: list(o.youDo).filter((c) => claimText(c)).length,
+    name: words(o.channel), platform: 'offline' as Platform, offline: true, paid: o.spend === 'paid', organic: null, makes: [], youDo: list(o.youDo).filter((c) => claimText(c)).length,
   }));
   return [...online, ...offline];
 }

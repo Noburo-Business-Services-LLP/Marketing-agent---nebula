@@ -23,6 +23,9 @@ export interface LevelItem {
   current?: boolean;
   /** An offline row (no Nebulaa work). */
   offline?: boolean;
+  /** A number to watch: who has it (Nebulaa shows it, or the owner counts it) and the page it is seen on. */
+  count?: 'nebulaa' | 'you';
+  where?: string;
 }
 export interface LevelLink { to: string; label: string }
 export interface StrategyLevel {
@@ -70,15 +73,19 @@ const LINKS: Partial<Record<LevelId, LevelLink>> = {
   numbers: { to: '/analytics', label: 'See your numbers' },
 };
 
+// Only for an id-only metrics list; a stored plan carries its own names from the server's fixed list.
 const METRIC_LABELS: Record<string, { label: string; live: boolean }> = {
   reach: { label: 'Reach', live: true },
   engagement: { label: 'Engagement', live: true },
-  followers: { label: 'Followers', live: true },
+  followers: { label: 'New followers', live: true },
   posts_published: { label: 'Posts published', live: true },
   enquiries: { label: 'Enquiries', live: false },
-  reviews: { label: 'Reviews', live: false },
+  reviews: { label: 'New reviews', live: false },
   website_visits: { label: 'Website visits', live: false },
 };
+
+export const PAID_NOTE = 'Paid promotion is only a suggestion. You decide, run and pay for it yourself; Nebulaa does not run paid ads.';
+export const OFFLINE_COST_NOTE = 'This costs money, for example stall fees or printing. You decide and pay for it yourself.';
 
 const PHASE_DAYS: Record<string, string> = { foundation: 'Days 1 to 30', storytelling: 'Days 31 to 60', growth: 'Days 61 to 90' };
 const PLURAL: Record<string, string> = { 'image post': 'image posts', carousel: 'carousels', reel: 'reels', story: 'stories' };
@@ -234,8 +241,11 @@ function channelsOf(p: Record<string, any>): Array<{ channel: string; role: any 
   return out;
 }
 
-function offlineOf(p: Record<string, any>): Array<{ channel: string; role: any; youDo: string[] }> {
-  return list(p.offline).filter((o) => isObj(o) && words(o.channel)).map((o) => ({ channel: words(o.channel), role: claimText(o.role) ? o.role : null, youDo: claimsOf(o.youDo).map(claimText) }));
+function offlineOf(p: Record<string, any>): Array<{ channel: string; role: any; youDo: string[]; paid: boolean }> {
+  return list(p.offline).filter((o) => isObj(o) && words(o.channel)).map((o) => {
+    const reason = claimText(o.reason) ? o.reason : claimText(o.role) ? o.role : null;
+    return { channel: words(o.channel), role: reason, youDo: claimsOf(o.youDo).map(claimText), paid: o.spend === 'paid' };
+  });
 }
 
 function formatCounts(p: Record<string, any>): Array<[string, number]> {
@@ -257,14 +267,15 @@ function mixLevel(p: Record<string, any>): StrategyLevel {
     const avg = Math.round(rows.reduce((a, r) => a + r.organic, 0) / rows.length);
     const anyPaid = rows.some((r) => r.paid > 0);
     summary = anyPaid ? `${avg}% organic on average` : 'All organic, no paid promotion';
-    if (!anyPaid) items.push({ label: 'Paid promotion', text: 'No paid promotion is suggested in this plan.' });
+    items.push(anyPaid ? { label: 'Paid promotion', text: PAID_NOTE, tag: 'proposed' } : { label: 'Paid promotion', text: 'No paid promotion is suggested in this plan.' });
   } else if (online.size) {
     items.push({ label: 'Organic and paid', text: 'Your plan does not split organic and paid effort yet.' });
   }
   if (online.size || offline.length) {
     const n = online.size;
+    const paidOff = offline.filter((o) => o.paid).length;
     const text = offline.length
-      ? `${n} online ${n === 1 ? 'channel' : 'channels'} and ${offline.length} offline.`
+      ? `${n} online ${n === 1 ? 'channel' : 'channels'} and ${offline.length} offline${paidOff ? `, ${paidOff} of them ${paidOff === 1 ? 'costs' : 'cost'} money` : ''}. You do all the offline work yourself.`
       : `All ${n} ${n === 1 ? 'channel' : 'channels'} in this plan ${n === 1 ? 'is' : 'are'} online. Your plan does not include offline activity yet, such as local events, posters or referrals.`;
     items.push({ label: 'Online and offline', text });
     if (!summary) summary = offline.length ? `${n} online and ${offline.length} offline` : `All online, ${n} ${n === 1 ? 'channel' : 'channels'}`;
@@ -299,7 +310,12 @@ function channelsLevel(p: Record<string, any>): StrategyLevel {
   offline.forEach((o) => items.push({
     label: o.channel, offline: true,
     text: o.role ? clampText(o.role.text, ITEM_MAX) : 'No role set for this yet.',
-    sub: [{ label: 'Nebulaa does', text: 'Nothing offline. This one is yours.' }, { label: 'You do', text: o.youDo.length ? clampText(o.youDo.join(' '), ITEM_MAX) : 'Nothing set yet.' }],
+    ...(o.role && o.role.tag ? { tag: String(o.role.tag) } : {}),
+    sub: [
+      { label: 'Nebulaa does', text: 'Nothing offline. This one is yours.' },
+      { label: 'You do', text: o.youDo.length ? clampText(o.youDo.join(' '), ITEM_MAX) : 'Nothing set yet.' },
+      ...(o.paid ? [{ label: 'Cost', text: OFFLINE_COST_NOTE }] : []),
+    ],
   }));
   if (!names.length && !offline.length) return level(6, 'channels', 'missing', '', []);
   const all = [...names, ...offline.map((o) => o.channel)];
@@ -342,11 +358,24 @@ function numbersLevel(p: Record<string, any>): StrategyLevel {
   const seen = new Set<string>();
   for (const m of list(p.metrics)) {
     if (!isObj(m)) continue;
+    // The stored shape: one number per row, its name, meaning and place written by the server from its fixed list.
+    if (words(m.name) && words(m.id)) {
+      if (seen.has(words(m.id))) continue;
+      seen.add(words(m.id));
+      const count = m.count === 'nebulaa' ? 'nebulaa' : 'you';
+      const why = claimText(m.why) ? m.why : null;
+      const sub: LevelSub[] = [];
+      if (why && words(m.meaning)) sub.push({ label: 'What it means', text: clampText(m.meaning, ITEM_MAX) });
+      sub.push({ label: 'Where you see it', text: count === 'nebulaa' ? `In ${clampText(m.where, 40) || 'Nebulaa'}.` : 'You count this yourself.' });
+      if (claimText(m.start)) sub.push({ label: 'Suggested starting point', text: clampText(m.start.text, ITEM_MAX) });
+      items.push({ label: clampText(m.name, 60), text: why ? clampText(why.text, ITEM_MAX) : clampText(m.meaning, ITEM_MAX) || 'A number to watch.', ...(why && why.tag ? { tag: String(why.tag) } : {}), sub, count, where: count === 'nebulaa' ? clampText(m.where, 40) : 'You count this' });
+      continue;
+    }
     for (const id of list(m.ids).map(words)) {
       const def = METRIC_LABELS[id];
       if (!def || seen.has(id)) continue;
       seen.add(id);
-      items.push({ label: def.label, text: def.live ? 'Nebulaa reads this from your connected accounts.' : 'You track this yourself.' });
+      items.push({ label: def.label, text: def.live ? 'Nebulaa reads this from your connected accounts.' : 'You track this yourself.', count: def.live ? 'nebulaa' : 'you', where: def.live ? 'Performance' : 'You count this' });
     }
   }
   const metricNames = items.map((i) => String(i.label).toLowerCase());
