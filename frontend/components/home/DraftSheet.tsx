@@ -9,6 +9,7 @@ import {
   createHandoff, draftOf, leftLine, newDraftKey, outcomeOf, priceLabel,
   type DraftKind, type DraftOptions, type DraftSource, type DraftText, type DraftTone, type Outcome,
 } from '../../utils/homeDrafts';
+import CompetitorAvatar from '../CompetitorAvatar';
 import './draftSheet.css';
 
 // The compact sheet behind "Make a post in response" and "Draft a witty comment" on a competitor's best post. It shows
@@ -90,7 +91,9 @@ export const DraftSheet: React.FC<{
     <div className="nb-hd-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={box} className="nb-hd-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-busy={state === 'working' ? 'true' : undefined}>
         <header className="nb-hd-head">
-          <span className="nb-hd-mark" aria-hidden="true"><PenLine aria-hidden="true" /></span>
+          {source.name
+            ? <CompetitorAvatar name={source.name} handle={source.handle} url={source.avatarUrl} />
+            : <span className="nb-hd-mark" aria-hidden="true"><PenLine aria-hidden="true" /></span>}
           <div className="nb-hd-titles">
             <h2 id={titleId}>{KIND_TITLE[kind]}</h2>
             <p className="nb-hd-from">From {source.title}</p>

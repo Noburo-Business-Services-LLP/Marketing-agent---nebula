@@ -1,0 +1,20 @@
+/* The idea box: one look for every "describe what you want" box (Home now; Create content and Videos should move onto
+   these two classes too, so they cannot drift). The values are the ones Create content's idea box uses today
+   (pages/GravityCreate.tsx): 12 px radius, the soft default border, the panel fill, the accent border and a light
+   accent ring while you type, 14 px secondary text, muted placeholder. The field inside carries no border of its own:
+   it also gets the "gravity-bare" class so the app-wide field border (index.html, section 5) leaves it alone. */
+.nb-ideabox {
+  box-sizing: border-box; border-radius: 12px; border: 1px solid var(--gv-border-default); background: var(--gv-panel);
+}
+.nb-ideabox:focus-within { border-color: var(--gv-accent); box-shadow: 0 0 0 3px rgb(var(--gv-accent-rgb) / 0.10); }
+.nb-ideabox .nb-ideabox-field,
+body.gravity-shell .nb-ideabox .nb-ideabox-field {
+  display: block; box-sizing: border-box; width: 100%; margin: 0; resize: vertical;
+  border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important;
+  font: inherit; font-size: 14px; line-height: 1.625; color: var(--gv-text-secondary) !important;
+}
+.nb-ideabox .nb-ideabox-field::placeholder,
+body.gravity-shell .nb-ideabox .nb-ideabox-field::placeholder { color: var(--gv-text-muted) !important; opacity: 1 !important; }
+@media (prefers-reduced-motion: no-preference) {
+  .nb-ideabox { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+}

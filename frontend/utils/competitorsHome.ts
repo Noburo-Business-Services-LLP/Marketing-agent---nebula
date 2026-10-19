@@ -14,6 +14,8 @@ export interface CompetitorCard {
   postsThisWeek: { value: number; atLeast: boolean } | null;
   bestPost: BestPost | null; worked: WorkedLine | null;
   weekOf: string | null; isCurrentWeek: boolean; lastCheckedOn: string | null;
+  /** Our own stored 96 x 96 copy of their profile picture, or null (initials are shown then). */
+  avatarUrl?: string | null;
 }
 export interface MakeAction { label: string; kind: 'post' | 'video'; mode: 'single' | 'carousel' | null; brief: string }
 export interface WorkingPost {
@@ -199,4 +201,26 @@ const BANNED = [
 /** The same rule the server applies to its sentences, for the copy written on the page. */
 export function isPlainCopy(s: string): boolean {
   return !BANNED.some((re) => re.test(String(s || '')));
+}
+
+/** Soft colours for the initials picture: [background, text], each at least 4.5 to 1 (tested). */
+export const AVATAR_TONES: ReadonlyArray<readonly [string, string]> = [
+  ['#FFE3D0', '#9A3A15'], ['#FFF0C7', '#7A4A00'], ['#FBDCE5', '#9C2F52'], ['#DDF2E6', '#24603C'], ['#D6F1EF', '#136F6C'], ['#F4E1F8', '#7A2C8A'],
+];
+// Only our own stored copy is ever loaded, never a link to Instagram.
+const STORED_AVATAR = /^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_-]+\/image\/upload\/(?:[A-Za-z0-9_,.:-]+\/)*nebula-competitor-avatars\/[A-Za-z0-9_-]{1,64}\.(?:webp|jpg|jpeg|png)$/;
+
+export interface AvatarView { src: string | null; initials: string; tone: number; alt: string }
+/** A competitor's picture: our stored copy when there is one, else initials on a colour that stays the same for a handle. */
+export function avatarView(name: string | null | undefined, handle: string | null | undefined, url: string | null | undefined): AvatarView {
+  const n = String(name || '').trim();
+  const h = String(handle || '').trim().replace(/^@/, '');
+  const words = n.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+  const first = (w: string) => (Array.from(w.replace(/^[^\p{L}\p{N}]+/u, ''))[0] || '');
+  const initials = (words.length >= 2 ? first(words[0]) + first(words[1]) : first(words[0] || h) || 'C').toUpperCase();
+  const key = (h || n).toLowerCase();
+  let hash = 2166136261;
+  for (const ch of key) { hash ^= ch.codePointAt(0) || 0; hash = Math.imul(hash, 16777619) >>> 0; }
+  const src = typeof url === 'string' && url.length <= 300 && STORED_AVATAR.test(url) ? url : null;
+  return { src, initials, tone: hash % AVATAR_TONES.length, alt: h ? `@${h}` : n || 'Competitor' };
 }

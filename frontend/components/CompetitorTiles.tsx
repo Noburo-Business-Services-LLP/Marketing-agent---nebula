@@ -11,6 +11,7 @@ import {
 } from '../utils/competitorsHome';
 import { draftsAvailable, isDraftOptions, type DraftKind, type DraftOptions, type DraftSource } from '../utils/homeDrafts';
 import { DraftActions, DraftSheet } from './home/DraftSheet';
+import CompetitorAvatar from './CompetitorAvatar';
 import './CompetitorTiles.css';
 
 // Competitor tiles, "What's working for your competitors" and "Trending for you", from GET /api/competitors/best-posts
@@ -90,7 +91,7 @@ export const CompetitorTile: React.FC<{ card: CompetitorCard; editable?: boolean
   return (
     <article className="nb-ct-tile" data-status={card.status} aria-label={`${v.name}${v.handleText ? ` ${v.handleText}` : ''}: ${v.chip.text}`}>
       <header className="nb-ct-head">
-        <span className="nb-ct-avatar" aria-hidden="true">{v.initial}</span>
+        <CompetitorAvatar name={v.name} handle={card.handle} url={card.avatarUrl} />
         <div className="nb-ct-who">
           <h3 className="nb-ct-name" title={v.name}>{v.name}</h3>
           <div className="nb-ct-meta">
@@ -124,7 +125,7 @@ export const CompetitorTile: React.FC<{ card: CompetitorCard; editable?: boolean
       )}
       {v.worked && <p className="nb-ct-worked" data-quiet={v.workedIsQuiet ? 'true' : undefined}><Sparkles aria-hidden="true" /><span>{v.worked}</span></p>}
       {canDraft && drafts && v.best && (
-        <DraftActions options={drafts} postsOnly={postsOnly} onPick={(k) => onDraft!(k, { ref, title: draftSourceTitle(card.name, card.bestPost?.type), url: v.best!.url })} />
+        <DraftActions options={drafts} postsOnly={postsOnly} onPick={(k) => onDraft!(k, { ref, title: draftSourceTitle(card.name, card.bestPost?.type), url: v.best!.url, name: card.name, handle: card.handle, avatarUrl: card.avatarUrl ?? null })} />
       )}
       {savedNote && <p role="status" className="nb-ct-saved">{savedNote}</p>}
       {editable && v.handleAction && onSaved && (
@@ -143,6 +144,7 @@ const TileSkeleton: React.FC<{ count: number }> = ({ count }) => (
 export const WorkingList: React.FC<{ res: BestPostsResponse; language?: string | null } & DraftsProps> = ({ res, language, drafts, postsOnly = false, onDraft }) => {
   const make = useMake(language);
   const rows = res.working.map(workingView);
+  const avatarOf = new Map(res.competitors.map((c) => [c.id, c.avatarUrl ?? null]));
   return (
     <section className="nb-ct-card" aria-labelledby="ct-working-title">
       <div className="nb-ct-sechead">
@@ -150,8 +152,9 @@ export const WorkingList: React.FC<{ res: BestPostsResponse; language?: string |
         <span className="nb-ct-sub">Their strongest recent posts</span>
       </div>
       <ul className="nb-ct-rows">
-        {rows.map((r) => {
+        {rows.map((r, i) => {
           const Icon = KIND_ICON[r.kind] || ImageIcon;
+          const w = res.working[i];
           return (
             <li key={r.key} className="nb-ct-row" data-tone="competitor">
               <span className="nb-ct-mark" aria-hidden="true"><Icon aria-hidden="true" /></span>
@@ -162,7 +165,7 @@ export const WorkingList: React.FC<{ res: BestPostsResponse; language?: string |
                   {r.url && <a className="nb-ct-link" href={r.url} target="_blank" rel="noopener noreferrer">Open the post<ExternalLink aria-hidden="true" /></a>}
                 </p>
                 {onDraft && drafts && draftsAvailable(drafts, r.ref) && (
-                  <div className="nb-ct-drafts"><DraftActions compact options={drafts} postsOnly={postsOnly} onPick={(k) => onDraft(k, { ref: r.ref, title: draftSourceTitle(r.title, r.kind), url: r.url })} /></div>
+                  <div className="nb-ct-drafts"><DraftActions compact options={drafts} postsOnly={postsOnly} onPick={(k) => onDraft(k, { ref: r.ref, title: draftSourceTitle(r.title, r.kind), url: r.url, name: w?.name || r.title, handle: w?.handle || '', avatarUrl: avatarOf.get(String(w?.competitorId || '')) ?? null })} /></div>
                 )}
               </div>
               <button type="button" className="nb-ct-btn" onClick={() => make(r.action)} aria-label={`${r.action.label}: ${r.title}`}>
@@ -266,7 +269,7 @@ export const CompetitorBoard: React.FC<{ language?: string | null; onLocked?: ()
   const told = useRef(false);
   useEffect(() => { if (state === 'locked' && onLocked && !told.current) { told.current = true; onLocked(); } }, [state, onLocked]);
   const onSaved = useCallback((saved: SavedHandle) => {
-    setRes((r) => (r ? { ...r, competitors: r.competitors.map((c) => (c.id === saved.id ? { ...c, handle: saved.handle, status: 'waiting' as const, profileUrl: null } : c)) } : r));
+    setRes((r) => (r ? { ...r, competitors: r.competitors.map((c) => (c.id === saved.id ? { ...c, handle: saved.handle, status: 'waiting' as const, profileUrl: null, avatarUrl: saved.handle.toLowerCase() === c.handle.toLowerCase() ? c.avatarUrl : null } : c)) } : r));
     setNotes((n) => ({ ...n, [saved.id]: handleSavedNote(saved) }));
   }, [setRes]);
   if (state === 'staff') return null;

@@ -11,6 +11,7 @@ import {
   numberTiles, numbersMode, actionRows, balanceView, describeHandoff, createTileHandoff, statusWord,
   HOME_CREATE_TILES, DESCRIBE_MAX, type Banner, type HomeCreateKey, type NumberKey,
 } from '../../utils/homeLayout';
+import '../ideaBox.css';
 
 // The blocks of the Home control room. Each block renders from the summary alone and fails alone.
 
@@ -118,14 +119,14 @@ export const DoThisNext: React.FC<{ summary: HomeSummary; planBannerShown: boole
     focusable.focus({ preventScroll: true });
   };
   return (
-    <section className="nb-darkpanel nb-home-darkpanel" data-nb-surface="dark" aria-labelledby="home-next-title">
-      <p className="nb-darkpanel-eyebrow">{isNew ? 'Start here' : 'Do this next'}</p>
+    <section className="nb-home-next" aria-labelledby="home-next-title">
+      <p className="nb-home-next-eyebrow">{isNew ? 'Start here' : 'Do this next'}</p>
       <div className="nb-home-dp-head">
         <h2 id="home-next-title">{isNew ? 'Your first steps' : rows.length ? 'What needs you' : summary.plan?.state === 'building' ? 'Nothing for now' : 'All caught up'}</h2>
         {rows.length > 1 && <span>{rows.length} things</span>}
       </div>
       {rows.length === 0 ? (
-        <p className="nb-home-dp-empty"><Check size={16} strokeWidth={2.6} aria-hidden="true" style={{ color: '#FFCB2E' }} />{summary.plan?.state === 'building' ? 'Nothing needs you while your plan is being built. Your next steps appear here when it is ready.' : 'You are up to date. New suggestions appear here as they come up.'}</p>
+        <p className="nb-home-dp-empty"><Check size={16} strokeWidth={2.6} aria-hidden="true" />{summary.plan?.state === 'building' ? 'Nothing needs you while your plan is being built. Your next steps appear here when it is ready.' : 'You are up to date. New suggestions appear here as they come up.'}</p>
       ) : (
         <ol className="nb-home-actions">
           {rows.map((r, i) => (
@@ -186,7 +187,7 @@ export const CreateToday: React.FC<{ language?: string | null }> = ({ language }
             : <Tile key={t.key} variant="choice" title={t.title} subtitle={t.subtitle} accent={t.accent} art={CREATE_ART[t.key]} onClick={() => open(t.key)} />
         ))}
       </TileGrid>
-      <form className="nb-home-describe" onSubmit={submit}>
+      <form className="nb-home-describe nb-ideabox" onSubmit={submit}>
         <div className="nb-home-tabs" role="tablist" aria-label="What to make from your idea">
           {tabs.map((t) => (
             <button key={t.key} id={`home-tab-${t.key}`} type="button" role="tab" className="nb-home-tab" aria-selected={tab === t.key} aria-controls="home-describe-panel" tabIndex={tab === t.key ? 0 : -1} onKeyDown={onTabKey} onClick={() => setTab(t.key)}>{t.label}</button>
@@ -195,7 +196,7 @@ export const CreateToday: React.FC<{ language?: string | null }> = ({ language }
         <div id="home-describe-panel" role="tabpanel" aria-labelledby={`home-tab-${tab}`}>
         <label htmlFor="home-describe" className="sr-only">Describe what you want</label>
         <textarea
-          id="home-describe" value={text} maxLength={DESCRIBE_MAX} rows={2}
+          id="home-describe" className="nb-ideabox-field gravity-bare" value={text} maxLength={DESCRIBE_MAX} rows={2}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit(); } }}
           placeholder={tab === 'post' ? 'Describe what you want, for example a post about this weekend\'s offer' : 'Describe the video, for example a short look behind the counter'}

@@ -4,7 +4,7 @@
 
 .nb-ct-card {
   box-sizing: border-box; min-width: 0; padding: 16px; border-radius: 16px;
-  background: rgb(255 255 255 / 0.84); border: 1px solid var(--gv-border-subtle); box-shadow: 0 1px 2px rgb(20 32 58 / 0.04);
+  background: rgb(255 255 255 / 0.84); border: 1px solid var(--gv-border-subtle); box-shadow: 0 1px 2px rgb(43 29 14 / 0.04);
   color: var(--gv-text-primary);
 }
 .nb-ct-card h2, .nb-ct-card h3, .nb-ct-card p { margin: 0; }
@@ -16,7 +16,7 @@
 .nb-ct-link svg { width: 13px; height: 13px; }
 .nb-ct-quiet { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13.5px; line-height: 1.5; color: var(--gv-text-secondary); }
 .nb-ct-quiet > span { flex: 1 1 260px; }
-.nb-ct-card a:focus-visible, .nb-ct-card button:focus-visible { outline: 3px solid #14203A; outline-offset: 2px; }
+.nb-ct-card a:focus-visible, .nb-ct-card button:focus-visible { outline: 3px solid #7A4A00; outline-offset: 2px; }
 
 /* ---- tiles ---- */
 .nb-ct-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 0; padding: 0; list-style: none; }
@@ -31,7 +31,7 @@
 .nb-ct-tile[data-status]:not([data-status="tracking"])::before { background: #D9CFBE; }
 .nb-ct-head { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
 .nb-ct-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; margin-top: 2px; min-width: 0; }
-.nb-ct-avatar { flex: 0 0 auto; margin-top: 1px; width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; font-size: 13.5px; font-weight: 700; background: #FFE3D0; color: #A8401A; }
+.nb-ct-head .nb-cav { margin-top: 1px; }
 .nb-ct-who { flex: 1 1 auto; min-width: 0; }
 .nb-ct-name { font-size: 14px; font-weight: 650; line-height: 1.25; color: var(--gv-text-primary); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .nb-ct-handle { display: inline-block; min-width: 0; max-width: 100%; font-size: 12px; color: var(--gv-text-tertiary); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; border-radius: 4px; }
@@ -58,6 +58,19 @@ a.nb-ct-handle:hover { color: var(--gv-text-primary); text-decoration: underline
 .nb-ct-worked[data-quiet="true"] svg { color: var(--gv-text-muted); }
 .nb-ct-saved { font-size: 12.5px; color: var(--gv-text-primary); }
 .nb-ct-tile .nb-ct-editor { margin-top: -2px; }
+
+/* ---- competitor picture (components/CompetitorAvatar.tsx): our stored copy, or initials on a soft colour ---- */
+.nb-cav {
+  flex: 0 0 auto; box-sizing: border-box; display: grid; place-items: center; border-radius: 999px; overflow: hidden;
+  font-size: 14px; font-weight: 700; line-height: 1; letter-spacing: 0.01em; user-select: none;
+}
+img.nb-cav { object-fit: cover; background: #FBF6EC; border: 1px solid var(--gv-border-subtle); }
+.nb-cav[data-tone="0"] { background: #FFE3D0; color: #9A3A15; }
+.nb-cav[data-tone="1"] { background: #FFF0C7; color: #7A4A00; }
+.nb-cav[data-tone="2"] { background: #FBDCE5; color: #9C2F52; }
+.nb-cav[data-tone="3"] { background: #DDF2E6; color: #24603C; }
+.nb-cav[data-tone="4"] { background: #D6F1EF; color: #136F6C; }
+.nb-cav[data-tone="5"] { background: #F4E1F8; color: #7A2C8A; }
 
 /* ---- the two lists ---- */
 .nb-ct-lists { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
@@ -89,13 +102,13 @@ a.nb-ct-handle:hover { color: var(--gv-text-primary); text-decoration: underline
 .nb-ct-tile .nb-hd-picks { margin-top: 2px; }
 
 /* ---- skeleton ---- */
-.nb-ct-skel { height: 150px; border-radius: 14px; background: linear-gradient(90deg, rgb(20 32 58 / 0.045), rgb(20 32 58 / 0.08), rgb(20 32 58 / 0.045)); background-size: 200% 100%; }
+.nb-ct-skel { height: 150px; border-radius: 14px; background: linear-gradient(90deg, rgb(43 29 14 / 0.045), rgb(43 29 14 / 0.08), rgb(43 29 14 / 0.045)); background-size: 200% 100%; }
 
 @media (prefers-reduced-motion: no-preference) {
   .nb-ct-skel { animation: nb-ct-shimmer 1.4s ease-in-out infinite; }
   @keyframes nb-ct-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
   .nb-ct-tile { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
-  .nb-ct-tile:hover { border-color: var(--gv-border-default); box-shadow: 0 6px 16px rgb(20 32 58 / 0.06); }
+  .nb-ct-tile:hover { border-color: var(--gv-border-default); box-shadow: 0 6px 16px rgb(43 29 14 / 0.06); }
   .nb-ct-btn { transition: border-color 0.15s ease, background-color 0.15s ease; }
 }
 

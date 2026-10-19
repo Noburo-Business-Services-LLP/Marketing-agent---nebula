@@ -19,7 +19,11 @@ export interface DraftOptions {
 export interface DraftText { comment?: string; caption?: string; imageIdea?: string }
 export interface DraftAnswer { success?: boolean; kind?: DraftKind; draft?: DraftText; quarks?: number; price?: string; language?: string; replay?: boolean; message?: string }
 /** The post a draft starts from, as the tile knows it. */
-export interface DraftSource { ref: string; title: string; url: string | null }
+export interface DraftSource {
+  ref: string; title: string; url: string | null;
+  /** Who the post is from, for the picture in the sheet's header (nothing else about them is shown). */
+  name?: string; handle?: string; avatarUrl?: string | null;
+}
 
 export const KIND_LABEL: Record<DraftKind, string> = { response_post: 'Make a post in response', witty_comment: 'Draft a witty comment' };
 export const KIND_TITLE: Record<DraftKind, string> = { response_post: 'A post in response', witty_comment: 'A witty comment' };
