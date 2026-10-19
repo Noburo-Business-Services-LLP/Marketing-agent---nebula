@@ -67,6 +67,8 @@ function world({ users = {}, wallet = {}, competitors, snapshots, writes = [], c
       money.push({ type: 'refund', uid, payer, cost: q, action: o.action, ref: o.ref });
       return { ok: true, payerId: payer };
     },
+    findSpend: async (ref) => { const m = money.find((x) => x.type === 'spend' && x.ref === ref); return m ? { user: m.payer, workspace: m.payer !== m.uid ? m.uid : undefined, quarks: -m.cost } : null; },
+    findRefund: async (ref) => money.find((x) => x.type === 'refund' && x.ref === ref) || null,
     guard: async (a) => { calls.guard.push(a); return guard ? guard(a) : { ok: true }; },
     write: async (prompt) => {
       calls.write++; calls.prompts.push(prompt);
@@ -397,4 +399,115 @@ test('every customer message follows the wording rule', () => {
     assert.ok(guard.every((re) => !re.test(m)), `${k}: ${m}`);
     assert.ok(/^[A-Z]/.test(m) && /\.$/.test(m), k);
   }
+});
+
+// ---- crash between the charge and the "charged" mark, silent refund failure, refunded-yet-delivered race ----
+const lostRow = (t, extra = {}) => ({ _id: 'crash1', userId: U1, key: 'crash-key-1', kind: 'witty_comment', day: istDay(NOW), status: 'started', inFlight: true, chargedConfirmed: false, attempts: 0, checks: 0, quarks: COMMENT, payerId: U1, refunded: false, startedAt: new Date(t - caps.STALE_MS - 5000), leaseAt: new Date(t - caps.STALE_MS - 5000), createdAt: new Date(t - 1000), ...extra });
+
+test('crash after the charge but before the charged mark: a stale row is refunded once, to the wallet that paid', async () => {
+  const w = world();
+  w.Draft.rows.push(lostRow(NOW.getTime()));
+  await w.deps.spend(U1, COMMENT, { action: 'home_witty_comment', ref: 'crash1' });
+  assert.strictEqual(net(w), -COMMENT);
+  await w.svc.recoverStale(U1);
+  const row = w.Draft.rows[0];
+  assert.strictEqual(row.status, 'failed'); assert.strictEqual(row.outcome, 'stale'); assert.strictEqual(row.refunded, true); assert.strictEqual(row.inFlight, undefined);
+  assert.strictEqual(net(w), 0);
+  assert.deepStrictEqual(w.money.filter((m) => m.type === 'refund').map((m) => [m.ref, m.cost, m.payer]), [['crash1', COMMENT, U1]]);
+  await w.svc.recoverStale(U1);
+  assert.strictEqual(w.money.filter((m) => m.type === 'refund').length, 1, 'recovery run twice refunds once');
+});
+
+test('crash after the charge for an agency client: the refund goes to the agency pool that paid', async () => {
+  const w = world({ payers: { [CLIENT]: AGENCY }, wallet: { [CLIENT]: 0 } });
+  w.Draft.rows.push(lostRow(NOW.getTime(), { userId: CLIENT, key: 'crash-key-2', payerId: CLIENT }));
+  await w.deps.spend(CLIENT, COMMENT, { action: 'home_witty_comment', ref: 'crash1' });
+  assert.strictEqual(w.purse.get(AGENCY), 100 - COMMENT);
+  await w.svc.recoverStale(CLIENT);
+  assert.strictEqual(w.purse.get(AGENCY), 100); assert.strictEqual(w.purse.get(CLIENT), 0);
+  assert.deepStrictEqual(w.money.filter((m) => m.type === 'refund').map((m) => m.payer), [AGENCY]);
+  assert.strictEqual(w.Draft.rows[0].refunded, true);
+});
+
+test('crash before the charge: the stale row is closed with no refund', async () => {
+  const w = world();
+  w.Draft.rows.push(lostRow(NOW.getTime()));
+  await w.svc.recoverStale(U1);
+  assert.strictEqual(w.Draft.rows[0].status, 'failed'); assert.strictEqual(w.Draft.rows[0].inFlight, undefined);
+  assert.strictEqual(w.calls.refund, 0); assert.strictEqual(w.money.length, 0);
+});
+
+test('a stale unconfirmed row is not refunded again when the ledger already shows a refund, and a failed lookup leaves it open', async () => {
+  const w = world();
+  w.Draft.rows.push(lostRow(NOW.getTime()));
+  await w.deps.spend(U1, COMMENT, { action: 'home_witty_comment', ref: 'crash1' });
+  await w.deps.refundTo(U1, COMMENT, { action: 'home_witty_comment_refund', ref: 'crash1', payerId: U1 });
+  w.calls.refund = 0;
+  await w.svc.recoverStale(U1);
+  assert.strictEqual(w.calls.refund, 0); assert.strictEqual(net(w), 0);
+  const v = world();
+  v.Draft.rows.push(lostRow(NOW.getTime()));
+  v.deps.findSpend = async () => { throw new Error('ledger down'); };
+  await createHomeDrafts(v.deps).recoverStale(U1);
+  assert.strictEqual(v.Draft.rows[0].inFlight, true, 'still open, looked at again later');
+});
+
+test('the intent (quarks, payer) is on the row before the charge is made', async () => {
+  const w = world();
+  let seen = null;
+  const spend = w.deps.spend;
+  w.deps.spend = async (...a) => { seen = { ...w.Draft.rows[0] }; return spend(...a); };
+  const svc = createHomeDrafts(w.deps);
+  const r = await svc.make(w.user(), 'witty_comment', { ref: REF, key: key() });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(seen.quarks, COMMENT); assert.strictEqual(seen.chargedConfirmed, false); assert.ok(seen.payerId);
+  assert.strictEqual(w.Draft.rows[0].chargedConfirmed, true);
+});
+
+test('the charged mark and the refund both failing: refundFailed is set, refunded stays false, and an alert is raised', async () => {
+  const w = world({ Draft: createFakeDraftModel({ failCharge: true }) });
+  w.deps.refundTo = async () => ({ ok: false });
+  const svc = createHomeDrafts(w.deps);
+  const r = await quiet(() => svc.make(w.user(), 'witty_comment', { ref: REF, key: key() }));
+  const row = w.Draft.rows[0];
+  assert.strictEqual(r.status, 503); assert.strictEqual(r.body.refunded, false);
+  assert.strictEqual(row.refundFailed, true); assert.strictEqual(row.refunded, false); assert.notStrictEqual(row.outcome, 'ok');
+  assert.deepStrictEqual(w.alerts, ['home_draft_refund']);
+});
+
+test('the charged mark failing alone: the Quarks go back once and the row says so', async () => {
+  const w = world({ Draft: createFakeDraftModel({ failCharge: true }) });
+  await quiet(() => make(w));
+  assert.strictEqual(net(w), 0); assert.strictEqual(w.Draft.rows[0].refunded, true); assert.strictEqual(w.calls.refund, 1);
+});
+
+test('a row closed and refunded by another process is never delivered', async () => {
+  const w = world();
+  w.deps.check = async () => { const d = w.Draft.rows[0]; d.refunded = true; d.status = 'failed'; d.outcome = 'stale'; delete d.inFlight; return DECENT; };
+  const svc = createHomeDrafts(w.deps);
+  const r = await svc.make(w.user(), 'witty_comment', { ref: REF, key: key() });
+  assert.notStrictEqual(r.status, 200); assert.strictEqual(r.body.draft, undefined); assert.strictEqual(r.body.success, false);
+  assert.notStrictEqual(w.Draft.rows[0].status, 'done'); assert.strictEqual(w.Draft.rows[0].result, undefined);
+});
+
+test('the lease: a live row with an old start but a fresh lease is not reaped, and every step refreshes it', async () => {
+  let t = NOW.getTime();
+  const w = world({ now: () => new Date(t) });
+  w.Draft.rows.push(lostRow(t, { leaseAt: new Date(t - 1000) }));
+  await w.svc.recoverStale(U1);
+  assert.strictEqual(w.Draft.rows[0].inFlight, true);
+  const w2 = world({ now: () => new Date(t) });
+  w2.deps.write = async () => { t += 90000; return OK_COMMENT; };
+  w2.deps.check = async () => { assert.strictEqual(new Date(w2.Draft.rows[0].leaseAt).getTime(), t, 'refreshed when the check was counted, after the slow write'); t += 90000; return DECENT; };
+  const svc = createHomeDrafts(w2.deps);
+  const r = await svc.make(w2.user(), 'witty_comment', { ref: REF, key: key() });
+  assert.strictEqual(r.status, 200);
+  assert.ok(new Date(w2.Draft.rows[0].startedAt).getTime() <= NOW.getTime() + 1, 'startedAt is the creation time');
+});
+
+test('STALE_MS is longer than the worst case of one request, computed from the timeouts', () => {
+  const worst = 2 * 20000 + 2 * 20000 + caps.MAX_ATTEMPTS * (caps.CALL_TIMEOUT_MS + caps.CALL_TIMEOUT_MS);
+  assert.strictEqual(caps.DB_TIMEOUT_MS, 20000);
+  assert.ok(caps.STALE_MS > worst, `${caps.STALE_MS} must exceed ${worst}`);
+  assert.ok(caps.STALE_MS > caps.WORST_CASE_MS);
 });

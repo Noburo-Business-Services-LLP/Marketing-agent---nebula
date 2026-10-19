@@ -2,6 +2,13 @@
 // Caps and limits for the Home drafts ("Make a post in response" and "Draft a witty comment" on a competitor's post).
 // Cost and safety live here: change a number, not the code. Prices are NOT here: they come from config/apiCosts.js
 // (home_response_post, home_witty_comment). How it works: docs/superpowers/ops/home-drafts.md
+// The longest one request can run without refreshing its lease: every database read that can wait (up to two for the
+// post, two for the brand) and every model call (a writing call and a check call for each attempt).
+const DB_TIMEOUT_MS = 20000;
+const CALL_TIMEOUT_MS = 60000;
+const MAX_ATTEMPTS = 2;
+const WORST_CASE_MS = 4 * DB_TIMEOUT_MS + MAX_ATTEMPTS * 2 * CALL_TIMEOUT_MS;
+
 module.exports = Object.freeze({
   // Switch: the whole feature is off unless ENABLE_COMPETITOR_DRAFTS=on (the same default-off rule as the tracker).
   SWITCH_ENV: 'ENABLE_COMPETITOR_DRAFTS',
@@ -14,11 +21,14 @@ module.exports = Object.freeze({
   MAX_DRAFTS_ALL_ACCOUNTS_PER_DAY: 3000,
 
   // One first draft and at most one more if the first one fails a check. Never more.
-  MAX_ATTEMPTS: 2,
-  // A request still marked as running after this long was lost (a restart): it is closed and its Quarks returned.
-  STALE_MS: 4 * 60 * 1000,
+  MAX_ATTEMPTS,
+  // A request whose lease (leaseAt, refreshed at every step) is older than this was lost (a restart): it is closed and
+  // its Quarks returned. Longer than the whole worst case, so a live request is never closed by another process.
+  DB_TIMEOUT_MS,
+  WORST_CASE_MS,
+  STALE_MS: WORST_CASE_MS + 3 * 60 * 1000,
   // The writing call and the check call each have this long.
-  CALL_TIMEOUT_MS: 60000,
+  CALL_TIMEOUT_MS,
   WRITE_MAX_TOKENS: 700,
   CHECK_MAX_TOKENS: 200,
 

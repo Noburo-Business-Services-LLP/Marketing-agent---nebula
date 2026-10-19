@@ -27,10 +27,14 @@ const homeDraftSchema = new mongoose.Schema({
   checks: { type: Number, default: 0 },   // check calls started
   quarks: { type: Number, default: 0 },
   payerId: { type: String, maxlength: 40 }, // the wallet that paid (the agency pool for a client workspace)
+  // quarks and payerId are written BEFORE the charge (the intent); chargedConfirmed turns true once the charge returned.
+  // A stale row with chargedConfirmed false is settled from the Quark ledger spend row (ref = this row's id).
+  chargedConfirmed: { type: Boolean },
   refunded: { type: Boolean, default: false },
   refundFailed: { type: Boolean },
   result: { type: resultSchema, default: undefined },
-  startedAt: { type: Date, default: Date.now },
+  startedAt: { type: Date, default: Date.now }, // set once, when the row is created
+  leaseAt: { type: Date, default: Date.now },   // refreshed at each step; a row is only reaped when this is old
   finishedAt: Date,
   createdAt: { type: Date, default: Date.now, expires: caps.KEEP_DAYS * 24 * 3600 }
 }, { collection: 'home_drafts' });

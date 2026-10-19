@@ -14,6 +14,7 @@ function matches(doc, filter) {
         if (op === '$gte' && !(v !== undefined && v !== null && cmp(v, arg) >= 0)) return false;
         if (op === '$lt' && !(v !== undefined && v !== null && cmp(v, arg) < 0)) return false;
         if (op === '$in' && !arg.some((a) => same(a, v))) return false;
+        if (op === '$exists' && (v !== undefined) !== Boolean(arg)) return false;
         if (op === '$ne' && same(v, arg)) return false;
       }
     } else if (cond === true || cond === false) {

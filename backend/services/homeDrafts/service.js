@@ -77,6 +77,9 @@ function defaultDeps() {
     spend: (userId, cost, opts) => quarks().spend(userId, cost, opts),
     settle: (userId) => quarks().settleWallet(userId).catch(() => null),
     refundTo: (userId, q, opts) => quarks().refundTo(userId, q, opts),
+    // The Quark ledger rows of one draft (ref = the draft row id): its spend, and any refund already made.
+    findSpend: (ref) => m('QuarkLedger').findOne({ type: 'spend', ref }).select('user workspace quarks').maxTimeMS(20000).lean(),
+    findRefund: (ref) => m('QuarkLedger').findOne({ type: 'refund', ref }).select('_id').maxTimeMS(20000).lean(),
     guard: (action) => require('../spendGuard').check(action),
     write: ({ system, user, language }) => {
       const { callTextLLM, textModelFor } = llm();
@@ -134,33 +137,57 @@ function createHomeDrafts(given = {}) {
 
   const draftOut = (kind, r) => (kind === 'response_post' ? { caption: r.caption, imageIdea: r.imageIdea } : { comment: r.comment });
 
-  /** Returns the Quarks of a charged row once (the flag flips first, so two closers cannot both refund). */
-  async function refundRow(row, userId, action) {
-    if (!row || !(row.quarks > 0)) return { ok: true, none: true };
-    const claimed = await Draft().findOneAndUpdate({ _id: row._id, refunded: false, quarks: { $gt: 0 } }, { $set: { refunded: true } }, { new: true }).catch(() => null);
+  /** Returns the Quarks of a charged row once (the flag flips first, so two closers cannot both refund). A row whose
+   *  charge was never confirmed (chargedConfirmed false: the process may have died between the charge and the mark) is
+   *  settled from the Quark ledger spend row: exactly that amount, to that payer, only if it exists and was not refunded.
+   *  `known` is the amount and payer of a charge that did return (used when only the mark could not be written). */
+  async function refundRow(row, userId, action, known = null) {
+    if (!row) return { ok: true, none: true };
+    let amount; let payer; let filter = { _id: row._id, inFlight: true, refunded: false };
+    if (known) { amount = known.amount; payer = known.payerId; }
+    else if (row.chargedConfirmed === false) {
+      let spent; let back;
+      try { [spent, back] = [await deps.findSpend(String(row._id)), null]; if (spent) back = await deps.findRefund(String(row._id)); } catch (_) { return { ok: false, lookupFailed: true }; }
+      const mine = spent && (String(spent.user) === userId || String(spent.workspace || '') === userId);
+      if (!mine || !(Number(spent.quarks) < 0) || back) return { ok: true, none: true };
+      amount = -Number(spent.quarks); payer = String(spent.user);
+    } else {
+      if (!(row.quarks > 0)) return { ok: true, none: true };
+      amount = row.quarks; payer = row.payerId || '';
+      filter = { ...filter, quarks: { $gt: 0 } };
+    }
+    if (row.quarks > 0) amount = Math.min(amount, row.quarks); // never more than was meant to be charged
+    if (!(amount > 0)) return { ok: true, none: true };
+    const claimed = await Draft().findOneAndUpdate(filter, { $set: { refunded: true, quarks: amount, payerId: payer } }, { new: true }).catch(() => null);
     if (!claimed) return { ok: true, none: true };
     let back = { ok: false };
-    try { back = await deps.refundTo(userId, claimed.quarks, { action: `${action}_refund`, ref: String(row._id), payerId: claimed.payerId || '' }); } catch (_) { back = { ok: false }; }
+    try { back = await deps.refundTo(userId, amount, { action: `${action}_refund`, ref: String(row._id), payerId: payer }); } catch (_) { back = { ok: false }; }
     if (!back || !back.ok) {
-      await Draft().updateOne({ _id: row._id }, { $set: { refundFailed: true } }).catch(() => null);
-      deps.alert('home_draft_refund', `Home draft ${String(row._id)}: the refund of ${claimed.quarks} Quarks did not land.`);
+      await Draft().updateOne({ _id: row._id }, { $set: { refundFailed: true, refunded: false } }).catch(() => null);
+      console.error(`[home drafts] refund of ${amount} Quarks did not land for draft ${String(row._id)}`);
+      deps.alert('home_draft_refund', `Home draft ${String(row._id)}: the refund of ${amount} Quarks did not land.`);
       return { ok: false };
     }
     return { ok: true };
   }
 
-  async function finish(row, set, { userId, action, refund }) {
+  async function finish(row, set, { userId, action, refund, known = null }) {
     let refunded = { ok: true, none: true };
-    if (refund) refunded = await refundRow(row, userId, action);
-    await Draft().updateOne({ _id: row._id }, { $set: { ...set, finishedAt: deps.now() }, $unset: { inFlight: 1 } }).catch(() => null);
+    if (refund) refunded = await refundRow(row, userId, action, known);
+    if (refunded.lookupFailed) return refunded; // could not tell whether money moved: leave the row to be looked at again
+    await Draft().updateOne({ _id: row._id, inFlight: true }, { $set: { ...set, finishedAt: deps.now() }, $unset: { inFlight: 1 } }).catch(() => null);
     return refunded;
   }
 
-  /** Requests left marked as running after STALE_MS were lost (a restart): closed as failed, Quarks returned. */
+  /** Requests whose lease ran out (nothing touched the row for STALE_MS: a restart) are closed as failed and their Quarks
+   *  returned. Rows from before the lease existed are judged by startedAt. */
   async function recoverStale(userId) {
     const before = new Date(deps.now().getTime() - caps.STALE_MS);
-    const rows = await Draft().find({ userId, inFlight: true, startedAt: { $lt: before } }).limit(5).lean().catch(() => []);
-    for (const r of rows) await finish(r, { status: 'failed', outcome: 'stale' }, { userId, action: ACTION[r.kind], refund: true });
+    const [a, b] = await Promise.all([
+      Draft().find({ userId, inFlight: true, leaseAt: { $lt: before } }).limit(5).lean().catch(() => []),
+      Draft().find({ userId, inFlight: true, leaseAt: { $exists: false }, startedAt: { $lt: before } }).limit(5).lean().catch(() => [])
+    ]);
+    for (const r of [...a, ...b].slice(0, 5)) await finish(r, { status: 'failed', outcome: 'stale' }, { userId, action: ACTION[r.kind], refund: true });
   }
 
   async function capsProblem(userId, now) {
@@ -283,7 +310,7 @@ function createHomeDrafts(given = {}) {
       try {
         row = await Draft().create({
           userId, key, kind, day: istDay(now), competitorId: found.competitorId, postKey: found.postKey, tone, language: language.code + (language.mix ? '_english_mix' : ''),
-          status: 'started', inFlight: true, startedAt: now, createdAt: now
+          status: 'started', inFlight: true, chargedConfirmed: false, startedAt: deps.now(), leaseAt: deps.now(), createdAt: now
         });
       } catch (e) {
         if (e && e.code === 11000) {
@@ -295,26 +322,38 @@ function createHomeDrafts(given = {}) {
 
       const cost = QUARK_COSTS[action];
       await deps.settle(userId);
-      let paid = null;
-      try { paid = await deps.spend(userId, cost, { action, description: kind === 'response_post' ? 'Post in response' : 'Witty comment draft', ref: String(row._id) }); } catch (_) { paid = null; }
+      // The intent goes on the row BEFORE the charge, so a crash right after it can still be settled from the ledger.
+      const intent = await Draft().findOneAndUpdate({ _id: row._id, inFlight: true, refunded: false }, { $set: { quarks: cost, payerId: userId, leaseAt: deps.now() } }, { new: true }).catch(() => null);
+      if (!intent) {
+        await finish(row, { status: 'failed', outcome: 'ledger' }, { userId, action, refund: false });
+        return reply(503, { message: MESSAGES.ledger });
+      }
+      let paid = null; let spendThrew = false;
+      try { paid = await deps.spend(userId, cost, { action, description: kind === 'response_post' ? 'Post in response' : 'Witty comment draft', ref: String(row._id) }); } catch (_) { paid = null; spendThrew = true; }
       if (!paid || !paid.success) {
+        if (spendThrew) {
+          // The charge may or may not have landed: the ledger decides, and a spend row is refunded.
+          const r = await finish(row, { status: 'failed', outcome: 'ledger', quarks: 0 }, { userId, action, refund: true });
+          if (r.lookupFailed) return reply(503, { message: MESSAGES.refundLate });
+          return reply(503, { refunded: r.ok, message: r.ok ? MESSAGES.ledger : MESSAGES.refundLate });
+        }
         const frozen = Boolean(paid && paid.frozen);
-        await finish(row, { status: 'refused', outcome: frozen ? 'frozen' : 'no_balance' }, { userId, action, refund: false });
+        await finish(row, { status: 'refused', outcome: frozen ? 'frozen' : 'no_balance', quarks: 0 }, { userId, action, refund: false });
         return frozen ? reply(403, { message: MESSAGES.frozen }) : reply(403, { creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `This draft needs ${priceText(cost)}. Please top up or choose a plan.` });
       }
-      const charged = await Draft().findOneAndUpdate({ _id: row._id }, { $set: { status: 'charged', quarks: cost, payerId: String(paid.payerId || userId) } }, { new: true }).catch(() => null);
-      row = charged || { ...row.toObject(), quarks: cost, payerId: String(paid.payerId || userId) };
+      const payerId = String(paid.payerId || userId);
+      const charged = await Draft().findOneAndUpdate({ _id: row._id, inFlight: true, refunded: false }, { $set: { status: 'charged', chargedConfirmed: true, quarks: cost, payerId, leaseAt: deps.now() } }, { new: true }).catch(() => null);
+      row = charged || { ...row.toObject(), quarks: cost, payerId };
       if (!charged) {
-        // The charge is not on the ledger: do not call anything, give the Quarks straight back.
-        try { await deps.refundTo(userId, cost, { action: `${action}_refund`, ref: String(row._id), payerId: String(paid.payerId || '') }); } catch (_) { /* logged below */ }
-        await Draft().updateOne({ _id: row._id }, { $set: { status: 'failed', outcome: 'ledger', refunded: true }, $unset: { inFlight: 1 } }).catch(() => null);
-        return reply(503, { message: MESSAGES.ledger });
+        // The charge is not marked on the row: do not call anything, give the Quarks straight back (once, and checked).
+        const r = await finish(row, { status: 'failed', outcome: 'ledger' }, { userId, action, refund: true, known: { amount: cost, payerId } });
+        return reply(503, { refunded: r.ok, message: r.ok ? MESSAGES.ledger : MESSAGES.refundLate });
       }
 
       const facts = buildFacts({ post: found.post, worked: found.worked, brand: await brandOf(user), banned: found.banned, source: found.source });
       const reasons = new Set();
       for (let attempt = 1; attempt <= caps.MAX_ATTEMPTS; attempt += 1) {
-        const counted = await Draft().updateOne({ _id: row._id }, { $inc: { attempts: 1 } }).catch(() => null);
+        const counted = await Draft().updateOne({ _id: row._id, inFlight: true, refunded: false }, { $inc: { attempts: 1 }, $set: { leaseAt: deps.now() } }).catch(() => null);
         if (!counted || counted.modifiedCount === 0) {
           const r = await finish(row, { status: 'failed', outcome: 'ledger' }, { userId, action, refund: true });
           return reply(503, { refunded: r.ok, message: r.ok ? MESSAGES.ledger : MESSAGES.refundLate });
@@ -330,7 +369,7 @@ function createHomeDrafts(given = {}) {
         const local = checkDraft(kind, draft, { banned: found.banned, source: found.source });
         if (!local.ok) { for (const x of local.reasons) reasons.add(x); continue; }
 
-        const checkCounted = await Draft().updateOne({ _id: row._id }, { $inc: { checks: 1 } }).catch(() => null);
+        const checkCounted = await Draft().updateOne({ _id: row._id, inFlight: true, refunded: false }, { $inc: { checks: 1 }, $set: { leaseAt: deps.now() } }).catch(() => null);
         if (!checkCounted || checkCounted.modifiedCount === 0) {
           const r = await finish(row, { status: 'failed', outcome: 'ledger' }, { userId, action, refund: true });
           return reply(503, { refunded: r.ok, message: r.ok ? MESSAGES.ledger : MESSAGES.refundLate });
@@ -344,7 +383,13 @@ function createHomeDrafts(given = {}) {
         }
         if (!verdict.decent) { reasons.add('model'); continue; }
 
-        await Draft().updateOne({ _id: row._id }, { $set: { status: 'done', outcome: 'ok', result: draft, finishedAt: deps.now(), ...(reasons.size ? { reasons: [...reasons].sort() } : {}) }, $unset: { inFlight: 1 } });
+        // Only a row that is still running and not refunded may be delivered: a row closed by another process is never shown.
+        const delivered = await Draft().findOneAndUpdate({ _id: row._id, inFlight: true, refunded: false }, { $set: { status: 'done', outcome: 'ok', result: draft, finishedAt: deps.now(), ...(reasons.size ? { reasons: [...reasons].sort() } : {}) }, $unset: { inFlight: 1 } }, { new: true });
+        if (!delivered) {
+          const now2 = await Draft().findOne({ _id: row._id }).lean().catch(() => null);
+          const back = Boolean(now2 && now2.refunded);
+          return reply(502, { refunded: back, message: back ? MESSAGES.failed : MESSAGES.refundLate });
+        }
         return reply(200, { kind, draft: draftOut(kind, draft), quarks: cost, price: priceText(cost), language: language.code });
       }
       const outcome = reasons.has('model') && ![...reasons].some((x) => x !== 'model') ? 'blocked_model' : 'blocked_local';
