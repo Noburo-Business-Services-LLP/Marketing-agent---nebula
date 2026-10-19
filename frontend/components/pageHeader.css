@@ -1,0 +1,30 @@
+/* The one page header (components/PageHeader.tsx). Numbers: utils/pageHeader.ts. Spec: docs/superpowers/ops/tile-system.md,
+   "Page header". Plain CSS, nothing compiled in the browser. Every page title in the app uses this block, so the title,
+   eyebrow and description look the same on every page (owner, 2026-10-19). */
+.nb-page-head {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px;
+  margin: 0 0 24px; padding: 0; text-align: left;
+}
+.nb-page-head-text { flex: 1 1 320px; min-width: 0; }
+.nb-page-eyebrow {
+  margin: 0 0 6px; font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11px; font-weight: 700; line-height: 1.3; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--gv-text-tertiary);
+}
+.nb-page-title {
+  margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 32px; line-height: 1.15; font-weight: 400;
+  letter-spacing: -0.01em; color: var(--gv-text-primary); overflow-wrap: anywhere;
+}
+/* The gold italic emphasis word: the display gold one step deeper, for 3 to 1 on the cream at this size. */
+.nb-page-title em, .nb-page-em { font-style: italic; font-weight: inherit; color: #C06F00; }
+.nb-page-desc {
+  margin: 6px 0 0; max-width: 640px; font-size: 14px; line-height: 1.5; color: var(--gv-text-secondary);
+}
+.nb-page-actions { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
+
+@media (max-width: 639px) {
+  .nb-page-head { margin-bottom: 20px; gap: 12px; }
+  .nb-page-title { font-size: 26px; }
+  .nb-page-head-text { flex-basis: 100%; }
+  .nb-page-actions { justify-content: flex-start; }
+}
