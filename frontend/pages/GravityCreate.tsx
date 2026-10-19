@@ -32,6 +32,9 @@ import { usePostAccess } from '../hooks/usePostAccess';
 import { postStateWord } from '../utils/postActions';
 import { defaultGapDays, platformsOf, schedulable, scheduleSummary, scheduleTimes } from '../utils/scheduleAll';
 
+/** Several result posts: cards of at least 240 px that flow in rows and keep their size (a short row is not widened). */
+const POST_GRID: React.CSSProperties = { gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' };
+
 const ASPECTS = [
   { key: '4:5',  label: '4:5',  hint: 'Portrait', use: 'Best for the Instagram feed', w: 4, h: 5 },
   { key: '1:1',  label: '1:1',  hint: 'Square', use: 'Works everywhere', w: 1, h: 1 },
@@ -1485,7 +1488,8 @@ const GravityCreate: React.FC = () => {
             </h2>
             {progressMsg && <p className="text-[13.5px] text-[var(--gv-text-tertiary)] mt-3">{progressMsg}</p>}
           </div>
-          <div className={`grid gap-4 ${pendingCards.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+          {/* Several posts: fixed-size cards in a flowing grid, never stretched across the page (tile-system.md, "Post cards"). */}
+          <div className={`grid gap-4 ${pendingCards.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : ''}`} style={pendingCards.length === 1 ? undefined : POST_GRID}>
             {pendingCards.map((_, i) => (
               <div key={i} className="rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] overflow-hidden">
                 <div className="relative bg-black" style={{ aspectRatio: backendAspect.replace(':', ' / ') }}>
@@ -1542,7 +1546,7 @@ const GravityCreate: React.FC = () => {
             )}
           </div>
 
-          <div className={`grid gap-4 ${results.length === 1 ? 'grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+          <div className={`grid gap-4 ${results.length === 1 ? 'grid-cols-1 max-w-md' : ''}`} style={results.length === 1 ? undefined : POST_GRID}>
             {results.map((d: any) => {
               const img = draftImage(d);
               const processing = String(d?.status || '').toLowerCase() === 'processing';

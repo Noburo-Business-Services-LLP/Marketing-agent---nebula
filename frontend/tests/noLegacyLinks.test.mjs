@@ -55,5 +55,7 @@ test('the left menu calls the video entry "Create video" and keeps "Create conte
 test('the Library offers no Hero filter and names the video filter "Videos"', () => {
   const lib = fs.readFileSync(path.join(ROOT, 'pages/Library.tsx'), 'utf8');
   assert.doesNotMatch(lib, /key: 'hero'/);
-  assert.match(lib, /key: 'video-draft', label: 'Videos'/);
+  // The source dropdown was removed (owner, 2026-10-19: redundant next to the type toggle); the toggle names videos "Videos".
+  assert.match(lib, /key: 'video', label: 'Videos'/);
+  assert.doesNotMatch(lib, /Hero video/);
 });

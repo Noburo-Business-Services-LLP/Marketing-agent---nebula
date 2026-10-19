@@ -128,7 +128,8 @@ test('Library: photoshoot photos are their own source, tagged and filterable', (
   assert.equal(fromPhotoshootPhoto(null), null);
   assert.equal(applyFilters([item], { ...DEFAULT_FILTERS, source: 'photoshoot' }).length, 1);
   const page = read('pages/Library.tsx');
-  assert.ok(page.includes('photoshootAPI.library()') && page.includes("{ key: 'photoshoot', label: 'Photoshoots' }"));
+  // Photos load into the Library and carry the "Photoshoot" source chip (the source dropdown was removed on 2026-10-19).
+  assert.ok(page.includes('photoshootAPI.library()') && page.includes('SOURCE_WORD[i.source]'));
 });
 
 test("Use in Create hands the photo over as the post's product picture, once", () => {

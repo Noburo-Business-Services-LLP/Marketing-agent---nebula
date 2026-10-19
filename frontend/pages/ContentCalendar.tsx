@@ -107,7 +107,6 @@ const ContentCalendar: React.FC = () => {
     ro.observe(el);
     return () => ro.disconnect();
   }, [viewMode, loading, history.length, activeDetailTab, weeklyDrafts.length, loadingWeeklyDrafts]);
-  const draftSpans = useMemo(() => fillRows(weeklyDrafts.map(() => 1), cardCols), [weeklyDrafts, cardCols]);
 
   const handleGenerateWeekContent = async () => {
     if (!calendar) return;
@@ -555,9 +554,9 @@ const ContentCalendar: React.FC = () => {
               <p className="mt-1">There are no drafts generated for Week {getActiveWeekNumber()} of this calendar.</p>
             </div>
           ) : (
-            <ul ref={draftsRef} className="nb-cal-drafts" style={{ ['--nb-cal-cols' as any]: cardCols }}>
-              {weeklyDrafts.map((item, n) => (
-                <li key={item._id} className="nb-cal-draft" style={draftSpans[n] > 1 ? { gridColumn: `span ${draftSpans[n]}` } : undefined}>
+            <ul ref={draftsRef} className="nb-cal-drafts">
+              {weeklyDrafts.map((item) => (
+                <li key={item._id} className="nb-cal-draft">
                   <div className="nb-cal-draft-pic">
                     {item.status === 'processing' ? (
                       <span className="inline-flex items-center gap-1.5"><Loader2 className="w-4 h-4 animate-spin text-[#C77A0A]" aria-hidden="true" />Making the image...</span>

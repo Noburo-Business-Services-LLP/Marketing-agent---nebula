@@ -224,10 +224,3 @@ export function libraryTileActions(i: Pick<LibraryItem, 'status' | 'mediaUrl' | 
   if (i.source === 'studio') out.push('again');
   return out;
 }
-
-/** Columns of the Library grid for the width the grid really has (the side menu takes part of the screen). */
-export function libraryColumns(width: number): number {
-  if (width >= 960) return 4;
-  if (width >= 620) return 3;
-  return 2;
-}

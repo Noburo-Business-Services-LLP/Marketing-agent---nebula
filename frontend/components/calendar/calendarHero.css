@@ -124,10 +124,10 @@
 .nb-cal-quiet[aria-pressed="true"] { border-color: #BFE3CC; background: #DDF2E6; color: #1E5A36; }
 .nb-cal-error { border-radius: 12px; border: 1px solid #F6C3A3; background: #FFF1E8; padding: 10px 14px; font-size: 13px; color: #8A2E0E; }
 
-/* Weekly drafts */
-.nb-cal-drafts { display: grid; gap: 14px; grid-template-columns: repeat(var(--nb-cal-cols, 1), minmax(0, 1fr)); align-items: stretch; margin: 0; padding: 0; list-style: none; }
-.nb-cal-draft { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border-radius: 14px; border: 1px solid var(--gv-border-subtle); background: var(--gv-panel); }
-.nb-cal-draft-pic { position: relative; height: 150px; display: flex; align-items: center; justify-content: center; background: #F6EEDF; font-size: 12px; color: #5E4A31; }
+/* Weekly drafts: fixed-size post cards in a flowing grid, never widened to fill a row (tile-system.md, "Post cards"). */
+.nb-cal-drafts { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); align-items: stretch; margin: 0; padding: 0; list-style: none; }
+.nb-cal-draft { display: flex; flex-direction: column; min-width: 0; max-width: 340px; overflow: hidden; border-radius: 14px; border: 1px solid var(--gv-border-subtle); background: var(--gv-panel); }
+.nb-cal-draft-pic { position: relative; aspect-ratio: 4 / 5; display: flex; align-items: center; justify-content: center; background: #F6EEDF; font-size: 12px; color: #5E4A31; }
 .nb-cal-draft-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .nb-cal-draft-body { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; padding: 12px 14px; }
 .nb-cal-draft-title { font-size: 13.5px; font-weight: 700; color: #2B1D0E; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,15 +1,16 @@
 /* ============================================================
-   Library tiles (pages/Library.tsx). One picture height for every tile, so each row is the same height;
-   the columns come from the grid's real width and the last tile of a short row is widened (fillRows),
-   so every row is filled (symmetry rule, ops/tile-system.md). Source and status chips in words.
+   Library tiles (pages/Library.tsx). Post cards are FIXED-SIZE (owner, 2026-10-19): they flow in an auto-fill grid
+   of 220 px minimum columns, one card never stretches across the page (a lone post stays one card wide), every
+   card has the same 4:5 picture area and the cards of a row share one height. Newest first. Source and status chips
+   in words. Rule: docs/superpowers/ops/tile-system.md, "Post cards".
    Every tile ends in one action row: posts use the shared post actions (components/PostActions.tsx, main button and More),
    videos and photos Open, Edit and Download. Views (Needs approval ... Bin) are one row of tabs with counts.
    Plain CSS on the cream theme tokens; motion only without reduced motion.
    ============================================================ */
-.nb-lib-grid { display: grid; gap: 14px; grid-template-columns: repeat(var(--nb-lib-cols, 2), minmax(0, 1fr)); align-items: stretch; margin: 0; padding: 0; list-style: none; }
+.nb-lib-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); align-items: stretch; margin: 0; padding: 0; list-style: none; }
 .nb-lib-cell { min-width: 0; display: flex; }
 .nb-lib-tile {
-  position: relative; display: flex; flex-direction: column; width: 100%; min-width: 0; overflow: hidden;
+  position: relative; display: flex; flex-direction: column; width: 100%; max-width: 340px; min-width: 0; overflow: hidden;
   border-radius: 14px; border: 1px solid var(--gv-border-subtle); background: var(--gv-panel);
   box-shadow: 0 1px 2px rgb(var(--gv-ink-rgb) / 0.05), 0 10px 24px -18px rgb(90 60 20 / 0.35);
 }
@@ -21,7 +22,7 @@
 .nb-lib-open:disabled { cursor: default; }
 .nb-lib-open:focus-visible { outline: 3px solid var(--gv-text-primary); outline-offset: -3px; border-radius: 14px; }
 .nb-lib-pic {
-  position: relative; display: flex; align-items: center; justify-content: center; height: 136px; overflow: hidden;
+  position: relative; display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 5; overflow: hidden;
   background: radial-gradient(70% 90% at 80% 10%, #FFF1D2, transparent 70%), #F6EEDF; color: var(--gv-text-tertiary);
 }
 .nb-lib-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -84,8 +85,7 @@
 .nb-lib-band[data-tone="bin"] { background: #F7F2E9; border-color: #E5DACA; color: #4A3A26; }
 
 @media (max-width: 639px) {
-  .nb-lib-grid { gap: 10px; }
-  .nb-lib-pic { height: 120px; }
+  .nb-lib-grid { gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .nb-lib-foot { padding: 0 8px 8px; }
   .nb-lib-view { flex: 0 0 auto; padding: 0 10px; }
 }

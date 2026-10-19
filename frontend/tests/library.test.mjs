@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { fromPostDraft, fromVideoDraft, fromHeroJob, applyFilters, DEFAULT_FILTERS, stillFor } from '../utils/library.ts';
 
 const MP4 = 'https://res.cloudinary.com/demo/video/upload/v1/x/abc.mp4';
@@ -83,7 +84,7 @@ test('Library: one row of views (tabs with counts) and one compact filter row wi
   assert.ok(!/h-9 px-4 rounded-full/.test(src));
 });
 
-import { SOURCE_WORD, libraryTileActions, libraryColumns, STATUS_WORD as STATUS_WORDS } from '../utils/library.ts';
+import { SOURCE_WORD, libraryTileActions, STATUS_WORD as STATUS_WORDS } from '../utils/library.ts';
 
 test('every source and status has words for its chip', () => {
   ['post', 'reel', 'video-draft', 'hero', 'photoshoot'].forEach((s) => assert.ok(SOURCE_WORD[s]));
@@ -97,8 +98,14 @@ test('tile actions: none while creating, edit for drafts and failed, download on
   assert.deepEqual(libraryTileActions({ status: 'posted', mediaUrl: 'https://x/y.jpg', source: 'post' }), ['open']);
 });
 
-test('library columns follow the grid width', () => {
-  assert.deepEqual([343, 619, 620, 959, 960, 1100].map(libraryColumns), [2, 2, 3, 3, 4, 4]);
+test('post cards keep one size in a flowing grid: no widened last card, no search box, no source dropdown', () => {
+  const page = fs.readFileSync(new URL('../pages/Library.tsx', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../components/library/library.css', import.meta.url), 'utf8');
+  assert.ok(!page.includes('fillRows') && !page.includes('gridColumn'), 'a card is never widened to fill a row');
+  assert.ok(!/Search by title or caption/.test(page) && !page.includes('Where it came from'));
+  assert.match(css, /\.nb-lib-grid \{[^}]*repeat\(auto-fill, minmax\(220px, 1fr\)\)/);
+  assert.match(css, /\.nb-lib-pic \{[^}]*aspect-ratio: 4 \/ 5/);
+  assert.match(css, /\.nb-lib-tile \{[^}]*max-width: 340px/);
 });
 
 import { LIBRARY_VIEWS, inView, defaultView, viewFromQuery, statusWordOf } from '../utils/library.ts';

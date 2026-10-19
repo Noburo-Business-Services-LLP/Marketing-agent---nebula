@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, RotateCcw, Search, Trash2, X } from 'lucide-react';
+import { Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, RotateCcw, Trash2, X } from 'lucide-react';
 import { GravityButton } from '../components/gravity';
 import { useConfirm } from '../context/ConfirmContext';
 import GenerationTimer from '../components/GenerationTimer';
@@ -17,9 +17,8 @@ import { platformLabel } from '../utils/platforms';
 import {
   LibraryItem, LibraryFilters, LibraryView, DEFAULT_FILTERS, STATUS_WORD, LIBRARY_VIEWS,
   fromPostDraft, fromVideoDraft, fromHeroJob, fromPhotoshootPhoto, fromStudioVideo, applyFilters, inView, defaultView, statusWordOf,
-  SOURCE_WORD, libraryTileActions, libraryColumns,
+  SOURCE_WORD, libraryTileActions,
 } from '../utils/library';
-import { fillRows } from '../utils/rowSpans';
 import '../components/library/library.css';
 import PageHeader from '../components/PageHeader';
 import GravityApprove from './GravityApprove';
@@ -27,10 +26,6 @@ import type { User } from '../types';
 
 const KINDS: Array<{ key: LibraryFilters['kind']; label: string }> = [
   { key: 'all', label: 'All' }, { key: 'image', label: 'Images' }, { key: 'video', label: 'Videos' },
-];
-const SOURCES: Array<{ key: LibraryFilters['source']; label: string }> = [
-  { key: 'all', label: 'Everything' }, { key: 'video-draft', label: 'Videos' }, { key: 'post', label: 'Posts and images' },
-  { key: 'studio', label: 'Short videos' }, { key: 'reel', label: 'Reels from your plan' }, { key: 'photoshoot', label: 'Photoshoots' },
 ];
 
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--gv-bg,transparent)]';
@@ -138,17 +133,8 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
   const shown = useMemo(() => applyFilters(source.filter((i) => inView(i, view)), filters), [source, view, filters]);
   // Counts per view: from the server (posts); views it does not count use what is loaded.
   const countFor = (key?: keyof DraftCounts): number | null => (key && counts && Number.isFinite(counts[key]) ? counts[key] : null);
-  // Columns follow the grid's real width; the last tile of a short row is widened so every row is filled.
-  const gridRef = useRef<HTMLUListElement | null>(null);
-  const [cols, setCols] = useState(2);
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(([e]) => setCols(libraryColumns(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [loading, binLoading, shown.length > 0]);
-  const spans = useMemo(() => fillRows(shown.map(() => 1), cols), [shown, cols]);
+  // Post cards keep one size and flow in a grid as more are made, newest first (applyFilters sorts by date); the grid
+  // never widens a card to fill a row (owner, 2026-10-19: the full-width rule is for the page, not for post cards).
   const platforms = useMemo(() => Array.from(new Set(items.flatMap((i) => i.platforms))).sort(), [items]);
   const set = (patch: Partial<LibraryFilters>) => setFilters((f) => ({ ...f, ...patch }));
 
@@ -228,18 +214,13 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
           <div className="shrink-0 inline-flex items-center gap-0.5 rounded-full border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-0.5" role="group" aria-label="Type">
             {KINDS.map((k) => <button key={k.key} type="button" aria-pressed={filters.kind === k.key} onClick={() => set({ kind: k.key })} className={seg(filters.kind === k.key)}>{k.label}</button>)}
           </div>
-          <label className="relative">
-            <span className="sr-only">Search your library</span>
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--gv-text-tertiary)]" />
-            <input value={filters.query} onChange={(e) => set({ query: e.target.value })} placeholder="Search by title or caption" className={`${select} pl-9 w-[220px]`} />
-          </label>
-          <select aria-label="Where it came from" value={filters.source} onChange={(e) => set({ source: e.target.value as any })} className={select}>
-            {SOURCES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-          <select aria-label="Platform" value={filters.platform} onChange={(e) => set({ platform: e.target.value })} className={select}>
-            <option value="">All platforms</option>
-            {platforms.map((p) => <option key={p} value={p}>{platformLabel(p)}</option>)}
-          </select>
+          {/* The platform filter only when posts are for two or more platforms; with one it would filter nothing. */}
+          {(platforms.length > 1 || filters.platform) && (
+            <select aria-label="Platform" value={filters.platform} onChange={(e) => set({ platform: e.target.value })} className={select}>
+              <option value="">All platforms</option>
+              {platforms.map((p) => <option key={p} value={p}>{platformLabel(p)}</option>)}
+            </select>
+          )}
         </div>}
       </div>
 
@@ -270,14 +251,14 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
               : view !== 'all' ? <GravityButton variant="ghost" onClick={() => setView('all')}>Show everything</GravityButton> : null}
         </div>
       ) : (
-        <ul ref={gridRef} className="nb-lib-grid" style={{ ['--nb-lib-cols' as any]: cols }} data-testid="library-grid">
-          {shown.map((i, n) => {
+        <ul className="nb-lib-grid" data-testid="library-grid">
+          {shown.map((i) => {
             const actions = libraryTileActions(i);
             const post = isPost(i);
             const word = statusWordOf(i);
             const daysLeft = i.status === 'binned' ? binDaysLeft(i.raw?.binnedAt) : 0;
             return (
-              <li key={`${i.source}-${i.id}`} className="nb-lib-cell" style={spans[n] > 1 ? { gridColumn: `span ${spans[n]}` } : undefined}>
+              <li key={`${i.source}-${i.id}`} className="nb-lib-cell">
                 <article className="nb-lib-tile">
                   <button type="button" onClick={() => (i.status === 'creating' ? undefined : setOpen(i))} disabled={i.status === 'creating'} className="nb-lib-open" aria-label={`Open ${i.title}`}>
                     <span className="nb-lib-pic">
