@@ -17,16 +17,17 @@ import './createOptions.css';
  * a light border, and a gold ring when it is chosen. Single choices are radio groups: Tab reaches the
  * chosen tile, the arrow keys move and choose.
  *
- * Symmetry (owner, 2026-10-19): the groups share the full row width in proportion to how many tiles they hold, the
- * tiles of a group stretch evenly across it, and every tile is the same height. Rows that wrap (tablet, phone) are
- * filled the same way. The layout lives in createOptions.css.
+ * Two rows (owner, 2026-10-19): Language and Platforms, then Aspect ratio, Logo and Look, in `.nb-opt-rows` >
+ * `.nb-opt-row` drawn by the Create page. In a row the groups share the full width in proportion to how many tiles
+ * they hold, the tiles of a group stretch evenly across it, and every tile is the same height (88 px), so the labels
+ * ("Instagram", "Your logo") have room. Rows that wrap on a phone are filled the same way. Layout: createOptions.css.
  */
 
-const TILE = 'relative flex h-[76px] shrink-0 flex-col items-center justify-between rounded-xl border px-1 pt-1.5 pb-[7px] outline-none transition-[border-color,box-shadow,background-color] focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--gv-bg)]';
+const TILE = 'relative flex h-[88px] shrink-0 flex-col items-center justify-between rounded-xl border px-1 pt-1.5 pb-[7px] outline-none transition-[border-color,box-shadow,background-color] focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--gv-bg)]';
 const TILE_ON = 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] shadow-[0_0_0_1px_var(--gv-accent)]';
 const TILE_OFF = 'border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] hover:border-[var(--gv-border-default)] hover:shadow-[0_1px_4px_rgb(20_32_58/0.06)]';
-const ART = 'flex h-[46px] w-full items-center justify-center';
-const NAME = 'block max-w-full truncate text-[10.5px] font-semibold leading-none tracking-[-0.01em]';
+const ART = 'flex h-[52px] w-full items-center justify-center';
+const NAME = 'block max-w-full truncate text-[12px] font-semibold leading-tight tracking-[-0.01em]';
 const nameTone = (on: boolean) => (on ? 'text-[var(--gv-accent-text)]' : 'text-[var(--gv-text-secondary)]');
 
 export const tileClass = (on: boolean, width: string) => `${TILE} ${width} ${on ? TILE_ON : TILE_OFF}`;
@@ -237,7 +238,7 @@ export const PlatformTiles: React.FC<{
   selected: string[];
   onToggle: (key: string) => void;
 }> = ({ items, selected, onToggle }) => (
-  <div className="nb-opt-tiles" role="group" aria-label="Platforms">
+  <div className="nb-opt-tiles nb-opt-platforms" role="group" aria-label="Platforms">
     {items.map((item) => {
       const on = selected.includes(item.key);
       const disabled = Boolean(item.soon);

@@ -1268,97 +1268,100 @@ const GravityCreate: React.FC = () => {
           </div>
         )}
 
-        {/* Language, platforms, shape, logo and look: small picture tiles of one height, in one row that wraps
-            (onto a few lines on a phone). Platforms, shape and logo are not in LinkedIn mode, which has no image step. */}
-        <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
-          {/* Every mode: a single post or a carousel is just as often made in a regional language. */}
-          <OptionGroup label="Language">
-            <div className="relative">
-              <LanguageTile value={language} open={openPopover === 'language'} onToggle={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
-              <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} className="min-w-[220px]" />
-            </div>
-          </OptionGroup>
-
-          {mode !== 'linkedin' && (
-            <OptionGroup
-              label="Platforms"
-              hint={mode === 'campaign' ? (
-                <>
-                  <span className="tabular-nums font-semibold text-[var(--gv-text-primary)]">~{estimate.total} posts</span>
-                  <span className="mx-1.5">·</span>{estimate.perWeek} per week
-                </>
-              ) : undefined}
-            >
-              <PlatformTiles items={PLATFORMS.map(({ key, label, soon }) => ({ key, label, soon }))} selected={selectedPlatforms} onToggle={togglePlatform} />
+        {/* Language, platforms, shape, logo and look: picture tiles of one height in TWO rows (owner, 2026-10-19):
+            Language and Platforms, then Aspect ratio, Logo and Look. Each row fills the width of the idea box; the
+            layout lives in components/createOptions.css. Platforms, shape and logo are not in LinkedIn mode, which has
+            no image step. */}
+        <div className="nb-opt-rows">
+          <div className="nb-opt-row" data-row="1">
+            {/* Every mode: a single post or a carousel is just as often made in a regional language. */}
+            <OptionGroup label="Language">
+              <div className="relative">
+                <LanguageTile value={language} open={openPopover === 'language'} onToggle={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
+                <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} className="min-w-[220px]" />
+              </div>
             </OptionGroup>
-          )}
 
-          {mode !== 'linkedin' && (
-            <OptionGroup label="Aspect ratio" hint={ASPECTS.find((a) => visualStyle.startsWith(a.key))?.use}>
-              <TileRadioRow
-                label="Shape of the picture"
-                width="w-[56px]"
-                value={ASPECTS.find((a) => visualStyle.startsWith(a.key))?.key || '4:5'}
-                onChange={setAspect}
-                choices={ASPECTS.map((a) => ({
-                  value: a.key,
-                  name: a.label,
-                  description: `${a.hint}, ${a.use.toLowerCase()}`,
-                  art: <ShapeArt w={a.w} h={a.h} on={visualStyle.startsWith(a.key)} />,
-                }))}
-              />
-            </OptionGroup>
-          )}
-
-          {mode !== 'linkedin' && (
-            <OptionGroup
-              label="Logo"
-              note={logos.length === 0 ? <>· none in Brand assets</> : undefined}
-              hint={selectedLogo ? 'Added after the picture is made' : undefined}
-            >
-              <TileRadioRow
-                label="Logo on the picture"
-                width="w-[64px]"
-                value={selectedLogo}
-                onChange={(url) => {
-                  setSelectedLogo(url);
-                  const l = logos.find((x) => x.url === url);
-                  if (l) setLogoPosition(l.defaultPosition);
-                }}
-                choices={[
-                  { value: '', name: 'No logo', art: <LogoPostArt /> },
-                  ...logos.map((l) => ({
-                    value: l.url,
-                    name: logos.length > 1 ? l.name : 'Your logo',
-                    description: l.name,
-                    art: <LogoPostArt position={selectedLogo === l.url ? logoPosition : l.defaultPosition} logoUrl={l.url} />,
-                  })),
-                ]}
-                after={
+            {mode !== 'linkedin' && (
+              <OptionGroup
+                label="Platforms"
+                hint={mode === 'campaign' ? (
                   <>
-                    {/* Only once a logo is going on the picture. Starts on that logo's Brand assets position. */}
-                    {selectedLogo && <LogoPositionTile value={logoPosition} logoUrl={selectedLogo} onChange={setLogoPosition} />}
-                    {logos.length === 0 && (
-                      <button type="button" onClick={() => navigate('/brand-assets')} className={`${tileClass(false, 'w-[76px]')} !justify-center text-[11.5px] font-semibold text-[var(--gv-accent-text)]`}>
-                        Add a logo
-                      </button>
-                    )}
+                    <span className="tabular-nums font-semibold text-[var(--gv-text-primary)]">~{estimate.total} posts</span>
+                    <span className="mx-1.5">·</span>{estimate.perWeek} per week
                   </>
-                }
-              />
-            </OptionGroup>
-          )}
+                ) : undefined}
+              >
+                <PlatformTiles items={PLATFORMS.map(({ key, label, soon }) => ({ key, label, soon }))} selected={selectedPlatforms} onToggle={togglePlatform} />
+              </OptionGroup>
+            )}
+          </div>
 
           {mode !== 'linkedin' && (
-            <OptionGroup label="Look" hint={LOOKS.find((l) => l.key === density)?.hint}>
-              <TileRadioRow
-                label="How full the design is"
-                width="w-[72px]"
-                value={density}
-                onChange={(v) => setDensity(v as typeof density)}
-                choices={LOOKS.map((l) => ({ value: l.key, name: l.label, description: l.hint, art: LOOK_ART[l.key] }))}
-              />
-            </OptionGroup>
+            <div className="nb-opt-row" data-row="2">
+
+              <OptionGroup label="Aspect ratio" hint={ASPECTS.find((a) => visualStyle.startsWith(a.key))?.use}>
+                <TileRadioRow
+                  label="Shape of the picture"
+                  width="w-[56px]"
+                  value={ASPECTS.find((a) => visualStyle.startsWith(a.key))?.key || '4:5'}
+                  onChange={setAspect}
+                  choices={ASPECTS.map((a) => ({
+                    value: a.key,
+                    name: a.label,
+                    description: `${a.hint}, ${a.use.toLowerCase()}`,
+                    art: <ShapeArt w={a.w} h={a.h} on={visualStyle.startsWith(a.key)} />,
+                  }))}
+                />
+              </OptionGroup>
+
+              <OptionGroup
+                label="Logo"
+                note={logos.length === 0 ? <>· none in Brand assets</> : undefined}
+                hint={selectedLogo ? 'Added after the picture is made' : undefined}
+              >
+                <TileRadioRow
+                  label="Logo on the picture"
+                  width="w-[64px]"
+                  value={selectedLogo}
+                  onChange={(url) => {
+                    setSelectedLogo(url);
+                    const l = logos.find((x) => x.url === url);
+                    if (l) setLogoPosition(l.defaultPosition);
+                  }}
+                  choices={[
+                    { value: '', name: 'No logo', art: <LogoPostArt /> },
+                    ...logos.map((l) => ({
+                      value: l.url,
+                      name: logos.length > 1 ? l.name : 'Your logo',
+                      description: l.name,
+                      art: <LogoPostArt position={selectedLogo === l.url ? logoPosition : l.defaultPosition} logoUrl={l.url} />,
+                    })),
+                  ]}
+                  after={
+                    <>
+                      {/* Only once a logo is going on the picture. Starts on that logo's Brand assets position. */}
+                      {selectedLogo && <LogoPositionTile value={logoPosition} logoUrl={selectedLogo} onChange={setLogoPosition} />}
+                      {logos.length === 0 && (
+                        <button type="button" onClick={() => navigate('/brand-assets')} className={`${tileClass(false, 'w-[76px]')} !justify-center text-[11.5px] font-semibold text-[var(--gv-accent-text)]`}>
+                          Add a logo
+                        </button>
+                      )}
+                    </>
+                  }
+                />
+              </OptionGroup>
+
+              <OptionGroup label="Look" hint={LOOKS.find((l) => l.key === density)?.hint}>
+                <TileRadioRow
+                  label="How full the design is"
+                  width="w-[72px]"
+                  value={density}
+                  onChange={(v) => setDensity(v as typeof density)}
+                  choices={LOOKS.map((l) => ({ value: l.key, name: l.label, description: l.hint, art: LOOK_ART[l.key] }))}
+                />
+              </OptionGroup>
+            </div>
           )}
         </div>
       </div>

@@ -1,15 +1,17 @@
-/* Create content options row (components/CreateOptions.tsx). Symmetry rule, docs/superpowers/ops/tile-system.md.
+/* Create content options (components/CreateOptions.tsx). Symmetry rule, docs/superpowers/ops/tile-system.md.
    Plain CSS, nothing compiled in the browser.
 
-   The row itself is drawn by the Create page; it is found here as the element that holds the option groups, so the
-   page needs no class of its own. It beats the page's Tailwind flex classes on specificity (element plus :has). */
-div:has(> .nb-opt-group) { display: flex; flex-wrap: wrap; align-items: stretch; column-gap: 10px; row-gap: 14px; }
+   Two rows (owner, 2026-10-19), drawn by pages/GravityCreate.tsx with its own classes:
+     .nb-opt-rows > .nb-opt-row[data-row="1"]  Language + Platforms
+     .nb-opt-rows > .nb-opt-row[data-row="2"]  Aspect ratio + Logo + Look
+   Each row runs the full width of the idea box above it, edge to edge; every tile is the same height. */
+.nb-opt-rows { display: flex; flex-direction: column; gap: 16px; }
+.nb-opt-row { display: flex; flex-wrap: wrap; align-items: stretch; column-gap: 14px; row-gap: 14px; }
 
-/* Each group takes a share of the row in proportion to the room its tiles need (--w, about one tile each), from a
-   basis of 54 px a share, so the row always ends flush with the idea box above and a wrapped row is filled too.
-   Language (one wider tile) counts one and a half; the four picture shapes need less room (3.25 for four); the logo
-   tiles with the position tile, whose labels are longer, count 1.1 each. */
-.nb-opt-group { --w: 1.5; flex: var(--w) 1 calc(var(--w) * 54px); }
+/* Each group takes a share of its row in proportion to the room its tiles need (--w, about one tile each), from a
+   basis of 64 px a share, so the row always ends flush with the idea box and a wrapped row is filled too.
+   Language (one wider tile showing the language name) counts two. */
+.nb-opt-group { --w: 2; flex: var(--w) 1 calc(var(--w) * 64px); }
 .nb-opt-group:has(.nb-opt-tiles > :nth-child(1)) { --w: 1; }
 .nb-opt-group:has(.nb-opt-tiles > :nth-child(2)) { --w: 2; }
 .nb-opt-group:has(.nb-opt-tiles > :nth-child(3)) { --w: 3; }
@@ -17,12 +19,16 @@ div:has(> .nb-opt-group) { display: flex; flex-wrap: wrap; align-items: stretch;
 .nb-opt-group:has(.nb-opt-tiles > :nth-child(5)) { --w: 5; }
 .nb-opt-group:has(.nb-opt-tiles > :nth-child(6)) { --w: 6; }
 .nb-opt-group:has(.nb-opt-tiles > :nth-child(7)) { --w: 7; }
-.nb-opt-group.nb-opt-group:has(.nb-opt-tiles .nb-opt-shape) { --w: 3.25; }
-.nb-opt-group.nb-opt-group:has(.nb-opt-tiles > div:nth-child(3)) { --w: 3.3; }
-.nb-opt-group.nb-opt-group:has(.nb-opt-tiles > div:nth-child(4)) { --w: 4.4; }
 .nb-opt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Tiles of a group: equal columns across the whole group width, one height (the tile class sets 76 px). */
-.nb-opt-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+/* Tiles of a group: equal columns across the whole group width, one height (the tile class sets 88 px). */
+.nb-opt-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
 .nb-opt-tiles > button, .nb-opt-tiles > div > button { width: 100%; min-width: 0; }
-.nb-opt-tiles > button > span:last-child, .nb-opt-tiles > div > button > span:last-child { font-size: 10px; letter-spacing: -0.02em; }
+
+/* Phone: every group gets its own full line, so each line is filled edge to edge; the five platforms stay on one
+   line (about 63 px a tile at 375 wide) with their names one step smaller so "Instagram" fits. */
+@media (max-width: 639px) {
+  .nb-opt-group { flex-basis: 100%; }
+  .nb-opt-tiles { gap: 4px; }
+  .nb-opt-platforms > button > span:last-child { font-size: 11px; letter-spacing: -0.02em; }
+}
