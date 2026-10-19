@@ -137,7 +137,8 @@ test('no "worth" wording anywhere on the Photoshoot page or its tiles (customer 
     const view = { ...p, quarks: 10 * p.defaultCount, minutes: 3 };
     const l = packTileLines(view, COSTS);
     assert.doesNotMatch(l.price + l.subtitle, /worth|post/i, p.key);
-    assert.equal(l.price, `${10 * p.defaultCount} Quarks`);
+    const amount = `${10 * p.defaultCount} Quarks`;
+    assert.equal(l.price, /^Up to /.test(l.subtitle) ? `Up to ${amount}` : amount);
   }
   assert.equal(`${priceLine(10, COSTS)} for each photo`, '10 Quarks for each photo', 'the header chip');
   const page = read('pages/Photoshoot.tsx');

@@ -31,11 +31,11 @@ const job = (extra = {}) => ({
 test('prices are Quarks only on the Photoshoot page (owner 2026-10-19), posts\' worth only for agency accounts', () => {
   assert.equal(priceLine(60, COSTS), '60 Quarks');
   assert.equal(priceLine(1, COSTS), '1 Quark');
-  assert.equal(priceLine(60, COSTS, true), "About 5 posts' worth");
+  assert.equal(priceLine(60, COSTS, true), '60 Quarks');
   assert.equal(priceLine(240, COSTS), '240 Quarks');
   assert.equal(priceLine(1000, COSTS), '1,000 Quarks');
   assert.equal(priceLine(0, COSTS), '');
-  assert.deepEqual(packTileLines(PACK, COSTS), { price: '60 Quarks', subtitle: 'Up to 6 photos, about 3 minutes' });
+  assert.deepEqual(packTileLines(PACK, COSTS), { price: 'Up to 60 Quarks', subtitle: 'Up to 6 photos, about 3 minutes' });
 });
 
 test('photos, minutes and the selection rules', () => {
@@ -110,8 +110,8 @@ test('Home: a Photoshoot tile, a Photoshoot tab and the packs rail from the serv
   assert.deepEqual(HOME_CREATE_TILES.map((t) => t.key), ['single', 'carousel', 'campaign', 'video', 'photoshoot']);
   assert.deepEqual(createTileHandoff('photoshoot'), { target: null, route: '/photoshoot', data: null });
   assert.deepEqual(HOME_DESCRIBE_TABS.map((t) => t.label), ['Post', 'Video', 'Photoshoot']);
-  assert.deepEqual(packRailItems({ ...OPTS }), [{ key: 'product', title: 'Product photoshoot', line: 'Up to 6 photos, about 3 minutes', price: '60 Quarks', to: '/photoshoot?pack=product' }]);
-  assert.equal(packRailItems({ ...OPTS }, true)[0].price, "About 5 posts' worth");
+  assert.deepEqual(packRailItems({ ...OPTS }), [{ key: 'product', title: 'Product photoshoot', line: 'Up to 6 photos, about 3 minutes', price: 'Up to 60 Quarks', to: '/photoshoot?pack=product' }]);
+  assert.equal(packRailItems({ ...OPTS }, true)[0].price, 'Up to 60 Quarks');
   assert.deepEqual(packRailItems(null), []);
   const blocks = read('components/home/HomeBlocks.tsx');
   assert.ok(blocks.includes('photoshootAPI.packs()'), 'the rail reads the catalogue');

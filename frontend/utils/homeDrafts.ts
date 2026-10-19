@@ -50,13 +50,11 @@ export function draftsAvailable(opts: DraftOptions | null | undefined, ref?: str
   return Boolean(opts && !opts.staff && opts.enabled && opts.entitled && String(ref || '').length > 0);
 }
 
-/** The price shown before pressing: "6 Quarks (about 1 post's worth)", or only "About 1 post's worth" where the account
- *  sees posts and videos rather than Quarks (agency owners and their clients). */
-export function priceLabel(opts: DraftOptions | null | undefined, kind: DraftKind, postsOnly = false): string {
+/** The price shown before pressing: "6 Quarks" for every account (owner, 2026-10-19: no "posts' worth" wording, same everywhere). */
+export function priceLabel(opts: DraftOptions | null | undefined, kind: DraftKind, _postsOnly = false): string {
   const p = opts?.prices?.[kind];
   if (!p || !isNum(p.quarks)) return '';
-  if (postsOnly || opts?.postsOnly) { const w = String(p.worth || '').trim(); return w ? w[0].toUpperCase() + w.slice(1) : ''; }
-  return String(p.price || `${p.quarks} Quarks`);
+  return `${Number(p.quarks).toLocaleString('en-IN')} ${Number(p.quarks) === 1 ? 'Quark' : 'Quarks'}`;
 }
 
 /** A new key for one press of the button: a second press of the same key is never charged again. */

@@ -33,9 +33,9 @@ test('options: the shape is checked, and the actions show only when on, allowed,
 });
 
 test('the price is shown before pressing: Quarks with the posts equivalent, or only the posts equivalent for agencies', () => {
-  assert.equal(priceLabel(opts(), 'witty_comment'), "6 Quarks (about 1 post's worth)");
-  assert.equal(priceLabel(opts(), 'response_post', true), "About 1 post's worth");
-  assert.equal(priceLabel(opts({ postsOnly: true }), 'witty_comment'), "About 1 post's worth");
+  assert.equal(priceLabel(opts(), 'witty_comment'), '6 Quarks');
+  assert.equal(priceLabel(opts(), 'response_post', true), '8 Quarks');
+  assert.equal(priceLabel(opts({ postsOnly: true }), 'witty_comment'), '6 Quarks');
   assert.equal(priceLabel(null, 'witty_comment'), '');
   assert.equal(leftLine(opts()), 'You can make 17 more drafts today.');
   assert.equal(leftLine(opts({ left: 1 })), 'You can make 1 more draft today.');

@@ -1,7 +1,6 @@
 // The Photoshoot page: the shapes the server sends and the small rules the page follows. Pure functions only, tested in
 // tests/photoshoot.test.mjs. Prices are never typed here: they come from the server (config/apiCosts.js) and are written
 // with the shared Quark wording (utils/plans.ts).
-import { worthText } from './plans.ts';
 
 export interface PhotoshootChoice { key: string; label: string }
 export interface PhotoshootPack {
@@ -54,11 +53,10 @@ export function minutesFor(photos: number): number {
   return Math.max(1, Math.ceil(Math.ceil(Math.max(1, photos) / 2) * 60 / 60));
 }
 
-/** "60 Quarks": the price as the customer reads it on the Photoshoot page (owner, 2026-10-19: no "posts' worth" here, it was
- * not understood). Agency accounts never see Quarks (the agency rule), so for them it stays the posts' worth only. */
-export function priceLine(quarks: number, costs: Record<string, number> | null | undefined, postsOnly = false): string {
+/** "60 Quarks": the price as the customer reads it on the Photoshoot page. Owner, 2026-10-19: no "posts' worth" wording anywhere,
+ * and the same Quark amount for every account, as on the other screens (`postsOnly` is kept only so callers need not change). */
+export function priceLine(quarks: number, _costs?: Record<string, number> | null, _postsOnly = false): string {
   if (!(quarks > 0)) return '';
-  if (postsOnly) { const w = worthText(quarks, costs); return w ? w.charAt(0).toUpperCase() + w.slice(1) : ''; }
   return noun(quarks, 'Quark', 'Quarks');
 }
 
@@ -72,7 +70,9 @@ export function packPhotosText(p: Pick<PhotoshootPack, 'counts' | 'defaultCount'
 
 /** The pack tile's price chip and its one line ("Up to 6 photos, about 3 minutes"). */
 export function packTileLines(p: PhotoshootPack, costs: Record<string, number> | null | undefined, postsOnly = false): { price: string; subtitle: string } {
-  return { price: priceLine(p.quarks, costs, postsOnly), subtitle: `${packPhotosText(p)}, ${minutesText(p.minutes).toLowerCase()}` };
+  const varies = /^Up to /.test(packPhotosText(p));
+  const amount = priceLine(p.quarks, costs, postsOnly);
+  return { price: amount && varies ? `Up to ${amount}` : amount, subtitle: `${packPhotosText(p)}, ${minutesText(p.minutes).toLowerCase()}` };
 }
 
 /** The choices to start from when a pack is picked. */
@@ -137,10 +137,9 @@ export function newKey(rand: () => number = Math.random, now: () => number = Dat
   return `ps-${now().toString(36)}-${Math.floor(rand() * 1e12).toString(36)}`.slice(0, 64);
 }
 
-/** "Make again (10 Quarks)", or "Make again (about 1 post's worth)" for agency accounts: the price is on the button. */
-export function redoLabel(perPhoto: number, costs: Record<string, number> | null | undefined, postsOnly = false): string {
+/** "Make again (10 Quarks)": the price is on the button, the same for every account. */
+export function redoLabel(perPhoto: number, _costs?: Record<string, number> | null, _postsOnly = false): string {
   if (!(perPhoto > 0)) return 'Make again';
-  if (postsOnly) { const w = worthText(perPhoto, costs); return w ? `Make again (${w})` : 'Make again'; }
   return `Make again (${perPhoto.toLocaleString('en-IN')} ${perPhoto === 1 ? 'Quark' : 'Quarks'})`;
 }
 
