@@ -277,7 +277,7 @@ const App: React.FC = () => {
                 <Layout user={user} onLogout={handleLogout} needsPlan={needsPlan} onTourSaved={(tour) => setUser((u) => (u ? { ...u, tour: { ...(u.tour || {}), ...tour } } : u))}>
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome user={user} />} />
-                    <Route path="/plan" element={<MyPlan />} />
+                    <Route path="/plan" element={<MyPlan user={user} />} />
                     {ArtShowcase && <Route path="/art-showcase" element={<React.Suspense fallback={null}><ArtShowcase /></React.Suspense>} />}
                     {/* The plans page sits inside the app shell like every other page. The route name is kept for old links. */}
                     <Route path="/trial-expired" element={<TrialExpired insideClient={isInsideClient(user)} />} />

@@ -1,184 +1,32 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { apiService, inventoryAPI } from '../services/api';
-import CompetitorInsights from '../components/CompetitorInsights';
-import ListeningCard from '../components/ListeningCard';
-import StrategyFunnel from '../components/StrategyFunnel';
-import type { PlanView } from '../types';
-import { BANNER_TEXT, PHASE_TITLES, dayMonth, effortRows, planBanner, refreshLabel, sectionsOf, shouldPoll, stoppedMessage, tagLabel } from '../utils/plan';
+import StrategyFunnel, { PlanPreview } from '../components/StrategyFunnel';
+import PlanHero from '../components/plan/PlanHero';
+import PlanDetails from '../components/plan/PlanDetails';
+import { PlanRoadArt } from '../components/art/plan/Road';
+import { PlanShopArt } from '../components/art/plan/Shop';
+import { BlueprintArt } from '../components/art/Blueprint';
+import type { PlanView, User } from '../types';
+import { BANNER_TEXT, dayMonth, planBanner, refreshLabel, shouldPoll, stoppedMessage } from '../utils/plan';
 import { levelsOf } from '../utils/strategyLevels';
+import { heroStats, titleCard } from '../utils/planVisuals';
+import '../components/plan/plan.css';
 
-const CARD = 'rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-4 sm:p-5';
-const BTN_MAIN = 'inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--gv-accent)] px-4 min-h-[40px] text-[13px] font-semibold text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)] disabled:opacity-50';
-const BTN = 'inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-4 min-h-[40px] text-[13px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-50';
+const BTN_MAIN = 'nb-plan-btn is-main';
+const BTN = 'nb-plan-btn';
 const LOAD_ERROR = 'We could not load your plan. Please try again.';
-const INK = { color: 'var(--gv-text-primary)' } as const;
-const QUIET = { color: 'var(--gv-text-secondary)' } as const;
 
-const CHIP_BG: Record<string, string> = { verified: 'var(--gv-mint)', inference: 'var(--gv-sky)', proposed: 'var(--gv-lav)', unverified: 'var(--gv-peach)' };
-
-type Claim = { text?: string | null; tag?: string; label?: string | null };
-
-/** The tag is always spelled out in words, so its meaning never depends on colour. */
-const Chip: React.FC<{ tag?: string }> = ({ tag }) => (
-  <span
-    className="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold leading-5 align-middle"
-    style={{ background: CHIP_BG[tag || ''] || CHIP_BG.proposed, color: 'var(--gv-text-primary)', border: '1px solid var(--gv-border-subtle)' }}
-  >{tagLabel(tag)}</span>
-);
-
-const Line: React.FC<{ c?: Claim | null; big?: boolean }> = ({ c, big }) => {
-  if (!c || typeof c.text !== 'string' || !c.text.trim()) return null;
-  return (
-    <p className={`${big ? 'text-[16px]' : 'text-[14px]'} leading-relaxed break-words`} style={INK}>
-      {c.label && <span className="font-semibold">{c.label}: </span>}{c.text} <Chip tag={c.tag} />
-    </p>
-  );
-};
-
-const Lines: React.FC<{ items?: Claim[] | null }> = ({ items }) => (
-  <div className="space-y-2">{(Array.isArray(items) ? items : []).map((c, i) => <Line key={i} c={c} />)}</div>
-);
-
-const Sub: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <h3 className="text-[13px] font-semibold uppercase tracking-wide mb-2" style={QUIET}>{children}</h3>
-);
-
-const Section: React.FC<{ id: string; title: string; children: React.ReactNode }> = ({ id, title, children }) => (
-  <section className={CARD} aria-labelledby={`plan-h-${id}`}>
-    <h2 id={`plan-h-${id}`} className="text-[18px] font-semibold mb-3" style={INK}>{title}</h2>
-    <div className="space-y-5">{children}</div>
-  </section>
-);
-
-const Split: React.FC<{ organic: number; paid: number }> = ({ organic, paid }) => (
-  <div>
-    <div className="flex h-2.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--gv-surface-2)' }} role="img" aria-label={`${organic}% organic, ${paid}% paid`}>
-      <div style={{ width: `${organic}%`, background: 'var(--gv-accent)' }} />
-      <div style={{ width: `${paid}%`, background: 'var(--gv-sky)' }} />
-    </div>
-    <p className="mt-1 text-[12.5px]" style={QUIET}>{organic}% organic, {paid}% paid</p>
+/** One state card (building, failed, no plan yet and so on): a small drawing beside the words, warm tints only. */
+const StateCard: React.FC<{ tone: string; art?: React.ReactNode; role?: string; children: React.ReactNode }> = ({ tone, art, role, children }) => (
+  <div className="nb-plan-state nb-plan-in" data-tone={tone} role={role} style={{ ['--i' as any]: 1 }}>
+    {art && <span className="nb-plan-state-art" aria-hidden="true">{art}</span>}
+    <div className="nb-plan-state-body">{children}</div>
   </div>
 );
 
-/** The finished plan, section by section. Shared by the page and nothing else. */
-const PlanBody: React.FC<{ view: PlanView; showCompetitors?: boolean; showListening?: boolean }> = ({ view, showCompetitors, showListening }) => {
-  const p = view.plan?.result?.plan || {};
-  const rows = effortRows(view.plan);
-  const roleOf = (name: string) => (p.channels || []).find((c: any) => c.channel === name)?.role;
-  const channelNames: string[] = Array.from(new Set<string>([...(p.channels || []).map((c: any) => String(c.channel)), ...rows.map((r) => r.channel)]));
-  const sections = sectionsOf(view.plan);
-  const hasRoadmap = sections.some((x) => x.id === 'roadmap');
-  return (
-    <>
-      {sections.map((s) => {
-        if (s.id === 'today') return (
-          <Section key={s.id} id={s.id} title={s.title}>
-            <Line c={p.promise} big />
-            {p.positioning?.line && <Line c={p.positioning.line} />}
-            {p.positioning?.territory?.name && (
-              <div><Sub>Where you can stand out</Sub>
-                <p className="text-[14px] font-semibold" style={INK}>{p.positioning.territory.name}</p>
-                <Line c={p.positioning.territory.rationale} /></div>
-            )}
-            {(p.positioning?.audience || []).length > 0 && <div><Sub>Who you speak to</Sub><Lines items={p.positioning.audience} /></div>}
-            {(p.whereToday || []).length > 0 && <div><Sub>Where you are today</Sub><Lines items={p.whereToday} /></div>}
-            {(p.competitors || []).length > 0 && (
-              <div><Sub>Others in your space</Sub>
-                <div className="space-y-3">{p.competitors.map((c: any, i: number) => (
-                  <div key={i}><p className="text-[14px] font-semibold" style={INK}>{c.name}</p><Lines items={c.observations} /></div>
-                ))}</div></div>
-            )}
-          </Section>
-        );
-        if (s.id === 'customer') {
-          const icp = p.icp || {};
-          const parts: Array<[string, Claim[]]> = [['Who they are', icp.who], ['What bothers them', icp.pains], ['Where they spend time', icp.where], ['What makes them buy', icp.triggers]];
-          return (
-            <Section key={s.id} id={s.id} title={s.title}>
-              {parts.filter(([, v]) => Array.isArray(v) && v.length > 0).map(([label, v]) => <div key={label}><Sub>{label}</Sub><Lines items={v} /></div>)}
-            </Section>
-          );
-        }
-        if (s.id === 'channels') return (
-          <Section key={s.id} id={s.id} title={s.title}>
-            {channelNames.map((name) => {
-              const row = rows.find((r) => r.channel === name);
-              return (
-                <div key={name} className="rounded-lg border border-[var(--gv-border-subtle)] p-3 sm:p-4 space-y-3">
-                  <p className="text-[15px] font-semibold" style={INK}>{name}</p>
-                  <Line c={roleOf(name)} />
-                  {row && (
-                    <>
-                      <Split organic={row.organicPct} paid={row.paidPct} />
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div><Sub>Nebulaa does</Sub>
-                          <p className="text-[14px]" style={INK}>{row.nebulaaDoes ? `Makes your ${row.nebulaaDoes}.` : 'Nothing here yet.'}</p></div>
-                        <div><Sub>You do</Sub>
-                          {row.youDo.length ? <ul className="list-disc pl-5 space-y-1 text-[14px]" style={INK}>{row.youDo.map((t, i) => <li key={i} className="break-words">{t}</li>)}</ul>
-                            : <p className="text-[14px]" style={QUIET}>Nothing needed.</p>}</div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </Section>
-        );
-        if (s.id === 'roadmap') return (
-          <React.Fragment key={s.id}>
-          <Section id={s.id} title={s.title}>
-            <div className="grid gap-3 md:grid-cols-3">
-              {(p.roadmap || []).map((r: any, i: number) => (
-                <div key={i} className="rounded-lg border border-[var(--gv-border-subtle)] p-3 sm:p-4 space-y-3 min-w-0">
-                  <p className="text-[15px] font-semibold" style={INK}>{PHASE_TITLES[r.phase] || r.phase}</p>
-                  <Line c={r.focus} />
-                  {(r.actions || []).length > 0 && <div><Sub>Actions</Sub><Lines items={r.actions} /></div>}
-                  {(r.measure || []).length > 0 && <div><Sub>How you will know</Sub><Lines items={r.measure} /></div>}
-                </div>
-              ))}
-            </div>
-          </Section>
-          {showCompetitors && <CompetitorInsights />}
-          {showListening && <ListeningCard lockedNote />}
-          </React.Fragment>
-        );
-        if (s.id === 'mix') {
-          const counts = new Map<string, number>();
-          (p.calendar || []).forEach((c: any) => { if (c && c.format) counts.set(String(c.format), (counts.get(String(c.format)) || 0) + 1); });
-          return (
-            <Section key={s.id} id={s.id} title={s.title}>
-              {counts.size > 0 && (
-                <div><Sub>What we will make</Sub>
-                  <ul className="flex flex-wrap gap-2">{Array.from(counts.entries()).map(([f, n]) => (
-                    <li key={f} className="rounded-full border border-[var(--gv-border-subtle)] px-3 py-1 text-[13px]" style={INK}>{n} {f}</li>
-                  ))}</ul></div>
-              )}
-              {(p.pillars || []).length > 0 && (
-                <div><Sub>What your posts talk about</Sub>
-                  <div className="space-y-3">{p.pillars.map((pl: any, i: number) => (
-                    <div key={i}><p className="text-[14px] font-semibold" style={INK}>{pl.name}</p><Line c={pl.why} /></div>
-                  ))}</div></div>
-              )}
-            </Section>
-          );
-        }
-        return (
-          <Section key={s.id} id={s.id} title={s.title}>
-            <ol className="space-y-2.5 list-decimal pl-5">{(p.firstSteps || []).filter((c: Claim) => c?.text).map((c: Claim, i: number) => (
-              <li key={i} className="text-[14px] leading-relaxed break-words" style={INK}>{c.text} <Chip tag={c.tag} /></li>
-            ))}</ol>
-          </Section>
-        );
-      })}
-      {showCompetitors && !hasRoadmap && <CompetitorInsights />}
-      {showListening && !hasRoadmap && <ListeningCard lockedNote />}
-    </>
-  );
-};
-
-const MyPlan: React.FC = () => {
+const MyPlan: React.FC<{ user?: User | null }> = ({ user }) => {
   const navigate = useNavigate();
   const [view, setView] = useState<PlanView | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -219,12 +67,14 @@ const MyPlan: React.FC = () => {
     setBusy(false);
   };
 
+  const levels = useMemo(() => (view && view.plan && products !== undefined ? levelsOf(view.plan, { products }) : null), [view, products]);
+
   if (!view) {
     return (
-      <div className="mx-auto max-w-3xl">
+      <div className="nb-plan">
         {loadError
-          ? <div className={CARD}><p role="alert" className="text-[14px] text-[var(--gv-coral-text)]">{loadError}</p><button type="button" className={`${BTN} mt-3`} onClick={load}>Try again</button></div>
-          : <div className="flex justify-center py-16" role="status" aria-label="Loading your plan"><Loader2 className="w-6 h-6 animate-spin text-[var(--gv-accent)]" aria-hidden /></div>}
+          ? <StateCard tone="coral"><p role="alert" className="nb-plan-state-text">{loadError}</p><button type="button" className={BTN} onClick={load}>Try again</button></StateCard>
+          : <div className="nb-plan-loading" role="status" aria-label="Loading your plan"><Loader2 className="nb-plan-spin" aria-hidden /></div>}
       </div>
     );
   }
@@ -233,94 +83,106 @@ const MyPlan: React.FC = () => {
   const label = refreshLabel(view);
   const canRefresh = label === 'Refresh my plan';
   const made = view.plan?.completedAt ? dayMonth(view.plan.completedAt) : '';
+  const name = String((user as any)?.businessProfile?.name || '').trim();
+  const ready = levels ? { ready: levels.filter((l) => l.status === 'ready').length, total: levels.length } : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[24px] font-semibold leading-tight" style={INK}>My plan</h1>
-          {made && state !== 'building' && <p className="mt-1 text-[13.5px]" style={QUIET}>Made on {made}</p>}
-        </div>
-        {view.eligible && view.plan && !view.running && (
+    <div className="nb-plan">
+      <PlanHero
+        name={name}
+        made={made}
+        state={state}
+        ready={ready}
+        card={view.plan ? titleCard(view.plan) : null}
+        stats={view.plan ? heroStats(view.plan) : []}
+        action={view.eligible && view.plan && !view.running ? (
           <button type="button" className={BTN} onClick={refresh} disabled={busy || !canRefresh}>
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <RefreshCw className="w-4 h-4" aria-hidden />}{label}
+            {busy ? <Loader2 className="nb-plan-spin" aria-hidden /> : <RefreshCw aria-hidden />}{label}
           </button>
-        )}
-      </header>
+        ) : null}
+      />
 
-      {loadError && <p role="alert" className="text-[13.5px] text-[var(--gv-coral-text)]">{loadError}</p>}
-      {actionError && <p role="alert" className="text-[13.5px] text-[var(--gv-coral-text)]">{actionError}</p>}
+      {loadError && <p role="alert" className="nb-plan-alert">{loadError}</p>}
+      {actionError && <p role="alert" className="nb-plan-alert">{actionError}</p>}
 
       {state === 'building' && (
-        <div className={`${CARD} flex items-center gap-3`} role="status">
-          <Loader2 className="w-5 h-5 shrink-0 animate-spin text-[var(--gv-accent)]" aria-hidden />
-          <p className="text-[14px]" style={INK}>{BANNER_TEXT.building}</p>
-        </div>
+        <StateCard tone="gold" role="status" art={<PlanRoadArt />}>
+          <p className="nb-plan-state-title">Building your plan</p>
+          <p className="nb-plan-state-text">{BANNER_TEXT.building}</p>
+          <span className="nb-plan-dots" aria-hidden="true"><i /><i /><i /></span>
+        </StateCard>
       )}
 
       {state === 'failed' && (
-        <div className={CARD}>
-          <p role="alert" className="flex items-start gap-2 text-[14px]" style={INK}><AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-[var(--gv-coral-text)]" aria-hidden />{BANNER_TEXT.failed}</p>
-          <button type="button" className={`${BTN_MAIN} mt-3`} onClick={refresh} disabled={busy}>{busy ? 'Starting…' : 'Try again'}</button>
-        </div>
+        <StateCard tone="coral" art={<PlanRoadArt />}>
+          <p role="alert" className="nb-plan-state-text is-strong"><AlertCircle aria-hidden className="nb-plan-i" />{BANNER_TEXT.failed}</p>
+          <div className="nb-plan-state-actions"><button type="button" className={BTN_MAIN} onClick={refresh} disabled={busy}>{busy ? 'Starting…' : 'Try again'}</button></div>
+        </StateCard>
       )}
 
       {state === 'can_build' && (
-        <div className={CARD}>
-          <h2 className="text-[18px] font-semibold" style={INK}>Build my plan</h2>
-          <p className="mt-1 text-[14px]" style={QUIET}>{BANNER_TEXT.can_build}</p>
-          <button type="button" className={`${BTN_MAIN} mt-4`} onClick={refresh} disabled={busy}>{busy ? 'Starting…' : 'Build my plan'}</button>
-        </div>
+        <StateCard tone="gold" art={<PlanRoadArt />}>
+          <h2 className="nb-plan-state-title">Build my plan</h2>
+          <p className="nb-plan-state-text">{BANNER_TEXT.can_build}</p>
+          <div className="nb-plan-state-actions"><button type="button" className={BTN_MAIN} onClick={refresh} disabled={busy}>{busy ? 'Starting…' : 'Build my plan'}</button></div>
+        </StateCard>
       )}
 
       {stoppedMessage(view) && (
-        <div className={CARD}>
-          <p role="alert" className="flex items-start gap-2 text-[14px]" style={INK}><AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-[var(--gv-coral-text)]" aria-hidden />{stoppedMessage(view)}</p>
-          <p className="mt-2 text-[13.5px]" style={QUIET}>Add or fix your details, then come back and build it again.</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+        <StateCard tone="coral" art={<PlanShopArt />}>
+          <p role="alert" className="nb-plan-state-text is-strong"><AlertCircle aria-hidden className="nb-plan-i" />{stoppedMessage(view)}</p>
+          <p className="nb-plan-state-text">Add or fix your details, then come back and build it again.</p>
+          <div className="nb-plan-state-actions">
             <button type="button" className={BTN_MAIN} onClick={() => navigate('/settings?tab=business')}>Go to Business profile</button>
             {!view.plan && <button type="button" className={BTN} onClick={refresh} disabled={busy}>{busy ? 'Starting…' : 'Build again'}</button>}
           </div>
-        </div>
+        </StateCard>
       )}
 
       {state === 'profile_incomplete' && (
-        <div className={CARD}>
-          <p className="text-[14px]" style={INK}>{BANNER_TEXT.profile_incomplete}</p>
-          {view.missing.length > 0 && <ul className="mt-3 list-disc pl-5 space-y-1 text-[14px]" style={INK}>{view.missing.map((m) => <li key={m}>{m}</li>)}</ul>}
-          <button type="button" className={`${BTN_MAIN} mt-4`} onClick={() => navigate('/settings?tab=business')}>Go to Business profile</button>
-        </div>
+        <StateCard tone="gold" art={<PlanShopArt />}>
+          <p className="nb-plan-state-text is-strong">{BANNER_TEXT.profile_incomplete}</p>
+          {view.missing.length > 0 && <ul className="nb-plan-chips">{view.missing.map((m) => <li key={m} data-tone="coral">{m}</li>)}</ul>}
+          <div className="nb-plan-state-actions"><button type="button" className={BTN_MAIN} onClick={() => navigate('/settings?tab=business')}>Go to Business profile</button></div>
+        </StateCard>
       )}
 
       {state === 'free' && (
-        <div className={CARD}>
-          <h2 className="text-[18px] font-semibold" style={INK}>Your free Growth Blueprint</h2>
-          <p className="mt-1 text-[14px]" style={QUIET}>Your Blueprint is a first look at where your business stands and what to do about it.</p>
-          <p className="mt-3 text-[14px]" style={INK}>{BANNER_TEXT.free}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
+        <StateCard tone="gold" art={<span className="nb-plan-state-big"><BlueprintArt /></span>}>
+          <h2 className="nb-plan-state-title">Your free Growth Blueprint</h2>
+          <p className="nb-plan-state-text">Your Blueprint is a first look at where your business stands and what to do about it.</p>
+          <p className="nb-plan-state-text">{BANNER_TEXT.free}</p>
+          <div className="nb-plan-state-actions">
             {view.freeBlueprint
               ? <Link to={`/blueprint/${view.freeBlueprint.id}`} className={BTN_MAIN}>Open my Blueprint</Link>
               : <Link to="/blueprint" className={BTN_MAIN}>Make my free Blueprint</Link>}
             <Link to="/trial-expired" className={BTN}>See plans</Link>
           </div>
-        </div>
+        </StateCard>
       )}
 
-      {state === 'none' && !view.running && !stoppedMessage(view) && <div className={CARD}><p className="text-[14px]" style={QUIET}>{BANNER_TEXT.none}</p></div>}
+      {state === 'none' && !view.running && !stoppedMessage(view) && (
+        <StateCard tone="sage" art={<PlanRoadArt />}><p className="nb-plan-state-text">{BANNER_TEXT.none}</p></StateCard>
+      )}
 
       {state === 'stale' && (
-        <div className={`${CARD} flex flex-wrap items-center justify-between gap-3`} style={{ background: 'var(--gv-accent-fill)' }}>
-          <p className="text-[14px] min-w-0" style={INK}>{BANNER_TEXT.stale}</p>
-        </div>
+        <StateCard tone="gold"><p className="nb-plan-state-text is-strong">{BANNER_TEXT.stale}</p></StateCard>
+      )}
+
+      {!view.plan && (state === 'building' || state === 'failed' || state === 'can_build' || state === 'none' || state === 'stopped') && (
+        <PlanPreview title={state === 'building' ? 'What your plan will cover' : 'What a plan covers'} />
       )}
 
       {view.plan && (
         <>
-          {products === undefined
-            ? <div className={`${CARD} min-h-[520px]`} role="status" aria-label="Loading your strategy"><Loader2 className="mx-auto mt-24 w-5 h-5 animate-spin text-[var(--gv-accent)]" aria-hidden /></div>
-            : <StrategyFunnel levels={levelsOf(view.plan, { products })} />}
-          <h2 className="pt-3 text-[12px] font-semibold uppercase tracking-[0.08em]" style={QUIET}>Your plan in detail</h2>
-          <PlanBody view={view} showCompetitors={state === 'ready'} showListening={state === 'ready'} />
+          {levels
+            ? <StrategyFunnel levels={levels} plan={view.plan} />
+            : (
+              <div className="nb-plan-grid is-skeleton" role="status" aria-label="Loading your strategy">
+                {Array.from({ length: 6 }, (_, i) => <span key={i} className="nb-plan-skel" />)}
+              </div>
+            )}
+          <PlanDetails view={view} showCompetitors={state === 'ready'} showListening={state === 'ready'} />
         </>
       )}
     </div>
