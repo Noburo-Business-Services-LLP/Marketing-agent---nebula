@@ -63,7 +63,9 @@ import CoverTile from '../components/CoverTile';
 - Where: Create content now, and later hero areas (a page's main two to five choices). Not for dense lists, dashboards or anything repeated many times on a screen: use `choice` or `compact` tiles there. At most one row of cover tiles on a screen.
 - A new palette needs a `.nb-cover[data-palette="..."]` rule (with `--cover-deep-rgb`), an entry in `COVER_PALETTES`, and an art offset rule; the test reads both lists.
 
-A `DarkPanel` takes `eyebrow`, `title`, text children and an `action`. Use two or three per page at most.
+A `DarkPanel` takes `eyebrow`, `title`, text children and an `action`. **Do not use it on the light pages** (the owner, 2026-10-19: the dark navy "Do this next" panel on Home was "odd, everything else is light"). For the one thing a page most wants noticed, use a warm gold card instead, like Home's "Do this next" (`.nb-home-next` in `components/home/home.css`): cream to soft gold gradient (#FFF9EC to #FFF1D2), a soft gold border (#EFD089) and gold glow shadow, brown ink text (#2B1D0E, details #5E4A31, eyebrow #8A5200), gold numbered badges (#FFE2A1 with #6B3F00; the first one solid #F5A623 with #1A1208), white quiet buttons and ONE gold primary button (#F5A623 with #1A1208); every pair is at least 4.5 to 1 (computed in `frontend/tests/homeBrandColours.test.mjs`). No dark blue on Home at all: Home sets its text tokens to brown ink, focus rings are #7A4A00, shadows are warm brown. `DarkPanel` stays only for the art showcase and any future dark hero the owner asks for.
+
+Text boxes where the customer describes an idea share one look: `components/ideaBox.css` (`.nb-ideabox` on the box, `.nb-ideabox-field gravity-bare` on the field): the values of Create content's idea box (12 px radius, soft default border, panel fill, gold border and light ring while typing, muted placeholder). Home uses it; Create content and Videos should move onto the same classes.
 
 ## Accent map (one colour per area)
 

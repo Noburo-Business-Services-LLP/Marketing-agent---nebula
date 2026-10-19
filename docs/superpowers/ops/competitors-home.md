@@ -82,6 +82,21 @@ node scripts/competitors-home-check.js cleanup    # remove leftovers of an inter
 
 The 2026-10-19 run: 25 PASS, 0 FAIL, 34 rows removed, 0 left.
 
+## Profile pictures (`backend/services/competitors/avatar.js`)
+
+Owner request of 2026-10-19: show each competitor's logo or photo, not only the name. Each tile (Home and the Competitors page) and the draft sheet's header show a round 40 px picture: our own stored copy of their public profile picture, or their initials on a soft colour that stays the same for a handle (six warm tints, each at least 4.5 to 1). Nothing else about the competitor is shown that was not shown before.
+
+- Source: the `profilePicUrl` (else `profilePicUrlHD`) field of the weekly Instagram profile read the tracker ALREADY makes (see the real-read fixture `backend/tests/fixtures/instagram-profile-real-nebulaa-os.json`). No new paid call.
+- When: inside the tracker, right after a good read has been saved. Best effort: it never throws and never fails the read; any failure leaves the old picture.
+- Download rules: https only; host must end in `cdninstagram.com` or `fbcdn.net` (allow-list; no user, no odd port, no IP literal); every host, also after a redirect, must resolve to public addresses only (checked before the request and again at connect time through a guarded DNS lookup: no loopback, private, link-local, carrier, multicast, reserved, or IPv4 inside IPv6); redirects only to another allowed host, at most two; `image/jpeg`, `image/png` or `image/webp` only; at most 200 KB (declared or actual, the download stops at the cap); 5 s in all.
+- Stored: resized with sharp to 96 x 96 WebP, uploaded to the app's image storage (the Cloudinary account the uploads use) as `nebula-competitor-avatars/<competitorId>`, overwritten in place. The record keeps only our link: `avatarUrl`, `avatarUpdatedAt`, and `avatarSourceKey` (a hash of the picture link's path, so the same picture with a new signature or CDN host is not fetched again). Instagram's link is never stored or sent to the browser.
+- Refresh: at most once a week (6.5 days), and only when the picture changed.
+- API: `GET /api/competitors/best-posts` and `GET /api/competitors/insights` return `avatarUrl` (our stored link only, checked by pattern) or `null`.
+- Page: `frontend/components/CompetitorAvatar.tsx` (lazy loading, alt text the @handle, `onError` falls back to the initials, no referrer); the page loads only links of our own avatar folder (`avatarView` in `utils/competitorsHome.ts`).
+- Privacy: kept only for tracked competitors. The file is deleted when the competitor is removed (`removeCompetitorsWithSnapshots` in `cleanup.js`, used by every removal path), ignored (`PUT /api/competitors/:id/ignore`) or given a different handle (`PUT /api/competitors/:id/handle`), when a picture finishes after its competitor was removed, and with the account or a client workspace (the account erase deletes every file in our `nebula*` folders found on the customer's records, and competitors are on the erase list).
+- Tests: `backend/tests/competitorAvatar.test.js` (fakes for the read, DNS, download and storage: allow-list, SSRF, redirects, size cap, bad type, time limit, resize, weekly rule, failure keeps the old one, removal, ignore, handle change, account erase, API output) and `frontend/tests/homeBrandColours.test.mjs`.
+- Real-database check: `backend/scripts/competitor-avatar-check.js` (nebulaa_dev only, throwaway `zz.avatarchk-` users, fake read, download and storage). The 2026-10-19 run: 11 PASS, 0 FAIL, 5 rows removed, 0 left.
+
 ## Preview
 
 Sample-data preview (`AUDIT_PORT=3101`): `/?audit=normal&compstate=<state>#/dashboard` and `#/competitors`, states `all` (default: data, a cut-short count, a stale reading, unconfirmed, private), `locked`, `empty`, `error`, `trackeroff`, `waiting`, `states` (one tile per handle state without data), `few` (too few posts for a pattern). Mock: `bestPostsAnswer()` in `frontend/scripts/visual-audit/mock-session.js`.
