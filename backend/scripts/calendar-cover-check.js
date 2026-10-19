@@ -200,6 +200,22 @@ async function runChecks() {
     assert.strictEqual(next.started, true, `new day should reset, got ${next.reason}`);
   });
 
+  await check('M2 (review 2026-10-19): a page load holding an old document does not start a second render next to a manual one', async () => {
+    const { startManualCover } = require('../services/contentCalendarService');
+    const u = await U('m2');
+    const d = await mkCal(u, M0, { coverStatus: 'pending', lastCoverAttemptAt: new Date(T0 - 11 * MIN) });
+    const old = await CC.findById(d._id); // what the page load read
+    gen.outcome = 'ready'; gen.calls = [];
+    const now = new Date(T0.getTime() + 2 * DAY); // a manual claim on a day with room under the daily cap
+    const manual = await startManualCover(await CC.findById(d._id), {}, { now, deps: { generate, spendGuard: spend } });
+    assert.strictEqual(manual.started, true, manual.reason);
+    old.coverStatus = 'pending'; // the old document still says pending from long ago
+    const auto = await maybeRetryCover(old, {}, { now: new Date(now.getTime() + 1000), deps: { generate, spendGuard: spend } });
+    await settle();
+    assert.strictEqual(auto.retried, false); assert.strictEqual(auto.reason, 'lost-claim');
+    assert.strictEqual(gen.calls.length, 1, 'one render only');
+  });
+
   await check('the spend check ran before every render and was recorded once per finished cover', async () => {
     assert.ok(spend.checks >= 5, `only ${spend.checks} spend checks`);
     assert.ok(spend.recorded >= 1);

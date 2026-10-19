@@ -19,6 +19,12 @@ function fakeModel(doc) {
       const lim = filter.$or && filter.$or[1].lastCoverRetryAt.$lt;
       if (doc.lastCoverRetryAt && !(doc.lastCoverRetryAt < lim)) return { modifiedCount: 0 };
       if (filter.autoCoverRetries && Number(doc.autoCoverRetries || 0) >= 3) return { modifiedCount: 0 };
+      // The attempt must still be old (a manual render that just claimed the cover wins).
+      const attemptOr = (filter.$and || []).map((c) => c.$or).find((o) => o && o.some((x) => 'lastCoverAttemptAt' in x));
+      if (attemptOr) {
+        const lt = attemptOr.find((x) => x.lastCoverAttemptAt && x.lastCoverAttemptAt.$lt).lastCoverAttemptAt.$lt;
+        if (doc.lastCoverAttemptAt && !(doc.lastCoverAttemptAt < lt)) return { modifiedCount: 0 };
+      }
       Object.assign(doc, update.$set); this.updates += 1;
       for (const [k, v] of Object.entries(update.$inc || {})) doc[k] = (doc[k] || 0) + v;
       return { modifiedCount: 1 };
@@ -122,4 +128,14 @@ test('at most 3 automatic retries in a calendar lifetime', async () => {
   doc.coverStatus = 'failed'; doc.lastCoverAttemptAt = ago(30 * MIN);
   const fourth = await go(doc, { now: new Date(NOW.getTime() + 4 * 25 * 60 * MIN) });
   assert.equal(fourth.r.retried, false); assert.equal(fourth.r.reason, 'retry-limit'); assert.equal(fourth.calls.length, 0);
+});
+
+test('M2: a page load holding an old document does not start a second render next to a manual one that just claimed', async () => {
+  const db = cal({ coverStatus: 'pending', lastCoverAttemptAt: NOW }); // the manual render claimed it a moment ago
+  const model = fakeModel(db);
+  const old = cal({ coverStatus: 'pending', lastCoverAttemptAt: ago(11 * MIN) }); // what the page load read before that
+  const calls = [];
+  const r = await maybeRetryCover(old, {}, { now: NOW, deps: { ContentCalendar: model, spendGuard: guard(), generate: async (c) => { calls.push(c); return 'https://x/c.jpg'; } } });
+  assert.equal(r.retried, false); assert.equal(r.reason, 'lost-claim');
+  assert.equal(calls.length, 0); assert.equal(model.updates, 0);
 });

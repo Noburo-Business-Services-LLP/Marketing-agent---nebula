@@ -780,7 +780,9 @@ async function maybeRetryCover(calendar, userProfile = {}, { now = new Date(), d
         _id: calendar._id,
         coverStatus: status,
         autoCoverRetries: { $not: { $gte: COVER_AUTO_RETRY_MAX } },
-        $or: [{ lastCoverRetryAt: null }, { lastCoverRetryAt: { $lt: new Date(t - COVER_RETRY_GAP_MS) } }]
+        $or: [{ lastCoverRetryAt: null }, { lastCoverRetryAt: { $lt: new Date(t - COVER_RETRY_GAP_MS) } }],
+        // The attempt we judged must still be the old one: a manual render that claimed the cover since then wins.
+        $and: [{ $or: [{ lastCoverAttemptAt: null }, { lastCoverAttemptAt: { $lt: new Date(t - COVER_STALE_PENDING_MS) } }] }]
       },
       { $set: { lastCoverRetryAt: now, lastCoverAttemptAt: now, coverStatus: 'pending' }, $inc: { autoCoverRetries: 1 } }
     );
