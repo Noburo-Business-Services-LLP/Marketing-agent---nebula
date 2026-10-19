@@ -78,7 +78,8 @@ function chooseKeys(posts, { now = new Date(), max = caps().THUMBS_PER_COMPETITO
   const thisWeek = weekOf(at);
   const weekBest = scored(month.filter((p) => weekOf(p.at) === thisWeek)).slice(0, 1);
   const best = scored(month).slice(0, 3);
-  const latest = [...list].sort((a, b) => b.at - a.at).slice(0, 3).map((p) => p.key);
+  // The newest ones not already among the best (the same 'latest' the gallery row shows, bestPosts.galleryOf).
+  const latest = [...list].sort((a, b) => b.at - a.at).filter((p) => !best.includes(p.key)).slice(0, 3).map((p) => p.key);
   const out = [];
   for (const k of [...weekBest, ...best, ...latest]) if (!out.includes(k) && out.length < max) out.push(k);
   return out;

@@ -282,13 +282,13 @@ async function runChecks() {
       assert.strictEqual(b.working[0].action.brief, 'A reel about Fresh bakes, in the style that works: reels are getting the most likes this month.');
     });
     await check('Trending: competitor, own best post (this account only, inside 30 days), the next approved day, the plan theme', async () => {
-      assert.deepStrictEqual(b.trending.map((x) => x.source), ['competitor', 'own', 'festival', 'plan']);
+      assert.deepStrictEqual(b.trending.map((x) => x.source).filter((s) => s !== 'news'), ['competitor', 'own', 'festival', 'plan']); // 'news': the dated public calendar
       const own = b.trending[1];
       assert.strictEqual(own.reason, 'Your reel on Monday 12 October got 240 likes and 18 comments.');
       assert.strictEqual(own.action.brief, 'A new reel about Our new sourdough loaf is here, in the style of your best post this month.');
       assert.strictEqual(b.trending[2].title, "Children's Day");
       assert.strictEqual(b.trending[2].reason, 'Saturday 14 November, in 30 days.');
-      assert.strictEqual(b.trending[3].title, 'Fresh bakes', 'the newest plan run is read');
+      assert.strictEqual(b.trending.find((x) => x.source === 'plan').title, 'Fresh bakes', 'the newest plan run is read');
       for (const x of b.trending) for (const ban of ['ZZ ', 'zz_', 'secret', '#bread', '@friend', 'https://']) assert.ok(!x.action.brief.includes(ban), `${ban} in ${x.action.brief}`);
     });
     await check('nothing private leaks: no caption, hashtag, picture link, account id or another account\'s number', async () => {
@@ -331,7 +331,7 @@ async function runChecks() {
       assert.strictEqual(r.state, 'not_entitled');
       assert.deepStrictEqual(r.competitors, []);
       assert.deepStrictEqual(r.working, []);
-      assert.deepStrictEqual(r.trending.map((x) => x.source), ['festival']);
+      assert.deepStrictEqual(r.trending.map((x) => x.source).filter((s) => s !== 'news'), ['festival']);
     });
     await check('free account: entitled false, nothing about competitors', async () => {
       const r = (await sim(free)).body;
