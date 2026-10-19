@@ -22,6 +22,9 @@ const snapshotSchema = new mongoose.Schema({
   // Mongoose as the type of the whole path and breaks every save).
   topPost: { type: new mongoose.Schema({ url: String, likes: Number, comments: Number, type: String, caption: String }, { _id: false }), default: null },
   topPostAt: Date,
+  // The posts the read returned (at most 12), compact: no caption and no picture. likes/comments null = hidden by
+  // Instagram. Read by GET /api/competitors/best-posts. Older snapshots do not have it.
+  posts: { type: [new mongoose.Schema({ at: Date, type: String, likes: Number, comments: Number, pinned: Boolean, url: String }, { _id: false })], default: undefined },
   hashtags: [String]
 }, { collection: 'competitor_snapshots' });
 

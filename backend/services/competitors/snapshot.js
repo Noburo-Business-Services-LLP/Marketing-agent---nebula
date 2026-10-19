@@ -41,6 +41,31 @@ const known = (v) => typeof v === 'number' && isFinite(v) && v >= 0;
 // Monday-to-Sunday week in India (the same week key the snapshot is stored under), never "the last 7 days".
 const LIMIT_NOTE = 'postsInWindowMayBeTruncated';
 
+// The compact post list kept on each snapshot: what the read already returned, so the Competitors page and Home can
+// show a best post and a "what worked" line later without another read. No caption, no picture link (nothing is
+// hotlinked), only the post's own https Instagram link. Likes or comments Instagram hides (-1) are stored as null.
+const MAX_STORED_POSTS = 12;
+const POST_LINK = /^https:\/\/(www\.)?instagram\.com\/(p|reel|tv)\/[A-Za-z0-9_-]{1,64}\/?$/;
+const typeKey = (t) => (t === 'Video' ? 'video' : t === 'Sidecar' ? 'carousel' : 'image');
+const countOrNull = (v) => (typeof v === 'number' && isFinite(v) && v >= 0 ? Math.round(v) : null);
+
+function compactPosts(posts, now) {
+  const at = toDate(now) || new Date();
+  const out = [];
+  for (const p of asArray(posts)) {
+    if (out.length >= MAX_STORED_POSTS) break;
+    if (!p || typeof p !== 'object') continue;
+    const d = postDate(p);
+    if (!d || d > at) continue;
+    const url = postUrl(p);
+    out.push({
+      at: d, type: typeKey(p.type), likes: countOrNull(rawLikes(p)), comments: countOrNull(rawComments(p)),
+      pinned: p.isPinned === true, url: POST_LINK.test(url) ? url : '',
+    });
+  }
+  return out;
+}
+
 function summarise({ profile, posts, now } = {}) {
   const at = toDate(now) || new Date();
   const prof = profile || {};
@@ -108,6 +133,7 @@ function summarise({ profile, posts, now } = {}) {
     } : null,
     topPostAt: top ? top.d : null,
     hashtags,
+    posts: compactPosts(posts, at),
   };
 }
 
@@ -208,4 +234,4 @@ function insights({ items, now } = {}) {
   return { highlights: ranked, competitors };
 }
 
-module.exports = { summarise, compare, insights };
+module.exports = { summarise, compare, insights, compactPosts, MAX_STORED_POSTS };
