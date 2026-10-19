@@ -135,3 +135,17 @@ test('India month boundaries and the hero line', () => {
   assert.equal(heroLine([{ key: 'reach', value: '800', chip: { text: 'Up 12 percent on last week', dir: 'up' } }]), 'Your posts reached 800 people, up 12 percent on last week.');
   assert.match(heroLine([{ key: 'reach', value: null, reason: 'Connect an account to see this.' }]), /^Connect an account/);
 });
+
+test('the reach chart places points by their real dates', async () => {
+  const { chartPaths } = await import('../utils/performanceView.ts');
+  const { line, area } = chartPaths([{ date: '2026-10-01', value: 50 }, { date: '2026-10-03', value: 100 }, { date: '2026-10-11', value: 100 }], 100, 112);
+  assert.equal(line, 'M0.0 58.0 L20.0 8.0 L100.0 8.0');
+  assert.ok(area.endsWith('L100 112 L0 112 Z'));
+  assert.deepEqual(chartPaths([{ date: '2026-10-01', value: 5 }]), { line: '', area: '' });
+});
+
+test('the hero line never leads with a zero and names the paid plan reason', () => {
+  assert.match(heroLine([{ key: 'reach', value: null, reason: 'Connecting accounts comes with a paid plan.' }, { key: 'posts', value: '0' }]), /paid plan/);
+  assert.equal(heroLine([{ key: 'reach', value: null, reason: 'We could not load this just now.' }, { key: 'posts', value: '0' }]), 'Your numbers show here as soon as your accounts report them.');
+  assert.match(heroLine([{ key: 'reach', value: null, reason: 'Your first numbers arrive within a day of connecting.' }, { key: 'posts', value: '2' }]), /^2 posts published this week/);
+});

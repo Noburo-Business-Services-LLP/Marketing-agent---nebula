@@ -112,10 +112,8 @@ export function followerGains(history: SnapshotPoint[]): { thisWeek: number | nu
   const a = back(t0, 7);
   if (!a) return { thisWeek: null, lastWeek: null };
   const b = back(dayOf(a) as number, 7);
-  return {
-    thisWeek: newest.totals!.followers - a.totals!.followers,
-    lastWeek: b ? a.totals!.followers - b.totals!.followers : null,
-  };
+  const f = (s: SnapshotPoint): number => (s.totals && isNum(s.totals.followers) ? s.totals.followers : 0);
+  return { thisWeek: f(newest) - f(a), lastWeek: b ? f(a) - f(b) : null };
 }
 
 /** India calendar month key "2026-10" of a date. */
@@ -171,8 +169,9 @@ export function buildKpis(input: BuildInput): KpiTile[] {
   const disconnected = Boolean(s && s.connected && s.connected.count === 0);
   // An old snapshot of an account that was disconnected is not shown (as on Home).
   const history = input.historyFailed || disconnected ? [] : cleanHistory(input.history);
-  const lineNote = (pts: number[], what: string) => (pts.length >= 2
-    ? `${what}, last ${plural(pts.length, 'day', 'days')} with numbers`
+  // `what` is kept for the screen-reader label; the visible note stays one short line.
+  const lineNote = (pts: number[], _what: string) => (pts.length >= 2
+    ? plural(pts.length, 'day', 'days')
     : 'The line appears after two days of numbers.');
 
   const unavailable = (key: KpiKey, title: string, n: HomeNumber | null | undefined): KpiTile => {
@@ -198,7 +197,7 @@ export function buildKpis(input: BuildInput): KpiTile[] {
   if (eng && eng.available && isNum(eng.value)) {
     const pts = seriesOf(history, 'engagement');
     const chip = chipFromNumber(eng);
-    tiles.push({ key: 'engagement', title: 'Engagement', value: formatPercent(eng.value), detail: 'average engagement rate', chip, reason: null, link: null, spark: sparkOrNull(pts), sparkNote: lineNote(pts, 'Engagement rate'), label: `Engagement: ${formatPercent(eng.value)}${chip ? `. ${chip.text}` : ''}` });
+    tiles.push({ key: 'engagement', title: 'Engagement', value: formatPercent(eng.value), detail: 'average rate', chip, reason: null, link: null, spark: sparkOrNull(pts), sparkNote: lineNote(pts, 'Engagement rate'), label: `Engagement: ${formatPercent(eng.value)}${chip ? `. ${chip.text}` : ''}` });
   } else tiles.push(unavailable('engagement', 'Engagement', eng));
 
   // New followers
@@ -211,9 +210,9 @@ export function buildKpis(input: BuildInput): KpiTile[] {
     if (change !== null) {
       const chip = gains.lastWeek !== null && gains.thisWeek === change ? changeWords(change, gains.lastWeek) : null;
       const value = `${change > 0 ? '+' : ''}${formatCount(change)}`;
-      tiles.push({ key: 'followers', title: 'New followers', value, detail: `in the last 7 days. ${nowText}.`, chip, reason: null, link: null, spark: sparkOrNull(pts), sparkNote: lineNote(pts, 'Followers'), label: `New followers: ${value} in the last 7 days, ${nowText}${chip ? `. ${chip.text}` : ''}` });
+      tiles.push({ key: 'followers', title: 'New followers', value, detail: `in a week, ${formatCount(fol.value)} in all`, chip, reason: null, link: null, spark: sparkOrNull(pts), sparkNote: lineNote(pts, 'Followers'), label: `New followers: ${value} over the last week, ${nowText}${chip ? `. ${chip.text}` : ''}` });
     } else {
-      tiles.push({ key: 'followers', title: 'New followers', value: formatCount(fol.value), detail: 'followers now. New followers show after a week of numbers.', chip: null, reason: null, link: null, spark: sparkOrNull(pts), sparkNote: lineNote(pts, 'Followers'), label: `Followers: ${formatCount(fol.value)}. New followers show after a week of numbers.` });
+      tiles.push({ key: 'followers', title: 'New followers', value: formatCount(fol.value), detail: 'followers now; new ones show after a week', chip: null, reason: null, link: null, spark: sparkOrNull(pts), sparkNote: lineNote(pts, 'Followers'), label: `Followers: ${formatCount(fol.value)}. New followers show after a week of numbers.` });
     }
   } else tiles.push(unavailable('followers', 'New followers', fol));
 
@@ -224,9 +223,9 @@ export function buildKpis(input: BuildInput): KpiTile[] {
     const pts = weekly.counts;
     const chip = changeWords(posts.value, isNum(posts.previous) ? posts.previous : undefined);
     const note = pts.length >= 2
-      ? `Posts published each week, last ${plural(pts.length, 'week', 'weeks')}${weekly.complete ? '' : ' we can count'}`
+      ? `${plural(pts.length, 'week', 'weeks')}${weekly.complete ? '' : ' we can count'}`
       : 'The line appears after two weeks of posts.';
-    tiles.push({ key: 'posts', title: 'Posts published', value: formatCount(posts.value), detail: 'this week', chip, reason: null, link: null, spark: pts.length >= 2 && pts.some((n) => n > 0) ? pts : null, sparkNote: pts.length >= 2 && !pts.some((n) => n > 0) ? 'No posts were published in these weeks.' : note, label: `Posts published this week: ${formatCount(posts.value)}${chip ? `. ${chip.text}` : ''}` });
+    tiles.push({ key: 'posts', title: 'Posts published', value: formatCount(posts.value), detail: 'this week', chip, reason: null, link: null, spark: pts.length >= 2 && pts.some((n) => n > 0) ? pts : null, sparkNote: pts.length >= 2 && !pts.some((n) => n > 0) ? 'No posts in these weeks' : note, label: `Posts published this week: ${formatCount(posts.value)}${chip ? `. ${chip.text}` : ''}` });
   } else tiles.push(unavailable('posts', 'Posts published', posts));
 
   return tiles;
@@ -250,7 +249,7 @@ export function reachDays(history: unknown, disconnected = false): Array<{ date:
   if (disconnected) return [];
   return cleanHistory(history)
     .filter((s) => s.totals && isNum(s.totals.reach) && s.totals.reach > 0)
-    .map((s) => ({ date: String(s.date), value: s.totals!.reach as number }));
+    .map((s) => ({ date: String(s.date), value: Number(s.totals && s.totals.reach) }));
 }
 
 export interface BestPost {
@@ -321,7 +320,8 @@ export function heroLine(tiles: KpiTile[]): string {
   const posts = tiles.find((t) => t.key === 'posts');
   if (reach && reach.value) return `Your posts reached ${reach.value} people${reach.chip && reach.chip.dir !== 'flat' ? `, ${reach.chip.text.charAt(0).toLowerCase()}${reach.chip.text.slice(1)}` : ''}.`;
   if (reach && reach.reason && /connect an account/i.test(reach.reason)) return 'Connect an account and your reach, engagement and followers show here.';
-  if (posts && posts.value) return `${posts.value === '1' ? '1 post' : `${posts.value} posts`} published this week. Reach and followers show as soon as your accounts report them.`;
+  if (reach && reach.reason && /paid plan/i.test(reach.reason)) return 'Your reach, engagement and followers show here once your accounts are connected. Connecting accounts comes with a paid plan.';
+  if (posts && posts.value && posts.value !== '0') return `${posts.value === '1' ? '1 post' : `${posts.value} posts`} published this week. Reach and followers show as soon as your accounts report them.`;
   return 'Your numbers show here as soon as your accounts report them.';
 }
 
@@ -331,4 +331,16 @@ export function dayMonth(d: unknown): string | null {
   if (!Number.isFinite(t)) return null;
   const x = new Date(t + OFFSET_MS);
   return `${x.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getUTCMonth()]}`;
+}
+
+/** Line and filled area for the reach chart: x follows the real dates, y the value (0 at the bottom). */
+export function chartPaths(points: Array<{ date: string; value: number }>, w = 300, h = 110): { line: string; area: string } {
+  const pts = (Array.isArray(points) ? points : []).map((p) => ({ t: new Date(p.date).getTime(), v: p.value })).filter((p) => Number.isFinite(p.t) && isNum(p.v));
+  if (pts.length < 2) return { line: '', area: '' };
+  const t0 = pts[0].t;
+  const span = Math.max(1, pts[pts.length - 1].t - t0);
+  const max = Math.max(...pts.map((p) => p.v), 1);
+  const xy = pts.map((p) => [((p.t - t0) / span) * w, h - 4 - (p.v / max) * (h - 12)]);
+  const line = xy.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  return { line, area: `${line} L${w} ${h} L0 ${h} Z` };
 }

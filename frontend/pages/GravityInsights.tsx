@@ -1,297 +1,235 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Filter, Download, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, Eye, Heart, Loader2, Minus, Send, UserPlus } from 'lucide-react';
 import { apiService } from '../services/api';
-import { Campaign } from '../types';
+import type { HomeSummary } from '../types';
+import { PerformanceArt, SinglePostArt } from '../components/art';
+import { PlanSparkleArt } from '../components/art/plan/Sparkle';
+import {
+  bestPostOfMonth, buildKpis, chartPaths, dayMonth, heroLine, reachDays, sparkPath,
+  type BestPost, type KpiKey, type KpiTile,
+} from '../utils/performanceView';
+import { formatShort } from '../utils/formatCount';
+import '../components/performance/performance.css';
 
-// Gravity Insights — matches the prototype's Insights screen: cinematic
-// serif hero, big +% growth on right, 4 stat cards, 14-day reach chart,
-// top posts list.
+// Performance: the four figures the owner asked for (reach, engagement, new followers, posts published), each with a
+// line drawn from stored points only, a change chip in words, the best post of the month and reach over 30 days.
+// Data: GET /api/home/summary (numbers with reasons), GET /api/analytics/history (stored daily snapshots) and
+// GET /api/campaigns (published posts). Nothing is invented: a figure that is not stored shows its reason.
+// Rules in utils/performanceView.ts, map in docs/superpowers/impact-maps/performance-brand.md.
 
-const compactK = (n: number): string => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
-  return `${n}`;
+const TONE: Record<KpiKey, string> = { reach: 'lilac', engagement: 'coral', followers: 'teal', posts: 'gold' };
+const ICON: Record<KpiKey, typeof Eye> = { reach: Eye, engagement: Heart, followers: UserPlus, posts: Send };
+const CHIP_ICON = { up: ArrowUpRight, down: ArrowDownRight, flat: Minus } as const;
+
+const Sparkline: React.FC<{ points: number[] }> = ({ points }) => {
+  const d = sparkPath(points, 120, 36);
+  if (!d) return null;
+  const last = d.split(' L').pop() || '';
+  const [x, y] = last.replace(/^M/, '').split(' ').map(Number);
+  return (
+    <svg className="nb-perf-line" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <path d={d} />
+      {Number.isFinite(x) && Number.isFinite(y) && <circle cx={x} cy={y} r="2.6" />}
+    </svg>
+  );
 };
 
-const wordsForNumber = (n: number): string => {
-  return n.toLocaleString();
+const KpiCard: React.FC<{ tile: KpiTile; index: number }> = ({ tile, index }) => {
+  const Icon = ICON[tile.key];
+  const ChipIcon = tile.chip ? CHIP_ICON[tile.chip.dir] : null;
+  return (
+    <li className="nb-perf-card nb-perf-in" data-tone={TONE[tile.key]} data-kpi={tile.key} style={{ ['--i' as any]: index + 1 }} aria-label={tile.label}>
+      <div className="nb-perf-head">
+        <span className="nb-perf-icon" aria-hidden="true"><Icon aria-hidden /></span>
+        <h2>{tile.title}</h2>
+        {tile.value !== null && tile.spark && <span className="nb-perf-note" title={tile.key === 'posts' ? 'Weeks the line covers' : 'Days with stored numbers the line covers'}>{tile.sparkNote}</span>}
+      </div>
+      {tile.value !== null ? (
+        <p className="nb-perf-valrow">
+          <span className="nb-perf-value">{tile.value}</span>
+          {tile.detail && <span className="nb-perf-detail">{tile.detail}</span>}
+        </p>
+      ) : (
+        <p className="nb-perf-reason">
+          {tile.reason}
+          {tile.link && <><br /><Link to={tile.link.to}>{tile.link.text}</Link></>}
+        </p>
+      )}
+      {tile.value !== null && (
+        <div className="nb-perf-foot">
+          {tile.spark && <Sparkline points={tile.spark} />}
+          {(tile.chip || !tile.spark) && (
+            <div className="nb-perf-footrow">
+              {tile.chip && ChipIcon && <span className="nb-perf-chip" data-dir={tile.chip.dir}><ChipIcon aria-hidden />{tile.chip.text}</span>}
+              {!tile.spark && tile.sparkNote && <span className="nb-perf-note">{tile.sparkNote}</span>}
+            </div>
+          )}
+        </div>
+      )}
+    </li>
+  );
+};
+
+const BestPostCard: React.FC<{ best: BestPost; index: number }> = ({ best, index }) => {
+  const when = best.when ? dayMonth(best.when) : null;
+  return (
+    <li className="nb-perf-card nb-perf-best nb-perf-in" data-tone="gold" data-wide="true" data-card="best" style={{ ['--i' as any]: index }}>
+      <span className="nb-perf-best-pic" aria-hidden={best.image ? undefined : true}>
+        {best.image
+          ? <img src={best.image} alt={best.name ? `Picture of ${best.name}` : 'Picture of the post'} width={132} height={132} loading="lazy" decoding="async" />
+          : <SinglePostArt />}
+      </span>
+      <div className="nb-perf-best-body">
+        <p className="nb-perf-eyebrow">{best.title}</p>
+        {best.kind === 'none' ? (
+          <>
+            <p className="nb-perf-reason">{best.note}</p>
+            <div className="nb-perf-foot">
+              <Link to="/campaigns" className="nb-perf-cta">Create a post <ArrowRight aria-hidden /></Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 className="nb-perf-best-name">{best.name}</h2>
+            {best.stats && best.stats.length > 0 && (
+              <ul className="nb-perf-stats" aria-label="Numbers for this post">{best.stats.map((s) => <li key={s}>{s}</li>)}</ul>
+            )}
+            {(when || best.platform) && (
+              <p className="nb-perf-when">Published{when ? ` ${when}` : ''}{best.platform ? ` on ${best.platform.charAt(0).toUpperCase()}${best.platform.slice(1)}` : ''}</p>
+            )}
+            <p className="nb-perf-note nb-perf-foot">{best.note}</p>
+          </>
+        )}
+      </div>
+    </li>
+  );
+};
+
+const ReachChart: React.FC<{ days: Array<{ date: string; value: number }>; reason: string | null; index: number }> = ({ days, reason, index }) => {
+  const { line, area } = chartPaths(days, 300, 110);
+  const max = days.length ? Math.max(...days.map((d) => d.value)) : 0;
+  return (
+    <li className="nb-perf-card nb-perf-in" data-tone="lilac" data-wide="true" data-card="chart" style={{ ['--i' as any]: index }}>
+      <div className="nb-perf-head">
+        <span className="nb-perf-icon" aria-hidden="true"><CalendarDays aria-hidden /></span>
+        <h2>Reach, last 30 days</h2>
+      </div>
+      {line ? (
+        <div className="nb-perf-chart">
+          <svg viewBox="0 0 300 110" preserveAspectRatio="none" role="img" aria-label={`Reach on ${days.length} days with numbers, highest ${formatShort(max)}`}>
+            <defs>
+              <linearGradient id="nb-perf-area" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#7B5CC4" stopOpacity="0.28" />
+                <stop offset="100%" stopColor="#7B5CC4" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path className="nb-perf-area" d={area} />
+            <path className="nb-perf-stroke" d={line} />
+          </svg>
+          <div className="nb-perf-axis">
+            <span>{dayMonth(days[0].date)}</span>
+            <span>Highest {formatShort(max)}</span>
+            <span>{dayMonth(days[days.length - 1].date)}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="nb-perf-empty">
+          <span className="nb-perf-empty-art" aria-hidden="true"><PerformanceArt /></span>
+          <p className="nb-perf-reason">{reason || 'The chart appears after two days of numbers.'}</p>
+        </div>
+      )}
+    </li>
+  );
 };
 
 const GravityInsights: React.FC = () => {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<HomeSummary | null>(null);
+  const [summaryFailed, setSummaryFailed] = useState(false);
+  const [history, setHistory] = useState<unknown[]>([]);
+  const [historyFailed, setHistoryFailed] = useState(false);
+  const [campaigns, setCampaigns] = useState<unknown[]>([]);
+  const [campaignsFailed, setCampaignsFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      try {
-        const res = await apiService.getCampaigns();
-        if (!cancelled) setCampaigns(Array.isArray(res?.campaigns) ? res.campaigns : []);
-      } finally { if (!cancelled) setLoading(false); }
+      // Each source fails on its own: the others still show.
+      const [s, h, c] = await Promise.allSettled([
+        apiService.getHomeSummary(),
+        apiService.getAnalyticsHistory(35),
+        apiService.getCampaigns(),
+      ]);
+      if (cancelled) return;
+      if (s.status === 'fulfilled' && s.value && (s.value as any).numbers) setSummary(s.value as HomeSummary); else setSummaryFailed(true);
+      if (h.status === 'fulfilled' && Array.isArray(h.value?.history)) setHistory(h.value.history); else setHistoryFailed(true);
+      // getCampaigns() answers an empty list when the call fails, so an empty list while the summary counts published
+      // posts is treated as a failure rather than "nothing published".
+      const sv: any = s.status === 'fulfilled' ? s.value : null;
+      const pub = sv?.numbers?.postsPublishedThisWeek;
+      const summaryHasPosts = Boolean(pub && pub.available && ((pub.value || 0) > 0 || (pub.previous || 0) > 0));
+      if (c.status === 'fulfilled' && Array.isArray(c.value?.campaigns) && !(c.value.campaigns.length === 0 && summaryHasPosts)) setCampaigns(c.value.campaigns);
+      else setCampaignsFailed(true);
+      setLoading(false);
     })();
     return () => { cancelled = true; };
   }, []);
 
-  // Compute derived stats from campaigns (real backend data).
-  const stats = useMemo(() => {
-    const now = new Date();
-    const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
-    const twoWeeksAgo = new Date(now); twoWeeksAgo.setDate(now.getDate() - 14);
-
-    const inLast7 = (d: Date) => d >= weekAgo && d <= now;
-    const inPrev7 = (d: Date) => d >= twoWeeksAgo && d < weekAgo;
-
-    let reach7d = 0, reachPrev = 0;
-    let engagement = 0, engagementPrev = 0;
-    let newFollowers = 0;
-    let approved = 0, drafts = 0;
-
-    const topPosts: any[] = [];
-
-    campaigns.forEach((c: any) => {
-      const raw = c?.scheduling?.startDate || c?.scheduledDate || c?.createdAt;
-      const d = raw ? new Date(raw) : null;
-      const reach = Number(c?.metrics?.reach || c?.analytics?.reach || 0);
-      const eng = Number(c?.metrics?.engagement || c?.analytics?.engagement || 0);
-      if (d && !isNaN(d.getTime())) {
-        if (inLast7(d)) { reach7d += reach; engagement += eng; }
-        if (inPrev7(d)) { reachPrev += reach; engagementPrev += eng; }
-      }
-      if (String(c?.status || '').toLowerCase() === 'draft') drafts += 1;
-      else approved += 1;
-      newFollowers += Number(c?.metrics?.newFollowers || 0);
-
-      if (reach > 0) {
-        topPosts.push({
-          id: c._id,
-          title: c.name || c.creative?.textContent?.slice(0, 60) || 'Post',
-          image: c.creative?.imageUrls?.[0] || null,
-          reach,
-          likes: Number(c?.metrics?.likes || 0),
-          platform: (c.platforms || [])[0] || 'instagram',
-        });
-      }
-    });
-
-    topPosts.sort((a, b) => b.reach - a.reach);
-
-    const total = approved + drafts;
-    const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
-
-    // null means the previous 7 days had no data, so no percentage can be stated.
-    const reachChangePct: number | null = reachPrev > 0
-      ? Math.round(((reach7d - reachPrev) / reachPrev) * 100)
-      : null;
-    const engChangePct: number | null = engagementPrev > 0
-      ? Math.round(((engagement - engagementPrev) / engagementPrev) * 100)
-      : null;
-
-    // Build a 14-day reach series (day-by-day)
-    const series: { date: Date; reach: number }[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const day = new Date(now); day.setDate(now.getDate() - i); day.setHours(0,0,0,0);
-      let dayReach = 0;
-      campaigns.forEach((c: any) => {
-        const raw = c?.scheduling?.startDate || c?.scheduledDate || c?.createdAt;
-        if (!raw) return;
-        const cd = new Date(raw);
-        if (cd.getFullYear() === day.getFullYear() && cd.getMonth() === day.getMonth() && cd.getDate() === day.getDate()) {
-          dayReach += Number(c?.metrics?.reach || 0);
-        }
-      });
-      series.push({ date: day, reach: dayReach });
-    }
-
-    return {
-      reach7d, reachPrev, reachChangePct,
-      engagement, engChangePct,
-      newFollowers, approvalRate,
-      topPosts: topPosts.slice(0, 5),
-      series,
-    };
-  }, [campaigns]);
-
-  const hasAnyReach = stats.reach7d > 0;
-  const changePct = stats.reachChangePct;
-  const reachSentence = changePct === null
-    ? 'This is the first week with reach data, so there is no earlier week to compare it with.'
-    : changePct > 0
-      ? `Reach is up ${changePct}% compared with the previous 7 days.`
-      : changePct < 0
-        ? `Reach is down ${Math.abs(changePct)}% compared with the previous 7 days.`
-        : 'Reach is unchanged compared with the previous 7 days.';
-  const trendLabel = !hasAnyReach
-    ? 'Waiting for data'
-    : changePct === null
-      ? 'First week with data'
-      : changePct > 0
-        ? 'Reach is rising'
-        : changePct < 0
-          ? 'Reach is falling'
-          : 'Reach is steady';
-
-  // Sparkline path
-  const chartPath = useMemo(() => {
-    const s = stats.series;
-    if (!s.length) return '';
-    const max = Math.max(...s.map((p) => p.reach), 1);
-    const W = 100, H = 100;
-    const step = W / Math.max(1, s.length - 1);
-    let d = `M 0 ${H - (s[0].reach / max) * H}`;
-    s.forEach((p, i) => {
-      if (i === 0) return;
-      d += ` L ${(i * step).toFixed(2)} ${(H - (p.reach / max) * H).toFixed(2)}`;
-    });
-    return d;
-  }, [stats.series]);
-
-  const chartFillPath = chartPath ? `${chartPath} L 100 100 L 0 100 Z` : '';
+  const now = useMemo(() => new Date(), [loading]);
+  const tiles = useMemo(() => buildKpis({ summary, summaryFailed, history, historyFailed, campaigns, campaignsFailed, now }), [summary, summaryFailed, history, historyFailed, campaigns, campaignsFailed, now]);
+  const best = useMemo<BestPost>(() => (campaignsFailed
+    ? { kind: 'none', title: 'Best post of the month', note: 'We could not load your posts just now. Please try again in a moment.' }
+    : bestPostOfMonth(campaigns, now)), [campaigns, campaignsFailed, now]);
+  const disconnected = Boolean(summary && summary.connected && summary.connected.count === 0);
+  const days = useMemo(() => (historyFailed ? [] : reachDays(history, disconnected).slice(-30)), [history, historyFailed, disconnected]);
+  const reachTile = tiles[0];
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-[var(--gv-text-tertiary)]">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-        Loading performance data…
+      <div className="nb-perf-loading" role="status" aria-label="Loading performance">
+        <Loader2 className="nb-perf-spin" aria-hidden />
       </div>
     );
   }
 
+  const asOf = summary?.numbers?.reach?.asOf || summary?.numbers?.followers?.asOf || null;
+  const stale = Boolean(summary?.numbers?.reach?.stale || summary?.numbers?.followers?.stale);
+  const connected = summary?.connected?.count ?? null;
+  const chartReason = historyFailed ? 'We could not load this just now.' : reachTile.value === null ? reachTile.reason : null;
+
   return (
-    <div className="max-w-[1240px] mx-auto pb-16">
-      {/* Header row (right-side actions) */}
-      <div className="flex items-center justify-end gap-2 mb-6">
-        <button className="flex items-center gap-2 h-9 px-4 rounded-lg border border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] text-[13px] font-medium hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]">
-          <Filter className="w-3.5 h-3.5" />
-          Filter
-        </button>
-        <button className="flex items-center gap-2 h-9 px-4 rounded-lg border border-[var(--gv-border-default)] text-[var(--gv-text-secondary)] text-[13px] font-medium hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]">
-          <Download className="w-3.5 h-3.5" />
-          Export
-        </button>
-      </div>
-
-      {/* HERO */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-end mb-14">
-        <div>
-          <div className="flex items-center gap-2 mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--gv-accent)]" />
-            <span className="gravity-label">Last 7 days</span>
-          </div>
-          <h1 className="font-serif-display text-[52px] leading-[1.05] tracking-[-0.02em] text-[var(--gv-text-primary)] mb-4">
-            {hasAnyReach ? (
-              <>In the last 7 days your posts reached <span className="italic text-[var(--gv-accent-display)] tabular-nums">{wordsForNumber(stats.reach7d)}</span> people.</>
-            ) : (
-              <>No reach has been recorded yet.</>
-            )}
-          </h1>
-          <p className="text-[14px] text-[var(--gv-text-secondary)] max-w-[540px]">
-            {hasAnyReach
-              ? `${reachSentence} Keep publishing on the schedule Nebulaa set for you.`
-              : `After your posts are published, this page shows how many people saw them. You do not need to build a dashboard or open a spreadsheet.`}
-          </p>
+    <div className="nb-perf">
+      <header className="nb-perf-hero nb-perf-in" style={{ ['--i' as any]: 0 }}>
+        <div className="nb-perf-hero-id">
+          <p className="nb-perf-eyebrow">Performance</p>
+          <h1>How your posts are <em>doing</em></h1>
+          <p className="nb-perf-lede">{heroLine(tiles)}</p>
+          <ul className="nb-perf-meta" aria-label="About these numbers">
+            {asOf && <li data-tone={stale ? 'coral' : 'lilac'}><CalendarDays aria-hidden />{stale ? `Last update ${dayMonth(asOf)}, waiting for newer numbers` : `Updated ${dayMonth(asOf)}`}</li>}
+            {connected !== null && <li>{connected === 0 ? 'No account connected' : `${connected} ${connected === 1 ? 'account' : 'accounts'} connected`}</li>}
+          </ul>
         </div>
+        <span className="nb-perf-hero-art" aria-hidden="true">
+          <PerformanceArt />
+          <PlanSparkleArt className="nb-perf-spark-deco" />
+        </span>
+      </header>
 
-        {hasAnyReach && stats.reachChangePct !== null && (
-          <div className="text-right">
-            <div className="font-serif-display text-[68px] leading-none tabular-nums text-[var(--gv-text-primary)]">
-              {stats.reachChangePct >= 0 ? '+' : ''}{stats.reachChangePct}%
-            </div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4ADE80] mt-2">Compared with the previous 7 days</div>
-          </div>
-        )}
-      </div>
+      <section className="nb-perf-wrap" aria-label="Your numbers">
+        <ul className="nb-perf-grid">
+          {tiles.map((t, i) => <KpiCard key={t.key} tile={t} index={i} />)}
+          <BestPostCard best={best} index={5} />
+          <ReachChart days={days} reason={chartReason} index={6} />
+        </ul>
+      </section>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <StatCard label="Reach (7 days)" value={hasAnyReach ? compactK(stats.reach7d) : '—'} delta={hasAnyReach && stats.reachChangePct !== null ? `${stats.reachChangePct >= 0 ? '+' : ''}${stats.reachChangePct}%` : null} />
-        <StatCard label="Engagement" value={stats.engagement > 0 ? compactK(stats.engagement) : '—'} delta={stats.engagement > 0 && stats.engChangePct !== null ? `${stats.engChangePct >= 0 ? '+' : ''}${stats.engChangePct}%` : null} />
-        <StatCard label="New followers" value={stats.newFollowers > 0 ? `${stats.newFollowers}` : '—'} delta={null} />
-        <StatCard label="Approval rate" value={`${stats.approvalRate}%`} delta={null} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6">
-        {/* CHART */}
-        <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="gravity-label">Reach in the last 14 days</div>
-            <div className="text-[11px] text-[var(--gv-text-muted)]">
-              {trendLabel}
-            </div>
-          </div>
-          {hasAnyReach ? (
-            <div className="relative h-[220px]">
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-                <defs>
-                  <linearGradient id="gravityChartFill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#F5A623" stopOpacity="0.4" />
-                    <stop offset="100%" stopColor="#F5A623" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path d={chartFillPath} fill="url(#gravityChartFill)" />
-                <path d={chartPath} fill="none" stroke="#F5A623" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-              </svg>
-              <div className="absolute inset-x-0 -bottom-6 flex justify-between text-[10px] text-[var(--gv-text-muted)]">
-                <span>{stats.series[0]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                <span>{stats.series[stats.series.length - 1]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-[var(--gv-text-muted)] text-[13px]">
-              No reach data yet.
-            </div>
-          )}
-        </div>
-
-        {/* TOP POSTS */}
-        <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-6">
-          <div className="gravity-label mb-4">Top posts</div>
-          {stats.topPosts.length === 0 ? (
-            <div className="text-[var(--gv-text-muted)] text-[13px] py-6 text-center">
-              No posts have been published yet. Your best-performing posts will appear here after you publish.
-            </div>
-          ) : (
-            <div className="divide-y divide-[var(--gv-border-subtle)]">
-              {stats.topPosts.map((p, i) => (
-                <div key={p.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                  <span className="text-[11px] font-serif-display text-[var(--gv-text-muted)] tabular-nums w-6">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <div className="w-10 h-10 rounded-md bg-[var(--gv-surface-2)] border border-[var(--gv-border-subtle)] overflow-hidden flex-shrink-0">
-                    {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-semibold text-[var(--gv-text-primary)] truncate leading-tight">{p.title}</div>
-                    <div className="text-[10.5px] text-[var(--gv-text-tertiary)] mt-0.5">
-                      {p.platform} · {p.likes} likes
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="font-serif-display text-[16px] text-[var(--gv-text-primary)] tabular-nums leading-none">{compactK(p.reach)}</div>
-                    <div className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-[var(--gv-text-muted)] mt-1">reach</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <p className="nb-perf-source">
+        Reach, engagement and followers come from your connected accounts and are updated twice a day. Changes compare with the numbers from a week earlier. Posts published counts the posts Nebulaa published for you, by India week.
+      </p>
     </div>
   );
 };
-
-const StatCard: React.FC<{ label: string; value: string; delta: string | null }> = ({ label, value, delta }) => (
-  <div className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-5">
-    <div className="gravity-label mb-3">{label}</div>
-    <div className="flex items-baseline gap-2">
-      <span className="font-serif-display text-[32px] leading-none text-[var(--gv-text-primary)] tabular-nums">{value}</span>
-    </div>
-    {delta && (
-      <div className={`text-[11px] font-semibold mt-2 ${delta.startsWith('+') ? 'text-[#4ADE80]' : 'text-red-400'}`}>
-        {delta}
-      </div>
-    )}
-  </div>
-);
 
 export default GravityInsights;
