@@ -1,0 +1,126 @@
+/* Inbox overview (pages/SocialInbox.tsx): the three part tiles with status chips, the Automatic replies explainer and the
+   small notes. Plain CSS, light theme only: cream panels, the gold glow, brand gold; no dark panels. Symmetry rule
+   (docs/superpowers/ops/tile-system.md): every row full, tiles in a row the same height. Motion only without reduced motion. */
+
+.nb-ix {
+  --ix-ink: var(--gv-text-primary); --ix-ink-2: var(--gv-text-secondary); --ix-line: var(--gv-border-subtle);
+  --ix-lift: 0 1px 2px rgb(43 29 14 / 0.04), 0 8px 24px rgb(43 29 14 / 0.05);
+  position: relative; max-width: 1120px; margin: 0 auto; padding-bottom: 32px;
+  display: flex; flex-direction: column; gap: 16px; color: var(--ix-ink); container-type: inline-size;
+}
+.nb-ix::before {
+  content: ""; position: absolute; z-index: 0; pointer-events: none; left: -24px; right: -24px; top: -32px; height: 300px;
+  background: radial-gradient(34% 60% at 10% 14%, var(--gv-glow-gold), transparent 70%), radial-gradient(30% 50% at 90% 6%, var(--gv-glow-amber), transparent 70%);
+  opacity: 0.6;
+}
+.nb-ix > * { position: relative; z-index: 1; min-width: 0; }
+.nb-ix h1, .nb-ix h2, .nb-ix h3, .nb-ix p, .nb-ix ol { margin: 0; }
+.nb-ix ol { list-style: none; padding: 0; }
+.nb-ix a:focus-visible, .nb-ix button:focus-visible { outline: 3px solid #7A4A00; outline-offset: 2px; }
+
+/* ---- heading ---- */
+.nb-ix-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 16px; }
+.nb-ix-head h1 { font-family: 'Playfair Display', Georgia, serif; font-size: 30px; font-weight: 600; line-height: 1.15; letter-spacing: -0.01em; }
+.nb-ix-lede { margin-top: 4px !important; font-size: 13.5px; line-height: 1.5; color: var(--ix-ink-2); max-width: 70ch; }
+
+/* ---- the three part tiles: one even row from 560 px of room, full-width rows below ---- */
+.nb-ix .nb-ix-strip.nb-tile-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: stretch; }
+@container (min-width: 560px) { .nb-ix .nb-ix-strip.nb-tile-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; } }
+/* On a narrow screen the rows stay short: the one-line description is left out (title, status and counts stay). */
+@container (max-width: 559px) { .nb-ix .nb-ix-strip .nb-tile-sub { display: none; } }
+.nb-ix .nb-ix-strip > .nb-tile[data-variant="compact"] { align-self: stretch; height: 100%; border-radius: 16px; background: rgb(255 253 248 / 0.92); }
+.nb-ix .nb-ix-strip > .nb-tile::before { height: 3px; }
+.nb-ix .nb-ix-strip .nb-tile-art { flex: 0 0 76px; width: 76px; min-height: 78px; }
+.nb-ix .nb-ix-strip .nb-tile-artwrap > svg { transform: scale(1.12); }
+.nb-ix .nb-ix-strip .nb-tile-body { padding: 10px 14px; gap: 2px; justify-content: center; }
+/* the status chip sits above the title, so the title keeps the full width */
+.nb-ix .nb-ix-strip .nb-tile-title { font-size: 14.5px; flex-direction: column-reverse; align-items: flex-start; flex-wrap: nowrap; gap: 3px; }
+.nb-ix .nb-ix-strip .nb-tile-title > span:first-child { min-width: 0; }
+.nb-ix .nb-ix-strip .nb-tile-sub { font-size: 12.5px; line-height: 1.35; }
+.nb-ix .nb-ix-strip .nb-tile-foot { margin-top: 2px; padding-top: 0; font-size: 12.5px; font-weight: 650; color: var(--ix-ink); }
+.nb-ix .nb-ix-strip .nb-tile-check { display: none; }
+.nb-ix .nb-ix-strip > .nb-tile[data-selected="true"] { border-color: #F5A623; background: #FFFAEE; box-shadow: 0 0 0 2px #F5A623, var(--ix-lift); }
+.nb-ix .nb-ix-strip > .nb-tile[data-selected="true"]::before { background: #F5A623; }
+
+/* status chips in words; text on every tint at least 4.5 to 1 (tests/inboxOverview.test.mjs) */
+.nb-ix .nb-ix-strip .nb-tile-badge { gap: 5px; border: 0; padding: 4px 9px; font-size: 11px; }
+.nb-ix .nb-ix-strip .nb-tile-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.85; }
+.nb-ix .nb-tile[data-status="connected"] .nb-tile-badge, .nb-ix .nb-tile[data-status="on"] .nb-tile-badge { background: #DDF2E6; color: #22603A; }
+.nb-ix .nb-tile[data-status="needs_setup"] .nb-tile-badge { background: #FFF0C7; color: #8A5000; }
+.nb-ix .nb-tile[data-status="addon"] .nb-tile-badge { background: #ECE6FB; color: #5B3FA6; }
+.nb-ix .nb-tile[data-status="off"] .nb-tile-badge { background: #F1ECE2; color: #5E4A31; }
+.nb-ix .nb-tile[data-status="off"] .nb-tile-badge::before { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+
+/* ---- warm notes (connect, add-on, could not load) ---- */
+.nb-ix-note {
+  display: flex; align-items: center; gap: 16px; border-radius: 18px; padding: 16px 20px; border: 1px solid #EFD089;
+  background: linear-gradient(135deg, #FFFDF8, #FFF4DA); box-shadow: var(--ix-lift);
+}
+.nb-ix-note-art { flex: 0 0 96px; width: 96px; }
+.nb-ix-note-art > svg { display: block; width: 100%; height: auto; }
+.nb-ix-note-text { flex: 1 1 auto; min-width: 0; }
+.nb-ix-note h2 { font-size: 16px; font-weight: 700; line-height: 1.3; color: #2B1D0E; }
+.nb-ix-note p { margin-top: 3px !important; font-size: 13.5px; line-height: 1.5; color: #5E4A31; }
+.nb-ix-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 12px;
+  cursor: pointer; white-space: nowrap; text-decoration: none; border: 1px solid #F5A623; background: #F5A623; color: #1A1208; font-size: 13px; font-weight: 650;
+}
+.nb-ix-btn:hover { background: #E89B1C; }
+.nb-ix-btn svg { width: 16px; height: 16px; }
+
+/* ---- the Automatic replies explainer ---- */
+.nb-ix-explain {
+  display: flex; flex-direction: column; gap: 14px; border-radius: 20px; padding: 18px 20px; border: 1px solid #EFD089;
+  background: radial-gradient(50% 90% at 100% 0%, rgb(255 203 46 / 0.22), transparent 65%), linear-gradient(135deg, #FFF9EC, #FFF1D2);
+  box-shadow: 0 1px 2px rgb(43 29 14 / 0.04), 0 10px 30px rgb(245 166 35 / 0.12);
+}
+.nb-ix-explain-head { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 28px; align-items: center; }
+@container (min-width: 760px) { .nb-ix-explain-head { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr); } }
+.nb-ix-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #8A5200; }
+.nb-ix-explain h2 { margin-top: 4px !important; font-family: 'Playfair Display', Georgia, serif; font-size: 23px; font-weight: 600; line-height: 1.22; color: #2B1D0E; }
+.nb-ix-explain-copy p { font-size: 13.5px; line-height: 1.55; color: #5E4A31; }
+.nb-ix-explain-copy p + p { margin-top: 6px !important; }
+.nb-ix-steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: stretch; }
+@container (min-width: 760px) { .nb-ix-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; } }
+.nb-ix-step {
+  display: flex; align-items: center; gap: 12px; height: 100%; box-sizing: border-box; min-height: 76px; padding: 10px 14px 10px 10px;
+  border-radius: 14px; background: rgb(255 255 255 / 0.86); border: 1px solid #F0DDB4;
+}
+.nb-ix-step-art { position: relative; flex: 0 0 64px; width: 64px; }
+.nb-ix-step-art > svg { display: block; width: 100%; height: auto; }
+.nb-ix-step-num {
+  position: absolute; left: -2px; top: -2px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+  border-radius: 50%; background: #FFE2A1; color: #6B3F00; font-size: 11px; font-weight: 800;
+}
+.nb-ix-step:first-child .nb-ix-step-num { background: #F5A623; color: #1A1208; }
+.nb-ix-step h3 { font-size: 14px; font-weight: 700; line-height: 1.3; color: #2B1D0E; }
+.nb-ix-step p { margin-top: 2px !important; font-size: 12.5px; line-height: 1.4; color: #5E4A31; overflow-wrap: anywhere; }
+.nb-ix-explain-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.nb-ix-explain-foot p { flex: 1 1 320px; font-size: 12.5px; line-height: 1.5; color: #5E4A31; }
+
+@media (max-width: 640px) {
+  .nb-ix-head h1 { font-size: 26px; }
+  .nb-ix-note { flex-direction: column; align-items: stretch; text-align: left; padding: 14px; }
+  .nb-ix-note-art { display: none; }
+  .nb-ix-explain { padding: 14px; }
+  .nb-ix-explain h2 { font-size: 20px; }
+  .nb-ix-explain-foot .nb-ix-btn { width: 100%; }
+}
+
+/* ---- motion (only without reduced motion) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .nb-ix-step { animation: nb-ix-rise 0.45s ease-out backwards; }
+  .nb-ix-step:nth-child(2) { animation-delay: 0.08s; }
+  .nb-ix-step:nth-child(3) { animation-delay: 0.16s; }
+  .nb-ix-glyph .nb-ix-pulse { transform-box: fill-box; transform-origin: center; animation: nb-ix-pulse 2.4s ease-in-out infinite; }
+  .nb-ix-glyph .nb-ix-sway { transform-box: fill-box; transform-origin: 50% 100%; animation: nb-ix-sway 4s ease-in-out infinite; }
+  .nb-ix-glyph .nb-ix-pop { transform-box: fill-box; transform-origin: center; animation: nb-ix-pop 3s ease-in-out infinite; }
+  .nb-ix .nb-ix-strip .nb-tile-artwrap > svg { transition: transform 0.25s ease; }
+  .nb-ix .nb-ix-strip > .nb-tile:hover .nb-tile-artwrap > svg { transform: scale(1.2); }
+}
+@keyframes nb-ix-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes nb-ix-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.45); } }
+@keyframes nb-ix-sway { 0%, 100% { transform: rotate(-38deg); } 50% { transform: rotate(32deg); } }
+@keyframes nb-ix-pop { 0%, 70%, 100% { transform: scale(1); } 80% { transform: scale(1.14); } }
+/* Without motion the needle rests on the middle (careful) setting. */
+@media (prefers-reduced-motion: reduce) { .nb-ix-glyph .nb-ix-sway { transform-box: fill-box; transform-origin: 50% 100%; transform: rotate(0deg); } }

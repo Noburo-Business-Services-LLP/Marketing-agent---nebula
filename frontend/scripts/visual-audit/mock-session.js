@@ -88,6 +88,12 @@
   // building = the plan is being built, client = an agency client workspace, free = a free account, error = the summary fails,
   // degraded = some sources failed (numbers, today, balance say so per block),
   // slow = the summary answers after 4 seconds. The agency-client session mode shows the client variant by itself.
+  // ?inboxstate= full | quiet | auto | nosocials | addon | error picks the Inbox variant (kept for the tab):
+  // full = Instagram and Facebook connected, 3 replies waiting for approval, 5 unread, Google connected, automatic replies off;
+  // quiet = connected, nothing waiting, no Google, automatic replies on (Fully automatic); auto = automatic only through an own rule;
+  // nosocials = the add-on but nothing connected; addon = no Inbox add-on (403 everywhere); error = the summary fails.
+  if (params.get('inboxstate')) sessionStorage.setItem('audit-inbox-state', params.get('inboxstate'));
+  var IXSTATE = sessionStorage.getItem('audit-inbox-state') || 'full';
   if (params.get('homestate')) sessionStorage.setItem('audit-home-state', params.get('homestate'));
   var HSTATE = sessionStorage.getItem('audit-home-state') || 'full';
   // ?weekstate= ready | partly | approved | top_up | no_plan | skipped | not_eligible picks the This week card variant (kept for the tab).
@@ -804,7 +810,37 @@
     ] })],
     ['GET', /^\/social\/(status|api-status)/, ok({ connections: socialConnections, platforms: socialConnections, connected: ['instagram'] })],
     ['GET', /^\/social\/ayrshare\/profile/, ok({ profiles: [] })],
-    ['GET', /^\/social\/inbox\/summary/, ok({ summary: { unread: 3, total: 12 }, accounts: [], connectedPlatformCount: 2, unreadMessageCount: 3 })],
+    // ---- Inbox (?inboxstate=): summary, reply settings and the approval list ----
+    ['GET', /^\/social\/inbox\/(summary|settings|pending|reviews|conversations)/, function (c) {
+      if (IXSTATE === 'addon') return { __status: 403, body: { success: false, upgradeRequired: true, reason: 'addon', feature: 'inbox', message: 'Inbox is an add-on.' } };
+      var what = c.path.split('/')[3];
+      var linked = IXSTATE !== 'nosocials';
+      if (what === 'summary') {
+        if (IXSTATE === 'error') return { __status: 500, body: { success: false, message: 'Failed to get social inbox summary' } };
+        var waiting = IXSTATE === 'full' ? 3 : 0, unread = IXSTATE === 'full' ? 5 : 0;
+        return ok({ connectedPlatforms: linked ? ['instagram', 'facebook'] : [], connectedPlatformCount: linked ? 2 : 0, unreadMessageCount: unread, pendingCount: waiting,
+          inboxEnabled: linked, inboxStatus: linked ? 'active' : 'disabled', syncStatus: { status: linked ? 'synced' : 'not_started', lastSyncAt: linked ? iso(0) : null },
+          webhookStatus: { registered: linked, activePlatforms: linked ? ['instagram', 'facebook'] : [], missingPlatforms: linked ? [] : ['instagram', 'facebook'] },
+          aiEngagement: { replySuggestions: true, priorityTagging: true, unreadAlerts: true, autoReplyEnabled: IXSTATE === 'quiet' || IXSTATE === 'auto', automationMode: IXSTATE === 'quiet' ? 'fully_automatic' : 'suggested' } });
+      }
+      if (what === 'settings') {
+        var on = IXSTATE === 'quiet' || IXSTATE === 'auto';
+        return ok({ settings: { enabled: on, automationMode: IXSTATE === 'quiet' ? 'fully_automatic' : 'suggested', channels: { messages: true, comments: true, mentions: false, replies: false },
+          platforms: { instagram: true, facebook: true, linkedin: false, x: false, youtube: false }, channelOverrides: [], businessTone: 'friendly', replyStyle: 'friendly',
+          responseRules: IXSTATE === 'auto' ? [{ _id: 'r1', name: 'Opening hours', enabled: true, matchType: 'contains', value: 'open', action: 'auto_reply', priority: 1 }] : [],
+          guardrails: { requireApprovalForNegative: true, requireApprovalForHighPriority: true, skipSpam: true, maxAutoRepliesPerConversationPerDay: 3, signature: '' } } });
+      }
+      if (what === 'pending') {
+        var items = IXSTATE !== 'full' ? [] : [
+          { id: 'p1', conversation_id: 'cv1', platform: 'instagram', message_type: 'comment', draft_text: 'Thank you. The sourdough is 220 rupees and fresh every morning.', suggested_replies: [], reason: 'Approval required mode', original_message: 'Hi, what is the price?', author_name: 'Asha', created_at: iso(0), conversation: { id: 'cv1', participant_name: 'Asha', platform: 'instagram', status: 'unread', priority: 'normal' } },
+          { id: 'p2', conversation_id: 'cv2', platform: 'facebook', message_type: 'message', draft_text: 'Yes, we deliver within 5 km. Would you like to place an order?', suggested_replies: [], reason: 'High priority message requires approval', original_message: 'Do you deliver to Anna Nagar?', author_name: 'Ravi', created_at: iso(0), conversation: { id: 'cv2', participant_name: 'Ravi', platform: 'facebook', status: 'unread', priority: 'high' } },
+          { id: 'p3', conversation_id: 'cv3', platform: 'instagram', message_type: 'message', draft_text: 'We are sorry about that. Could you share your order number so we can fix it?', suggested_replies: [], reason: 'Negative sentiment requires approval', original_message: 'My cake arrived late.', author_name: 'Meena', created_at: iso(-1), conversation: { id: 'cv3', participant_name: 'Meena', platform: 'instagram', status: 'unread', priority: 'high' } }
+        ];
+        return ok({ pending: items, pendingCount: items.length });
+      }
+      if (what === 'reviews') return ok({ connected: IXSTATE === 'full', reviews: IXSTATE === 'full' ? [{ id: 'g1', rating: 5, text: 'Lovely croissants and kind staff.', reviewer: 'Priya S', createdAt: iso(-2), replied: false, existingReply: '', needsApproval: false }] : [], summary: null });
+      return ok({ conversations: [] });
+    }],
     ['GET', /^\/social\/inbox/, ok({ accounts: [], conversations: [], messages: [] })],
     ['GET', /^\/social\/?$/, ok({ connections: socialConnections })],
     ['GET', /^\/socials?\b/, ok({ connections: socialConnections })],
@@ -969,6 +1005,8 @@
     ['GET', /^\/home\/summary/, function () {
       if (HSTATE === 'error') return { __status: 500, body: { success: false, message: 'We could not load your home page numbers. Please try again.' } };
       var out = { __status: 200, body: Object.assign({ success: true, cached: false }, homeSummary()) };
+      // The Inbox reads only the connected accounts from here (Google reviews chip); ?inboxstate=full has a Google Business Profile.
+      if (location.hash.indexOf('#/inbox') === 0) out.body.connected = IXSTATE === 'nosocials' ? { count: 0, platforms: [] } : { count: IXSTATE === 'full' ? 3 : 2, platforms: IXSTATE === 'full' ? ['instagram', 'facebook', 'gmb'] : ['instagram', 'facebook'] };
       if (HSTATE === 'slow') out.__delay = 4000;
       return out;
     }],
