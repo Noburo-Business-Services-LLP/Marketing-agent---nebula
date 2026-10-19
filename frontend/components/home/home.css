@@ -32,7 +32,7 @@ main:has(> .nb-home) { container-type: inline-size; --nb-area-pad: 16px; overflo
 .nb-home h2, .nb-home h3 { margin: 0; }
 
 /* ---- header ---- */
-.nb-home-head { padding-top: 2px; }
+.nb-home-head { padding-top: 0; }
 /* The title, eyebrow and description come from the one page header (components/pageHeader.css). The column gap
    (18 px) plus this margin keeps the spec's 24 px below the header (14 px plus 6 px on a phone). */
 .nb-home > .nb-page-head { margin-bottom: 6px; }

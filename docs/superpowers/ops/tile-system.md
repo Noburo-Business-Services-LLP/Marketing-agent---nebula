@@ -175,6 +175,24 @@ The owner could not read the drawn cover art on the pack tiles (cut off, unclear
 - **Layout.** Create content: `.nb-cover-grid` (in `CoverTile.css`), three columns from 640 px (two rows of three, 164 px tall), two columns below (three rows of two, 148 px), every tile exactly its row height. Photoshoot packs: one, two or three columns with fixed row heights (148, 156, 164 px), six packs fill every row. Home: the five create tiles and the packs rail are compact cover tiles (116 and 128 px) with the same photos.
 - **A new photo slot.** Add the slot to both lists, add its prompt, run the script with `--only <slot>`, check the contact sheet, type PROMOTE, then run `node scripts/art-budget.mjs`.
 
+## Page header (owner, 2026-10-19): one heading style on every page
+
+The owner saw big titles on Videos and Review and approve and small ones on Dashboard, My plan and Create content. Every page now starts with the same block, `components/PageHeader.tsx` with `components/pageHeader.css` (numbers in `utils/pageHeader.ts`, tested in `tests/pageHeader.test.mjs`).
+
+- **API.** `<PageHeader eyebrow? title emphasis? description? actions? as? id? titleId? dataTour? descriptionLive? />`. `emphasis` is added after the title in the gold italic; for an emphasis in the middle use `<PageEmphasis>` inside `title`. `children` go under the description (for example the current plan line on Plans).
+- **Title.** Playfair Display, weight 400, 32 px (26 px below 640 px), line height 1.15, letter spacing -0.01em, primary ink. Emphasis italic in #C06F00 (3 to 1 on the cream at this size).
+- **Eyebrow.** Optional, 11 px, weight 700, uppercase, 0.14em tracking, tertiary ink, 6 px above the title. Usually the menu name of the page.
+- **Description.** Optional, one or two plain sentences, 14 px, line height 1.5, secondary ink, at most 640 px wide, 6 px under the title.
+- **Actions.** Optional, right-aligned on the same line, aligned to the bottom of the text; under the text, left-aligned, on a phone.
+- **Spacing.** No top margin (the page area's own padding is the top margin; pages no longer add their own top padding above the header), 24 px below (20 px on a phone). Pages laid out as a flex column with an 18 px gap set `margin-bottom: 6px` on `> .nb-page-head`.
+- **Rules.** One header per page, left-aligned, never inside a card. Pages made of tabs (Create content, Calendar) get their header from `PAGE_HEADERS` in `App.tsx` through `PageTabs` (`header`, `frame`), above the tab bar. Titles further down the page are section headings (h2, 22 to 24 px serif); `GravityHero size="md"` is now an h2 at 22 px for wizard steps. `GravityHero` at full size is kept only until the last pages move.
+- **Home** keeps its greeting band (date eyebrow, greeting with the business name in the emphasis, the day's line, the balance chip as the action) on the same component.
+- **Not yet on it** (another change adopts it): Inbox (`SocialInbox.tsx`), Performance (`GravityInsights.tsx`), Competitors (`Competitors.tsx`). Staff pages, sign-in, legal pages, the landing page, onboarding and the hidden classic pages keep their own look.
+
+## Create options rows (owner, 2026-10-19)
+
+Two rows under the idea box: Language and Platforms, then Aspect ratio, Logo and Look (`.nb-opt-rows > .nb-opt-row[data-row]` in `GravityCreate.tsx`, layout in `createOptions.css`). Each row runs the full width of the idea box; groups share it in proportion to their tiles (`--w`, 64 px a share), tiles of a group are equal columns, every tile is 88 px tall with 12 px names, so "Instagram" and "Your logo" are never cut off. On a phone each group takes its own full line.
+
 ## Not done yet (by design)
 
 Post templates, Library, Memory and Calendar tiles, the sample photos themselves (the owner makes them, see above), a Lighthouse-style first paint comparison (the page weight was measured instead: see the build task report).
