@@ -55,6 +55,7 @@ function typedFacts(input) {
   if (input.pricePositioning) rows.push(['Price level', PRICE_WORDS[input.pricePositioning] || input.pricePositioning, input.pricePositioning]);
   if (input.keyDifferentiator) rows.push(['What makes it different', input.keyDifferentiator, input.keyDifferentiator]);
   if (input.contentLanguage) rows.push(['Content language', languageWords(input.contentLanguage), input.contentLanguage]);
+  for (const l of input.learned || []) rows.push(['What Nebulaa learned', l, l]);
   if ((input.colours || []).length) rows.push(['Brand colours', input.colours.join(', '), input.colours.join(', ')]);
   return rows.map(([field, text, quote]) => ({ kind: 'typed', field, text: `${field}: ${text}`, quote, source: { type: 'typed', field } }));
 }

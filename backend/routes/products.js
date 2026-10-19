@@ -1,5 +1,15 @@
 const express = require('express');
 const router = express.Router();
+
+// After any change that worked, What Nebulaa learned looks again (debounced, code only; never throws or delays the answer).
+router.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    res.on('finish', () => {
+      if (res.statusCode < 300 && req.user) require('../services/brandMemory/runner').refreshSoon(req.user._id || req.user.id, 'product');
+    });
+  }
+  next();
+});
 const Product = require('../models/Product');
 const BrandAsset = require('../models/BrandAsset');
 const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');

@@ -20,6 +20,8 @@ function defaultDeps() {
     // The account's own catalogue for the planner: a few fields, oldest first, capped.
     loadProducts: (id) => require('../../models/Product').find({ user: id }).sort({ createdAt: 1 }).limit(PLAN_LIMITS.MAX_PRODUCTS)
       .select('name type price priceNote currency description keyFeatures').lean(),
+    // What Nebulaa learned (the shared prompt helper), without the plan's own items: a new plan is not fed its old self.
+    loadLearned: (id) => require('../brandMemory/prompt').loadMemoryLines(id, { exclude: ['plan'], maxLines: PLAN_LIMITS.MAX_LEARNED }),
     findRuns: (q) => Blueprint().find({ kind: 'plan', ...q }).sort({ completedAt: -1, createdAt: -1 }).lean(),
     latestRun: (userId) => Blueprint().findOne({ kind: 'plan', userId }).sort({ createdAt: -1 }).lean(),
     failRun: (blueprintId, at) => Blueprint().updateOne(
@@ -84,7 +86,10 @@ function createPlanService(deps = defaultDeps()) {
       // The products are a help, never a blocker: if they cannot be read the plan is built without them.
       let products = [];
       if (deps.loadProducts) { try { products = (await deps.loadProducts(userId)) || []; } catch (e) { console.warn(`[plan] products not read for ${userId}: ${e && e.message}`); } }
-      out = await deps.startSystem({ user, input: inputFromProfile(user, { products }), kind: 'plan' });
+      // What Nebulaa learned is a help too: never a blocker.
+      let learned = [];
+      if (deps.loadLearned) { try { learned = (await deps.loadLearned(userId)) || []; } catch (e) { console.warn(`[plan] learned lines not read for ${userId}: ${e && e.message}`); } }
+      out = await deps.startSystem({ user, input: inputFromProfile(user, { products, learned }), kind: 'plan' });
     } catch (e) {
       if (deps.releaseStart) await deps.releaseStart(userId);
       throw e;

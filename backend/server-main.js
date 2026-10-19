@@ -497,6 +497,8 @@ app.use('/api/photoshoot', require('./routes/photoshoot'));
 app.use('/api/week', require('./routes/week'));
 app.use('/api/setup', require('./routes/week').setupRouter);
 app.use('/api/tour', require('./routes/tour'));
+// What Nebulaa learned, by source (code only, no model call; docs/superpowers/ops/brand-memory.md)
+app.use('/api/ai-memory', require('./routes/aiMemoryLearned'));
 app.use('/api/ai-memory', aiMemoryRoutes);
 app.use('/api/influencers', influencerRoutes);
 app.use('/api/collaborations', collaborationRoutes);
@@ -900,6 +902,14 @@ const startServer = async () => {
       require('./services/plan/planScheduler').startPlanScheduler();
     } catch (schedulerError) {
       console.warn('Plan scheduler failed to start:', schedulerError.message);
+    }
+
+    // What Nebulaa learned: daily bounded refresh from the six sources plus change triggers (code only, no model call;
+    // on by default, off with ENABLE_MEMORY_REFRESH=off)
+    try {
+      require('./services/brandMemory/runner').startBrandMemoryJob();
+    } catch (schedulerError) {
+      console.warn('Brand memory refresh failed to start:', schedulerError.message);
     }
 
     // Start weekly AI memory distillation scheduler

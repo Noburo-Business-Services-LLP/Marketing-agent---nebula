@@ -168,6 +168,8 @@ async function runPerformanceTrackerOnce({ now = new Date(), limit = MAX_CHECKS_
     );
     // New post numbers may have been stored: the Performance view should not show the old ones for a minute.
     require('./performance/cache').forgetAccount(campaign.userId);
+    // ...and What Nebulaa learned looks at the new numbers (debounced, code only; never throws).
+    require('./brandMemory/runner').refreshSoon(campaign.userId, 'measured');
   }
 
   return { checked, candidateCount: candidates.length };

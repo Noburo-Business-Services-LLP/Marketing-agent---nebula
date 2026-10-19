@@ -84,7 +84,7 @@ const PLAN_METRICS = [
   { id: 'referral_customers', name: 'Customers from referrals', meaning: 'New customers who came because someone sent them.', where: 'You count this', count: 'you', needs: { offline: 'referrals' } },
   { id: 'event_contacts', name: 'Contacts from events', meaning: 'Names and numbers you collect at events and stalls.', where: 'You count this', count: 'you', needs: { offline: 'local_events' } }
 ];
-const PLAN_LIMITS = { MAX_OFFLINE: 3, MIN_METRICS: 3, MAX_METRICS: 5, MAX_PRODUCTS: 6, PRODUCT_NAME: 80, PRODUCT_TEXT: 160, PRODUCT_PRICE: 24, ROW_TEXT: 200, MAX_YOU_DO: 2 };
+const PLAN_LIMITS = { MAX_OFFLINE: 3, MIN_METRICS: 3, MAX_METRICS: 5, MAX_PRODUCTS: 6, PRODUCT_NAME: 80, PRODUCT_TEXT: 160, PRODUCT_PRICE: 24, ROW_TEXT: 200, MAX_YOU_DO: 2, MAX_LEARNED: 6, LEARNED_TEXT: 160 };
 // The planner's visible answer budget. Fixture plans with every block measure about 4,600 output tokens; this leaves
 // about twice that before a cut. A reasoning model gets three times this for thinking plus answer (openAI.js).
 const PLAN_MAX_TOKENS = 9000;

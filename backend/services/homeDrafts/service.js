@@ -75,6 +75,8 @@ function defaultDeps() {
       return list.map((p) => String((p && p.name) || '').trim()).filter(Boolean).slice(0, 4);
     },
     productsFor: async (userId) => (await m('Product').find({ user: userId }).select('name').limit(5).maxTimeMS(20000).lean()).map((p) => p.name).filter(Boolean),
+    // What Nebulaa learned, through the one shared prompt helper (services/brandMemory/prompt.js); [] when nothing.
+    learnedFor: (userId) => require('../brandMemory/prompt').loadMemoryLines(userId, { maxLines: 4 }),
     spend: (userId, cost, opts) => quarks().spend(userId, cost, opts),
     settle: (userId) => quarks().settleWallet(userId).catch(() => null),
     refundTo: (userId, q, opts) => quarks().refundTo(userId, q, opts),
@@ -317,11 +319,12 @@ function createHomeDrafts(given = {}) {
   async function brandOf(user) {
     const bp = (user && user.businessProfile) || {};
     const userId = idOf(user);
-    const [pillars, products] = await Promise.all([
+    const [pillars, products, learned] = await Promise.all([
       Promise.resolve().then(() => deps.pillarsFor(userId)).catch(() => []),
-      Promise.resolve().then(() => deps.productsFor(userId)).catch(() => [])
+      Promise.resolve().then(() => deps.productsFor(userId)).catch(() => []),
+      Promise.resolve().then(() => (deps.learnedFor ? deps.learnedFor(userId) : [])).catch(() => [])
     ]);
-    return { ...bp, name: bp.name || (user && user.companyName) || '', pillars, products };
+    return { ...bp, name: bp.name || (user && user.companyName) || '', pillars, products, learned: Array.isArray(learned) ? learned : [] };
   }
 
   /** GET options: prices, switch, entitlement, languages, how many drafts are left today. */

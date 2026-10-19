@@ -1233,6 +1233,7 @@ router.put('/update-profile', protect, [
 
     // Fire and forget: a plan is started if this save completed the profile; it never delays or fails the save.
     require('../services/plan/planService').maybeStartFirstPlanSafe(req.user._id);
+    require('../services/brandMemory/runner').refreshSoon(req.user._id, 'profile');
 
     res.status(200).json({
       success: true,
@@ -1354,6 +1355,7 @@ router.put('/complete-onboarding', protect, async (req, res) => {
     );
 
     require('../services/plan/planService').maybeStartFirstPlanSafe(req.user._id);
+    require('../services/brandMemory/runner').refreshSoon(req.user._id, 'profile');
 
     // Also save to OnboardingContext for AI outreach
     try {

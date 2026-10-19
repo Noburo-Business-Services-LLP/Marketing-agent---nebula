@@ -4,6 +4,7 @@ const Product = require('../models/Product');
 const BrandAsset = require('../models/BrandAsset');
 const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { resolveOrganizationId } = require('./aiMemoryService');
+const { memorySectionLines } = require('./brandMemory/prompt');
 
 /**
  * The "Brand Memory" context block fed to the content-writing prompts.
@@ -128,24 +129,16 @@ async function buildBrandMemoryBlock(userId) {
   lines.push('PEOPLE (founders, team, customers)');
   lines.push('- Not yet supported in Gravity. Do not depict a specific real founder, team member or customer — if a person is needed, keep them generic and unbranded.');
 
-  // Layer 2 of the AI memory system: a small, curated set of patterns
-  // distilled from real published-post performance (see
-  // services/memoryDistillation.js). Deliberately the ONLY memory-derived
-  // content read into generation — never the raw performance log directly.
-  // This function only receives userId (no user object/organizationId from
-  // any call site), so organizationId is resolved the same simple way
-  // resolveOrganizationId falls back when given just a userId — kept
-  // consistent with every other read/write of this model elsewhere.
+  // What Nebulaa learned: the one shared helper (services/brandMemory/prompt.js) gives every prompt the same short,
+  // capped lines from the six sources (plan, Blueprint, customers, products, results, competitors) and the old
+  // performance notes. With nothing new learned it is exactly the old "WHAT'S WORKED BEFORE" section. organizationId is
+  // resolved from the userId alone, the same way every read and write of this model does.
   const organizationId = resolveOrganizationId({ userId });
-  const learnedMemory = await AIBrandMemory.findOne({ organizationId, userId }).select('learnedNotes').lean();
-  const notes = (learnedMemory?.learnedNotes || [])
-    .slice()
-    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
-    .slice(0, 10);
-  if (notes.length) {
+  const learnedMemory = await AIBrandMemory.findOne({ organizationId, userId }).select('learnedNotes learnedItems').lean();
+  const section = memorySectionLines(learnedMemory);
+  if (section.length) {
     lines.push('');
-    lines.push("WHAT'S WORKED BEFORE (learned from published post performance)");
-    notes.forEach((n) => lines.push(`- ${n.text}`));
+    section.forEach((l) => lines.push(l));
   }
 
   return lines.join('\n');

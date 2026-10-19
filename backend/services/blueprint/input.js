@@ -69,7 +69,7 @@ function logoDataBytes(d) {
   return Math.floor(b64.length * 3 / 4) - pad;
 }
 
-function normaliseInput(raw, { allowGuided = false } = {}) {
+function normaliseInput(raw, { allowGuided = false, allowLearned = false } = {}) {
   const r = isObj(raw) ? raw : {};
   const errors = {};
   const businessName = clean(r.businessName, 80);
@@ -118,6 +118,14 @@ function normaliseInput(raw, { allowGuided = false } = {}) {
     products.push({ name, kind: p.kind === 'service' ? 'service' : p.kind === 'product' ? 'product' : '', price: clean(p.price, PLAN_LIMITS.PRODUCT_PRICE), about: clean(p.about, PLAN_LIMITS.PRODUCT_TEXT) });
     if (products.length >= PLAN_LIMITS.MAX_PRODUCTS) break;
   }
+  // What Nebulaa learned about the account (only a run the system starts may send it, never the public form): short plain lines written by code, no digits.
+  const learned = [];
+  for (const l of (allowLearned && Array.isArray(r.learned) ? r.learned : []).slice(0, PLAN_LIMITS.MAX_LEARNED * 2)) {
+    const line = clean(l, PLAN_LIMITS.LEARNED_TEXT);
+    if (!line || /\p{Nd}/u.test(line) || learned.some((x) => x.toLowerCase() === line.toLowerCase())) continue;
+    learned.push(line);
+    if (learned.length >= PLAN_LIMITS.MAX_LEARNED) break;
+  }
   const profile = {};
   if (BUSINESS_TYPES.includes(r.businessType)) profile.businessType = r.businessType;
   const reach = (Array.isArray(r.reachAreas) ? r.reachAreas : []).filter((a) => REACH_AREAS.includes(a));
@@ -149,7 +157,7 @@ function normaliseInput(raw, { allowGuided = false } = {}) {
     input: {
       businessName, websiteUrl: w.url || '', websiteHost: w.host || '', instagramHandle: ig.handle || '', instagramUrl: ig.url || '',
       whatYouSell, whoItsFor, goal, city: clean(r.city, 60), competitors, offers, colours, logoUrl,
-      ...(products.length ? { products } : {}), ...profile
+      ...(products.length ? { products } : {}), ...(learned.length ? { learned } : {}), ...profile
     }
   };
 }

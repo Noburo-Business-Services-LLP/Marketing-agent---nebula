@@ -18,7 +18,10 @@ function snapshotStore(Model = require('../../models/CompetitorSnapshot')) {
           throw e;
         }
       }
-      return Model.findOneAndUpdate(key, { $set: { ...fields, ok: true } }, { upsert: true, new: true });
+      const saved = await Model.findOneAndUpdate(key, { $set: { ...fields, ok: true } }, { upsert: true, new: true });
+      // A good reading: What Nebulaa learned looks at it (debounced, code only; never throws).
+      if (fields.userId) require('../brandMemory/runner').refreshSoon(fields.userId, 'competitor snapshot');
+      return saved;
     },
     /** Newest first, good snapshots only. */
     latest(competitorId, n = 4) {

@@ -19,6 +19,25 @@ const reusableMetadataSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// One learned item (see learnedItems below).
+const learnedItemSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true },
+    source: { type: String, enum: ['plan', 'blueprint', 'customers', 'products', 'results', 'competitors'], required: true },
+    kind: { type: String, default: 'fact' },
+    text: { type: String, required: true },
+    promptLine: { type: String, default: '' },
+    evidenceCount: { type: Number, default: 0 },
+    evidenceUnit: { type: String, default: '' },
+    evidenceText: { type: String, default: '' },
+    confidence: { type: String, enum: ['strong', 'good', 'early'], default: 'early' },
+    learnedAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+    userEdited: { type: Boolean, default: false }
+  },
+  { _id: false }
+);
+
 const aiBrandMemorySchema = new mongoose.Schema(
   {
     organizationId: { type: String, required: true, index: true },
@@ -78,6 +97,18 @@ const aiBrandMemorySchema = new mongoose.Schema(
       }
     ],
     learnedNotesUpdatedAt: { type: Date, default: null },
+    // What Nebulaa learned from SIX sources, computed in code (no model call) by services/brandMemory/runner.js:
+    // the plan, the Blueprint, the customers, the products, the post results and the competitors. Each item keeps
+    // where it came from, how much backs it, when it was first learned and a confidence word. Optional fields: an old
+    // document without them reads as "nothing learned yet". See docs/superpowers/ops/brand-memory.md.
+    learnedItems: { type: [learnedItemSchema], default: undefined },
+    learnedHidden: { type: [String], default: undefined },
+    learnedSources: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    learnedRefreshedAt: { type: Date, default: null },
+    learnedCheckedAt: { type: Date, default: null },
+    learnedFingerprint: { type: String, default: '' },
+    learnedManualAt: { type: Date, default: null },
+    learnedLockUntil: { type: Date, default: null },
     rawProfile: { type: mongoose.Schema.Types.Mixed, default: {} },
     reusableMetadata: { type: reusableMetadataSchema, default: () => ({ source: 'brand_memory' }) }
   },

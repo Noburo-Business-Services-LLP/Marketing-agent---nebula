@@ -246,7 +246,7 @@ function createBlueprintService(depsIn) {
     const userId = idOf(user);
     const g = await (deps.spendCheck ? deps.spendCheck(ACTION) : { ok: true });
     if (g && g.ok === false) return { ok: false, reason: 'busy', message: g.message };
-    const n = normaliseInput(input, { allowGuided: true });
+    const n = normaliseInput(input, { allowGuided: true, allowLearned: true });
     if (!n.ok) return { ok: false, reason: 'invalid_input', errors: n.errors, message: MSG.fields };
     if (kind === 'plan') {
       const since = new Date(deps.now() - DAY_MS);
@@ -337,6 +337,8 @@ function createBlueprintService(depsIn) {
         { blueprintId: id, status: 'processing' },
         { $set: { status: 'completed', step: 'done', progress: 100, result: built.result, qaFlags, completedAt: at(), heartbeatAt: at() } }
       );
+      // What Nebulaa learned reads the finished plan or Blueprint (debounced, code only; never throws).
+      require('../brandMemory/runner').refreshSoon(doc.userId, 'blueprint');
     } catch (err) {
       console.error(`[blueprint] run failed for ${id}:`, err && err.message);
       await failAndRefund(doc, MSG.failed);

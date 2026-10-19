@@ -124,7 +124,9 @@ function buildFacts({ post = {}, worked = null, brand = {}, banned = [], source 
       heroProduct: cleanFact(b.heroProduct, 80, banned),
       place: cleanFact(b.businessLocation, 60, banned),
       voice: cleanFact(b.brandVoice, 80, banned),
-      themes: pillars
+      themes: pillars,
+      // What Nebulaa learned (shared helper lines), each through the same filter as every other fact.
+      learned: (Array.isArray(b.learned) ? b.learned : []).map((l) => cleanFact(l, 160, banned)).filter(Boolean).slice(0, 4)
     }
   };
 }
@@ -181,6 +183,7 @@ function dataBlock(facts) {
     line('Where it is', b.place),
     line('Its voice', b.voice),
     line('Themes it posts about', (b.themes || []).join(', ')),
+    line('What Nebulaa learned about this business', (b.learned || []).join(' ')),
     '<<<END>>>'
   ].filter(Boolean).join('\n');
 }

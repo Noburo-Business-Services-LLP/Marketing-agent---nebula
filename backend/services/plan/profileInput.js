@@ -87,8 +87,12 @@ function detailsOf(user) {
 // The old single reach answer, read as the nearest new one.
 const OLD_REACH = { hyperlocal: 'neighbourhood', local_city: 'city', regional: 'state', state: 'state', national: 'india', international: 'international' };
 
-function inputFromProfile(user, { products } = {}) {
+// What Nebulaa learned (lines from services/brandMemory/prompt.js): plain strings, capped (the input check caps again).
+const learnedOf = (list) => (Array.isArray(list) ? list : []).map(str).filter(Boolean).slice(0, PLAN_LIMITS.MAX_LEARNED);
+
+function inputFromProfile(user, { products, learned } = {}) {
   const items = productsOf(products);
+  const lines = learnedOf(learned);
   return {
     businessName: nameOf(user),
     website: str(profileOf(user).website),
@@ -99,6 +103,7 @@ function inputFromProfile(user, { products } = {}) {
     competitors: competitorsOf(user),
     offers: [],
     ...(items.length ? { products: items } : {}),
+    ...(lines.length ? { learned: lines } : {}),
     ...detailsOf(user)
   };
 }
