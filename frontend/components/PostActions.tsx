@@ -246,8 +246,14 @@ const ActionButton: React.FC<{ action: PostAction; busy: boolean; anyBusy: boole
   );
 };
 
+/** One entry of the "More" menu: a post action, or an action of another kind of item (components/ItemActions.tsx). */
+export interface MenuEntry {
+  key: string; label: string; hint: string; reason: string; disabled: boolean; quarks?: number;
+  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>; danger?: boolean;
+}
+
 /** "More": a real menu button with arrow keys, Escape and focus return. Drawn fixed, so tiles never clip it. */
-const MoreMenu: React.FC<{ items: PostAction[]; open: boolean; setOpen: (v: boolean) => void; onRun: (a: PostAction) => void; busy: string; name: string }> = ({ items, open, setOpen, onRun, busy, name }) => {
+export const MoreMenu: React.FC<{ items: MenuEntry[]; open: boolean; setOpen: (v: boolean) => void; onRun: (a: any) => void; busy: string; name: string }> = ({ items, open, setOpen, onRun, busy, name }) => {
   const btn = useRef<HTMLButtonElement | null>(null);
   const menu = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -324,7 +330,7 @@ const MoreMenu: React.FC<{ items: PostAction[]; open: boolean; setOpen: (v: bool
       {open && pos && createPortal(
         <div ref={menu} id={menuId} role="menu" aria-label={`More actions for ${name}`} className="nb-pa-menu" style={{ top: pos.top, left: pos.left }} onKeyDown={onKey}>
           {items.map((a) => {
-            const Icon = ICONS[a.key];
+            const Icon = a.icon || ICONS[a.key as PostActionKey] || MoreHorizontal;
             return (
               <button
                 key={a.key}
@@ -332,7 +338,7 @@ const MoreMenu: React.FC<{ items: PostAction[]; open: boolean; setOpen: (v: bool
                 role="menuitem"
                 className="nb-pa-item"
                 data-action={a.key}
-                data-danger={a.key === 'delete' ? 'true' : undefined}
+                data-danger={a.key === 'delete' || a.danger ? 'true' : undefined}
                 data-locked={a.disabled ? 'true' : undefined}
                 aria-disabled={a.disabled || undefined}
                 onClick={() => { onRun(a); btn.current?.focus(); }}

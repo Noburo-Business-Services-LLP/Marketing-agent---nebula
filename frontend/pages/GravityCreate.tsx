@@ -1,8 +1,9 @@
 import { priceWithWorth } from '../utils/plans';
 import PlatformIcon from '../components/PlatformIcon';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, ChevronRight, Loader2, Check, Clock, Save, AlertCircle, RotateCcw, Pencil, Trash2, Code2, Copy, X, SlidersHorizontal, Package } from 'lucide-react';
+import { Sparkles, Layers, Calendar as CalendarIcon, Zap, Image as ImageIcon, Instagram, Facebook, ChevronRight, Loader2, Check, AlertCircle, RotateCcw, Pencil, Code2, Copy, X, SlidersHorizontal, Package, CalendarClock, Lock, Clock } from 'lucide-react';
 import { draftsAPI, brandAssetsAPI, apiService } from '../services/api';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
 import { useConfirm } from '../context/ConfirmContext';
@@ -26,6 +27,10 @@ import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import PromptStudio from '../components/PromptStudio';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import { GravityEmphasis } from '../components/gravity';
+import PostActions, { PostActionsChange, PostNotice, PostNoticeValue } from '../components/PostActions';
+import { usePostAccess } from '../hooks/usePostAccess';
+import { postStateWord } from '../utils/postActions';
+import { defaultGapDays, platformsOf, schedulable, scheduleSummary, scheduleTimes } from '../utils/scheduleAll';
 
 const ASPECTS = [
   { key: '4:5',  label: '4:5',  hint: 'Portrait', use: 'Best for the Instagram feed', w: 4, h: 5 },
@@ -50,8 +55,8 @@ const getToken = () =>
 
 // Gravity Create — matches the prototype's Create screen exactly.
 // Two modes: Campaign (multi-post plan) and Single post.
-// Wires the primary CTA to apiService.createCampaign, then routes to
-// /drafts (Approve) so the user sees what got produced.
+// The results stay on this page with the shared post actions (components/PostActions.tsx): these are posts the
+// customer made, so they can be scheduled or posted straight away (no approval step).
 
 type CreateMode = 'campaign' | 'single' | 'carousel' | 'linkedin';
 // Created once, so the tiles do not rebuild their pictures on every keystroke in the form.
@@ -201,6 +206,61 @@ const PendingSlot: React.FC<{ position: number; active: boolean; etaSeconds: num
   );
 };
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const GAP_CHOICES = [
+  { days: 1, label: 'One a day' }, { days: 2, label: 'Every 2 days' }, { days: 3, label: 'Every 3 days' }, { days: 7, label: 'One a week' },
+];
+
+/** "Schedule all": the first date and time and how far apart, with the exact sentence of what will happen. */
+const ScheduleAllDialog: React.FC<{
+  count: number; platforms: string[]; gapDays: number; busy: boolean;
+  onCancel: () => void; onConfirm: (first: Date, gapDays: number) => void;
+}> = ({ count, platforms, gapDays, busy, onCancel, onConfirm }) => {
+  const start = (() => { const t = new Date(); t.setDate(t.getDate() + 1); t.setHours(10, 0, 0, 0); return t; })();
+  const [date, setDate] = useState(`${start.getFullYear()}-${pad2(start.getMonth() + 1)}-${pad2(start.getDate())}`);
+  const [time, setTime] = useState('10:00');
+  const [gap, setGap] = useState(GAP_CHOICES.some((g) => g.days === gapDays) ? gapDays : 1);
+  const [err, setErr] = useState('');
+  const titleId = useId();
+  const first = new Date(`${date}T${time}:00`);
+  const valid = Boolean(date && time) && !Number.isNaN(first.getTime());
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!valid) { setErr('Please choose a date and a time.'); return; }
+    if (first.getTime() < Date.now() + 5 * 60 * 1000) { setErr('Please choose a time at least 5 minutes from now.'); return; }
+    onConfirm(first, gap);
+  };
+  return createPortal(
+    <div className="nb-pa-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
+      <form className="nb-pa-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit} onKeyDown={(e) => { if (e.key === 'Escape' && !busy) onCancel(); }} style={{ maxWidth: 420 }}>
+        <h2 id={titleId} className="nb-pa-dialog-title">Schedule all {count} posts?</h2>
+        <p className="nb-pa-dialog-sub" style={{ whiteSpace: 'normal' }}>Pick when the first one goes out. The rest follow at the same time of day.</p>
+        <div className="nb-pa-dialog-fields">
+          <label><span>First date</span><input type="date" value={date} onChange={(e) => { setDate(e.target.value); setErr(''); }} required autoFocus /></label>
+          <label><span>Time</span><input type="time" value={time} onChange={(e) => { setTime(e.target.value); setErr(''); }} required /></label>
+        </div>
+        <div className="nb-pa-dialog-fields" style={{ gridTemplateColumns: '1fr', marginTop: 10 }}>
+          <label><span>How often</span>
+            <select value={gap} onChange={(e) => setGap(Number(e.target.value))} style={{ height: 38, padding: '0 10px', borderRadius: 10, border: '1px solid #E5DACA', background: '#FFFFFF', color: '#2B1D0E', fontSize: 14, fontWeight: 500, letterSpacing: 0, textTransform: 'none' }}>
+              {GAP_CHOICES.map((g) => <option key={g.days} value={g.days}>{g.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <p className="mt-3 text-[13px] leading-snug text-[#2B1D0E]" role="status">{valid ? scheduleSummary(count, platforms, first, gap) : 'Choose a date and a time.'}</p>
+        {err && <p className="nb-pa-dialog-err" role="alert">{err}</p>}
+        <div className="nb-pa-dialog-actions">
+          <button type="button" className="nb-pa-btn" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button type="submit" className="nb-pa-btn" data-primary="true" disabled={busy}>
+            {busy ? <Loader2 className="nb-pa-ico animate-spin" aria-hidden="true" /> : <CalendarClock className="nb-pa-ico" aria-hidden="true" />}
+            <span className="nb-pa-word">Schedule {count} posts</span>
+          </button>
+        </div>
+      </form>
+    </div>,
+    document.body,
+  );
+};
+
 const GravityCreate: React.FC = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<CreateMode>('single');
@@ -260,7 +320,7 @@ const GravityCreate: React.FC = () => {
     setProgressMsg('');
     setPostsGenerated(0);
     setResults([]);
-    setActioned({});
+    setNotice(null);
     setGalleryKey((k) => k + 1);
   };
   // Timing for the queue display: when the run began, and how long each post
@@ -280,10 +340,10 @@ const GravityCreate: React.FC = () => {
   // produced by a background worker, so we poll the draft(s) until the
   // artwork lands, then offer keep / publish / schedule inline.
   const [results, setResults] = useState<Draft[]>([]);
-  const [actioned, setActioned] = useState<Record<string, 'draft' | 'approved' | 'scheduled'>>({});
   const [actionBusy, setActionBusy] = useState<string>('');
-  const [scheduleFor, setScheduleFor] = useState<string>('');
-  const [schedulingId, setSchedulingId] = useState<string>('');
+  const [notice, setNotice] = useState<PostNoticeValue | null>(null);
+  const [scheduleAllOpen, setScheduleAllOpen] = useState(false);
+  const postAccess = usePostAccess();
   const pollRef = useRef<any>(null);
   const runStartRef = useRef<number | null>(null);
 
@@ -407,25 +467,6 @@ const GravityCreate: React.FC = () => {
 
   const draftImage = (d: any): string =>
     d?.imageUrl || d?.creative?.imageUrls?.[0] || d?.images?.[0] || '';
-
-  // Keep as draft — the record already exists as a draft the moment it is
-  // generated, so this only needs to acknowledge and clear it from view.
-  const keepAsDraft = (d: Draft) => {
-    setActioned((prev) => ({ ...prev, [d._id]: 'draft' }));
-  };
-
-  const approveNow = async (d: Draft) => {
-    setActionBusy(d._id);
-    setError(null);
-    try {
-      await draftsAPI.publishDraft(d._id, selectedPlatforms);
-      setActioned((prev) => ({ ...prev, [d._id]: 'approved' }));
-    } catch (e: any) {
-      setError(e?.message || 'This post could not be published.');
-    } finally {
-      setActionBusy('');
-    }
-  };
 
   // Writes a caption for the poster that was actually produced, rather than
   // echoing the user's prompt back at them.
@@ -559,50 +600,56 @@ const GravityCreate: React.FC = () => {
     }
   };
 
-  const discard = async (d: Draft) => {
-    setActionBusy(d._id);
-    try {
-      await draftsAPI.deleteDraft(d._id);
-    } catch { /* already gone — drop it from view regardless */ }
-    setResults((prev) => prev.filter((x: any) => x._id !== d._id));
-    setActionBusy('');
+  // After a post action on a result card: take out what left (moved to the Bin, archived), show the new picture
+  // being made, and otherwise show the post's new state (scheduled, posted, unscheduled).
+  const STATUS_AFTER: Partial<Record<string, string>> = { postNow: 'published', schedule: 'scheduled', unschedule: 'approved', approve: 'approved', unapprove: 'draft', restore: 'draft' };
+  const resultChanged = (d: any) => (c: PostActionsChange) => {
+    if (c.key === 'delete' || c.key === 'archive') { setResults((prev) => prev.filter((x: any) => x._id !== d._id)); setGalleryKey((k) => k + 1); return; }
+    if (c.key === 'makeAgain') { setResults((prev) => prev.map((x: any) => (x._id === d._id ? { ...x, status: 'processing', imageUrl: '' } : x))); return; }
+    const next = c.draft && c.draft._id ? c.draft : null;
+    setResults((prev) => prev.map((x: any) => (x._id === d._id ? (next ? { ...x, ...next } : STATUS_AFTER[c.key] ? { ...x, status: STATUS_AFTER[c.key] } : x) : x)));
+    setGalleryKey((k) => k + 1);
   };
 
-  // "Send all to approval" — publishes every card that hasn't been actioned.
-  const sendAllToApproval = async () => {
-    const pending = results.filter((d: any) => !actioned[d._id] && draftImage(d));
-    if (!pending.length) return;
+  // "Schedule all": the finished posts of this run go out one every few days from a date the customer picks. It never
+  // posts anything at once; the confirm says how many posts, where and when (utils/scheduleAll.ts).
+  const scheduleList = schedulable(results as any[]);
+  const scheduleLock = postAccess.publish === 'upgrade' ? 'Scheduling is part of the paid plans.'
+    : postAccess.publish === 'addon' ? 'Scheduling needs the Publish add-on.'
+      : postAccess.hasAccount === false ? 'Connect an account first, so Nebulaa can post for you.' : '';
+  const openScheduleAll = () => {
+    if (scheduleLock) {
+      const toPlans = postAccess.publish === 'upgrade' || postAccess.publish === 'addon';
+      setNotice({ text: scheduleLock, tone: 'error', to: toPlans ? { label: 'See plans', path: '/trial-expired' } : { label: 'Connect accounts', path: '/connect-socials' } });
+      return;
+    }
+    setNotice(null);
+    setScheduleAllOpen(true);
+  };
+  const scheduleAll = async (first: Date, gapDays: number) => {
+    const list = schedulable(results as any[]);
+    if (!list.length) { setScheduleAllOpen(false); return; }
     setActionBusy('all');
-    setError(null);
-    const done: Record<string, 'approved'> = {};
-    for (const d of pending) {
+    const times = scheduleTimes(first, list.length, gapDays);
+    let done = 0;
+    let firstProblem = '';
+    for (let i = 0; i < list.length; i++) {
+      const d: any = list[i];
       try {
-        await draftsAPI.publishDraft(d._id, selectedPlatforms);
-        done[d._id] = 'approved';
-      } catch { /* keep going; the rest can still go out */ }
+        const res: any = await draftsAPI.scheduleDraft(d._id, times[i].toISOString());
+        if (res && res.success === false) throw new Error(res.message || '');
+        done += 1;
+        setResults((prev) => prev.map((x: any) => (x._id === d._id ? { ...x, status: 'scheduled', scheduledDate: times[i].toISOString() } : x)));
+      } catch (e: any) {
+        if (!firstProblem) firstProblem = String((e && e.message) || '').trim();
+      }
     }
-    setActioned((prev) => ({ ...prev, ...done }));
-    const failed = pending.length - Object.keys(done).length;
-    if (failed > 0) setError(`${failed} of ${pending.length} posts could not be published.`);
     setActionBusy('');
-  };
-
-  const scheduleNow = async (d: Draft) => {
-    if (!scheduleFor) { setError('Choose a date and time first.'); return; }
-    setActionBusy(d._id);
-    setError(null);
-    try {
-      // The backend creates the Campaign behind this draft, which is what the
-      // publishing scheduler actually picks up.
-      await draftsAPI.scheduleDraft(d._id, new Date(scheduleFor).toISOString());
-      setActioned((prev) => ({ ...prev, [d._id]: 'scheduled' }));
-      setSchedulingId('');
-      setScheduleFor('');
-    } catch (e: any) {
-      setError(e?.message || 'This post could not be scheduled.');
-    } finally {
-      setActionBusy('');
-    }
+    setScheduleAllOpen(false);
+    setGalleryKey((k) => k + 1);
+    const failed = list.length - done;
+    if (!failed) setNotice({ text: `${done} ${done === 1 ? 'post is' : 'posts are'} scheduled. You can change a time on each post.`, tone: 'ok', to: { label: 'See scheduled posts', path: '/library?view=scheduled' } });
+    else setNotice({ text: `${done} of ${list.length} posts are scheduled. ${failed} could not be scheduled${firstProblem ? `: ${firstProblem}` : '.'}`, tone: 'error' });
   };
 
   const togglePlatform = (key: string) =>
@@ -987,14 +1034,14 @@ const GravityCreate: React.FC = () => {
     setProgressMsg('Loading your new posts…');
     try {
       const res = await draftsAPI.getDrafts();
+      // Only posts still waiting to be used (not approved, scheduled, posted, archived or in the Bin).
       const fresh = (res?.drafts || [])
-        .filter((d: any) => !['published', 'posted', 'scheduled', 'rejected'].includes(String(d?.status || '').toLowerCase()))
+        .filter((d: any) => ['draft', 'ready', 'completed', 'processing', 'failed'].includes(String(d?.status || 'draft').toLowerCase()))
         .slice(0, postCount || 12);
       setResults(fresh);
-      setActioned({});
     } catch {
-      // If the fetch fails the posts still exist — fall back to Approve.
-      navigate('/drafts');
+      // If the fetch fails the posts still exist: they are in the Library.
+      navigate('/library');
       return false;
     }
     setProgressMsg('');
@@ -1018,7 +1065,7 @@ const GravityCreate: React.FC = () => {
     // Posts now stream in as they finish, so clear the previous run's cards
     // or the new ones would append underneath them.
     setResults([]);
-    setActioned({});
+    setNotice(null);
     let handedOver = false;
     try {
       if (mode === 'carousel') {
@@ -1459,7 +1506,7 @@ const GravityCreate: React.FC = () => {
         <div className="max-w-5xl mx-auto mt-10">
           <div className="relative text-center mb-6">
             <button
-              onClick={() => { setResults([]); setActioned({}); setSchedulingId(''); }}
+              onClick={() => { setResults([]); setNotice(null); setScheduleAllOpen(false); }}
               className="absolute right-0 top-0 inline-flex items-center gap-1.5 rounded-lg border border-[var(--gv-border-default)] px-3 py-2 text-[12px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:border-[var(--gv-border-default)] transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -1500,8 +1547,8 @@ const GravityCreate: React.FC = () => {
               const img = draftImage(d);
               const processing = String(d?.status || '').toLowerCase() === 'processing';
               const failed = String(d?.status || '').toLowerCase() === 'failed';
-              const done = actioned[d._id];
               const busy = actionBusy === d._id;
+              const stateWord = processing ? '' : postStateWord(d);
 
               return (
                 <div key={d._id} className="rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] overflow-hidden">
@@ -1565,8 +1612,9 @@ const GravityCreate: React.FC = () => {
                           {d.caption || <span className="text-[var(--gv-text-muted)] italic">No caption yet</span>}
                         </p>
                         <div className="flex items-center justify-between mt-2.5">
-                          <div className="gravity-label text-[var(--gv-text-muted)]">
+                          <div className="gravity-label text-[var(--gv-text-muted)] min-w-0 truncate">
                             {backendAspect} · {d.slideLabel || (mode === 'campaign' ? 'Campaign' : 'Editorial')}
+                            {!d.isCarouselSlide && stateWord && stateWord !== 'Draft' && stateWord !== 'Ready' && <> · <span className="text-[var(--gv-accent-text)]">{stateWord}</span></>}
                           </div>
                           <div className="flex items-center gap-1">
                             {/* Every one of these addresses a single draft. A
@@ -1577,20 +1625,11 @@ const GravityCreate: React.FC = () => {
                                 <IconAction label="Write a caption" onClick={() => generateCaption(d)} disabled={captionBusy === d._id || !img}>
                                   {captionBusy === d._id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                                 </IconAction>
-                                <IconAction label="Edit caption" onClick={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}>
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </IconAction>
                                 <IconAction label="View the prompt" onClick={() => openPrompt(d)}>
                                   <Code2 className="w-3.5 h-3.5" />
                                 </IconAction>
-                                <IconAction label="Regenerate" onClick={() => regenerateImage(d)} disabled={busy || processing}>
-                                  <RotateCcw className="w-3.5 h-3.5" />
-                                </IconAction>
                                 <IconAction label="Edit image" onClick={() => openEditImage(d)} disabled={busy || processing || !img}>
                                   <Pencil className="w-3.5 h-3.5" />
-                                </IconAction>
-                                <IconAction label="Delete this post" onClick={() => discard(d)} disabled={busy} danger>
-                                  <Trash2 className="w-3.5 h-3.5" />
                                 </IconAction>
                               </>
                             )}
@@ -1693,59 +1732,22 @@ const GravityCreate: React.FC = () => {
                       </>
                     )}
 
-                    {done ? (
-                      <div className="mt-3 inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-emerald-400">
-                        <Check className="w-3.5 h-3.5" />
-                        {done === 'approved' ? 'Published' : done === 'scheduled' ? 'Scheduled' : 'Saved to drafts'}
-                      </div>
-                    ) : schedulingId === d._id ? (
-                      <div className="mt-3 space-y-2">
-                        <input
-                          type="datetime-local"
-                          value={scheduleFor}
-                          onChange={(e) => setScheduleFor(e.target.value)}
-                          className="w-full rounded-lg bg-[var(--gv-surface-3)] border border-[var(--gv-border-default)] px-2.5 py-1.5 text-[12px] text-[var(--gv-text-primary)]"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => scheduleNow(d)}
-                            disabled={busy || !scheduleFor}
-                            className="flex-1 rounded-lg bg-[var(--gv-accent)] text-black text-[11.5px] font-semibold py-1.5 disabled:opacity-50"
-                          >
-                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : 'Confirm'}
-                          </button>
-                          <button
-                            onClick={() => { setSchedulingId(''); setScheduleFor(''); }}
-                            className="px-3 rounded-lg border border-[var(--gv-border-default)] text-[11.5px] text-[var(--gv-text-tertiary)]"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
+                    {/* The shared post actions: Schedule, Post now, Download, Edit, Make again (with its price), and in
+                        More: Archive and Delete. A carousel slide is part of one post, so it has none of them. */}
+                    {d.isCarouselSlide ? null : processing ? (
+                      <p className="mt-3 text-[11.5px] text-[var(--gv-text-muted)]">The picture is being made. The buttons show when it is ready.</p>
                     ) : (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        <button
-                          onClick={() => keepAsDraft(d)}
-                          disabled={busy}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[var(--gv-border-default)] text-[11.5px] text-[var(--gv-text-secondary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-50"
-                        >
-                          <Save className="w-3 h-3" /> Save as draft
-                        </button>
-                        <button
-                          onClick={() => approveNow(d)}
-                          disabled={busy || processing || (!img && mode !== 'linkedin')}
-                          title={processing ? 'Wait until the image is ready' : 'Publish now'}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11.5px] font-semibold disabled:opacity-40"
-                        >
-                          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Approve
-                        </button>
-                        <button
-                          onClick={() => { setSchedulingId(d._id); setScheduleFor(''); }}
-                          disabled={busy || processing || (!img && mode !== 'linkedin')}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)] text-[11.5px] font-semibold disabled:opacity-40"
-                        >
-                          <Clock className="w-3 h-3" /> Schedule
-                        </button>
+                      <div className="mt-3">
+                        <PostActions
+                          draft={d}
+                          variant="row"
+                          className="nb-pa-cols"
+                          label={d.title || 'this post'}
+                          makeAgainQuarks={regenerateCostFor(d)}
+                          onEdit={() => { setEditingCaption(d._id); setCaptionDraft(d.caption || ''); }}
+                          onMessage={(text, tone, to) => setNotice(text ? { text, tone, to } : null)}
+                          onChanged={resultChanged(d)}
+                        />
                       </div>
                     )}
                   </div>
@@ -1768,8 +1770,10 @@ const GravityCreate: React.FC = () => {
             ))}
           </div>
 
+          <PostNotice notice={notice} onClose={() => setNotice(null)} className="mt-6 max-w-xl mx-auto" />
+
           {/* Footer actions */}
-          <div className="flex items-center justify-center gap-3 mt-10">
+          <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
             <button
               onClick={handleDraft}
               disabled={submitting || stillRendering}
@@ -1778,15 +1782,29 @@ const GravityCreate: React.FC = () => {
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
               Generate {results.length || 4} more
             </button>
-            <button
-              onClick={sendAllToApproval}
-              disabled={actionBusy === 'all' || stillRendering || results.every((d: any) => actioned[d._id])}
-              className="inline-flex items-center gap-2 h-11 px-6 rounded-xl bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[13px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.25)] transition-colors disabled:opacity-40"
-            >
-              {actionBusy === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" strokeWidth={2.5} />}
-              Send all to approval
-            </button>
+            {scheduleList.length > 1 && (
+              <button
+                onClick={openScheduleAll}
+                disabled={actionBusy === 'all' || stillRendering}
+                title={scheduleLock || `Pick when the ${scheduleList.length} posts go out. Nothing is posted now.`}
+                data-testid="schedule-all"
+                className="inline-flex items-center gap-2 h-11 px-6 rounded-xl bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[13px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.25)] transition-colors disabled:opacity-40"
+              >
+                {actionBusy === 'all' ? <Loader2 className="w-4 h-4 animate-spin" /> : scheduleLock ? <Lock className="w-4 h-4" /> : <CalendarClock className="w-4 h-4" />}
+                Schedule all {scheduleList.length}
+              </button>
+            )}
           </div>
+          {scheduleAllOpen && (
+            <ScheduleAllDialog
+              count={scheduleList.length}
+              platforms={platformsOf(scheduleList)}
+              gapDays={mode === 'campaign' ? defaultGapDays(estimate.perWeek) : 1}
+              busy={actionBusy === 'all'}
+              onCancel={() => setScheduleAllOpen(false)}
+              onConfirm={scheduleAll}
+            />
+          )}
         </div>
       )}
 

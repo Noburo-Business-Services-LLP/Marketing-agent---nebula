@@ -100,6 +100,7 @@ const CreateGenerations: React.FC<{ category: CreateCategory; refreshKey: number
             draft={open}
             onClose={() => setOpen(null)}
             onSuccess={() => { setOpen(null); load(true); }}
+            onChanged={() => load(true)}
             onPrev={at > 0 ? () => setOpen(ready[at - 1]) : undefined}
             onNext={at >= 0 && at < ready.length - 1 ? () => setOpen(ready[at + 1]) : undefined}
             position={at >= 0 ? `${at + 1} / ${ready.length}` : undefined}

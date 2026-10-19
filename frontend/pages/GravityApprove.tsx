@@ -66,8 +66,6 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
   // single is the full detail view. A customer with fifty drafts going
   // through them one swipe at a time is the exact problem this solves.
   const [reviewView, setReviewView] = useState<'single' | 'grid'>('single');
-  // Track drafts we've auto-retried image gen for, so we don't spam.
-  const autoRetriedRef = useRef<Set<string>>(new Set());
   const pollTimerRef = useRef<any>(null);
 
   // ---- Library tabs -------------------------------------------------------
@@ -205,23 +203,9 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
     };
   }, [drafts]);
 
-  // Auto-retry image generation only for drafts whose generation is
-  // confirmed failed (status === 'failed'). A draft with no image that
-  // isn't 'failed' may simply be done-by-design (e.g. a LinkedIn draft
-  // saved without an image) — never auto-trigger generation for that
-  // case, since it silently spends the user's Quarks. Fires once per draft.
-  useEffect(() => {
-    const current: any = drafts[index];
-    if (!current?._id) return;
-    const status = String(current?.status || '').toLowerCase();
-    const alreadyTried = autoRetriedRef.current.has(String(current._id));
-    if (status === 'failed' && !alreadyTried) {
-      autoRetriedRef.current.add(String(current._id));
-      draftsAPI.retryImageGeneration(String(current._id)).catch(() => {});
-      // Trigger a quick refresh so status flips to processing
-      setTimeout(() => loadDrafts(), 800);
-    }
-  }, [index, drafts]);
+  // A post whose picture did not finish is NOT made again by itself any more: making it again charges the account
+  // (POST /drafts/:id/retry-image takes the image price for every post that is not a campaign post), so it is the
+  // visible Make again button of the shared post actions, with its price on the button and in the question.
 
   const current: any = drafts[index] || null;
   const total = drafts.length;
@@ -545,15 +529,16 @@ const GravityApprove: React.FC<{ user?: User | null }> = ({ user }) => {
             ) : String(current?.status || '').toLowerCase() === 'failed' ? (
               <div className="w-full h-full bg-gradient-to-br from-red-950/20 to-[var(--gv-surface-1)] flex flex-col items-center justify-center gap-3 px-6 text-center">
                 <AlertCircle className="w-8 h-8 text-red-400/70" />
-                <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">Image generation failed</div>
+                <div className="text-[13px] font-semibold text-[var(--gv-text-primary)]">The picture did not finish</div>
                 <div className="text-[11.5px] text-[var(--gv-text-tertiary)] max-w-[260px] leading-relaxed">
                   {current?.errorMessage || 'Something went wrong. Select Make again to try once more.'}
                 </div>
                 <button
                   onClick={handleRedo}
+                  data-testid="approve-make-again"
                   className="mt-2 h-8 px-3 rounded-md bg-[var(--gv-surface-2)] hover:bg-[var(--gv-surface-4)] text-[12px] font-semibold text-[var(--gv-text-primary)]"
                 >
-                  Make again
+                  Make again{regenerateCostFor(current) > 0 ? ` (${regenerateCostFor(current).toLocaleString('en-IN')} ${regenerateCostFor(current) === 1 ? 'Quark' : 'Quarks'})` : ''}
                 </button>
               </div>
             ) : String(current?.status || '').toLowerCase() !== 'processing' ? (
