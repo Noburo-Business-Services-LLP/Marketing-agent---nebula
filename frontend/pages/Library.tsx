@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Film, Image as ImageIcon, Loader2, Play, Search, Trash2, X } from 'lucide-react';
+import { Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, Search, Trash2, X } from 'lucide-react';
 import { GravityLabel, GravityButton } from '../components/gravity';
 import { useConfirm } from '../context/ConfirmContext';
 import GenerationTimer from '../components/GenerationTimer';
@@ -14,7 +14,10 @@ import { platformLabel } from '../utils/platforms';
 import {
   LibraryItem, LibraryFilters, LibraryStatus, DEFAULT_FILTERS, STATUS_WORD,
   fromPostDraft, fromVideoDraft, fromHeroJob, fromPhotoshootPhoto, applyFilters,
+  SOURCE_WORD, libraryTileActions, libraryColumns,
 } from '../utils/library';
+import { fillRows } from '../utils/rowSpans';
+import '../components/library/library.css';
 
 const STATUS_CHIPS: Array<{ key: 'all' | LibraryStatus; label: string }> = [
   { key: 'all', label: 'All' }, { key: 'draft', label: 'Drafts' }, { key: 'ready', label: 'Ready' },
@@ -81,6 +84,17 @@ const Library: React.FC = () => {
   }, [anyCreating, load]);
 
   const shown = useMemo(() => applyFilters(items, filters), [items, filters]);
+  // Columns follow the grid's real width; the last tile of a short row is widened so every row is filled.
+  const gridRef = useRef<HTMLUListElement | null>(null);
+  const [cols, setCols] = useState(2);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => setCols(libraryColumns(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [loading, shown.length > 0]);
+  const spans = useMemo(() => fillRows(shown.map(() => 1), cols), [shown, cols]);
   const platforms = useMemo(() => Array.from(new Set(items.flatMap((i) => i.platforms))).sort(), [items]);
   const set = (patch: Partial<LibraryFilters>) => setFilters((f) => ({ ...f, ...patch }));
 
@@ -154,27 +168,43 @@ const Library: React.FC = () => {
           {items.length ? <GravityButton variant="ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>Clear filters</GravityButton> : <GravityButton onClick={() => navigate('/campaigns')}>Create content</GravityButton>}
         </div>
       ) : (
-        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {shown.map((i) => (
-            <li key={`${i.source}-${i.id}`} className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] overflow-hidden">
-              <button type="button" onClick={() => (i.status === 'creating' ? undefined : setOpen(i))} disabled={i.status === 'creating'} className="block w-full text-left disabled:cursor-default" aria-label={`Open ${i.title}`}>
-                <div className="relative aspect-square bg-[var(--gv-border-subtle)] flex items-center justify-center overflow-hidden">
-                  {i.thumbnailUrl ? <img src={i.thumbnailUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
-                    : i.kind === 'video' ? <Film className="w-8 h-8 text-[var(--gv-text-tertiary)]" /> : <ImageIcon className="w-8 h-8 text-[var(--gv-text-tertiary)]" />}
-                  {i.kind === 'video' && i.mediaUrl && <span className="absolute bottom-2 left-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center"><Play className="w-3.5 h-3.5" /></span>}
-                  <span className="absolute top-2 left-2 rounded-full bg-[var(--gv-panel)] border border-[var(--gv-border-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--gv-text-primary)]">{STATUS_WORD[i.status]}</span>
-                  {i.status === 'creating' && <div className="absolute inset-x-2 bottom-2"><GenerationTimer startedAt={i.createdAt || undefined} minSeconds={i.slideTotal ? 20 * i.slideTotal : (i.kind === 'video' ? 300 : 20)} maxSeconds={i.slideTotal ? 60 * i.slideTotal : (i.kind === 'video' ? 600 : 60)} /></div>}
-                </div>
-                <div className="px-3 py-2.5 space-y-1">
-                  <p className="text-[13px] font-semibold text-[var(--gv-text-primary)] line-clamp-2">{i.title}</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11.5px] text-[var(--gv-text-muted)]">{fmtDate(i.createdAt)}{i.slideTotal ? ` · ${i.slides && i.slides.length < i.slideTotal && i.status === 'creating' ? `${i.slides.length} of ${i.slideTotal}` : i.slideTotal} slides` : ''}</p>
-                    <span className="flex items-center gap-1 text-[var(--gv-text-tertiary)]">{i.platforms.slice(0, 4).map((p) => <PlatformIcon key={p} platform={p} className="w-3.5 h-3.5" />)}</span>
-                  </div>
-                </div>
-              </button>
-            </li>
-          ))}
+        <ul ref={gridRef} className="nb-lib-grid" style={{ ['--nb-lib-cols' as any]: cols }} data-testid="library-grid">
+          {shown.map((i, n) => {
+            const actions = libraryTileActions(i);
+            return (
+              <li key={`${i.source}-${i.id}`} className="nb-lib-cell" style={spans[n] > 1 ? { gridColumn: `span ${spans[n]}` } : undefined}>
+                <article className="nb-lib-tile">
+                  <button type="button" onClick={() => (i.status === 'creating' ? undefined : setOpen(i))} disabled={i.status === 'creating'} className="nb-lib-open" aria-label={`Open ${i.title}`}>
+                    <span className="nb-lib-pic">
+                      {i.thumbnailUrl ? <img src={i.thumbnailUrl} alt="" loading="lazy" decoding="async" />
+                        : i.kind === 'video' ? <Film className="w-8 h-8" aria-hidden="true" /> : <ImageIcon className="w-8 h-8" aria-hidden="true" />}
+                      {i.kind === 'video' && i.mediaUrl && i.status !== 'creating' && <span className="nb-lib-play" aria-hidden="true"><Play className="w-3.5 h-3.5" /></span>}
+                      {i.status === 'creating' && <span className="nb-lib-timer"><GenerationTimer startedAt={i.createdAt || undefined} minSeconds={i.slideTotal ? 20 * i.slideTotal : (i.kind === 'video' ? 300 : 20)} maxSeconds={i.slideTotal ? 60 * i.slideTotal : (i.kind === 'video' ? 600 : 60)} /></span>}
+                    </span>
+                    <span className="nb-lib-body">
+                      <span className="nb-lib-title">{i.title}</span>
+                      <span className="nb-lib-meta">
+                        <span>{fmtDate(i.createdAt)}{i.slideTotal ? ` · ${i.slides && i.slides.length < i.slideTotal && i.status === 'creating' ? `${i.slides.length} of ${i.slideTotal}` : i.slideTotal} slides` : ''}</span>
+                        <span className="nb-lib-platforms">{i.platforms.slice(0, 4).map((p) => <PlatformIcon key={p} platform={p} className="w-3.5 h-3.5" />)}</span>
+                      </span>
+                    </span>
+                  </button>
+                  <span className="nb-lib-chips" aria-hidden="true">
+                    <span className="nb-lib-chip">{SOURCE_WORD[i.source]}</span>
+                    <span className="nb-lib-chip" data-status={i.status}>{STATUS_WORD[i.status]}</span>
+                  </span>
+                  <span className="sr-only">{SOURCE_WORD[i.source]}, {STATUS_WORD[i.status]}</span>
+                  {actions.length > 0 && (
+                    <div className="nb-lib-actions">
+                      {actions.includes('open') && <button type="button" className="nb-lib-action" data-primary="true" onClick={() => setOpen(i)} aria-label={`Open ${i.title}`}><Eye className="w-3.5 h-3.5" aria-hidden="true" /><span className="nb-lib-action-word">Open</span></button>}
+                      {actions.includes('edit') && <button type="button" className="nb-lib-action" onClick={() => goEdit(i)} aria-label={`Edit ${i.title}`}><Pencil className="w-3.5 h-3.5" aria-hidden="true" /><span className="nb-lib-action-word">Edit</span></button>}
+                      {actions.includes('download') && <a className="nb-lib-action" href={i.mediaUrl} download target="_blank" rel="noreferrer" aria-label={`Download ${i.title}`}><Download className="w-3.5 h-3.5" aria-hidden="true" /><span className="nb-lib-action-word">Download</span></a>}
+                    </div>
+                  )}
+                </article>
+              </li>
+            );
+          })}
         </ul>
       )}
 

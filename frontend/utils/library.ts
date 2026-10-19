@@ -133,3 +133,26 @@ export function applyFilters(items: LibraryItem[], f: LibraryFilters): LibraryIt
 export const STATUS_WORD: Record<LibraryStatus, string> = {
   creating: 'Creating', draft: 'Draft', ready: 'Ready', scheduled: 'Scheduled', posted: 'Posted', archived: 'Archived', failed: 'Did not finish',
 };
+
+/** Where an item came from, in words, for the source chip on its tile. */
+export const SOURCE_WORD: Record<LibrarySource, string> = {
+  post: 'Post', reel: 'Reel from your plan', 'video-draft': 'Step-by-step video', hero: 'Hero video', photoshoot: 'Photoshoot',
+};
+
+export type LibraryAction = 'open' | 'edit' | 'download';
+
+/** The actions a tile offers on hover and focus. Nothing while it is still being made. */
+export function libraryTileActions(i: Pick<LibraryItem, 'status' | 'mediaUrl' | 'source'>): LibraryAction[] {
+  if (i.status === 'creating') return [];
+  const out: LibraryAction[] = ['open'];
+  if (i.status === 'draft' || i.status === 'failed') out.push('edit');
+  if (i.mediaUrl && i.source !== 'post') out.push('download');
+  return out;
+}
+
+/** Columns of the Library grid for the width the grid really has (the side menu takes part of the screen). */
+export function libraryColumns(width: number): number {
+  if (width >= 960) return 4;
+  if (width >= 620) return 3;
+  return 2;
+}

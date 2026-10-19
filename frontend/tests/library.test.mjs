@@ -78,3 +78,21 @@ test('Library filters are one compact row with accessible groups', () => {
   assert.match(src, /overflow-x-auto/);
   assert.ok(!/h-9 px-4 rounded-full/.test(src));
 });
+
+import { SOURCE_WORD, libraryTileActions, libraryColumns, STATUS_WORD as STATUS_WORDS } from '../utils/library.ts';
+
+test('every source and status has words for its chip', () => {
+  ['post', 'reel', 'video-draft', 'hero', 'photoshoot'].forEach((s) => assert.ok(SOURCE_WORD[s]));
+  ['creating', 'draft', 'ready', 'scheduled', 'posted', 'archived', 'failed'].forEach((s) => assert.ok(STATUS_WORDS[s]));
+});
+
+test('tile actions: none while creating, edit for drafts and failed, download only with a file and not for posts', () => {
+  assert.deepEqual(libraryTileActions({ status: 'creating', mediaUrl: 'https://x/y.mp4', source: 'hero' }), []);
+  assert.deepEqual(libraryTileActions({ status: 'draft', mediaUrl: '', source: 'post' }), ['open', 'edit']);
+  assert.deepEqual(libraryTileActions({ status: 'ready', mediaUrl: 'https://x/y.mp4', source: 'hero' }), ['open', 'download']);
+  assert.deepEqual(libraryTileActions({ status: 'posted', mediaUrl: 'https://x/y.jpg', source: 'post' }), ['open']);
+});
+
+test('library columns follow the grid width', () => {
+  assert.deepEqual([343, 619, 620, 959, 960, 1100].map(libraryColumns), [2, 2, 3, 3, 4, 4]);
+});
