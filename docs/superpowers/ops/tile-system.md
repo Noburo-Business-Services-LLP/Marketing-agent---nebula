@@ -111,6 +111,19 @@ Import art from the barrel (`../components/art`) or from the piece file. The pro
 - Create content at 1280 and 375: the four mode tiles and the Video entry (a compact link tile to the Videos page), selecting by click and by keyboard (Tab then Enter), the focus ring, the hover lift. On 375 the tiles were four full-width stacked cards (about 360 px each); they are now rows (picture left), about 125 px each.
 - Contrast audit (the repo's runner) on the showcase and Create content at 1280 and 375: no failure on any tile text. The failures that remain on Create content are the old small option captions and the account initial (they were there before).
 
+## My plan illustration style (2026-10-19)
+
+The owner asked for My plan to be "all tiles and beautiful with images and animations and vector images", with no dark navy panels. What was built and the rules for adding to it:
+
+- Files: `frontend/pages/MyPlan.tsx` (states), `frontend/components/StrategyFunnel.tsx` (nine strategy tiles and the no-plan preview), `frontend/components/plan/` (`PlanHero`, `PlanDetails`, `PlanCharts` for the donut and timeline, `PlanMarks` for channel marks and mini posts, `PlanBits` for chips and opened details, `plan.css`), numbers in `frontend/utils/planVisuals.ts` (tested in `tests/planVisuals.test.mjs`).
+- Level glyphs: `frontend/components/art/plan/` (a 64 by 56 frame with a tinted disc, one piece per level plus the sparkle). Same drawing rules as the main set: flat shapes, two or three colours, ink only as a soft outline, no text; each well under 1 KB. They are imported from the piece files, not the barrel, and are not on `/art-showcase`.
+- Colour: cream panels and the gold glow; one category tint per level from five soft tones (gold #FFF0C7, coral #FFE3D0, teal #D6F1EF, sage #E3EFD9, lilac #ECE6FB), each with a deep mark colour and a text colour that keeps 4.5 to 1 on the tint. No dark panels anywhere on the page.
+- Data drawings show stored numbers only: the donut's outer ring is the average organic and paid split of the channels that have one, the inner ring counts online and offline channels; without a split the ring stays dashed and the legend says "not split yet". The timeline marker sits on the real plan day. KPI tiles never show made-up values, only the metric and who reads it.
+- Channel marks are simple generic glyphs on a colour square, not copies of any logo; every mark colour keeps 4.5 to 1 against white so `gen-layer-lists.mjs` does not list it.
+- Layout: three columns from 1024 px (positioning and channels span two, the 90 days and the numbers the full row, a level that is not decided yet stays one column wide), two below, one under 640 px. Tiles align to the top so opening one does not stretch its neighbours. Detail cards are full width with tiles inside.
+- Motion (only without reduced motion): staggered rise on first render (fill mode `backwards`, so hover lift still works afterwards), donut and ready ring draw-in, timeline fill, a slow pulse on today's marker, the twinkling sparkle, hover lift.
+- Honesty: every claim keeps its tag in words, a missing level says "Not decided yet" with its reason behind "Why it is empty", and nothing is drawn for data the plan does not have.
+
 ## Not done yet (by design)
 
-Photoshoot tile and page (the page does not exist yet), templates and packs, Home, Library, Inbox, Performance, My plan, Brand, Blueprint, Memory and Calendar tiles, photo tiles (none registered yet), a Lighthouse-style first paint comparison (the page weight was measured instead: see the build task report).
+Photoshoot tile and page (the page does not exist yet), templates and packs, Home, Library, Inbox, Performance, Brand, Blueprint, Memory and Calendar tiles, photo tiles (none registered yet), a Lighthouse-style first paint comparison (the page weight was measured instead: see the build task report).
