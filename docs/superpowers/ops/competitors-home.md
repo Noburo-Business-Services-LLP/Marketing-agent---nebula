@@ -93,4 +93,4 @@ Sample-data preview (`AUDIT_PORT=3101`): `/?audit=normal&compstate=<state>#/dash
 - Followers of exactly 0 are shown as unknown.
 - Own best posts need the performance tracker to have measured them (`ENABLE_PERFORMANCE_TRACKER`, a connected account); otherwise that source is simply absent.
 - The tile and lists show English only, like the rest of Home.
-- Rival and witty comment drafts are a separate task (Home build Task 7); nothing here drafts text with a model or posts anywhere.
+- Drafts from a best post ("Make a post in response", "Draft a witty comment") are a separate feature with its own routes and checks: `home-drafts.md`. This answer only adds each post's reference (`bestPost.ref`, `working[].ref`: `<competitorId>.<postKey>`, the Instagram shortcode or the post time); it still drafts nothing and posts nothing.
