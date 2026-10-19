@@ -16,6 +16,7 @@
  * Rules and examples: docs/superpowers/ops/competitors-home.md
  */
 const { weekStartOf } = require('../week/weekMath');
+const { isStoredAvatarUrl } = require('./avatar');
 
 const DAY = 864e5;
 const MONTH_DAYS = 30;
@@ -179,6 +180,8 @@ function competitorCard({ competitor, status, snapshots, now, lastCheckedAt = nu
   const card = {
     id: idOf(competitor), name: String((competitor && competitor.name) || 'A competitor'), handle: HANDLE_RE.test(handle) ? handle : '',
     status: status || 'waiting', profileUrl: linked ? `https://www.instagram.com/${handle}/` : null,
+    // Our own stored copy of their profile picture (never Instagram's link), or null: the page shows initials then.
+    avatarUrl: isStoredAvatarUrl(competitor && competitor.avatarUrl) ? competitor.avatarUrl : null,
     followers: null, postsThisWeek: null, bestPost: null, worked: null,
     weekOf: latest ? latest.weekStart || null : null, isCurrentWeek: !!(latest && latest.weekStart === thisWeek), lastCheckedOn: null
   };

@@ -9,6 +9,7 @@ const { requireFeature } = require('../middleware/requireFeature');
 const caps = require('../config/competitors');
 const { weekStartOf } = require('../services/week/weekMath');
 const { insights } = require('../services/competitors/snapshot');
+const { isStoredAvatarUrl } = require('../services/competitors/avatar');
 const { handleOf, handleStatusOf, isValidHandle, trackedCompetitors, competitorsQuery } = require('../services/competitors/tracked');
 
 const toUserId = (user) => (!user ? null : user._id ? String(user._id) : user.id ? String(user.id) : null);
@@ -77,6 +78,7 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
       const m = madeOf.get(String(competitor._id)) || {};
       return {
         id: String(competitor._id), name: competitor.name, handle: handleOf(competitor), handleStatus: handleStatusOf(competitor), status,
+        avatarUrl: isStoredAvatarUrl(competitor.avatarUrl) ? competitor.avatarUrl : null,
         trend: m.trend || [], lastCheckedAt,
         // Which week the numbers are from: when isCurrentWeek is false say "last checked on <lastCheckedOn>", not "this week".
         weekOf: m.weekOf || null, isCurrentWeek: !!m.isCurrentWeek, previousWeekOf: m.previousWeekOf || null, lastCheckedOn: m.lastCheckedOn || null

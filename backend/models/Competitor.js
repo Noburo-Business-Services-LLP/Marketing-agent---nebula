@@ -90,6 +90,10 @@ const competitorSchema = new mongoose.Schema({
   // Who stands behind the Instagram handle: suggested (we found or guessed it; never read until the customer confirms),
   // verified (our own profile check matched), confirmed (the customer confirmed or typed it). Older records have none.
   handleStatus: { type: String, enum: ['suggested', 'verified', 'confirmed'] },
+  // Our own 96 x 96 copy of their public profile picture, kept only while they are tracked (services/competitors/avatar.js).
+  avatarUrl: String,
+  avatarUpdatedAt: Date,
+  avatarSourceKey: String, // which picture it was made from (a hash of the link's path), so an unchanged picture is not fetched again
   // Weekly tracking state (see services/competitors/tracker.js)
   tracking: {
     failures: { type: Number, default: 0 },

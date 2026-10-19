@@ -45,6 +45,11 @@ function createHandleRouter(impl = {}) {
           'tracking.lastCheckedAt': null // read again at the next pass (the daily caps still apply)
         }
       });
+      // A different handle is a different page: its old stored picture goes now, the new one comes with the next read.
+      const before = String((competitor.socialHandles && competitor.socialHandles.instagram) || '').trim().replace(/^@/, '');
+      if (competitor.avatarUrl && before.toLowerCase() !== handle.toLowerCase()) {
+        await (impl.dropAvatar || require('../services/competitors/avatar').dropAvatar)(competitor, { Competitor: Competitor() });
+      }
       return res.json({ success: true, competitor: { id, name: competitor.name, handle, handleStatus: 'confirmed' } });
     } catch (err) {
       console.error('[competitor-handle] route error:', err && err.message);

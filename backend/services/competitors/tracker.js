@@ -70,6 +70,8 @@ function defaultDeps() {
     gate: () => require('../backgroundGate').blockedAccountIdsSafe(),
     spend: { check: (a) => require('../spendGuard').check(a), record: (a, n) => require('../spendGuard').record(a, n) },
     scrapeProfile: (handle) => require('../socialMediaAPI').scrapeInstagramProfile(handle),
+    // The competitor's picture, from the profile just read (no extra read). Best effort: see avatar.js.
+    refreshAvatar: (args) => require('./avatar').refreshAvatar(args),
     sleep: (ms) => new Promise((r) => setTimeout(r, ms))
   };
 }
@@ -112,9 +114,11 @@ async function trackOne({ competitor, user, now, deps } = {}) {
 
     let snapshotFields = null;
     let error = null;
+    let profileRead = null;
     try {
       const res = await d.scrapeProfile(handle);
       const profile = res && res.success && Array.isArray(res.data) ? res.data[0] : null;
+      profileRead = profile;
       if (!profile || typeof profile !== 'object' || notAProfile(profile)) error = 'Could not read this profile';
       else if (profile.private || profile.isPrivate) error = failReason(profile);
       else snapshotFields = summarise({ profile, posts: profile.latestPosts || profile.posts || [], now: at });
@@ -141,6 +145,10 @@ async function trackOne({ competitor, user, now, deps } = {}) {
       if (t.failures >= caps.FAIL_PAUSE_AFTER) t.pausedAt = at;
     }
     try { await d.saveTracking(competitor, { ...t }); } catch (_) { /* the snapshot is already stored */ }
+    // After the read is saved: keep our own small copy of their profile picture. Never fails the read.
+    if (snapshotFields && profileRead && typeof d.refreshAvatar === 'function') {
+      try { await d.refreshAvatar({ competitor, profile: profileRead, now: at }); } catch (_) { /* the old picture stays */ }
+    }
     return snapshotFields ? { ok: true, read: true } : { ok: false, read: true, reason: error };
   } catch (e) {
     return { ok: false, read: false, reason: 'error' };

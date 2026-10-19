@@ -15,6 +15,7 @@ const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
 const { createHandleRouter } = require('./competitorHandle');
 const { guardedRead, sharedGuard, ReadRefused } = require('../services/competitors/readGuard');
 const { removeCompetitorsWithSnapshots } = require('../services/competitors/cleanup');
+const { dropAvatar } = require('../services/competitors/avatar');
 const { handleStatusOf } = require('../services/competitors/tracked');
 const { validateProfileMatch } = require('../services/competitors/profileMatch');
 
@@ -579,7 +580,9 @@ router.put('/:id/ignore', protect, async (req, res) => {
     if (!competitor) {
       return res.status(404).json({ success: false, message: 'Competitor not found' });
     }
-    
+    // An ignored competitor is no longer tracked: its stored profile picture goes (a new copy is made by a weekly read after it is shown again).
+    await dropAvatar(competitor);
+
     console.log(` Ignored competitor: ${competitor.name}`);
     res.json({ success: true, message: `${competitor.name} has been ignored`, competitor });
   } catch (error) {
