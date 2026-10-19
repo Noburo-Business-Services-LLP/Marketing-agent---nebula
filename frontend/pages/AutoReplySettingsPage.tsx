@@ -38,7 +38,8 @@ const PLATFORM_ROWS: Array<{ key: 'instagram' | 'facebook'; label: string }> = [
   { key: 'facebook', label: 'Facebook' },
 ];
 
-const AutoReplySettingsPage: React.FC = () => {
+/** `onSaved` tells the Inbox page the saved settings, so its Automatic replies tile shows the new status. */
+const AutoReplySettingsPage: React.FC<{ onSaved?: (settings: AutoReplySettings) => void }> = ({ onSaved }) => {
   const [settings, setSettings] = useState<AutoReplySettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -93,7 +94,9 @@ const AutoReplySettingsPage: React.FC = () => {
     try {
       const sendConfirm = confirmedAuto && needsAutoConfirm(savedMode, settings.automationMode);
       const res = await inboxAPI.updateSettings(settings, sendConfirm);
-      setSettings({ ...defaultSettings, ...(res.settings || {}) });
+      const next = { ...defaultSettings, ...(res.settings || {}) };
+      setSettings(next);
+      onSaved?.(next);
       setSavedMode(res.settings?.automationMode || settings.automationMode);
       setConfirmedAuto(false);
       setSaved(true);

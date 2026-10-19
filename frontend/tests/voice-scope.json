@@ -79,5 +79,8 @@
   "utils/homeDrafts.ts",
   "components/home/DraftSheet.tsx",
   "pages/Photoshoot.tsx",
-  "utils/photoshoot.ts"
+  "utils/photoshoot.ts",
+  "pages/SocialInbox.tsx",
+  "components/inbox/InboxOverview.tsx",
+  "utils/inboxOverview.ts"
 ]
