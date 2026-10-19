@@ -28,3 +28,19 @@ test('the Approve page uses the shared helper instead of its own list', () => {
   assert.match(src, /utils\/draftStatus/);
   assert.doesNotMatch(src, /APPROVABLE_STATUSES/);
 });
+test('origin and needs approval mean the same as on the server, including old rows without an origin', async () => {
+  const { originOf, needsApproval, ORIGINS } = await import('../utils/draftStatus.ts');
+  assert.deepEqual([...ORIGINS], [...backend.ORIGINS]);
+  const rows = [
+    { origin: 'manual', contentCalendarId: 'c1' }, { origin: 'automation' }, { contentCalendarId: 'c1' }, { calendarDay: 3 }, { calendarDay: null },
+    { origin: 'x' }, {}, null,
+    { status: 'completed', origin: 'automation', sourceType: 'post' }, { status: 'completed', calendarDay: 2, sourceType: 'post' },
+    { status: 'completed', origin: 'manual', sourceType: 'post' }, { status: 'approved', origin: 'automation', sourceType: 'post' },
+    { status: 'binned', origin: 'automation', sourceType: 'post' }, { status: 'draft', origin: 'automation', sourceType: 'reel' }
+  ];
+  for (const d of rows) {
+    assert.equal(originOf(d), backend.originOf(d), JSON.stringify(d));
+    assert.equal(needsApproval(d), backend.needsApproval(d), JSON.stringify(d));
+  }
+  for (const s of ['approved', 'binned']) assert.equal(stateOf(s), backend.stateOf(s), s);
+});

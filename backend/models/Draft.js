@@ -93,12 +93,27 @@ const draftSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // 'approved' = the customer said yes and it waits to be scheduled or posted. 'binned' = in the Bin: restorable for
+  // 14 days (binnedAt, binnedFrom), then removed for good by services/binPurge.js. 'archived' is restorable any time.
   status: {
     type: String,
-    enum: ['draft', 'scheduled', 'published', 'archived', 'processing', 'completed', 'failed'],
+    enum: ['draft', 'approved', 'scheduled', 'published', 'archived', 'binned', 'processing', 'completed', 'failed'],
     default: 'draft',
     index: true
   },
+  // Who made it: 'manual' (the customer, by hand) or 'automation' (weekly plan, calendar auto-generation). Only
+  // automation posts must be approved before they can be posted or scheduled. No default on purpose: old rows have
+  // none and are read through services/draftStatus.js originOf (calendar-made rows are automation, others manual).
+  origin: {
+    type: String,
+    enum: ['manual', 'automation']
+  },
+  // The day the plan meant it to go out (automation posts). Approving schedules it for this date when it is ahead.
+  plannedDate: { type: Date, default: null },
+  approvedAt: { type: Date, default: null },
+  binnedAt: { type: Date, default: null },
+  binnedFrom: { type: String, default: '' },
+  archivedFrom: { type: String, default: '' },
   errorMessage: {
     type: String,
     default: ''
