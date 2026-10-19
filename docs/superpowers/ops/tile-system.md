@@ -144,6 +144,10 @@ The owner asked for My plan to be "all tiles and beautiful with images and anima
 - The pack choice on `/photoshoot` is six cover tiles (one column under 560 px, two up to 900 px, then three) with their own small drawings in `frontend/components/art/packs/` (imported from that folder, not the barrel; same drawing rules and budget as the main set). Palettes: product plum, marketplace blue, festival gold, lifestyle teal, flat lay coral, clean white ink.
 - Page styles: `frontend/components/photoshoot/photoshoot.css` (brown ink like Home, one warm gold summary card, no dark panel). The Home packs rail is a sideways row of compact `choice` tiles (`.nb-home-packs-rail`).
 
+## Brand memory page (2026-10-19)
+
+`frontend/pages/AIMemory.tsx` (route `/ai-memory`, "What Nebulaa has learned") in the My plan style: a cream and gold hero with the brain drawing (`art/Memory.tsx`) and the sparkle, the tracked post count, patterns learned, last update and Refresh now; the learned notes as colour-coded pattern tiles, one per stored category (best days and times, formats, words and tone, calls to action, hashtags and topics, visual style), each note with its stored strength as a small bar and Edit and Delete kept; while nothing is learned, an illustrated card (`art/memory/Grow.tsx`, imported from the piece file) with the real tracked count, the three steps and what will show; the three history pages as small icon tiles. Grouping and wording in `utils/memoryView.ts` (tested); styles in `components/memory/memory.css`. Only stored notes are shown. Preview: `/?audit=normal&memorystate=empty|tracking|filled#/ai-memory`.
+
 ## Not done yet (by design)
 
 Post templates, Home, Library, Inbox, Performance, Brand, Blueprint, Memory and Calendar tiles, photo tiles (none registered yet), a Lighthouse-style first paint comparison (the page weight was measured instead: see the build task report).

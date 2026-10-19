@@ -48,7 +48,7 @@
     { "label": "influencer-submissions", "path": "/influencer-portal/submissions", "mode": "normal", "group": "shell" },
     { "label": "influencer-analytics", "path": "/influencer-portal/analytics", "mode": "normal", "group": "shell" },
     { "label": "influencer-profile", "path": "/influencer-portal/profile", "mode": "normal", "group": "shell" },
-    { "label": "ai-memory", "path": "/ai-memory", "mode": "normal", "group": "shell", "nav": "AI Memory" },
+    { "label": "ai-memory", "path": "/ai-memory", "mode": "normal", "group": "shell", "nav": "AI Memory", "note": "Brand memory. Variants (load /?audit=normal&memorystate=<state> first, kept for the tab): empty (default, nothing tracked), tracking (3 posts tracked, nothing learned yet), filled (7 learned notes in five categories)." },
     { "label": "ai-history", "path": "/ai-history", "mode": "normal", "group": "shell" },
     { "label": "ai-performance", "path": "/ai-performance", "mode": "normal", "group": "shell" },
     { "label": "settings-profile", "path": "/settings", "mode": "normal", "group": "shell", "nav": "Settings" },

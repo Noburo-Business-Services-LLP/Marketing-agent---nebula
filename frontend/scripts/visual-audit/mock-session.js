@@ -1008,6 +1008,28 @@
     ['GET', /^\/settings/, ok({ settings: {} })],
     ['GET', /^\/auto-reply/, ok({ settings: { enabled: false } })],
     ['GET', /^\/prompts/, ok({ prompts: [] })],
+    // ---- Brand memory (/ai-memory) summary. ?memorystate= empty (default: nothing tracked) | tracking (posts tracked,
+    // nothing learned yet) | filled (learned notes in five categories). Kept for the tab. ----
+    ['GET', /^\/ai-memory\/summary/, function () {
+      var p = new URLSearchParams(location.search).get('memorystate');
+      if (p) sessionStorage.setItem('audit-memory-state', p);
+      var st = sessionStorage.getItem('audit-memory-state') || 'empty';
+      var n = function (id, category, confidence, text) { return { _id: 'mem-' + id, category: category, confidence: confidence, text: text, createdAt: iso(-6), updatedAt: iso(-6) }; };
+      var notes = st !== 'filled' ? [] : [
+        n(1, 'timing', 0.86, 'Posts that go out between 7 and 9 in the morning get about twice the likes of afternoon posts.'),
+        n(2, 'timing', 0.58, 'Saturday posts are saved more often than weekday posts.'),
+        n(3, 'format', 0.81, 'Short reels of the baking process get the most reach.'),
+        n(4, 'format', 0.47, 'Carousels with a price on the last slide get more enquiries.'),
+        n(5, 'copy', 0.72, 'Warm, first-person captions that name the neighbourhood do better than plain product lines.'),
+        n(6, 'cta', 0.64, 'Asking people to pre-order for the weekend gets more replies than "visit us".'),
+        n(7, 'hashtags', 0.41, 'Local hashtags with the area name reach more nearby people than broad food tags.'),
+      ];
+      return ok({
+        summary: { performanceMemories: st === 'empty' ? 0 : st === 'tracking' ? 3 : 18, campaignMemories: 4, videoMemories: 2 },
+        brandMemory: { learnedNotes: notes, learnedNotesUpdatedAt: notes.length ? iso(-3) : null },
+        winners: [], recentCampaigns: [], recentVideos: [],
+      });
+    }],
     ['GET', /^\/ai-memory/, ok({ memories: [], items: [] })],
     ['GET', /^\/ai-(history|performance)/, ok({ items: [], history: [] })],
     ['GET', /^\/reachouts\//, ok({ leads: [], campaigns: [], sequences: [], integrations: [] })],
