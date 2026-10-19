@@ -12,7 +12,7 @@ const {
   findItem,
   todaySuggestion,
   calendarMonth,
-  generateCalendarCover,
+  startManualCover,
   maybeRetryCover,
   remapProposalItems
 } = require('../services/contentCalendarService');
@@ -116,24 +116,28 @@ router.post('/regenerate', protect, async (req, res) => {
 
 // Covers arrive after the plan, and every calendar made before this feature
 // has none. This lets the UI ask for one without regenerating the whole month.
+const coverCooldown = makeCooldown(60 * 1000);
+router.testDeps = undefined; // tests put fakes here; never set in production
+
 router.post('/cover', protect, async (req, res) => {
   try {
+    if (!coverCooldown.hit(req.user._id).ok) {
+      return res.status(429).json({ success: false, message: 'Please wait a minute before making another cover.' });
+    }
     const month = req.body?.month || calendarMonth();
     const calendar = await ContentCalendar.findOne({ userId: req.user._id, month });
     if (!calendar) {
       return res.status(404).json({ success: false, message: 'No calendar for that month yet.' });
     }
-    const startedAt = calendar.lastCoverAttemptAt || calendar.updatedAt;
-    const stuck = !startedAt || Date.now() - new Date(startedAt).getTime() > 10 * 60 * 1000;
-    if (calendar.coverStatus === 'pending' && !stuck) {
-      return res.json({ success: true, status: 'pending' });
-    }
-
     const user = await User.findById(req.user._id);
-    // Not awaited: rendering takes long enough to time out the request, and
-    // the client polls the calendar for the finished cover.
-    generateCalendarCover(calendar, user).catch(() => { /* recorded on the document */ });
-
+    // Not awaited inside: rendering takes long enough to time out the request, and the client polls the calendar.
+    const r = await startManualCover(calendar, user, { deps: router.testDeps || {} });
+    if (r.reason === 'spend-guard') {
+      return res.status(429).json({ success: false, message: 'Covers are paused for now. Please try again a little later.' });
+    }
+    if (r.reason === 'daily-cap') {
+      return res.status(429).json({ success: false, message: 'You have made enough covers for today. Please try again tomorrow.' });
+    }
     res.json({ success: true, status: 'pending' });
   } catch (error) {
     console.error('Content calendar cover error:', error);

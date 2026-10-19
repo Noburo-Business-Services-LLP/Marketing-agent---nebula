@@ -18,7 +18,9 @@ function fakeModel(doc) {
       if (filter.coverStatus && doc.coverStatus !== filter.coverStatus) return { modifiedCount: 0 };
       const lim = filter.$or && filter.$or[1].lastCoverRetryAt.$lt;
       if (doc.lastCoverRetryAt && !(doc.lastCoverRetryAt < lim)) return { modifiedCount: 0 };
+      if (filter.autoCoverRetries && Number(doc.autoCoverRetries || 0) >= 3) return { modifiedCount: 0 };
       Object.assign(doc, update.$set); this.updates += 1;
+      for (const [k, v] of Object.entries(update.$inc || {})) doc[k] = (doc[k] || 0) + v;
       return { modifiedCount: 1 };
     }
   };
@@ -42,7 +44,8 @@ test('a failed cover is retried once, free, and marked pending', async () => {
   assert.equal(doc.coverStatus, 'pending');
   assert.deepEqual(doc.lastCoverRetryAt, NOW);
   assert.deepEqual(g.checks, ['image_generated']);
-  assert.deepEqual(g.recorded, [['image_generated', 1]]);
+  assert.deepEqual(g.recorded, [['campaign_text', 1], ['image_generated', 1]]);
+  assert.equal(doc.autoCoverRetries, 1);
 });
 
 test('a pending cover older than 10 minutes is retried; a fresh one is left alone', async () => {
@@ -94,7 +97,29 @@ test('a generator that throws or returns nothing never breaks the caller and rec
   await new Promise((res) => setImmediate(res));
   assert.equal(r.retried, true); assert.deepEqual(g.recorded, []);
   const none = await go(cal(), { url: '' });
-  assert.deepEqual(none.g.recorded, []);
+  assert.deepEqual(none.g.recorded, [['campaign_text', 1]]);
   const broken = await maybeRetryCover(null);
   assert.equal(broken.retried, false);
+});
+
+test('a month that is neither this month nor next (India time) is never retried', async () => {
+  const old = await go(cal({ month: '2026-07' }));
+  assert.equal(old.r.retried, false); assert.equal(old.r.reason, 'old-month'); assert.equal(old.calls.length, 0); assert.equal(old.model.updates, 0);
+  assert.equal((await go(cal({ month: '2026-11' }))).r.retried, true);
+  // 18:30 UTC on 31 Oct is already 1 Nov in India, so October is now a past month.
+  const edge = await go(cal({ month: '2026-10' }), { now: new Date('2026-10-31T19:00:00Z') });
+  assert.equal(edge.r.reason, 'old-month');
+});
+
+test('at most 3 automatic retries in a calendar lifetime', async () => {
+  const doc = cal();
+  for (let i = 0; i < 3; i++) {
+    doc.coverStatus = 'failed'; doc.lastCoverAttemptAt = ago(30 * MIN);
+    const r = await go(doc, { now: new Date(NOW.getTime() + i * 25 * 60 * MIN) });
+    assert.equal(r.r.retried, true, `retry ${i + 1}`);
+  }
+  assert.equal(doc.autoCoverRetries, 3);
+  doc.coverStatus = 'failed'; doc.lastCoverAttemptAt = ago(30 * MIN);
+  const fourth = await go(doc, { now: new Date(NOW.getTime() + 4 * 25 * 60 * MIN) });
+  assert.equal(fourth.r.retried, false); assert.equal(fourth.r.reason, 'retry-limit'); assert.equal(fourth.calls.length, 0);
 });

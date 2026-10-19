@@ -69,6 +69,9 @@ const contentCalendarSchema = new mongoose.Schema({
   // The retry is allowed at most once a day per month (see maybeRetryCover).
   lastCoverAttemptAt: { type: Date, default: null },
   lastCoverRetryAt: { type: Date, default: null },
+  // Automatic retries ever made (at most 3), and manual "Make a cover" renders per India day, e.g. { '2026-10-19': 2 }.
+  autoCoverRetries: { type: Number, default: 0 },
+  manualCoverDays: { type: Object, default: undefined },
   generatedAt: { type: Date, default: Date.now },
   lastAutoRunAt: { type: Date, default: null }
 }, {

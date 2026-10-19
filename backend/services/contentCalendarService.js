@@ -673,6 +673,69 @@ async function generateCalendarCover(calendar, userProfile = {}) {
 
 const COVER_STALE_PENDING_MS = 10 * 60 * 1000;
 const COVER_RETRY_GAP_MS = 24 * 60 * 60 * 1000;
+const COVER_AUTO_RETRY_MAX = 3;
+const COVER_MANUAL_DAILY_MAX = 3;
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// "2026-10" for the given moment in India time (the customers' calendar), and the day as "2026-10-19".
+function istParts(now) {
+  const d = new Date(now.getTime() + IST_OFFSET_MS);
+  const y = d.getUTCFullYear(); const m = d.getUTCMonth() + 1;
+  const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  return { month: `${y}-${String(m).padStart(2, '0')}`, nextMonth: next, day: d.toISOString().slice(0, 10) };
+}
+
+// Runs the render in the background and counts what it used: the text call whenever it ran, the image only on success.
+function runAndCount(generate, calendar, userProfile, guard) {
+  Promise.resolve()
+    .then(() => generate(calendar, userProfile))
+    .then(async (url) => {
+      try { await guard.record('campaign_text', 1); } catch (_) { /* counting only */ }
+      if (url) { try { await guard.record('image_generated', 1); } catch (_) { /* counting only */ } }
+    })
+    .catch(() => { /* generateCalendarCover records the failure on the document */ });
+}
+
+/**
+ * Manual "Make a cover". Free to the customer, but guarded like the automatic retry: one render at a time per
+ * calendar (atomic claim), the spend ceiling, and at most 3 a day per account (India day).
+ * Returns { started, reason } with reason one of started, pending, daily-cap, spend-guard, lost-claim.
+ */
+async function startManualCover(calendar, userProfile = {}, { now = new Date(), deps = {} } = {}) {
+  const CC = deps.ContentCalendar || ContentCalendar;
+  const generate = deps.generate || generateCalendarCover;
+  const t = now.getTime();
+  const ist = istParts(now);
+  const dayKey = `manualCoverDays.${ist.day}`;
+
+  const startedAt = calendar.lastCoverAttemptAt || calendar.updatedAt;
+  const stuck = !startedAt || t - new Date(startedAt).getTime() > COVER_STALE_PENDING_MS;
+  if (calendar.coverStatus === 'pending' && !stuck) return { started: false, reason: 'pending' };
+
+  const mine = await CC.find({ userId: calendar.userId }).lean();
+  const usedToday = (mine || []).reduce((n, c) => n + Number(c.manualCoverDays && c.manualCoverDays[ist.day] || 0), 0);
+  if (usedToday >= COVER_MANUAL_DAILY_MAX) return { started: false, reason: 'daily-cap' };
+
+  const guard = deps.spendGuard || require('./spendGuard');
+  const allowed = await guard.check('image_generated');
+  if (allowed && allowed.ok === false) return { started: false, reason: 'spend-guard' };
+
+  // Atomic claim: two requests at once cannot both start a render.
+  const claim = await CC.updateOne(
+    {
+      _id: calendar._id,
+      [dayKey]: { $not: { $gte: COVER_MANUAL_DAILY_MAX } },
+      $and: [{ $or: [{ coverStatus: { $ne: 'pending' } }, { lastCoverAttemptAt: { $lt: new Date(t - COVER_STALE_PENDING_MS) } }, { lastCoverAttemptAt: null }] }]
+    },
+    { $set: { coverStatus: 'pending', lastCoverAttemptAt: now }, $inc: { [dayKey]: 1 } }
+  );
+  if (!claim || !(claim.modifiedCount > 0 || claim.nModified > 0)) return { started: false, reason: 'lost-claim' };
+
+  calendar.coverStatus = 'pending';
+  calendar.lastCoverAttemptAt = now;
+  runAndCount(generate, calendar, userProfile, guard);
+  return { started: true, reason: 'started' };
+}
 
 /**
  * Self-healing covers. A cover that failed, or has been "pending" for more
@@ -694,6 +757,11 @@ async function maybeRetryCover(calendar, userProfile = {}, { now = new Date(), d
     if (!hasItems) return { retried: false, reason: 'empty-plan' };
     if (status !== 'failed' && status !== 'pending') return { retried: false, reason: 'not-retryable' };
 
+    // Only this month and next month (India time) are worth money; old months in the history are left as they are.
+    const ist = istParts(now);
+    if (calendar.month !== ist.month && calendar.month !== ist.nextMonth) return { retried: false, reason: 'old-month' };
+    if (Number(calendar.autoCoverRetries || 0) >= COVER_AUTO_RETRY_MAX) return { retried: false, reason: 'retry-limit' };
+
     const attemptAt = calendar.lastCoverAttemptAt || calendar.updatedAt || null;
     const age = attemptAt ? t - new Date(attemptAt).getTime() : Infinity;
     // A render that just started (or just failed) is left alone for 10 minutes.
@@ -711,9 +779,10 @@ async function maybeRetryCover(calendar, userProfile = {}, { now = new Date(), d
       {
         _id: calendar._id,
         coverStatus: status,
+        autoCoverRetries: { $not: { $gte: COVER_AUTO_RETRY_MAX } },
         $or: [{ lastCoverRetryAt: null }, { lastCoverRetryAt: { $lt: new Date(t - COVER_RETRY_GAP_MS) } }]
       },
-      { $set: { lastCoverRetryAt: now, lastCoverAttemptAt: now, coverStatus: 'pending' } }
+      { $set: { lastCoverRetryAt: now, lastCoverAttemptAt: now, coverStatus: 'pending' }, $inc: { autoCoverRetries: 1 } }
     );
     if (!claim || !(claim.modifiedCount > 0 || claim.nModified > 0)) return { retried: false, reason: 'lost-claim' };
 
@@ -722,10 +791,7 @@ async function maybeRetryCover(calendar, userProfile = {}, { now = new Date(), d
     calendar.lastCoverRetryAt = now;
     calendar.lastCoverAttemptAt = now;
 
-    Promise.resolve()
-      .then(() => generate(calendar, userProfile))
-      .then(async (url) => { if (url) { try { await guard.record('image_generated', 1); } catch (_) { /* counting only */ } } })
-      .catch(() => { /* generateCalendarCover records the failure on the document */ });
+    runAndCount(generate, calendar, userProfile, guard);
     return { retried: true, reason: status === 'pending' ? 'stale-pending' : 'failed' };
   } catch (error) {
     console.error('[ContentCalendar] cover retry check failed:', error.message);
@@ -1007,6 +1073,7 @@ module.exports = {
   generateMonthlyCalendar,
   generateCalendarCover,
   maybeRetryCover,
+  startManualCover,
   monthLabel,
   normalizeLanguage,
   processAutoGeneration,
