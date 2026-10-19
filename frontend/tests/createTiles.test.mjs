@@ -80,3 +80,11 @@ test('Video is offered as an entry that opens the existing Videos page, with its
   assert.ok(page.includes('VIDEO_ENTRY.to') && page.includes('<VideoArt'), 'the page shows it');
   assert.ok(read('App.tsx').includes('path="/reels"'), 'the destination route exists');
 });
+
+test('the five choices are small tiles of one structure in one row, and the theme field is gone', () => {
+  const page = read('pages/GravityCreate.tsx');
+  assert.ok(page.includes('<TileGrid columns={5} size="small"'), 'one even row of five');
+  assert.equal((page.match(/variant="choice"/g) || []).length, 2, 'the mode tiles and the Video tile use the same small variant');
+  assert.ok(!/Theme or festival|create-theme|setTheme/.test(page), 'no theme or festival field');
+  assert.ok(!/theme: theme/.test(page), 'no theme value is sent');
+});

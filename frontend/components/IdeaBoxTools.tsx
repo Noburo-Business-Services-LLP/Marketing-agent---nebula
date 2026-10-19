@@ -140,7 +140,7 @@ const IdeaBoxTools: React.FC<{
   const busy = reading || transcribing;
   return (
     <div
-      className={`mt-3 rounded-xl border border-dashed px-3 py-2.5 transition-colors ${dragging ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)]'}`}
+      className={`mt-2.5 rounded-xl border border-dashed px-2.5 py-2 transition-colors ${dragging ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-[var(--gv-border-default)]'}`}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={(e) => { e.preventDefault(); setDragging(false); if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); }}
@@ -152,14 +152,14 @@ const IdeaBoxTools: React.FC<{
             onClick={recording ? stopRecording : startRecording}
             disabled={busy}
             aria-pressed={recording}
-            className={`inline-flex items-center gap-2 h-10 px-3.5 rounded-lg border text-[13px] font-semibold disabled:opacity-60 ${recording ? 'border-red-500 bg-red-500/10 text-red-600' : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)]'}`}
+            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border text-[12.5px] font-semibold disabled:opacity-60 ${recording ? 'border-red-500 bg-red-500/10 text-red-600' : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-primary)]'}`}
           >
-            {recording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {recording ? <Square className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
             {recording ? 'Stop' : 'Speak your idea'}
           </button>
         )}
-        <label className={`inline-flex items-center gap-2 h-10 px-3.5 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[13px] font-semibold text-[var(--gv-text-primary)] cursor-pointer ${busy ? 'opacity-60 pointer-events-none' : ''}`}>
-          <Paperclip className="w-4 h-4" />
+        <label className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[12.5px] font-semibold text-[var(--gv-text-primary)] cursor-pointer ${busy ? 'opacity-60 pointer-events-none' : ''}`}>
+          <Paperclip className="w-3.5 h-3.5" />
           Add a picture or PDF
           <input type="file" accept={ACCEPT} multiple className="sr-only" aria-label="Add a picture or PDF" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
         </label>

@@ -134,19 +134,19 @@ const PostDesignPanel: React.FC<{
   );
 
   return (
-    <section className="rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]" aria-label="Advanced options">
+    <section className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)]" aria-label="Advanced options">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls="advanced-options-body"
-        className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left"
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <span>
-          <span className="block text-[16px] font-semibold text-[var(--gv-text-primary)]">Advanced options <span className="text-[13px] font-normal text-[var(--gv-text-tertiary)]">· optional</span></span>
-          <span className="block mt-0.5 text-[13px] text-[var(--gv-text-secondary)]">{open ? 'Exact words, a reference picture, a header and footer. Leave empty and nothing is invented.' : summary}</span>
+          <span className="block text-[14px] font-semibold text-[var(--gv-text-primary)]">Advanced options <span className="text-[12.5px] font-normal text-[var(--gv-text-tertiary)]">· optional</span></span>
+          <span className="block mt-0.5 text-[12.5px] text-[var(--gv-text-secondary)]">{open ? 'Exact words, a reference picture, a header and footer. Leave empty and nothing is invented.' : summary}</span>
         </span>
-        <ChevronDown className={`w-5 h-5 shrink-0 text-[var(--gv-text-tertiary)] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+        <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--gv-text-tertiary)] transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
       {open && (
       <div id="advanced-options-body" className="border-t border-[var(--gv-border-subtle)] p-5 sm:p-6 space-y-8">

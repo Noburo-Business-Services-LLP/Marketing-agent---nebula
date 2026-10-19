@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, Sparkles, GalleryHorizontalEnd, Linkedin, Check } from 'lucide-react';
+import { Layers, Sparkles, GalleryHorizontalEnd, Linkedin } from 'lucide-react';
 
 export type CreateModeKey = 'campaign' | 'single' | 'carousel' | 'linkedin';
 
@@ -30,24 +30,18 @@ const COPY: Record<CreateModeKey, { title: string; what: string; best: string[];
   },
 };
 
-/** What the chosen kind of content is and when to pick it. The tab above already names it, so this is one slim block. */
+/** What the chosen kind of content is and when to pick it: one quiet line under the tiles, no box. */
 const ModeExplainer: React.FC<{ mode: CreateModeKey }> = ({ mode }) => {
   const c = COPY[mode];
   const Icon = c.Icon;
   return (
-    <div className="max-w-2xl mx-auto mb-6 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-4 py-3" aria-live="polite">
-      <p className="flex items-center justify-center gap-2 text-center text-[13px] leading-snug text-[var(--gv-text-secondary)]">
-        <Icon className="h-4 w-4 shrink-0 text-[var(--gv-accent)]" />
-        <span>{c.what}</span>
-      </p>
-      <ul className="mt-2.5 flex flex-wrap justify-center gap-1.5" aria-label="Good for">
-        {c.best.map((b) => (
-          <li key={b} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--gv-border-default)] bg-[var(--gv-surface-2)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--gv-text-secondary)]">
-            <Check className="h-3 w-3 text-[var(--gv-accent)]" aria-hidden="true" />
-            {b}
-          </li>
-        ))}
-      </ul>
+    <div className="mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] leading-snug text-[var(--gv-text-secondary)]" aria-live="polite">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--gv-accent)]" aria-hidden="true" />
+      <span>{c.what}</span>
+      <span className="text-[var(--gv-text-tertiary)]">
+        Good for: <span className="sr-only">{c.best.join(', ')}</span>
+        <span aria-hidden="true">{c.best.join(' · ')}</span>
+      </span>
     </div>
   );
 };

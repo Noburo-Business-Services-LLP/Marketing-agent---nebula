@@ -25,8 +25,7 @@ import CreateGenerations from '../components/CreateGenerations';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
 import PromptStudio from '../components/PromptStudio';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
-import { BorderBeam } from '../components/ui/border-beam';
-import { GravityHero, GravityEmphasis } from '../components/gravity';
+import { GravityEmphasis } from '../components/gravity';
 
 const ASPECTS = [
   { key: '4:5',  label: '4:5',  hint: 'Portrait', use: 'Best for the Instagram feed', w: 4, h: 5 },
@@ -52,6 +51,13 @@ type CreateMode = 'campaign' | 'single' | 'carousel' | 'linkedin';
 const ART_FOR_MODE: Record<CreateMode, React.ReactNode> = {
   single: <SinglePostArt />, campaign: <CampaignArt />, carousel: <CarouselArt />, linkedin: <LinkedInArt />,
 };
+const VIDEO_ART = <VideoArt />;
+// The small optional shortcuts beside the heading (calendar idea, prompts, products).
+// The small option pickers (shape, logo, look): one height, a light border, gold when chosen.
+const PICK = 'inline-flex h-[52px] items-center justify-center rounded-lg border text-[12px] font-semibold transition-colors';
+const PICK_ON = 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]';
+const PICK_OFF = 'border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:border-[var(--gv-border-default)]';
+const SHORTCUT = 'inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[12.5px] font-medium border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-colors';
 
 const DURATIONS = ['1 week', '2 weeks', '3 weeks', '4 weeks'];
 const CADENCES = ['2 posts / week', '3 posts / week', '5 posts / week', 'Daily'];
@@ -82,14 +88,15 @@ const MetaBox: React.FC<{
 }> = ({ label, value, Icon, onClick }) => (
   <button
     onClick={onClick}
-    className="group relative flex items-center gap-4 h-[68px] px-5 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-2)] hover:border-[var(--gv-border-default)] transition-all text-left w-full"
+    type="button"
+    className="group relative flex items-center gap-3 h-[52px] px-3 rounded-lg border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] hover:border-[var(--gv-border-default)] transition-colors text-left w-full"
   >
-    <span className="w-9 h-9 rounded-md bg-[var(--gv-accent-fill)] border border-[rgb(var(--gv-accent-rgb)/0.20)] flex items-center justify-center flex-shrink-0">
-      <Icon className="w-4 h-4 text-[var(--gv-accent)]" />
+    <span className="w-7 h-7 rounded-md bg-[var(--gv-accent-fill)] flex items-center justify-center flex-shrink-0">
+      <Icon className="w-3.5 h-3.5 text-[var(--gv-accent)]" />
     </span>
     <div className="flex-1 min-w-0">
       <div className="gravity-label mb-0.5">{label}</div>
-      <div className="text-[14px] font-semibold text-[var(--gv-text-primary)] truncate">{value}</div>
+      <div className="text-[13px] font-semibold text-[var(--gv-text-primary)] truncate">{value}</div>
     </div>
     <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--gv-text-muted)] group-hover:text-[var(--gv-accent-text)]">
       Edit
@@ -237,8 +244,6 @@ const GravityCreate: React.FC = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState<CreateMode>('single');
   const [name, setName] = useState('');
-  // An optional label that ties posts together by subject (a festival, an offer): they are then listed together.
-  const [theme, setTheme] = useState('');
   // How full the design should be: calm, balanced or rich. Sent with every request.
   const [density, setDensity] = useState<'clean' | 'balanced' | 'rich'>('balanced');
   const [description, setDescription] = useState('');
@@ -686,7 +691,6 @@ const GravityCreate: React.FC = () => {
     const res: any = await draftsAPI.generateImageBg({
       type: 'post',
       title: name.trim() || 'Untitled post',
-      theme: theme.trim() || undefined,
       density,
       caption: description.trim() || name.trim() || '',
       hashtags: [],
@@ -773,8 +777,7 @@ const GravityCreate: React.FC = () => {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: name.trim(),
-        theme: theme.trim() || undefined,
-        density,
+          density,
         brief: description.trim() || name.trim(),
         slideCount,
         platforms: selectedPlatforms,
@@ -884,7 +887,6 @@ const GravityCreate: React.FC = () => {
 
     const body = {
       campaignName: name.trim(),
-      theme: theme.trim() || undefined,
       density,
       campaignDescription: description.trim() || name.trim(),
       objective: ideaContext.objective || 'awareness',
@@ -1125,13 +1127,15 @@ const GravityCreate: React.FC = () => {
   })();
 
   return (
-    <div className="max-w-[900px] mx-auto pb-24">
-      {/* Mode tiles: the same four choices as before (they only set the mode), now with a picture, a one-line description and the price. */}
-      <div className="mb-5 mt-1">
-        <TileGrid columns={4} phone="row" label="What do you want to create?">
+    <div className="max-w-[960px] mx-auto pb-24">
+      {/* What to make: five small tiles in one even row (two columns on a phone). The four modes only set
+          the mode; Video is made on its own page, so its tile opens that page. Same structure for all five. */}
+      <div className="mt-1 mb-3">
+        <TileGrid columns={5} size="small" label="What do you want to create?">
           {CREATE_TILES.map((t) => (
             <Tile
               key={t.key}
+              variant="choice"
               title={t.title}
               subtitle={t.subtitle}
               footer={createTileCost(t.key, quarkCosts) || undefined}
@@ -1141,77 +1145,48 @@ const GravityCreate: React.FC = () => {
               onClick={() => setMode(t.key)}
             />
           ))}
-        </TileGrid>
-        {/* Video is made on its own page, so this one opens it instead of changing the mode. */}
-        <div className="mt-4 max-w-[460px]">
           <Tile
-            variant="compact"
+            variant="choice"
             title={VIDEO_ENTRY.title}
             subtitle={VIDEO_ENTRY.subtitle}
             footer={videoEntryCost(quarkCosts) || undefined}
             accent={VIDEO_ENTRY.accent}
-            art={<VideoArt />}
+            art={VIDEO_ART}
             to={VIDEO_ENTRY.to}
           />
-        </div>
+        </TileGrid>
       </div>
 
       <ModeExplainer mode={mode} />
 
-      {/* Hero */}
-      <GravityHero
-        eyebrow={
-          mode === 'campaign'
-            ? 'Plan a campaign · ' + duration
-            : mode === 'carousel'
-              ? `Build a carousel · ${slideCount} slides`
-              : 'Create a single post'
-        }
-        headline={
-          mode === 'campaign' ? (
-            <>Describe your <GravityEmphasis>campaign</GravityEmphasis></>
-          ) : mode === 'carousel' ? (
-            <>Describe your <GravityEmphasis>carousel</GravityEmphasis></>
-          ) : (
-            <>Describe your <GravityEmphasis>post</GravityEmphasis></>
-          )
-        }
-        className="!mb-6"
-      />
-
-      {/* Ideas already planned in the calendar. A button rather than a wall
-          of tiles: the brief is the point of this screen, the ideas are an
-          optional shortcut into it. */}
-      <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
-        <button
-          onClick={() => setIdeaPickerOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-all"
-        >
-          <CalendarIcon className="w-4 h-4 text-[var(--gv-accent)]" />
-          Choose an idea from your calendar
-        </button>
-        <button
-          onClick={() => setPromptStudioOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-all"
-        >
-          <SlidersHorizontal className="w-4 h-4 text-[var(--gv-accent)]" />
-          Edit the prompts
-        </button>
-        <button
-          onClick={() => setAssetPickerOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold border border-[var(--gv-border-default)] text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] hover:border-[rgb(var(--gv-accent-rgb)/0.40)] transition-all"
-        >
-          <Package className="w-4 h-4 text-[var(--gv-accent)]" />
-          {pickedProducts.length === 0
-            ? 'Feature a product or service'
-            : `${pickedProducts.length} product${pickedProducts.length > 1 ? 's' : ''} selected`}
-        </button>
-        {pickedIdea && (
-          <span className="text-[12px] text-[var(--gv-text-tertiary)]">
-            Loaded: <span className="text-[var(--gv-accent-text)]">{pickedIdea}</span>
-          </span>
-        )}
+      {/* The brief: a small heading with the optional shortcuts beside it, then the idea box. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-2.5">
+        <h1 className="font-serif-display text-[24px] leading-tight tracking-[-0.01em] text-[var(--gv-text-primary)]">
+          Describe your <GravityEmphasis>{mode === 'campaign' ? 'campaign' : mode === 'carousel' ? 'carousel' : 'post'}</GravityEmphasis>
+        </h1>
+        {/* Ideas already planned in the calendar, the prompts and products: small shortcuts, the brief is the point of this screen. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button type="button" onClick={() => setIdeaPickerOpen(true)} className={SHORTCUT}>
+            <CalendarIcon className="w-3.5 h-3.5 text-[var(--gv-accent)]" aria-hidden="true" />
+            Choose an idea from your calendar
+          </button>
+          <button type="button" onClick={() => setPromptStudioOpen(true)} className={SHORTCUT}>
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--gv-accent)]" aria-hidden="true" />
+            Edit the prompts
+          </button>
+          <button type="button" onClick={() => setAssetPickerOpen(true)} className={SHORTCUT}>
+            <Package className="w-3.5 h-3.5 text-[var(--gv-accent)]" aria-hidden="true" />
+            {pickedProducts.length === 0
+              ? 'Feature a product or service'
+              : `${pickedProducts.length} product${pickedProducts.length > 1 ? 's' : ''} selected`}
+          </button>
+        </div>
       </div>
+      {pickedIdea && (
+        <p className="mb-2 text-[12px] text-[var(--gv-text-tertiary)]">
+          Loaded: <span className="text-[var(--gv-accent-text)]">{pickedIdea}</span>
+        </p>
+      )}
 
       <CalendarIdeaPicker
         open={ideaPickerOpen}
@@ -1234,63 +1209,29 @@ const GravityCreate: React.FC = () => {
         focus={mode === 'campaign' ? 'campaign.content' : mode === 'carousel' ? 'carousel.content' : mode === 'linkedin' ? 'linkedin.content' : 'single.content'}
       />
 
-      {/* Name + Description card, wrapped in a travelling border beam.
-          `mono` is the greyscale variant — desaturated and brightened it
-          reads as brushed steel rather than a neon outline, with a narrow
-          hue range so a warm glint passes through as the beam travels. */}
-      {/* Three layers make the metal read: a soft outward halo (CSS, below
-          the card), the travelling beam on the 1px edge (BorderBeam), and a
-          brushed gradient + rim highlights on the surface itself. */}
-      <div className="relative mb-5">
-      <div className="metalHalo" aria-hidden />
-      <BorderBeam
-        size="md"
-        // 'sunset' is the warm variant — orange/gold/amber, matching the
-        // Gravity accent. Hue-shift stays ON so the gold shimmers as the
-        // beam travels rather than sitting flat.
-        colorVariant="sunset"
-        theme="dark"
-        saturation={1.35}
-        brightness={2.4}
-        hueRange={18}
-        duration={3.6}
-        borderRadius={16}
-        strength={1}
-        className="relative block"
-        style={{ zIndex: 1 }}
-      >
-      {/* No border of its own — the beam IS the border, so a competing
-          1px outline would sit exactly on top of it. Warm interior sheen
-          so the surface picks up the gold as the beam passes. */}
-      <div
-        className="relative rounded-2xl p-5 overflow-hidden"
-        style={{
-          background: 'linear-gradient(180deg, rgb(var(--gv-ink-rgb) / 0.05) 0%, rgb(var(--gv-ink-rgb) / 0.01) 45%, rgb(var(--gv-ink-rgb) / 0.03) 100%), var(--gv-panel)',
-          boxShadow: 'inset 0 1px 0 0 rgb(var(--gv-ink-rgb) / 0.10), inset 0 -1px 0 0 rgba(0,0,0,0.12), inset 0 0 70px rgba(245,166,35,0.05)'
-        }}
-      >
-        {/* Ambient interior glow, warm to match the travelling beam. */}
-        <div className="pointer-events-none absolute inset-0 -z-0" style={{ background: 'radial-gradient(60% 100% at 50% 100%, rgba(245,166,35,0.09) 0%, transparent 60%)' }} />
-        <div className="relative">
-          <div className="flex items-baseline gap-4 mb-3">
+      {/* The idea box: a plain white card with a light border; it turns gold while you type. */}
+      <div className="rounded-2xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-4 pt-3.5 pb-3 transition-[border-color,box-shadow] focus-within:border-[rgb(var(--gv-accent-rgb)/0.55)] focus-within:shadow-[0_0_0_3px_rgb(var(--gv-accent-rgb)/0.10)]">
+          <div className="flex items-baseline gap-3 mb-2">
             <span className="gravity-label text-[var(--gv-accent-text)]">{mode === 'campaign' ? 'Campaign' : mode === 'linkedin' ? 'LinkedIn post' : 'Post'}</span>
             <input
               value={name}
+              aria-label="Name"
               onChange={(e) => { setName(e.target.value); setFromPlan(false); }}
               placeholder={mode === 'campaign' ? 'Monsoon menu launch' : mode === 'linkedin' ? '500 customers milestone' : 'Sunday pour-over ritual'}
-              className="gravity-bare flex-1 bg-transparent border-none outline-none text-[16px] font-semibold text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)]"
+              className="gravity-bare flex-1 bg-transparent border-none outline-none text-[15px] font-semibold text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)]"
             />
           </div>
           <textarea
             value={description}
+            aria-label="Describe your idea"
             onChange={(e) => { setDescription(e.target.value); setFromPlan(false); }}
             placeholder={mode === 'campaign'
               ? 'For example: Launch our monsoon menu over two weeks. Introduce the dishes first, then reveal the menu, then invite customers to the Saturday launch event.'
               : mode === 'linkedin'
                 ? 'For example: We have reached 500 customers. Here is what it took to get there.'
                 : 'For example: A quiet Sunday morning with filter coffee. Invite people to spend the morning with us.'}
-            rows={mode === 'linkedin' ? 8 : 4}
-            className="gravity-bare w-full bg-transparent border-none outline-none text-[14.5px] text-[var(--gv-text-tertiary)] leading-relaxed resize-none placeholder:text-[var(--gv-text-muted)]"
+            rows={mode === 'linkedin' ? 6 : 3}
+            className="gravity-bare w-full bg-transparent border-none outline-none text-[14px] text-[var(--gv-text-secondary)] leading-relaxed resize-none placeholder:text-[var(--gv-text-muted)]"
           />
           <IdeaBoxTools
             languageLabel={language}
@@ -1298,210 +1239,191 @@ const GravityCreate: React.FC = () => {
             onRead={(ups) => applyReadFiles(ups)}
             onReuse={(u) => applyReadFiles([u])}
           />
-          {fromPlan && <p className="mt-3 text-[12.5px] text-[var(--gv-text-tertiary)]">Filled in from your plan. Change anything you like.</p>}
-        </div>
-      </div>
-      </BorderBeam>
+          {fromPlan && <p className="mt-2 text-[12px] text-[var(--gv-text-tertiary)]">Filled in from your plan. Change anything you like.</p>}
       </div>
 
-      {/* How many slides. A carousel's length changes the shape of the story,
-          so it is picked before the brief is sent, not afterwards. */}
-      {mode === 'carousel' && (
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-          <span className="gravity-label text-[var(--gv-text-muted)] mr-1">Slides</span>
-          {[3, 4, 5, 6, 7, 8, 10].map((n) => (
-            <button
-              key={n}
-              onClick={() => setSlideCount(n)}
-              className={`h-9 w-9 rounded-full text-[13px] font-semibold transition-colors ${
-                slideCount === n
-                  ? 'bg-[var(--gv-accent)] text-[#1A1208]'
-                  : 'text-[var(--gv-text-tertiary)] border border-[var(--gv-border-default)] hover:text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)]'
-              }`}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Metadata grid — Campaign mode only */}
-      {mode === 'campaign' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-          <div className="relative">
-            <MetaBox label="Duration" value={duration} Icon={CalendarIcon} onClick={() => setOpenPopover(openPopover === 'duration' ? null : 'duration')} />
-            <OptionPopover open={openPopover === 'duration'} options={DURATIONS} onPick={setDuration} onClose={() => setOpenPopover(null)} />
+      {/* The options, in small labelled groups on a few even rows. No big panels. */}
+      <div className="mt-4 space-y-4">
+        {/* How many slides. A carousel's length changes the shape of the story,
+            so it is picked before the brief is sent, not afterwards. */}
+        {mode === 'carousel' && (
+          <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label="Number of slides">
+            <span className="gravity-label text-[var(--gv-text-muted)] mr-2">Slides</span>
+            {[3, 4, 5, 6, 7, 8, 10].map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={slideCount === n}
+                onClick={() => setSlideCount(n)}
+                className={`h-8 w-8 rounded-full text-[12.5px] font-semibold transition-colors ${
+                  slideCount === n
+                    ? 'bg-[var(--gv-accent)] text-[#1A1208]'
+                    : 'text-[var(--gv-text-tertiary)] border border-[var(--gv-border-default)] bg-[var(--gv-panel)] hover:text-[var(--gv-text-primary)]'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
           </div>
-          <div className="relative">
-            <MetaBox label="Cadence" value={cadence} Icon={Layers} onClick={() => setOpenPopover(openPopover === 'cadence' ? null : 'cadence')} />
-            <OptionPopover open={openPopover === 'cadence'} options={CADENCES} onPick={setCadence} onClose={() => setOpenPopover(null)} />
-          </div>
-          <div className="relative">
-            <MetaBox label="Tone" value={tone} Icon={Sparkles} onClick={() => setOpenPopover(openPopover === 'tone' ? null : 'tone')} />
-            <OptionPopover open={openPopover === 'tone'} options={TONES} onPick={setTone} onClose={() => setOpenPopover(null)} />
-          </div>
-          <div className="relative">
-            <MetaBox label="Visual style" value={visualStyle} Icon={ImageIcon} onClick={() => setOpenPopover(openPopover === 'style' ? null : 'style')} />
-            <OptionPopover open={openPopover === 'style'} options={VISUAL_STYLES} onPick={setVisualStyle} onClose={() => setOpenPopover(null)} />
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* Language — every mode, not just Campaign, since a single post or a
-          carousel is just as often the thing being tested in a regional
-          language. */}
-      <div className="max-w-xs mx-auto mb-6">
-        <div className="relative">
-          <MetaBox label="Language" value={language} Icon={Globe} onClick={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
-          <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} />
-        </div>
-      </div>
-
-      {/* Theme — optional; posts that share one are listed together, next to each other. */}
-      <div className="max-w-xs mx-auto mb-6">
-        <label className="gravity-label block mb-1.5" htmlFor="create-theme">Theme or festival <span className="normal-case text-[var(--gv-text-muted)]">· optional</span></label>
-        <input
-          id="create-theme"
-          value={theme}
-          onChange={(e) => setTheme(e.target.value.slice(0, 60))}
-          placeholder="For example Diwali, Monsoon sale"
-          className="w-full h-11 rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-3 text-[13.5px] text-[var(--gv-text-primary)] outline-none focus:border-[var(--gv-accent)]"
-        />
-      </div>
-
-      {/* Platforms — not shown in LinkedIn mode, where the platform is
-          implicit and there is no image-generation step to target. */}
-      {mode !== 'linkedin' && (
-      <div className="flex items-center justify-center gap-4 py-4 mb-2">
-        <span className="gravity-label">Platforms</span>
-        <PlatformPicker items={PLATFORMS.map(({ key, label, soon }) => ({ key, label, soon }))} selected={selectedPlatforms} onToggle={togglePlatform} kind="image" />
+        {/* Campaign settings: campaign mode only. */}
         {mode === 'campaign' && (
-          <div className="ml-2 text-[12px] text-[var(--gv-text-tertiary)]">
-            <span className="tabular-nums font-semibold text-[var(--gv-text-primary)]">~{estimate.total} posts</span>
-            <span className="mx-1.5 text-[var(--gv-text-muted)]">·</span>
-            <span>{estimate.perWeek} per week</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="relative">
+              <MetaBox label="Duration" value={duration} Icon={CalendarIcon} onClick={() => setOpenPopover(openPopover === 'duration' ? null : 'duration')} />
+              <OptionPopover open={openPopover === 'duration'} options={DURATIONS} onPick={setDuration} onClose={() => setOpenPopover(null)} />
+            </div>
+            <div className="relative">
+              <MetaBox label="Cadence" value={cadence} Icon={Layers} onClick={() => setOpenPopover(openPopover === 'cadence' ? null : 'cadence')} />
+              <OptionPopover open={openPopover === 'cadence'} options={CADENCES} onPick={setCadence} onClose={() => setOpenPopover(null)} />
+            </div>
+            <div className="relative">
+              <MetaBox label="Tone" value={tone} Icon={Sparkles} onClick={() => setOpenPopover(openPopover === 'tone' ? null : 'tone')} />
+              <OptionPopover open={openPopover === 'tone'} options={TONES} onPick={setTone} onClose={() => setOpenPopover(null)} />
+            </div>
+            <div className="relative">
+              <MetaBox label="Visual style" value={visualStyle} Icon={ImageIcon} onClick={() => setOpenPopover(openPopover === 'style' ? null : 'style')} />
+              <OptionPopover open={openPopover === 'style'} options={VISUAL_STYLES} onPick={setVisualStyle} onClose={() => setOpenPopover(null)} />
+            </div>
+          </div>
+        )}
+
+        {/* Language (every mode: a single post or a carousel is just as often made in a regional language)
+            and the platforms (not in LinkedIn mode, where the platform is implicit and there is no image step). */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 [overflow-x:clip]">
+          <div className="relative w-full sm:w-[240px]">
+            <MetaBox label="Language" value={language} Icon={Globe} onClick={() => setOpenPopover(openPopover === 'language' ? null : 'language')} />
+            <OptionPopover open={openPopover === 'language'} options={LANGUAGES} onPick={setLanguage} onClose={() => setOpenPopover(null)} />
+          </div>
+          {mode !== 'linkedin' && (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="gravity-label">Platforms</span>
+              <PlatformPicker items={PLATFORMS.map(({ key, label, soon }) => ({ key, label, soon }))} selected={selectedPlatforms} onToggle={togglePlatform} kind="image" />
+              {mode === 'campaign' && (
+                <span className="text-[12px] text-[var(--gv-text-tertiary)]">
+                  <span className="tabular-nums font-semibold text-[var(--gv-text-primary)]">~{estimate.total} posts</span>
+                  <span className="mx-1.5 text-[var(--gv-text-muted)]">·</span>
+                  <span>{estimate.perWeek} per week</span>
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Shape, logo and look: small pickers on one row (they wrap on a phone). Not in LinkedIn mode,
+            which has no image step at generation time. */}
+        {mode !== 'linkedin' && (
+          <div className="flex flex-wrap items-start gap-x-7 gap-y-4">
+            <div className="min-w-0">
+              <div className="gravity-label mb-1.5">Aspect ratio</div>
+              <div className="flex gap-1.5" role="radiogroup" aria-label="Shape of the picture">
+                {ASPECTS.map((a) => {
+                  const active = visualStyle.startsWith(a.key);
+                  // A small shape drawn at the real proportions: the longer side is 18 pixels.
+                  const scale = 18 / Math.max(a.w, a.h);
+                  return (
+                    <button
+                      key={a.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      aria-label={`${a.label}, ${a.hint}`}
+                      onClick={() => setAspect(a.key)}
+                      title={`${a.hint}: ${a.use}`}
+                      className={`${PICK} w-[50px] flex-col gap-1 ${active ? PICK_ON : PICK_OFF}`}
+                    >
+                      <span className="flex h-[18px] items-center justify-center">
+                        <span
+                          aria-hidden="true"
+                          className={`block rounded-[2px] border-[1.5px] ${active ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-current opacity-70'}`}
+                          style={{ width: Math.round(a.w * scale), height: Math.round(a.h * scale) }}
+                        />
+                      </span>
+                      <span className="text-[11.5px] font-semibold leading-none">{a.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[11.5px] text-[var(--gv-text-muted)]">{ASPECTS.find((a) => visualStyle.startsWith(a.key))?.use}</p>
+            </div>
+
+            <div>
+              <div className="gravity-label mb-1.5">
+                Logo {logos.length === 0 && <span className="text-[var(--gv-text-muted)] normal-case">· none in Brand assets</span>}
+              </div>
+              <div className="flex h-[52px] items-stretch gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLogo('')}
+                  aria-pressed={!selectedLogo}
+                  className={`${PICK} px-3 ${!selectedLogo ? PICK_ON : PICK_OFF}`}
+                >
+                  No logo
+                </button>
+                {logos.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => { setSelectedLogo(l.url); setLogoPosition(l.defaultPosition); }}
+                    aria-pressed={selectedLogo === l.url}
+                    title={l.name}
+                    className={`aspect-square h-full rounded-lg border overflow-hidden bg-[var(--gv-surface-2)] transition-colors ${
+                      selectedLogo === l.url ? 'border-[var(--gv-accent)] ring-1 ring-[var(--gv-accent)]' : 'border-[var(--gv-border-subtle)] hover:border-[var(--gv-border-strong)]'
+                    }`}
+                  >
+                    <img src={l.url} alt={l.name} className="w-full h-full object-contain p-1" />
+                  </button>
+                ))}
+                {/* Only relevant once a logo is actually going on the image. Defaults to that
+                    logo's own Brand assets position; a small hover/tap popover keeps it out of the page flow. */}
+                {selectedLogo && <LogoPositionPicker value={logoPosition} onChange={setLogoPosition} />}
+                {logos.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/brand-assets')}
+                    className="text-[11.5px] text-[var(--gv-text-muted)] hover:text-[var(--gv-accent-text)] underline underline-offset-2"
+                  >
+                    Add one
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="min-w-0 w-full sm:w-auto">
+              <div className="gravity-label mb-1.5">Look</div>
+              <div className="grid grid-cols-3 gap-1.5 sm:flex" role="radiogroup" aria-label="How full the design is">
+                {([
+                  ['clean', 'Clean', 'Calm and simple'],
+                  ['balanced', 'Balanced', 'A clear message with support'],
+                  ['rich', 'Rich', 'Festive and full'],
+                ] as const).map(([key, label, hint]) => {
+                  const on = density === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => setDensity(key)}
+                      className={`${PICK} min-w-0 sm:w-[124px] flex-col items-start px-2.5 text-left ${on ? PICK_ON : PICK_OFF}`}
+                    >
+                      <span className="block text-[12px] font-semibold leading-tight">{label}</span>
+                      <span className="block text-[10.5px] leading-tight opacity-80">{hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
-      )}
-
-      {/* Aspect + logo — shown for campaign/single/carousel. Not shown in
-          LinkedIn mode, which has no image step at generation time. */}
-      {mode !== 'linkedin' && (
-      <div className="max-w-2xl mx-auto mt-8 grid gap-4 sm:grid-cols-2">
-        <div>
-          <div className="gravity-label mb-2">Aspect ratio</div>
-          <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Shape of the picture">
-            {ASPECTS.map((a) => {
-              const active = visualStyle.startsWith(a.key);
-              // A small shape drawn at the real proportions: the longer side is 30 pixels.
-              const scale = 30 / Math.max(a.w, a.h);
-              return (
-                <button
-                  key={a.key}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => setAspect(a.key)}
-                  title={`${a.hint}: ${a.use}`}
-                  className={`flex h-[88px] flex-col items-center justify-center gap-1.5 rounded-lg border px-1.5 transition-colors ${
-                    active
-                      ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
-                      : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'
-                  }`}
-                >
-                  <span className="flex h-[34px] items-center justify-center">
-                    <span
-                      aria-hidden="true"
-                      className={`block rounded-[3px] border-2 ${active ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)]' : 'border-current opacity-70'}`}
-                      style={{ width: Math.round(a.w * scale), height: Math.round(a.h * scale) }}
-                    />
-                  </span>
-                  <span className="text-[12.5px] font-semibold leading-none">{a.label}</span>
-                  <span className="text-[10.5px] leading-tight opacity-80 text-center">{a.hint}</span>
-                </button>
-              );
-            })}
-          </div>
-          <p className="mt-1.5 text-[11.5px] text-[var(--gv-text-muted)]">{ASPECTS.find((a) => visualStyle.startsWith(a.key))?.use}</p>
-        </div>
-
-        <div>
-          <div className="gravity-label mb-2">
-            Logo {logos.length === 0 && <span className="text-[var(--gv-text-muted)] normal-case">· none in Brand assets</span>}
-          </div>
-          <div className="flex h-[88px] items-stretch gap-1.5">
-            <button
-              onClick={() => setSelectedLogo('')}
-              className={`rounded-lg border px-4 text-[12.5px] font-semibold transition-colors ${
-                !selectedLogo
-                  ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
-                  : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'
-              }`}
-            >
-              No logo
-            </button>
-            {logos.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => { setSelectedLogo(l.url); setLogoPosition(l.defaultPosition); }}
-                title={l.name}
-                className={`aspect-square h-full rounded-lg border overflow-hidden bg-[var(--gv-surface-2)] transition-colors ${
-                  selectedLogo === l.url ? 'border-[var(--gv-accent)]' : 'border-[var(--gv-border-default)] hover:border-[var(--gv-border-strong)]'
-                }`}
-              >
-                <img src={l.url} alt={l.name} className="w-full h-full object-contain p-1" />
-              </button>
-            ))}
-            {/* Only relevant once a logo is actually going on the image. Defaults to that
-                logo's own Brand assets position; a small hover/tap popover keeps it out of the page flow. */}
-            {selectedLogo && <LogoPositionPicker value={logoPosition} onChange={setLogoPosition} />}
-            {logos.length === 0 && (
-              <button
-                onClick={() => navigate('/brand-assets')}
-                className="text-[11.5px] text-[var(--gv-text-muted)] hover:text-[var(--gv-accent-text)] underline underline-offset-2"
-              >
-                Add one
-              </button>
-            )}
-          </div>
-
-        </div>
-
-        <div className="sm:col-span-2">
-          <div className="gravity-label mb-2">Look</div>
-          <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="How full the design is">
-            {([
-              ['clean', 'Clean', 'Calm and simple'],
-              ['balanced', 'Balanced', 'A clear message with support'],
-              ['rich', 'Rich', 'Festive and full'],
-            ] as const).map(([key, label, hint]) => {
-              const on = density === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => setDensity(key)}
-                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${on
-                    ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
-                    : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]'}`}
-                >
-                  <span className="block text-[12.5px] font-semibold">{label}</span>
-                  <span className="block text-[11px] opacity-80">{hint}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      )}
 
       {/* The look of the post: style with sample pictures, the exact text, a reference picture, header and footer.
           Its own full-width section, not squeezed into the options row above. */}
       {mode !== 'linkedin' && (
-        <div className="mt-10">
+        <div className="mt-5">
           <PostDesignPanel
             design={design}
             onChange={setDesign}
@@ -1521,12 +1443,12 @@ const GravityCreate: React.FC = () => {
       )}
 
       {/* Primary CTA */}
-      <div className="flex flex-col items-center gap-3 mt-6">
+      <div className="flex flex-col items-center gap-3 mt-5">
         <div className="flex items-center justify-center gap-4">
           <button
             onClick={handleDraft}
             disabled={submitting}
-            className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[14.5px] font-semibold shadow-[0_10px_40px_rgba(245,166,35,0.30)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 h-11 px-7 rounded-xl bg-[var(--gv-accent)] hover:bg-[var(--gv-accent-hover)] text-[#1A1208] text-[14px] font-semibold shadow-[0_6px_20px_rgba(245,166,35,0.25)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <>
@@ -1560,12 +1482,12 @@ const GravityCreate: React.FC = () => {
       {/* In-flight placeholders — the card appears immediately with the
           animation in it, then becomes the real draft when it lands. */}
       {pendingCards.length > 0 && (
-        <div className="max-w-5xl mx-auto mt-14">
-          <div className="text-center mb-10">
+        <div className="max-w-5xl mx-auto mt-10">
+          <div className="text-center mb-6">
             <div className="gravity-label text-[var(--gv-accent-text)] mb-3">
               {mode === 'campaign' ? 'Building your campaign' : mode === 'carousel' ? 'Building your carousel' : 'Creating your post'}
             </div>
-            <h2 className="text-[42px] leading-[1.1] font-semibold text-[var(--gv-text-primary)] tracking-[-0.02em]">
+            <h2 className="text-[26px] leading-[1.15] font-semibold text-[var(--gv-text-primary)] tracking-[-0.015em]">
               Your content is being <em className="italic font-normal text-[var(--gv-accent-display)]">created</em>.
             </h2>
             {progressMsg && <p className="text-[13.5px] text-[var(--gv-text-tertiary)] mt-3">{progressMsg}</p>}
@@ -1588,8 +1510,8 @@ const GravityCreate: React.FC = () => {
 
       {/* Results — everything happens here now. No hop to /drafts. */}
       {results.length > 0 && (
-        <div className="max-w-5xl mx-auto mt-14">
-          <div className="relative text-center mb-10">
+        <div className="max-w-5xl mx-auto mt-10">
+          <div className="relative text-center mb-6">
             <button
               onClick={() => { setResults([]); setActioned({}); setSchedulingId(''); }}
               className="absolute right-0 top-0 inline-flex items-center gap-1.5 rounded-lg border border-[var(--gv-border-default)] px-3 py-2 text-[12px] text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)] hover:border-[var(--gv-border-default)] transition-colors"
@@ -1609,7 +1531,7 @@ const GravityCreate: React.FC = () => {
                     ? `${results.length} slide${results.length !== 1 ? 's' : ''}, in swipe order`
                     : 'Your post'}
             </div>
-            <h2 className="text-[42px] leading-[1.1] font-semibold text-[var(--gv-text-primary)] tracking-[-0.02em]">
+            <h2 className="text-[26px] leading-[1.15] font-semibold text-[var(--gv-text-primary)] tracking-[-0.015em]">
               {submitting ? (
                 <>Your content is being <em className="italic font-normal text-[var(--gv-accent-display)]">created</em>.</>
               ) : mode === 'campaign' ? (
