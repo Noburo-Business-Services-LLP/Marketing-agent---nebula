@@ -1,6 +1,10 @@
 'use strict';
 const { isPublicHttpsUrl } = require('../heroVideoService');
-const { GOALS, LIMITS } = require('../../config/blueprint');
+const { GOALS, LIMITS, PLAN_LIMITS } = require('../../config/blueprint');
+
+const BUSINESS_TYPES = ['B2B', 'B2C', 'Both'];
+const REACH_AREAS = ['neighbourhood', 'city', 'state', 'india', 'international'];
+const PRICE_LEVELS = ['budget', 'affordable', 'mid_range', 'premium', 'luxury'];
 
 const HOST_RE = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 const IG_RESERVED = new Set(['p', 'reel', 'reels', 'explore', 'accounts', 'stories', 'tv', 'direct']);
@@ -104,6 +108,25 @@ function normaliseInput(raw, { allowGuided = false } = {}) {
     offers.push({ name, price });
   }
 
+  // The account's own catalogue and business details (plan runs only send them). Every field is optional, capped
+  // in count and length, and taken as typed: nothing here is read from a page.
+  const products = [];
+  for (const p of (Array.isArray(r.products) ? r.products : []).slice(0, PLAN_LIMITS.MAX_PRODUCTS * 2)) {
+    if (!isObj(p)) continue;
+    const name = clean(p.name, PLAN_LIMITS.PRODUCT_NAME);
+    if (!name || products.some((x) => x.name.toLowerCase() === name.toLowerCase())) continue;
+    products.push({ name, kind: p.kind === 'service' ? 'service' : p.kind === 'product' ? 'product' : '', price: clean(p.price, PLAN_LIMITS.PRODUCT_PRICE), about: clean(p.about, PLAN_LIMITS.PRODUCT_TEXT) });
+    if (products.length >= PLAN_LIMITS.MAX_PRODUCTS) break;
+  }
+  const profile = {};
+  if (BUSINESS_TYPES.includes(r.businessType)) profile.businessType = r.businessType;
+  const reach = (Array.isArray(r.reachAreas) ? r.reachAreas : []).filter((a) => REACH_AREAS.includes(a));
+  if (reach.length) profile.reachAreas = [...new Set(reach)];
+  if (PRICE_LEVELS.includes(r.pricePositioning)) profile.pricePositioning = r.pricePositioning;
+  if (clean(r.keyDifferentiator, PLAN_LIMITS.PRODUCT_TEXT)) profile.keyDifferentiator = clean(r.keyDifferentiator, PLAN_LIMITS.PRODUCT_TEXT);
+  if (clean(r.industry, 60)) profile.industry = clean(r.industry, 60);
+  if (/^[a-z_]{2,30}$/.test(String(r.contentLanguage || '')) && r.contentLanguage !== 'english') profile.contentLanguage = r.contentLanguage;
+
   const colours = (Array.isArray(r.colours) ? r.colours : []).map(hex).filter(Boolean).slice(0, LIMITS.MAX_COLOURS);
 
   let logoUrl = '';
@@ -125,7 +148,8 @@ function normaliseInput(raw, { allowGuided = false } = {}) {
     logoDataUrl,
     input: {
       businessName, websiteUrl: w.url || '', websiteHost: w.host || '', instagramHandle: ig.handle || '', instagramUrl: ig.url || '',
-      whatYouSell, whoItsFor, goal, city: clean(r.city, 60), competitors, offers, colours, logoUrl
+      whatYouSell, whoItsFor, goal, city: clean(r.city, 60), competitors, offers, colours, logoUrl,
+      ...(products.length ? { products } : {}), ...profile
     }
   };
 }

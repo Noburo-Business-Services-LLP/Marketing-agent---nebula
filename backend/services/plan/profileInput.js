@@ -3,6 +3,7 @@
 // Pure and total: never throws on missing or odd fields.
 
 const { normaliseInput } = require('../blueprint/input');
+const { PLAN_LIMITS } = require('../../config/blueprint');
 
 const str = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
 const profileOf = (user) => (user && user.businessProfile && typeof user.businessProfile === 'object' ? user.businessProfile : {});
@@ -47,7 +48,47 @@ function competitorsOf(user) {
     .map((name) => ({ name }));
 }
 
-function inputFromProfile(user) {
+// A stored price in words, exactly as stored: the price note wins, then a whole number in rupees. Never rounded or guessed.
+function priceOf(p) {
+  const note = str(p.priceNote);
+  if (note) return note;
+  const n = Number(p.price);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const cur = str(p.currency).toUpperCase();
+  return !cur || cur === 'INR' ? `Rs ${n.toLocaleString('en-IN')}` : `${cur} ${n}`;
+}
+
+// The account's own catalogue, first ones first, capped (the input check caps again).
+function productsOf(list) {
+  return (Array.isArray(list) ? list : []).filter((p) => p && str(p.name)).slice(0, PLAN_LIMITS.MAX_PRODUCTS).map((p) => ({
+    name: str(p.name),
+    kind: p.type === 'service' ? 'service' : 'product',
+    price: priceOf(p),
+    about: str(p.description) || (Array.isArray(p.keyFeatures) ? p.keyFeatures.map(str).filter(Boolean).join(', ') : '')
+  }));
+}
+
+// The typed business details the planner may cite. Unset answers are left out, never sent empty.
+function detailsOf(user) {
+  const p = profileOf(user);
+  const out = {};
+  // The place only: a postcode or phone-like number is cut, so it can never be repeated as an address.
+  const city = str(str(p.businessLocation).replace(/\d{5,}/g, ' ')).replace(/^[,\s-]+|[,\s-]+$/g, '');
+  if (city.length >= 2) out.city = city;
+  if (['B2B', 'B2C', 'Both'].includes(p.businessType)) out.businessType = p.businessType;
+  const reach = Array.isArray(p.reachAreas) && p.reachAreas.length ? p.reachAreas : (OLD_REACH[p.geographicReach] ? [OLD_REACH[p.geographicReach]] : []);
+  if (reach.length) out.reachAreas = reach;
+  if (str(p.pricePositioning)) out.pricePositioning = str(p.pricePositioning);
+  if (str(p.keyDifferentiator)) out.keyDifferentiator = str(p.keyDifferentiator);
+  if (str(p.industry)) out.industry = str(p.industry);
+  if (str(p.contentLanguage)) out.contentLanguage = str(p.contentLanguage);
+  return out;
+}
+// The old single reach answer, read as the nearest new one.
+const OLD_REACH = { hyperlocal: 'neighbourhood', local_city: 'city', regional: 'state', state: 'state', national: 'india', international: 'international' };
+
+function inputFromProfile(user, { products } = {}) {
+  const items = productsOf(products);
   return {
     businessName: nameOf(user),
     website: str(profileOf(user).website),
@@ -56,7 +97,9 @@ function inputFromProfile(user) {
     whoItsFor: whoItsForOf(user),
     goal: goalOf(user),
     competitors: competitorsOf(user),
-    offers: []
+    offers: [],
+    ...(items.length ? { products: items } : {}),
+    ...detailsOf(user)
   };
 }
 

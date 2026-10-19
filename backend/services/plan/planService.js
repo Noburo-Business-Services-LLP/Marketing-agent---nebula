@@ -2,7 +2,7 @@
 // Plan runs: starts the system's own Blueprint run for an account, one at a time, never charged.
 const { shouldHavePlan, canRefresh } = require('./planRules');
 const { inputFromProfile } = require('./profileInput');
-const { LIMITS } = require('../../config/blueprint');
+const { LIMITS, PLAN_LIMITS } = require('../../config/blueprint');
 
 const ACTIVE = ['queued', 'processing'];
 const CLAIM_MS = 60 * 1000;          // a start claim holds this long
@@ -17,6 +17,9 @@ function defaultDeps() {
   const Blueprint = () => require('../../models/Blueprint');
   return {
     loadUser: (id) => User().findById(id).lean(),
+    // The account's own catalogue for the planner: a few fields, oldest first, capped.
+    loadProducts: (id) => require('../../models/Product').find({ user: id }).sort({ createdAt: 1 }).limit(PLAN_LIMITS.MAX_PRODUCTS)
+      .select('name type price priceNote currency description keyFeatures').lean(),
     findRuns: (q) => Blueprint().find({ kind: 'plan', ...q }).sort({ completedAt: -1, createdAt: -1 }).lean(),
     latestRun: (userId) => Blueprint().findOne({ kind: 'plan', userId }).sort({ createdAt: -1 }).lean(),
     failRun: (blueprintId, at) => Blueprint().updateOne(
@@ -78,7 +81,10 @@ function createPlanService(deps = defaultDeps()) {
     if (deps.claimStart && !(await deps.claimStart(userId, deps.now()))) return { ok: true, alreadyRunning: true };
     let out = null;
     try {
-      out = await deps.startSystem({ user, input: inputFromProfile(user), kind: 'plan' });
+      // The products are a help, never a blocker: if they cannot be read the plan is built without them.
+      let products = [];
+      if (deps.loadProducts) { try { products = (await deps.loadProducts(userId)) || []; } catch (e) { console.warn(`[plan] products not read for ${userId}: ${e && e.message}`); } }
+      out = await deps.startSystem({ user, input: inputFromProfile(user, { products }), kind: 'plan' });
     } catch (e) {
       if (deps.releaseStart) await deps.releaseStart(userId);
       throw e;

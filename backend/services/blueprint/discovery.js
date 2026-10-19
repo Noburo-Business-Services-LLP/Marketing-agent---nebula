@@ -27,6 +27,17 @@ function leaves(v, out = []) {
   return out;
 }
 
+// Plain words for the typed business details, so the planner reads a sentence, not a code.
+const SELLS_TO = { B2B: 'other businesses', B2C: 'individual customers', Both: 'both businesses and individual customers' };
+const REACH_WORDS = { neighbourhood: 'the neighbourhood', city: 'the city', state: 'the state', india: 'across India', international: 'outside India' };
+const PRICE_WORDS = { budget: 'budget', affordable: 'affordable', mid_range: 'mid-range', premium: 'premium', luxury: 'luxury' };
+function languageWords(code) {
+  const s = String(code || '');
+  const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+  const m = s.match(/^([a-z]+)_english_mix$/);
+  return m ? `${cap(m[1])} mixed with English` : cap(s.replace(/_/g, ' '));
+}
+
 function typedFacts(input) {
   const rows = [['Business name', input.businessName, input.businessName]];
   rows.push(['What you sell', input.whatYouSell, input.whatYouSell], ['Who it is for', input.whoItsFor, input.whoItsFor], ['Main goal', input.goal, input.goal]);
@@ -34,6 +45,16 @@ function typedFacts(input) {
   if (input.websiteHost) rows.push(['Website', input.websiteHost, input.websiteHost]);
   if (input.instagramHandle) rows.push(['Instagram page', `instagram.com/${input.instagramHandle}`, input.instagramHandle]);
   for (const o of input.offers || []) rows.push(['Offer', o.price ? `${o.name}, ${o.price}` : o.name, o.name]);
+  for (const p of input.products || []) {
+    const head = [p.name, p.kind === 'service' ? '(a service)' : p.kind === 'product' ? '(a product)' : ''].filter(Boolean).join(' ');
+    rows.push(['Product', `${head}${p.price ? `, ${p.price}` : ''}${p.about ? `. ${p.about}` : ''}`, p.name]);
+  }
+  if (input.industry) rows.push(['Industry', input.industry, input.industry]);
+  if (SELLS_TO[input.businessType]) rows.push(['Sells to', SELLS_TO[input.businessType], input.businessType]);
+  if ((input.reachAreas || []).length) rows.push(['Where customers are', input.reachAreas.map((a) => REACH_WORDS[a] || a).join(', '), input.reachAreas[0]]);
+  if (input.pricePositioning) rows.push(['Price level', PRICE_WORDS[input.pricePositioning] || input.pricePositioning, input.pricePositioning]);
+  if (input.keyDifferentiator) rows.push(['What makes it different', input.keyDifferentiator, input.keyDifferentiator]);
+  if (input.contentLanguage) rows.push(['Content language', languageWords(input.contentLanguage), input.contentLanguage]);
   if ((input.colours || []).length) rows.push(['Brand colours', input.colours.join(', '), input.colours.join(', ')]);
   return rows.map(([field, text, quote]) => ({ kind: 'typed', field, text: `${field}: ${text}`, quote, source: { type: 'typed', field } }));
 }
@@ -107,7 +128,8 @@ function evaluateStop(sheet, input, ctx = {}) {
   const igFacts = facts.filter((f) => f.kind === 'instagram');
   const websiteRead = ctx.websiteRead !== undefined ? ctx.websiteRead : pageFacts.length > 0;
   const instagramRead = ctx.instagramRead !== undefined ? ctx.instagramRead : igFacts.length > 0;
-  const offers = (input.offers || []).length;
+  // The account's own products are typed offers too (plan runs): the stop message asks for exactly that. At most three count.
+  const offers = Math.min(LIMITS.MAX_OFFERS, (input.offers || []).length + (input.products || []).length);
   const evidence = pageFacts.length + igFacts.length + 3 * offers;
   const basis = evidence < LIMITS.FULL_EVIDENCE || !websiteRead ? 'limited' : 'full';
   const warnings = [];
@@ -246,4 +268,4 @@ async function discover({ input, fetchPage = fetchPublicPage, robots = robotsAll
   return { sheet, sources };
 }
 
-module.exports = { discover, verifyFacts, evaluateStop, nameTokens };
+module.exports = { discover, verifyFacts, evaluateStop, nameTokens, typedFacts };

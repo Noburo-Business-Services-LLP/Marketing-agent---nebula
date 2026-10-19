@@ -2,9 +2,10 @@
 // Module C and D (model side): build the locked prompt, call the model, and turn what it returns into claims the
 // document may carry. The model can never mint Verified: anything it calls verified is downgraded, and anything
 // the QA scanner rejects is removed and counted.
-const { FORMATS, CHANNELS, PHASES, LIMITS, PLAN_NEBULAA_CAN } = require('../../config/blueprint');
+const { FORMATS, CHANNELS, PHASES, LIMITS, PLAN_NEBULAA_CAN, OFFLINE_CHANNELS, PLAN_METRICS, PLAN_LIMITS, PLAN_MAX_TOKENS } = require('../../config/blueprint');
 const { getPrompt, renderTemplate } = require('../promptRegistry');
-const { scanClaimText, allowedNumbersOf } = require('./qa');
+const { scanClaimText, scanPlanWording, allowedNumbersOf } = require('./qa');
+const { readPlanAnswer } = require('./planJson');
 
 const GOAL_TEXT = { enquiries: 'more enquiries', sales: 'more sales', followers: 'more followers', launch: 'a launch' };
 const str = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
@@ -21,14 +22,14 @@ function supported(text, ids, ctx) {
 }
 
 // The model can never produce Verified. An inference with no real fact behind it becomes a proposal.
-function toClaim(raw, ctx, forceProposed = false) {
+function toClaim(raw, ctx, forceProposed = false, max = 320) {
   const o = isObj(raw) ? raw : { text: raw };
-  const text = str(o.text, 320);
+  const text = str(o.text, max);
   if (!text) return null;
   const ids = arr(o.factIds, 6).map((x) => str(x, 12)).filter((id) => ctx.factIds.has(id));
   let tag = o.tag === 'proposed' || forceProposed ? 'proposed' : 'inference';
   if (tag === 'inference' && !ids.length) tag = 'proposed';
-  const bad = scanClaimText(text, { allowedNumbers: ctx.allowedNumbers });
+  const bad = [...scanClaimText(text, { allowedNumbers: ctx.allowedNumbers }), ...scanPlanWording(text, ctx.basisText)];
   if (!bad.length && tag === 'inference' && !supported(text, ids, ctx)) bad.push({ rule: 'unsupported_by_facts' });
   if (bad.length) { ctx.dropped.push({ text, rules: bad.map((b) => b.rule) }); return null; }
   return tag === 'inference' ? { text, tag, factIds: ids } : { text, tag };
@@ -38,7 +39,7 @@ function toClaim(raw, ctx, forceProposed = false) {
 function toLabel(raw, max, ctx) {
   const text = str(raw, max);
   if (!text) return '';
-  const bad = scanClaimText(text, { allowedNumbers: ctx.allowedNumbers });
+  const bad = [...scanClaimText(text, { allowedNumbers: ctx.allowedNumbers }), ...scanPlanWording(text, ctx.basisText)];
   if (bad.length) { ctx.dropped.push({ text, rules: bad.map((b) => b.rule) }); return ''; }
   return text;
 }
@@ -66,16 +67,88 @@ function buildPlanVars(sheet, input, direction) {
     competitors: comp || 'None given.',
     formats: FORMATS.join(', '),
     channels: CHANNELS.join(', '),
-    nebulaaCan: PLAN_NEBULAA_CAN.join(', ')
+    nebulaaCan: PLAN_NEBULAA_CAN.join(', '),
+    offlineChannels: OFFLINE_CHANNELS.map((o) => `${o.id} (${o.name})`).join(', '),
+    metricIds: PLAN_METRICS.map((m) => `${m.id} (${m.name}${m.needs ? `, only with ${m.needs.channel || m.needs.offline}` : ''})`).join(', ')
   };
 }
 
-const ctxOf = (sheet) => ({ brand: String((sheet && sheet.client && sheet.client.name) || ''), factText: new Map(((sheet && sheet.facts) || []).map((f) => [f.id, String(f.text || '')])), factIds: new Set(((sheet && sheet.facts) || []).map((f) => f.id)), allowedNumbers: allowedNumbersOf(sheet), dropped: [] });
+const ctxOf = (sheet) => ({ brand: String((sheet && sheet.client && sheet.client.name) || ''), basisText: [String((sheet && sheet.client && sheet.client.name) || ''), ...((sheet && sheet.facts) || []).map((f) => String(f.text || ''))].join(' '), factText: new Map(((sheet && sheet.facts) || []).map((f) => [f.id, String(f.text || '')])), factIds: new Set(((sheet && sheet.facts) || []).map((f) => f.id)), allowedNumbers: allowedNumbersOf(sheet), dropped: [] });
+
+// Offline rows: ids from the fixed list only, at most three, each with a reason. Everything is a suggestion (tag
+// proposed) and the owner does it: a line that says Nebulaa does anything offline is removed.
+const OFFLINE_BY_ID = new Map(OFFLINE_CHANNELS.map((o) => [o.id, o]));
+const NAMES_NEBULAA = /\bnebulaa\b/i;
+function offlineClaim(raw, ctx) {
+  const c = toClaim(raw, ctx, true, PLAN_LIMITS.ROW_TEXT);
+  if (c && NAMES_NEBULAA.test(c.text)) { ctx.dropped.push({ text: c.text, rules: ['offline_nebulaa'] }); return null; }
+  return c;
+}
+function offlineOf(parsed, ctx) {
+  const out = [];
+  for (const o of arr(parsed.offline, RAW_CAP)) {
+    if (!isObj(o)) continue;
+    const id = str(o.id || o.channel, 40).toLowerCase();
+    const def = OFFLINE_BY_ID.get(id);
+    if (!def || out.some((x) => x.id === id)) continue;
+    const reason = offlineClaim(o.reason, ctx);
+    if (!reason) continue;
+    const youDo = arr(o.youDo, RAW_CAP).map((y) => offlineClaim(y, ctx)).filter(Boolean).slice(0, PLAN_LIMITS.MAX_YOU_DO);
+    out.push({ id, channel: def.name, mode: 'offline', spend: def.spend, reason, youDo, nebulaaDoes: [] });
+    if (out.length >= PLAN_LIMITS.MAX_OFFLINE) break;
+  }
+  return out;
+}
+
+// Numbers to watch: ids from the fixed list only, tied to a chosen channel or offline row where the list says so.
+// Name, meaning, where it is seen and who counts it come from the list, never from the model.
+const METRIC_BY_ID = new Map(PLAN_METRICS.map((m) => [m.id, m]));
+const METRIC_TOP_UP = { enquiries: ['enquiries', 'reach', 'posts_published'], sales: ['enquiries', 'engagement', 'posts_published'], followers: ['followers', 'reach', 'engagement'], launch: ['reach', 'engagement', 'enquiries'] };
+function goalOf(sheet) {
+  const f = ((sheet && sheet.facts) || []).find((x) => x.kind === 'typed' && x.field === 'Main goal');
+  const g = f ? String(f.quote || f.text || '').toLowerCase().replace(/^main goal:\s*/, '') : '';
+  return METRIC_TOP_UP[g] ? g : 'enquiries';
+}
+function metricRow(def, why, start) {
+  return { id: def.id, name: def.name, meaning: def.meaning, where: def.where, count: def.count, why, start };
+}
+function metricsOf(parsed, ctx, { channels, offline, goal }) {
+  const fits = (def) => !def.needs || (def.needs.channel ? channels.has(def.needs.channel) : offline.has(def.needs.offline));
+  const out = [];
+  for (const m of arr(parsed.metrics, RAW_CAP)) {
+    if (!isObj(m)) continue;
+    const def = METRIC_BY_ID.get(str(m.id, 40).toLowerCase());
+    if (!def || !fits(def) || out.some((x) => x.id === def.id)) continue;
+    out.push(metricRow(def, toClaim(m.why, ctx, true, PLAN_LIMITS.ROW_TEXT), toClaim(m.start, ctx, true, PLAN_LIMITS.ROW_TEXT)));
+    if (out.length >= PLAN_LIMITS.MAX_METRICS) break;
+  }
+  // A block that came back short is filled to three from a fixed list for the goal. Nothing is added when the
+  // answer had no metrics at all (an older answer or a cut one): the page then says the block is not in the plan yet.
+  if (out.length && out.length < PLAN_LIMITS.MIN_METRICS) {
+    for (const id of METRIC_TOP_UP[goal]) {
+      if (out.length >= PLAN_LIMITS.MIN_METRICS) break;
+      if (!out.some((x) => x.id === id)) out.push({ ...metricRow(METRIC_BY_ID.get(id), null, null), auto: true });
+    }
+  }
+  return out;
+}
+
+// The marketing mix the page draws, worked out in code from the rows above: online and offline, organic and paid.
+// Paid is only ever a suggestion the owner runs and pays for himself; Nebulaa does not run paid ads.
+function mixOf(channels, effort, offline) {
+  const rows = channels.map((c) => {
+    const e = effort.find((x) => x.channel === c.channel);
+    return { channel: c.channel, mode: 'online', organicPct: e ? e.organicPct : null, paidPct: e ? e.paidPct : null };
+  });
+  offline.forEach((o) => rows.push({ channel: o.channel, mode: 'offline', organicPct: o.spend === 'paid' ? 0 : 100, paidPct: o.spend === 'paid' ? 100 : 0 }));
+  return { channels: rows, online: channels.length, offline: offline.length, paidTag: 'proposed', paidBy: 'you' };
+}
 
 function normalisePlan(parsed, sheet) {
   if (!isObj(parsed)) return null;
   const ctx = ctxOf(sheet);
-  const typedOffers = new Set(((sheet && sheet.facts) || []).filter((f) => f.kind === 'typed' && f.field === 'Offer').map((f) => f.id));
+  // An offer cites a typed offer or one of the account's own products.
+  const typedOffers = new Set(((sheet && sheet.facts) || []).filter((f) => f.kind === 'typed' && (f.field === 'Offer' || f.field === 'Product')).map((f) => f.id));
   const pos = isObj(parsed.positioning) ? parsed.positioning : {};
   const t = isObj(pos.territory) ? pos.territory : {};
   const tName = toLabel(t.name, 60, ctx);
@@ -152,7 +225,7 @@ function normalisePlan(parsed, sheet) {
     if (!Number.isFinite(organic) || organic < 0 || organic > 100) continue;
     if (!Number.isFinite(paid) || paid < 0 || paid > 100 || organic + paid !== 100) paid = 100 - organic; // repaired: organic leads
     const does = arr(e.nebulaaDoes, RAW_CAP).map((a) => str(a, 40).toLowerCase()).filter((a) => PLAN_NEBULAA_CAN.includes(a));
-    effort.push({ channel: e.channel, organicPct: organic, paidPct: paid, nebulaaDoes: [...new Set(does)], youDo: claims(e.youDo, 4, xctx, true) });
+    effort.push({ channel: e.channel, mode: 'online', organicPct: organic, paidPct: paid, nebulaaDoes: [...new Set(does)], youDo: claims(e.youDo, 4, xctx, true) });
   }
 
   const roadmap = [];
@@ -165,6 +238,9 @@ function normalisePlan(parsed, sheet) {
     if (!r) continue;
     roadmap.push({ phase: ph.id, focus: toClaim(r.focus, ctx, true), actions: claims(r.actions, 4, ctx, true), measure: claims(r.measure, 3, ctx, true) });
   }
+
+  const offline = offlineOf(parsed, xctx);
+  const metrics = metricsOf(parsed, xctx, { channels: channelNames, offline: new Set(offline.map((o) => o.id)), goal: goalOf(sheet) });
 
   return {
     plan: {
@@ -183,7 +259,10 @@ function normalisePlan(parsed, sheet) {
       icp,
       effort,
       roadmap,
-      firstSteps: claims(parsed.firstSteps, 5, ctx, true)
+      firstSteps: claims(parsed.firstSteps, 5, ctx, true),
+      offline,
+      metrics,
+      mix: mixOf(channels, effort, offline)
     },
     dropped: ctx.dropped,
     droppedExtra: xctx.dropped
@@ -209,13 +288,14 @@ const lazy = {
   parseJSON: (...a) => require('../geminiAI').parseGeminiJSON(...a)
 };
 
-async function ask(id, vars, { callLLM = lazy.callLLM, parseJSON = lazy.parseJSON } = {}) {
+// One model call. The answer is read strictly first; a cut answer is repaired to its last complete value.
+async function askRaw(id, vars, { callLLM = lazy.callLLM, parseJSON = lazy.parseJSON } = {}) {
   // renderTemplate on the shipped text, never buildPrompt: no override can apply to a locked prompt.
   const prompt = renderTemplate(getPrompt(id).template, vars);
-  const raw = await callLLM(prompt, { jsonMode: true, temperature: 0.4, maxTokens: 6500, skipCache: true });
-  if (isObj(raw)) return raw;
-  try { return parseJSON(String(raw || '')); } catch (_) { return null; }
+  const raw = await callLLM(prompt, { jsonMode: true, temperature: 0.4, maxTokens: PLAN_MAX_TOKENS, skipCache: true });
+  return readPlanAnswer(raw, parseJSON);
 }
+const ask = async (...a) => (await askRaw(...a)).parsed;
 
 // What came back, in a form safe to log: shapes and counts only, never the text of the answer.
 function describeAnswer(parsed) {
@@ -225,14 +305,27 @@ function describeAnswer(parsed) {
 
 // The AI sometimes returns a plan the checks reject (too few themes, or ideas that fail the claim checks).
 // One more try usually gives a usable one; if not, the run fails and the Quarks are returned.
-async function runPlan({ sheet, input, direction, callLLM, parseJSON }) {
+// A cut answer (the model ran out of room) is repaired to what was complete. When everything up to the first steps
+// survived, only the optional offline and metrics blocks can be missing, so it is used as it is. A cut that lost
+// more is asked for once more; if that also fails, the best repaired plan is used rather than failing the run.
+// `beforeCall` runs before every model call (the spend ledger for plan runs), so a second call is counted too.
+async function runPlan({ sheet, input, direction, callLLM, parseJSON, beforeCall }) {
+  let best = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const parsed = await ask('blueprint.plan', buildPlanVars(sheet, input, direction), { callLLM, parseJSON });
+    if (typeof beforeCall === 'function') { try { await beforeCall(attempt); } catch (_) { /* the ledger is best effort */ } }
+    const { parsed, repaired } = await askRaw('blueprint.plan', buildPlanVars(sheet, input, direction), { callLLM, parseJSON });
     const plan = normalisePlan(parsed, sheet);
-    if (plan) return plan;
+    if (plan && !repaired) return plan;
+    if (plan && repaired) {
+      plan.repaired = true;
+      if (plan.plan.firstSteps.length) return plan;
+      if (!best) best = plan;
+      console.warn(`[blueprint] plan attempt ${attempt} was cut short and lost more than the optional blocks: ${describeAnswer(parsed)}`);
+      continue;
+    }
     console.warn(`[blueprint] plan attempt ${attempt} rejected: ${describeAnswer(parsed)}`);
   }
-  return null;
+  return best;
 }
 
 async function runDirections({ sheet, input, callLLM, parseJSON }) {

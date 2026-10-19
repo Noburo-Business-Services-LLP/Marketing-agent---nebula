@@ -186,7 +186,10 @@ const TOKENS = {
   chat_turn:         { in: 1200, out: 400 },
   scene_script:      { in: 2000, out: 800 },  // per scene, video pipeline
   story_skeleton:    { in: 3000, out: 1600 }, // once per video: story + shot list
-  blueprint_plan:    { in: 5000, out: 4500 }, // one planner call per Brand Growth Blueprint
+  // One planner call per Brand Growth Blueprint or plan run. Raised 2026-10-19 for the products, business details,
+  // offline and metrics blocks: the fixture answer with every block measures about 4,900 output tokens (15.6 KB of
+  // JSON) against about 4,100 before, and the prompt about 600 tokens more.
+  blueprint_plan:    { in: 5600, out: 5300 },
   listening_batch:   { in: 3000, out: 700 },  // one batch of up to 40 comments, labels only
   // Home drafts. Output includes the thinking tokens a newer model spends before it answers, so it is generous.
   home_response_post: { in: 1600, out: 1200 }, // one caption (up to 600 characters) and a short picture idea

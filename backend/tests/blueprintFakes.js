@@ -86,7 +86,7 @@ function makeDeps(over = {}) {
     uploadLogo: async (d) => { calls.upload.push(d); return 'https://res.cloudinary.com/demo/image/upload/logo.png'; },
     discover: async (a) => { calls.discover += 1; calls.discoverArgs.push(a); return { sheet: clone(sheetFixture), sources: [{ id: 'S1', url: 'https://sweetco.in/', kind: 'website', ok: true }] }; },
     plan: {
-      build: async (a) => { calls.build += 1; calls.buildArgs.push(a); return { result: goodResult(), qa: { passed: true, flags: [] } }; },
+      build: async (a) => { calls.build += 1; calls.buildArgs.push(a); if (a && typeof a.beforeCall === 'function') await a.beforeCall(1); return { result: goodResult(), qa: { passed: true, flags: [] } }; },
       directions: async () => { calls.directions += 1; return [0, 1, 2].map((i) => ({ name: `Direction ${i}`, rationale: { text: `Why ${i}`, tag: 'proposed' }, risk: { text: `Risk ${i}`, tag: 'proposed' } })); }
     },
     enqueue: (t) => { queued.push(t); },

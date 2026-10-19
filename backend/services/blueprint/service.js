@@ -324,8 +324,9 @@ function createBlueprintService(depsIn) {
 
       if (!(await step({ step: 'planning', progress: 60 }))) return;
       // A plan run is not charged to anyone, so the model call is counted against the daily ceiling here, when it is made.
-      if (doc.kind === 'plan') { try { if (deps.recordSpend) await deps.recordSpend(ACTION, 1); } catch (_) { /* cost tracking is best effort */ } }
-      const built = await deps.plan.build({ input: doc.input, sheet, direction, mode: doc.mode, now: at(), sources: sources || [] });
+      // It is recorded before EVERY model call (a second try is a second call), never after.
+      const beforeCall = doc.kind === 'plan' && deps.recordSpend ? async () => { try { await deps.recordSpend(ACTION, 1); } catch (_) { /* cost tracking is best effort */ } } : undefined;
+      const built = await deps.plan.build({ input: doc.input, sheet, direction, mode: doc.mode, now: at(), sources: sources || [], ...(beforeCall ? { beforeCall } : {}) });
       const qa = (built && built.qa) || { passed: false, flags: [] };
       const qaFlags = [...(qa.flags || []), ...flags];
       if (qa.passed === false || !built || !built.result) {

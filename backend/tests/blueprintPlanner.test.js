@@ -6,7 +6,7 @@ const path = require('path');
 const planner = require('../services/blueprint/planner');
 const { buildBlueprint, proposeDirections } = require('../services/blueprint/pipeline');
 const { claimsOf } = require('../services/blueprint/qa');
-const { NEBULAA, PAGES, LIMITED_NOTE, WARNING_MESSAGES } = require('../config/blueprint');
+const { NEBULAA, PAGES, LIMITED_NOTE, WARNING_MESSAGES, PLAN_MAX_TOKENS } = require('../config/blueprint');
 const { normaliseInput } = require('../services/blueprint/input');
 const sheet = require('./fixtures/blueprintSheet.json');
 const good = require('./fixtures/blueprintPlanGood.json');
@@ -39,7 +39,7 @@ test('runPlan sends the golden rule once with the exact options', async () => {
   const d = deps(good);
   const r = await planner.runPlan({ sheet, input, direction: null, ...d });
   assert.equal(d.callLLM.calls.length, 1);
-  assert.deepEqual(d.callLLM.calls[0].opts, { jsonMode: true, temperature: 0.4, maxTokens: 6500, skipCache: true });
+  assert.deepEqual(d.callLLM.calls[0].opts, { jsonMode: true, temperature: 0.4, maxTokens: PLAN_MAX_TOKENS, skipCache: true });
   assert.ok(d.callLLM.calls[0].prompt.includes('THE GOLDEN RULE'));
   assert.equal(r.plan.pillars.length, 4);
 });

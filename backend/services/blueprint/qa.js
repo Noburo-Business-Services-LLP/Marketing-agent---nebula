@@ -70,6 +70,28 @@ function scanClaimText(text, ctx = {}) {
   return v;
 }
 
+// Plan wording: no outside product or supplier names (the AI and media services behind Nebulaa, or the product's
+// own internal names), and English sentences only. A word that is in the business's own facts is allowed, so a
+// bakery called "Orbit Cakes" or a Tamil product name is never a reason to drop a line.
+const VENDOR_NAMES = /\b(open\s?ai|chat\s?gpt|gpt[\s-]?\d[\w.]*|gpt|gemini|anthropic|claude|kling|seedance|higgsfield|midjourney|dall[\s-]?e|stable diffusion|eleven\s?labs|whisper|apify|cloudinary|razorpay|nano banana|gravity|pulsar|orbit)\b/gi;
+const LETTER = /\p{L}/gu;
+const LATIN = /\p{Script=Latin}/u;
+
+function scanPlanWording(text, basis = '') {
+  const t = String(text || '');
+  const allowed = String(basis || '').toLowerCase();
+  const out = [];
+  for (const m of t.matchAll(VENDOR_NAMES)) {
+    if (!allowed.includes(m[0].toLowerCase())) { out.push({ rule: 'vendor_name', match: m[0] }); break; }
+  }
+  // Letters outside the Latin script, not counting words the facts already hold (a typed product name in Tamil).
+  const own = t.split(/\s+/).filter((w) => !(w.length > 1 && allowed.includes(w.toLowerCase().replace(/[^\p{L}\p{M}\p{Nd}]+/gu, ''))));
+  const letters = own.join(' ').match(LETTER) || [];
+  const other = letters.filter((c) => !LATIN.test(c)).length;
+  if (letters.length >= 4 && other / letters.length > 0.3) out.push({ rule: 'not_english' });
+  return out;
+}
+
 // Every number that appears in a verified fact: those, and only those, may be repeated in model text.
 function allowedNumbersOf(sheet) {
   const out = new Set();
@@ -176,4 +198,4 @@ function runQa({ blueprint, sheet, input, dropped }) {
   return { passed: !flags.some((f) => f.level === 'block'), flags };
 }
 
-module.exports = { scanClaimText, numbersIn, allowedNumbersOf, claimsOf, runQa };
+module.exports = { scanClaimText, scanPlanWording, numbersIn, allowedNumbersOf, claimsOf, runQa };

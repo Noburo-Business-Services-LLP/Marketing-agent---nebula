@@ -17,11 +17,22 @@ function scanPlanExtras(plan, sheet) {
   });
   const icp = plan.icp ? { who: keep(plan.icp.who), pains: keep(plan.icp.pains), where: keep(plan.icp.where), triggers: keep(plan.icp.triggers) } : null;
   const effort = (plan.effort || []).map((e) => ({ ...e, youDo: keep(e.youDo) }));
-  return { plan: { ...plan, icp: icp && (icp.who.length || icp.pains.length || icp.where.length || icp.triggers.length) ? icp : null, effort }, dropped };
+  const one = (c) => (c ? (keep([c])[0] || null) : null);
+  // Offline rows need their reason; a metric keeps its fixed name and meaning even when its own line is removed.
+  const offline = (plan.offline || []).map((o) => ({ ...o, reason: one(o.reason), youDo: keep(o.youDo) })).filter((o) => o.reason);
+  const metrics = (plan.metrics || []).map((m) => ({ ...m, why: one(m.why), start: one(m.start) }));
+  const out = { ...plan, icp: icp && (icp.who.length || icp.pains.length || icp.where.length || icp.triggers.length) ? icp : null, effort };
+  if (plan.offline) out.offline = offline;
+  if (plan.metrics) out.metrics = metrics;
+  if (plan.mix && plan.offline && offline.length !== plan.offline.length) {
+    const names = new Set(offline.map((o) => o.channel));
+    out.mix = { ...plan.mix, channels: plan.mix.channels.filter((r) => r.mode !== 'offline' || names.has(r.channel)), offline: offline.length };
+  }
+  return { plan: out, dropped };
 }
 
-async function buildBlueprint({ input, sheet, direction, mode, now, sources }, deps = {}) {
-  const planned = await runPlan({ sheet, input, direction, callLLM: deps.callLLM, parseJSON: deps.parseJSON });
+async function buildBlueprint({ input, sheet, direction, mode, now, sources, beforeCall }, deps = {}) {
+  const planned = await runPlan({ sheet, input, direction, callLLM: deps.callLLM, parseJSON: deps.parseJSON, beforeCall });
   if (!planned) throw new Error('planner returned no usable plan');
   const extras = scanPlanExtras(planned.plan, sheet);
   const result = assembleBlueprint({ input, sheet, plan: extras.plan, direction, mode, now, sources });
@@ -29,7 +40,8 @@ async function buildBlueprint({ input, sheet, direction, mode, now, sources }, d
   result.plan = extras.plan;
   const qa = runQa({ blueprint: result, sheet, input, dropped: planned.dropped });
   const apart = extras.dropped.length + ((planned.droppedExtra || []).length);
-  if (apart) qa.flags.push({ level: 'note', rule: 'removed_plan_items', where: 'plan', detail: `${apart} items were removed from the customer and effort blocks.` });
+  if (apart) qa.flags.push({ level: 'note', rule: 'removed_plan_items', where: 'plan', detail: `${apart} items were removed from the customer, effort, offline and metrics blocks.` });
+  if (planned.repaired) qa.flags.push({ level: 'note', rule: 'plan_answer_cut', where: 'plan', detail: 'The answer was cut short and was repaired to its last complete part.' });
   return { result, qa };
 }
 

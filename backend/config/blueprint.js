@@ -58,4 +58,35 @@ const PLAN_NEBULAA_CAN = ['posts', 'carousels', 'videos', 'captions and hashtags
 const PLAN_RUNS_PER_DAY_MAX = 100; // global safety cap on plan runs the system creates in 24 hours
 const PLAN_REFRESH_DAYS = 7; // one manual plan refresh per account in this many days
 
-module.exports = { PLAN_RUNS_PER_DAY_MAX, PLAN_NEBULAA_CAN, PLAN_REFRESH_DAYS, TAGS, TAG_LABEL, GOALS, FORMATS, CHANNELS, MODES, STATUS, PAGES, PHASES, LIMITS, NEBULAA, STOP_MESSAGES, WARNING_MESSAGES, LIMITED_NOTE };
+// Offline activity in a plan: a FIXED list. The owner does all of it; Nebulaa does nothing offline, so a row never
+// carries "Nebulaa does". `spend` is a fixed reading of the activity (stall fees and printing cost money; the rest
+// mostly cost time), never a model output. Chosen for small Indian businesses; see docs/superpowers/ops/plan-additions.md.
+const OFFLINE_CHANNELS = [
+  { id: 'referrals', name: 'Referrals and word of mouth', spend: 'organic' },
+  { id: 'local_events', name: 'Local events and stalls', spend: 'paid' },
+  { id: 'print', name: 'Printed material and hoardings', spend: 'paid' },
+  { id: 'counter', name: 'In-store and at-counter prompts', spend: 'organic' },
+  { id: 'partnerships', name: 'Partnerships with nearby businesses', spend: 'organic' },
+  { id: 'personal_followup', name: 'Phone and personal WhatsApp follow-up', spend: 'organic' }
+];
+
+// Numbers to watch: a FIXED list. `count` says who has the number: 'nebulaa' (shown on the named page) or 'you'
+// (the owner counts it by hand). `needs` ties a metric to a channel or an offline activity the plan chose.
+const PLAN_METRICS = [
+  { id: 'reach', name: 'Reach', meaning: 'How many people saw your posts.', where: 'Performance', count: 'nebulaa' },
+  { id: 'engagement', name: 'Engagement', meaning: 'Likes, comments, saves and shares on your posts.', where: 'Performance', count: 'nebulaa' },
+  { id: 'followers', name: 'New followers', meaning: 'How many people started following your page.', where: 'Performance', count: 'nebulaa' },
+  { id: 'posts_published', name: 'Posts published', meaning: 'How many posts went out on your pages.', where: 'Performance', count: 'nebulaa' },
+  { id: 'messages', name: 'Messages and comments', meaning: 'Messages and comments people send you on your pages.', where: 'Inbox (add-on)', count: 'nebulaa' },
+  { id: 'enquiries', name: 'Enquiries', meaning: 'Calls, walk-ins and messages asking about what you sell.', where: 'You count this', count: 'you' },
+  { id: 'reviews', name: 'New reviews', meaning: 'New reviews on your Google Business Profile.', where: 'You count this', count: 'you', needs: { channel: 'Google Business Profile' } },
+  { id: 'website_visits', name: 'Website visits', meaning: 'Visits to your website, from its own statistics.', where: 'You count this', count: 'you', needs: { channel: 'Website' } },
+  { id: 'referral_customers', name: 'Customers from referrals', meaning: 'New customers who came because someone sent them.', where: 'You count this', count: 'you', needs: { offline: 'referrals' } },
+  { id: 'event_contacts', name: 'Contacts from events', meaning: 'Names and numbers you collect at events and stalls.', where: 'You count this', count: 'you', needs: { offline: 'local_events' } }
+];
+const PLAN_LIMITS = { MAX_OFFLINE: 3, MIN_METRICS: 3, MAX_METRICS: 5, MAX_PRODUCTS: 6, PRODUCT_NAME: 80, PRODUCT_TEXT: 160, PRODUCT_PRICE: 24, ROW_TEXT: 200, MAX_YOU_DO: 2 };
+// The planner's visible answer budget. Fixture plans with every block measure about 4,600 output tokens; this leaves
+// about twice that before a cut. A reasoning model gets three times this for thinking plus answer (openAI.js).
+const PLAN_MAX_TOKENS = 9000;
+
+module.exports = { PLAN_RUNS_PER_DAY_MAX, PLAN_NEBULAA_CAN, PLAN_REFRESH_DAYS, OFFLINE_CHANNELS, PLAN_METRICS, PLAN_LIMITS, PLAN_MAX_TOKENS, TAGS, TAG_LABEL, GOALS, FORMATS, CHANNELS, MODES, STATUS, PAGES, PHASES, LIMITS, NEBULAA, STOP_MESSAGES, WARNING_MESSAGES, LIMITED_NOTE };

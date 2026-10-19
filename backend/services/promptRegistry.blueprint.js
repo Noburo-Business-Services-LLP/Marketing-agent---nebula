@@ -30,7 +30,9 @@ module.exports = {
       competitors: 'What the named competitors own pages say',
       formats: 'The post formats that may be used',
       channels: 'The channels that may be used',
-      nebulaaCan: 'The only things the Nebulaa product may be said to do'
+      nebulaaCan: 'The only things the Nebulaa product may be said to do',
+      offlineChannels: 'The fixed list of offline activities, each id with its name',
+      metricIds: 'The fixed list of numbers to watch, each id with its name and what it needs'
     },
     template: `You are the strategist for a Brand Growth Blueprint. You are creative about ideas and strict about facts.
 
@@ -60,6 +62,9 @@ RULES
 8. If the information basis is limited, say less, not more.
 9. Describe the ideal customer in "icp": who they are, what bothers them, where they spend time, and what makes them buy now. Short claims, each with a tag and factIds like the other claims. Never invent a fact about the customers.
 10. "effort" has one row for every channel in "channels". "organicPct" and "paidPct" are whole numbers that add up to 100. They are a recommendation, never a measurement, and are written only in those two fields, never in a sentence. "nebulaaDoes" lists what Nebulaa does for the owner on that channel, chosen ONLY from: {{nebulaaCan}}. "youDo" lists what the owner does themselves, offline or on the platform, for example following up on WhatsApp, asking for Google reviews, or local events. Every item in "youDo" has the tag "proposed".
+11. "offline" lists at most three offline activities that fit this business, chosen ONLY from these ids: {{offlineChannels}}. Choose one only when the facts give a reason, for example a shop or counter customers visit, a city or neighbourhood, a product people recommend to friends, or selling to other businesses. "reason" is one sentence saying why it fits, drawn from the facts. "youDo" holds one or two things the owner does. The owner does all offline work himself: never write that Nebulaa makes, prints, runs, organises or attends anything offline. Every item has the tag "proposed". Leave "offline" empty when nothing fits.
+12. "metrics" lists between three and five numbers to watch, chosen ONLY from these ids: {{metricIds}}. Each one must fit the main goal and the channels or offline activities you chose; an id marked "only with" needs that channel or activity in your plan. "why" says in one sentence what it shows for this business. "start" is optional: a suggested starting point for counting it, written without any digit, target or promised result. Every item has the tag "proposed".
+13. Facts with the source "typed: product" are what the business sells. Use their names in pillars, hooks and offers where they fit, and an offer may cite a product's fact id. Write every sentence in English, even when the facts name another content language; the posts themselves are made in that language later.
 
 Return ONLY JSON in exactly this shape:
 {
@@ -78,7 +83,9 @@ Return ONLY JSON in exactly this shape:
   "roadmap": [{ "phase": "foundation", "focus": { "text": "", "tag": "proposed" }, "actions": [{ "text": "", "tag": "proposed" }], "measure": [{ "text": "", "tag": "proposed" }] }],
   "icp": { "who": [{ "text": "", "tag": "inference", "factIds": ["F1"] }], "pains": [{ "text": "", "tag": "proposed" }], "where": [{ "text": "", "tag": "proposed" }], "triggers": [{ "text": "", "tag": "proposed" }] },
   "effort": [{ "channel": "Instagram", "organicPct": 80, "paidPct": 20, "nebulaaDoes": ["posts"], "youDo": [{ "text": "", "tag": "proposed" }] }],
-  "firstSteps": [{ "text": "", "tag": "proposed" }]
+  "firstSteps": [{ "text": "", "tag": "proposed" }],
+  "offline": [{ "id": "referrals", "reason": { "text": "", "tag": "proposed" }, "youDo": [{ "text": "", "tag": "proposed" }] }],
+  "metrics": [{ "id": "enquiries", "why": { "text": "", "tag": "proposed" }, "start": { "text": "", "tag": "proposed" } }]
 }`
   },
 
