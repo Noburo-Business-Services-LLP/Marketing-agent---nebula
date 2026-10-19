@@ -270,3 +270,58 @@ Total: about 7 to 9 working days. Phases 1 and 2 give the uniform buttons. Phase
 6. **Delete:** no instant permanent delete. Archive keeps the item (restorable any time). "Delete" moves it to a **Bin** where it can be restored for **14 days**, then it is permanently removed by a background purge (also remove stored files/thumbnails; honour the data-retention rules; document the job).
 7. **Top bar Search button:** it does nothing today (it was meant to search pages, posts and conversations). Remove it for now; wire it to a real search later (Library and Inbox search) only if the owner asks.
 8. **Video posting follows the same Publish add-on rule as posts** (gate it, tell accounts that used it in the last 30 days).
+
+## Phase 1 backend built (2026-10-19, not released)
+
+Code: `backend/services/postLifecycle.js` (rules), `backend/services/draftStatus.js` and `frontend/utils/draftStatus.ts` (shared status and origin helpers, kept equal by `frontend/tests/draftStatus.test.mjs`), `backend/routes/drafts.js` (thin routes), `backend/services/binPurge.js` (purge job). Tests: `backend/tests/postApproval.test.js`, `backend/tests/binPurge.test.js`. Real-database check: `backend/scripts/approval-check.js` (nebulaa_dev only, 19 checks).
+
+### Statuses
+`draft, approved, scheduled, published, archived, binned, processing, completed, failed`. `approved` is new: the customer said yes and the post waits to be scheduled or posted. `binned` is new: in the Bin. The shared helper maps `approved` and `scheduled` to "approved", `binned` to "closed".
+
+### Origin and the migration rule for old rows
+Every Draft carries `origin: 'manual' | 'automation'`.
+- **manual**: `POST /drafts/save`, `POST /drafts/upload-media`, `POST /drafts/generate-image-bg` (Create), `POST /campaigns` (its auto-saved draft), carousels, video drafts seeded by `/video-generation`.
+- **automation**: `generateSingleCalendarItem` (weekly plan posts, calendar auto-generation, Regenerate of a calendar post) and the calendar reel seed in `routes/contentCalendar.js`.
+- A language version takes the origin of its original.
+- **Old rows (no origin) are not rewritten.** `originOf(draft)` reads them as automation when they carry `contentCalendarId` or a numeric `calendarDay` (only the calendar and weekly generator ever set these; weekly plan rows have `calendarDay` but no calendar id), otherwise manual. The database filter (`automationClauses`) applies the same rule, so no backfill and no destructive migration is needed. The schema has no default origin on purpose, so old rows keep reading through this rule.
+- Automatic reply drafts (Inbox) and Home drafts (competitor responses) are other models, not Drafts; they keep their own approval flows.
+
+### Routes (all `protect`, owner-scoped by `req.user`; an agency pass or CSM pass is the client, so they work inside a client)
+| Route | What it does |
+|---|---|
+| `POST /api/drafts/:id/approve` | Never posts. With a planned date at least 5 minutes ahead and the right to schedule (`canUse(user, 'schedule')`, Publish add-on rules unchanged) it is scheduled for that date through the existing scheduler (Campaign `scheduled`). Otherwise status `approved`. Free on every plan. 409 for Bin, archived, still being made, did not finish, already posted. |
+| `POST /api/drafts/:id/unapprove` | `approved` back to `draft` (Needs approval). |
+| `POST /api/drafts/:id/unschedule` | `scheduled` to `approved`; its Campaign goes from `scheduled` to `draft` (conditional, so a campaign already going out is refused). Refused within 2 minutes of its time. The time is kept as `plannedDate`. |
+| `POST /api/drafts/:id/publish`, `POST /api/drafts/:id/schedule` | Unchanged for manual posts (any of draft, ready, completed, approved). Automation posts must be `approved` or `scheduled`, else 409 "Approve this post first." Binned posts: 409 "Restore this post from the Bin first." |
+| `DELETE /api/drafts/:id` | Moves to the Bin: `binned`, `binnedAt`, `binnedFrom`. Posted items: 409 (archive them). Scheduled: 409 "Unschedule this post first." Still being made: 409. |
+| `POST /api/drafts/:id/archive` | `archived` with `archivedFrom`. Posted items may be archived; scheduled must be unscheduled first. |
+| `POST /api/drafts/:id/reject` | Reject = archive (same rules) and the calendar day is marked rejected. |
+| `POST /api/drafts/:id/restore` | From the Bin within 14 days (410 after), or from Archived at any time, back to the previous status (`scheduled` comes back as `approved`). An old archived row without `archivedFrom` comes back as posted when its campaign was posted, else as draft. |
+| `GET /api/drafts/counts` | `{ needsApproval, drafts, approved, scheduled, posted, archived, binned }`, `countDocuments` on the existing `{ userId, status }` index. No new index. |
+| `GET /api/drafts` | The Bin is no longer listed unless `?status=binned`. |
+| `PUT /api/drafts/:id`, `POST /api/drafts/save` | Can no longer set status, origin, Bin fields, planned date, calendar link or campaign link. An edit no longer schedules the linked campaign by itself (before, any edit of a draft with a date set its campaign to scheduled). |
+| `POST /api/campaigns/:id/publish`, `PUT /api/campaigns/:id` with status scheduled or active | 409 "Approve this post first." when the campaign belongs to an automation post that is not approved. |
+
+Needs approval = automation origin, a post (not a reel or video), status waiting or failed (the same status set as the Review queue). Home "drafts waiting" uses the same `needsApprovalFilter`. The Home summary cache is cleared by the existing `/api` write watcher on every drafts write. Calendar and weekly posts now store `plannedDate` (10:00 India time on the planned day) and are linked to their Campaign at creation.
+
+### Publish add-on for videos
+- Hero videos: `POST /api/hero-video/jobs/:jobId/publish` is now gated with `requireFeature('publish')` at the mount in `server-main.js` (plain 403 with `upgradeRequired`).
+- Old reels: `POST /api/video-generation/schedulePost` was already gated with `requireFeature('schedule')` at the mount (same add-on). The finding in section 1.4 was out of date.
+- Studio videos (`/api/videos`): no posting route exists. Making and downloading videos is not affected on any plan.
+
+### Bin purge (`services/binPurge.js`)
+Daily (first run 3 minutes after start), one server at a time (OpsState lease `bin_purge_lease`), batch of 50 (`BIN_PURGE_BATCH`), off with `ENABLE_BIN_PURGE=off`. Removes Drafts binned more than 14 days ago; the delete repeats the condition, so a Restore that lands first wins and a second run removes nothing more. Skips a row whose campaign is anything but unsent (`draft` or `failed`); deletes an unsent linked campaign with its post. Files are deleted through `services/cloudinaryCleanup.js` (our "nebula" folders only), never brand, logo, product, Blueprint or competitor files, and never a file another Draft or Campaign of the account still uses (language versions share pictures). Video drafts lose only their row; their files belong to the video record. The row goes first, then the files, so a failed file deletion leaves a stray file, never a broken post. Logs counts only.
+
+### Send all to approval
+Frontend only (`GravityCreate.tsx` calls publish for each card). Create results are manual posts, so the server correctly lets them post. Phase 2 must rename it and call `/approve` (or Schedule), not publish.
+
+### Left for phase 2 (frontend) and later
+- Library: Needs approval view and badge from `GET /drafts/counts`; Approved and Bin views; Restore and Unschedule buttons; PostActions.
+- Review and approve page: switch from `isAwaitingReview` to `needsApproval` and from publish to `/approve`. **Until then its Approve button returns 409 for automation posts** (it calls publish). Release backend and frontend together.
+- `DraftPreviewModal` "Archive" calls `DELETE`, which now moves to the Bin: switch it to `/archive`. Library Delete and Create Delete now go to the Bin (wanted).
+- Create results: "Send all to approval" (above).
+- Home tile title "Drafts waiting" can become "Needs approval".
+- Campaigns and ContentDraft have their own delete paths (`DELETE /api/campaigns/:id`, calendar `ContentDraft`): not moved to the Bin yet. Hero, video drafts and studio videos keep their real deletes (Library already confirms them).
+- Old calendar-made Campaigns are not linked to their post, so the campaign routes cannot tell they need approval; new ones are linked. `createDraftsForItem` with `publish: true` schedules a calendar ContentDraft campaign directly at the customer's click (not a Draft).
+- The scheduler leaves the Draft as `scheduled` after it posts the Campaign (it only updates the Campaign), so the `posted` count misses posts that went out through the scheduler. Worth a small follow-up in `campaignScheduler.js`.
+- Approve for videos (D3) when videos join the Library.
