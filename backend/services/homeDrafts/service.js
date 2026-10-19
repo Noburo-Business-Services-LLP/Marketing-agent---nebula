@@ -21,7 +21,7 @@
  */
 const caps = require('../../config/homeDrafts');
 const { QUARK_COSTS } = require('../../config/apiCosts');
-const { priceText } = require('../../config/quarkWording');
+const { priceText, worthText } = require('../../config/quarkWording');
 const { canUse } = require('../../config/entitlements');
 const { trackedCompetitors, competitorsQuery, handleOf } = require('../competitors/tracked');
 const { mergePosts, postKeyOf, whatWorked, bestOf } = require('../competitors/bestPosts');
@@ -108,7 +108,7 @@ function entitlement(user) {
 /** Price of each kind, read from config/apiCosts.js only. */
 function prices() {
   const out = {};
-  for (const kind of caps.KINDS) { const q = QUARK_COSTS[ACTION[kind]]; out[kind] = { quarks: q, price: priceText(q) }; }
+  for (const kind of caps.KINDS) { const q = QUARK_COSTS[ACTION[kind]]; out[kind] = { quarks: q, price: priceText(q), worth: worthText(q) }; }
   return out;
 }
 
@@ -231,8 +231,12 @@ function createHomeDrafts(given = {}) {
       const used = await Draft().countDocuments({ userId: idOf(user), day: istDay(deps.now()), attempts: { $gt: 0 } });
       left = Math.max(0, caps.MAX_DRAFTS_PER_DAY - used);
     } catch (_) { left = null; }
+    // Agency owners and their client workspaces see posts and videos, never Quarks (the same rule as the agency screens).
+    const tier = user && user.plan && user.plan.tier;
+    const ag = (user && user.agency) || {};
+    const postsOnly = tier === 'agency' || Boolean(ag.ownerId) || Number(ag.clientCount || 0) > 0;
     return {
-      enabled: switchOn(deps.env), entitled: ent.ok, locked: ent.ok ? null : ent.reason, prices: prices(),
+      enabled: switchOn(deps.env), entitled: ent.ok, locked: ent.ok ? null : ent.reason, prices: prices(), postsOnly,
       tones: caps.TONES, languages: caps.LANGUAGES.map((key) => ({ key, label: languageLabel(key) })), language: lang.code,
       perDay: caps.MAX_DRAFTS_PER_DAY, left, maxComment: caps.COMMENT_MAX, maxCaption: caps.CAPTION_MAX
     };

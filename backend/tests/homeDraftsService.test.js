@@ -95,6 +95,7 @@ test('prices come from config/apiCosts.js only, with the posts equivalent beside
   assert.strictEqual(p.witty_comment.quarks, QUARK_COSTS.home_witty_comment);
   assert.strictEqual(p.response_post.quarks, QUARK_COSTS.home_response_post);
   assert.match(p.witty_comment.price, /^\d+ Quarks \(about \d+ posts?'s? worth\)$/);
+  assert.match(p.response_post.worth, /^about \d+ posts?'s? worth$/, 'agencies see the posts equivalent without Quarks');
 });
 
 test('a decent comment: one charge, one writing call, one check, the draft shown and kept on the ledger row', async () => {
@@ -373,6 +374,9 @@ test('options: prices, the switch, entitlement, languages and drafts left today;
   assert.strictEqual(o.left, caps.MAX_DRAFTS_PER_DAY - 1);
   assert.strictEqual(o.prices.witty_comment.quarks, COMMENT);
   assert.deepStrictEqual(o.languages.map((l) => l.key), ['english', 'tamil', 'hindi', 'telugu', 'kannada', 'malayalam']);
+  assert.strictEqual(o.postsOnly, false);
+  assert.strictEqual((await w.svc.options(w.user(U1, { plan: { tier: 'agency' } }))).postsOnly, true, 'an agency sees posts, not Quarks');
+  assert.strictEqual((await w.svc.options(w.user(CLIENT, { agency: { ownerId: AGENCY } }))).postsOnly, true, 'so does its client workspace');
   assert.deepStrictEqual(await w.svc.options(w.user(U1, { staffRole: 'admin' })), { staff: true });
   const off = await world({ env: {} }).svc.options(w.user(U1, { plan: { tier: 'free' } }));
   assert.strictEqual(off.enabled, false); assert.strictEqual(off.entitled, false); assert.strictEqual(off.locked, 'upgrade');
