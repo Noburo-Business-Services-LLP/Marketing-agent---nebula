@@ -42,6 +42,7 @@ import ConnectSocials from './pages/ConnectSocials';
 import BrandAssets from './pages/BrandAssets';
 import Inventory from './pages/Inventory';
 import Settings from './pages/Settings';
+import Help from './pages/Help';
 import Analytics from './pages/Analytics';
 import SEOAssistant from './pages/SEOAssistant';
 import AIHistory from './pages/AIHistory';
@@ -338,6 +339,7 @@ const App: React.FC = () => {
                     <Route path="/ai-history" element={<AIHistory />} />
                     <Route path="/ai-performance" element={<AIPerformance />} />
                     <Route path="/settings" element={<Settings user={user} onUserUpdate={setUser} />} />
+                    <Route path="/help" element={<Help user={user} />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
                     {/* Persists across navigation while a Smart Calendar reel renders. */}

@@ -1,0 +1,44 @@
+/* Help page (pages/Help.tsx). A row of 2 or 3 equal tiles (flex, each grows; a short row still fills the width),
+   then the quick answers in a grid of equal cards (1, 2 or 4 columns from the section's own width, 8 answers fill
+   every row). Cream theme tokens and the area accents of docs/superpowers/ops/tile-system.md. */
+.nb-help-row { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 28px; padding: 0; list-style: none; align-items: stretch; }
+.nb-help-tile {
+  flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: 16px;
+  background: var(--gv-panel); border: 1px solid var(--gv-border-subtle); border-top: 4px solid var(--nb-help-bar, #F5A623);
+  box-shadow: 0 1px 2px rgb(var(--gv-ink-rgb) / 0.05), 0 12px 26px -20px rgb(90 60 20 / 0.4);
+}
+.nb-help-tile[data-accent="plan"] { --nb-help-bar: #1F9D9A; --nb-help-tint: #D6F1EF; }
+.nb-help-tile[data-accent="create"] { --nb-help-bar: #F5A623; --nb-help-tint: #FFF0C7; }
+.nb-help-tile[data-accent="inbox"] { --nb-help-bar: #3B82C4; --nb-help-tint: #DCEBFA; }
+.nb-help-ico { width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--nb-help-tint, #FFF0C7); color: #14203A; }
+.nb-help-title { margin: 2px 0 0; font-size: 16px; font-weight: 700; color: var(--gv-text-primary); }
+.nb-help-text { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--gv-text-secondary); }
+.nb-help-mail { color: var(--gv-text-primary); font-weight: 700; overflow-wrap: anywhere; }
+.nb-help-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.nb-help-tile > .nb-help-btn { margin-top: auto; align-self: flex-start; }
+.nb-help-btn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 16px; border-radius: 10px;
+  border: 1px solid var(--gv-border-default); background: var(--gv-panel); color: var(--gv-text-primary);
+  font: inherit; font-size: 13.5px; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.nb-help-btn:hover { background: #FFF6E3; border-color: var(--gv-border-strong); }
+.nb-help-btn[data-primary="true"] { background: #F5A623; border-color: #F5A623; color: #1A1208; }
+.nb-help-btn[data-primary="true"]:hover { background: #E69A17; }
+.nb-help-btn:focus-visible, .nb-help-link:focus-visible { outline: 3px solid #7A4A00; outline-offset: 2px; }
+.nb-help-status { margin: 0; min-height: 1.2em; font-size: 12px; color: var(--gv-text-tertiary); }
+
+.nb-help-faq { container-type: inline-size; }
+.nb-help-h2 { margin: 0 0 12px; font-family: 'Playfair Display', Georgia, serif; font-weight: 400; font-size: 24px; line-height: 1.2; color: var(--gv-text-primary); }
+.nb-help-faq-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 0; padding: 0; list-style: none; align-items: stretch; }
+@container (min-width: 600px) { .nb-help-faq-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 1200px) { .nb-help-faq-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.nb-help-answer { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px; border-radius: 14px; background: var(--gv-panel); border: 1px solid var(--gv-border-subtle); }
+.nb-help-q { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--gv-text-primary); }
+.nb-help-a { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--gv-text-secondary); }
+.nb-help-link { margin-top: auto; padding-top: 4px; align-self: flex-start; font-size: 13px; font-weight: 600; color: var(--gv-accent-text); text-decoration: underline; text-underline-offset: 2px; border-radius: 4px; }
+
+@media (max-width: 639px) {
+  .nb-help-row { gap: 10px; margin-bottom: 22px; }
+  .nb-help-tile { padding: 16px; }
+  .nb-help-h2 { font-size: 22px; }
+}

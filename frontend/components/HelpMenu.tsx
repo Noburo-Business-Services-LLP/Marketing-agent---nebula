@@ -91,6 +91,7 @@ const HelpMenu: React.FC<{ canReplay?: boolean; canSetup?: boolean; className?: 
         <div ref={menu} role="menu" aria-label="Help" className="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-1.5 shadow-2xl">
           {canReplay && <button type="button" role="menuitem" onClick={replay} className={ITEM}>Replay the tour</button>}
           {canSetup && setupShown && <button type="button" role="menuitem" onClick={setupSteps} className={ITEM}>Your setup steps</button>}
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate('/help'); }} className={ITEM}>Help and quick answers</button>
           <a role="menuitem" href={`mailto:${SUPPORT_EMAIL}`} onClick={() => setOpen(false)} className={ITEM}>Contact support</a>
         </div>
       )}

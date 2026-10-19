@@ -30,7 +30,6 @@ import HelpMenu, { TOUR_REPLAY_EVENT } from './HelpMenu';
 import { TOUR_STEPS, shouldAutoStart } from '../utils/tour';
 import { needsTermsPrompt } from '../utils/accountDeletion';
 import { groupHasPath, showsCompetitorsEntry, navSectionOf, navSubItems, activeSubKey, topBarMeta as topBarMetaOf, badgeText, NavSection, NavSubItem } from '../utils/navMenu';
-import { SUPPORT_EMAIL } from '../constants/legal';
 import './nav.css';
 import { apiService, draftsAPI } from '../services/api';
 import { staffMenuEntry, returnHashAfterActing } from '../utils/staffHome';
@@ -193,6 +192,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     { path: '/brand-assets',    label: 'Brand assets',       icon: Palette },
     { path: '/connect-socials', label: 'Connected accounts', icon: Link2 },
     { path: '/settings',        label: 'Settings',           icon: Settings },
+    { path: '/help',            label: 'Help',               icon: HelpCircle },
   ];
   const currentSection = navSectionOf(location.pathname);
   const currentSub = activeSubKey(location.pathname, location.search, navOptions);
@@ -389,14 +389,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
                   {setupNav.map((item) => (
                     <NavLink key={item.path} {...item} />
                   ))}
-                  <a
-                    href={`mailto:${SUPPORT_EMAIL}`}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`${ROW} ${rowTone(false)}`}
-                  >
-                    <HelpCircle className="w-[15px] h-[15px] text-[var(--gv-text-tertiary)] group-hover:text-[var(--gv-text-secondary)]" />
-                    <span className="text-[13.5px] font-medium tracking-[-0.005em] flex-1">Help</span>
-                  </a>
                 </nav>
               )}
             </div>

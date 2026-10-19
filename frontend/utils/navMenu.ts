@@ -38,7 +38,7 @@ export function navSectionOf(pathname: string): NavSection {
   if (starts(p, '/library') || starts(p, '/drafts')) return 'library';
   if (starts(p, '/inbox')) return 'inbox';
   if (starts(p, '/analytics') || starts(p, '/competitors') || starts(p, '/ai-memory') || starts(p, '/ai-history') || starts(p, '/ai-performance')) return 'insights';
-  if (starts(p, '/brand-assets') || starts(p, '/inventory') || starts(p, '/connect-socials') || starts(p, '/settings')) return 'setup';
+  if (starts(p, '/brand-assets') || starts(p, '/inventory') || starts(p, '/connect-socials') || starts(p, '/settings') || starts(p, '/help')) return 'setup';
   return 'other';
 }
 
@@ -171,6 +171,7 @@ export function topBarMeta(pathname: string, search = ''): { title: string; crum
   if (pathname.startsWith('/brand-assets')) return { title: 'Setup', crumb: 'Brand assets' };
   if (pathname.startsWith('/inventory')) return { title: 'Setup', crumb: 'Brand assets' };
   if (pathname.startsWith('/settings')) return { title: 'Setup', crumb: 'Settings' };
+  if (pathname.startsWith('/help')) return { title: 'Setup', crumb: 'Help' };
   return { title: 'Home', crumb: '' };
 }
 
