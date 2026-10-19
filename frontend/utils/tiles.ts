@@ -4,7 +4,8 @@
 export const TILE_ACCENTS = ['create', 'review', 'inbox', 'performance', 'plan', 'brand', 'competitors', 'video', 'photoshoot'] as const;
 export type TileAccent = typeof TILE_ACCENTS[number];
 
-export const TILE_VARIANTS = ['hero', 'standard', 'compact', 'idea'] as const;
+// `choice` is the small quiet tile for picking between options (Create content): small framed picture, no stripe, no arrow.
+export const TILE_VARIANTS = ['hero', 'standard', 'compact', 'idea', 'choice'] as const;
 export type TileVariant = typeof TILE_VARIANTS[number];
 
 /** One colour per area: `bar` is the accent stripe and arrow, `tint` is the art background. Kept in step with the `.nb-tile[data-accent]` rules in index.html (a test checks it). */

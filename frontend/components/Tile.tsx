@@ -37,11 +37,12 @@ const Tile: React.FC<TileProps> = ({
   title, subtitle, art, accent, badge, footer, to, onClick, locked, disabled, variant, selected, dataAttrs, className,
 }) => {
   const kind = tileTag({ to, onClick, disabled });
+  const v = variantOf(variant);
   const badgeStr = badgeText(badge);
   const shared = {
     className: `nb-tile${className ? ` ${className}` : ''}`,
     'data-accent': accentOf(accent),
-    'data-variant': variantOf(variant),
+    'data-variant': v,
     'data-locked': locked ? 'true' : undefined,
     'data-selected': selected ? 'true' : undefined,
     ...dataAttrs,
@@ -60,10 +61,11 @@ const Tile: React.FC<TileProps> = ({
         {locked && (
           <span className="nb-tile-mark" aria-hidden="true"><Lock size={14} strokeWidth={2.4} /></span>
         )}
-        {selected && (
+        {/* A choice tile shows its selection with the ring alone: no tick, no arrow. */}
+        {selected && v !== 'choice' && (
           <span className="nb-tile-mark nb-tile-check" aria-hidden="true"><Check size={15} strokeWidth={3} /></span>
         )}
-        {kind !== 'disabled' && variantOf(variant) !== 'compact' && (
+        {kind !== 'disabled' && v !== 'compact' && v !== 'choice' && (
           <span className="nb-tile-go" aria-hidden="true"><ArrowRight size={16} strokeWidth={2.4} /></span>
         )}
       </span>

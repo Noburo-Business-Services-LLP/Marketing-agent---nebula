@@ -14,7 +14,7 @@ Built 2026-10-18 on branch `nebulaa-redesign` (foundation of the visual refresh,
 | 22 illustrations plus the shared frame `Svg.tsx` and a barrel `index.ts` | `frontend/components/art/` |
 | Developer showcase (all pieces, every accent, variant and state, Tamil and Hindi titles) | `frontend/pages/ArtShowcase.tsx`, route `/art-showcase` (development and the sample-data preview only; not in a production build) |
 | Art budget | `frontend/scripts/art-budget.mjs`, enforced by `frontend/tests/art-budget.test.mjs` |
-| First proof: Create content mode tiles | `frontend/pages/GravityCreate.tsx`, `frontend/utils/createTiles.ts` |
+| Create content type chooser (five `choice` tiles in one row) | `frontend/pages/GravityCreate.tsx`, `frontend/utils/createTiles.ts` |
 
 ## How to use a Tile
 
@@ -29,9 +29,17 @@ import { ReviewQueueArt } from '../components/art';
 </TileGrid>
 ```
 
-Props: `title`, `subtitle`, `art` (an art component, or `{ src, width, height, alt }` for a small photo), `accent`, `badge` (text or a count; 0 is hidden, over 99 reads 99+), `footer`, `to` (link) or `onClick` (button), `locked` (lock mark, grey-toned art, "Locked" read out), `disabled`, `variant`, `selected` (for choosing between options: `aria-pressed`, a tick and an accent ring), `dataAttrs` (for example `{ 'data-tour': 'x' }`).
+Props: `title`, `subtitle`, `art` (an art component, or `{ src, width, height, alt }` for a small photo), `accent`, `badge` (text or a count; 0 is hidden, over 99 reads 99+), `footer`, `to` (link) or `onClick` (button), `locked` (lock mark, grey-toned art, "Locked" read out), `disabled`, `variant`, `selected` (for choosing between options: `aria-pressed`, a tick and an accent ring; on `choice` tiles only a thin gold ring), `dataAttrs` (for example `{ 'data-tour': 'x' }`).
 
-Variants: `standard` (picture above text), `hero` (spans two columns from 640 px, picture beside text), `compact` (a row with a small picture), `idea` (3:2 picture, small title, footer for the format and cost). `TileGrid phone="row"` turns standard and idea tiles into rows on a phone so a choice of several tiles does not fill several screens (Create content uses it).
+Variants: `standard` (picture above text), `hero` (spans two columns from 640 px, picture beside text), `compact` (a row with a small picture), `idea` (3:2 picture, small title, footer for the format and cost), `choice` (a small quiet tile for picking between options: a 38 by 30 px framed picture beside the title, one line and a muted price below, no stripe, no arrow, no tick; the current one gets a thin gold ring). `TileGrid phone="row"` turns standard and idea tiles into rows on a phone. `TileGrid size="small"` is the tight grid for `choice` tiles: 2 columns on a phone, 3 on a tablet, then `columns` (up to 5) in one even row.
+
+### Lesson (owner, 2026-10-19): tiles must be compact
+
+The first Create content tiles (four 300 px picture tiles in a 2 by 2 grid plus a different-looking Video row) pushed the form far down and read as "so ugly, big blocks". Rules since then:
+
+- Above a form or on a working screen, use `choice` or `compact` tiles: about 96 to 120 px tall at desktop, all in one even row, every tile the same structure (Video looks exactly like the four modes even though it opens another page).
+- Big illustrated tiles (`standard`, `hero`) belong only on hero and landing areas, never above a form.
+- Show selection with a thin gold ring, not a big tick badge. Keep headings small, borders light and avoid big filled panels; the form must be visible without scrolling at 1280 by 800 once a type is chosen.
 
 A `DarkPanel` takes `eyebrow`, `title`, text children and an `action`. Use two or three per page at most.
 

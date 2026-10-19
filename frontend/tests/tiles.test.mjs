@@ -11,9 +11,9 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
-test('the nine accents and four variants are fixed', () => {
+test('the nine accents and five variants are fixed', () => {
   assert.deepEqual([...TILE_ACCENTS], ['create', 'review', 'inbox', 'performance', 'plan', 'brand', 'competitors', 'video', 'photoshoot']);
-  assert.deepEqual([...TILE_VARIANTS], ['hero', 'standard', 'compact', 'idea']);
+  assert.deepEqual([...TILE_VARIANTS], ['hero', 'standard', 'compact', 'idea', 'choice']);
 });
 
 test('an unknown accent or variant falls back instead of breaking the tile', () => {

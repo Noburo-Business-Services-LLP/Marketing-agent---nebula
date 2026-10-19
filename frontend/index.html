@@ -268,6 +268,27 @@
       .nb-tile[data-variant="idea"] .nb-tile-art { aspect-ratio: 3 / 2; }
       .nb-tile[data-variant="idea"] .nb-tile-title { font-size: 15px; }
       .nb-tile[data-variant="idea"] .nb-tile-foot { padding-top: 6px; }
+      /* Small choice tiles (Create content): one quiet, even row. A small framed picture beside the title,
+         one line and a muted price below, no stripe, no arrow, no tick; the current one has a thin gold ring.
+         Big illustrated tiles belong on hero and landing areas only, never above a form. */
+      .nb-tile-grid[data-size="small"] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      @media (min-width: 640px) { .nb-tile-grid[data-size="small"] { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } }
+      @media (min-width: 1024px) { .nb-tile-grid[data-size="small"] { grid-template-columns: repeat(var(--nb-cols, 5), minmax(0, 1fr)); gap: 12px; } }
+      .nb-tile[data-variant="choice"] {
+        display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: 9px; align-items: center;
+        padding: 10px 11px 9px; border-radius: 14px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(20, 32, 58, 0.04);
+      }
+      .nb-tile[data-variant="choice"]::before { display: none; }
+      .nb-tile[data-variant="choice"] .nb-tile-art {
+        grid-column: 1; grid-row: 1; width: 38px; height: 30px; aspect-ratio: auto; border-radius: 8px;
+        background: #FBF6EC; box-shadow: inset 0 0 0 1px rgb(20 32 58 / 0.06);
+      }
+      .nb-tile[data-variant="choice"] .nb-tile-artwrap > svg { transform: scale(1.18); }
+      .nb-tile[data-variant="choice"] .nb-tile-body { display: contents; }
+      .nb-tile[data-variant="choice"] .nb-tile-title { grid-column: 2; grid-row: 1; font-size: 13.5px; font-weight: 650; line-height: 1.25; letter-spacing: -0.005em; }
+      .nb-tile[data-variant="choice"] .nb-tile-sub { grid-column: 1 / -1; grid-row: 2; margin-top: 6px; font-size: 12px; line-height: 1.3; }
+      .nb-tile[data-variant="choice"] .nb-tile-foot { grid-column: 1 / -1; grid-row: 3; align-self: end; margin-top: 0; padding-top: 3px; font-size: 11px; line-height: 1.3; font-weight: 500; color: var(--gv-text-tertiary); }
+      .nb-tile[data-variant="choice"][data-selected="true"] { border-color: var(--gv-accent); background: #FFFCF4; box-shadow: 0 0 0 1px var(--gv-accent), 0 1px 2px rgba(20, 32, 58, 0.04); }
       @media (min-width: 640px) {
         .nb-tile[data-variant="hero"] { flex-direction: row; }
         .nb-tile[data-variant="hero"] .nb-tile-art { flex: 0 0 46%; aspect-ratio: auto; min-height: 200px; }
@@ -284,6 +305,8 @@
         .nb-tile[data-selected="true"]:hover { box-shadow: 0 0 0 2px var(--tile-bar), 0 18px 40px rgb(var(--tile-glow-rgb) / 0.30); }
         .nb-tile .nb-tile-go { transition: transform 0.18s ease; }
         .nb-tile:hover:not(:disabled) .nb-tile-go { transform: translateX(3px); }
+        .nb-tile[data-variant="choice"]:hover:not(:disabled):not([data-disabled="true"]) { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(20, 32, 58, 0.08); }
+        .nb-tile[data-variant="choice"][data-selected="true"]:hover:not(:disabled) { box-shadow: 0 0 0 1px var(--gv-accent), 0 6px 16px rgba(20, 32, 58, 0.08); }
       }
       /* Deep-ink feature panel with a soft gold glow border. Use sparingly: two or three per page at most. */
       .nb-darkpanel {
