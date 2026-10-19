@@ -9,11 +9,11 @@ import HeroEdit from '../components/HeroEdit';
 import { DraftPreviewModal } from '../components/DraftPreviewModal';
 import { orderForViewing } from '../utils/postOrder';
 import PlatformIcon from '../components/PlatformIcon';
-import { draftsAPI, videoGenerationAPI, heroVideoAPI } from '../services/api';
+import { draftsAPI, videoGenerationAPI, heroVideoAPI, photoshootAPI } from '../services/api';
 import { platformLabel } from '../utils/platforms';
 import {
   LibraryItem, LibraryFilters, LibraryStatus, DEFAULT_FILTERS, STATUS_WORD,
-  fromPostDraft, fromVideoDraft, fromHeroJob, applyFilters,
+  fromPostDraft, fromVideoDraft, fromHeroJob, fromPhotoshootPhoto, applyFilters,
 } from '../utils/library';
 
 const STATUS_CHIPS: Array<{ key: 'all' | LibraryStatus; label: string }> = [
@@ -25,7 +25,7 @@ const KINDS: Array<{ key: LibraryFilters['kind']; label: string }> = [
 ];
 const SOURCES: Array<{ key: LibraryFilters['source']; label: string }> = [
   { key: 'all', label: 'Everything' }, { key: 'hero', label: 'Hero videos' }, { key: 'video-draft', label: 'Step-by-step videos' }, { key: 'post', label: 'Posts and images' },
-  { key: 'reel', label: 'Reels from your plan' },
+  { key: 'reel', label: 'Reels from your plan' }, { key: 'photoshoot', label: 'Photoshoots' },
 ];
 
 const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gv-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--gv-bg,transparent)]';
@@ -49,10 +49,11 @@ const Library: React.FC = () => {
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
-    const [posts, videos, heroes] = await Promise.allSettled([
+    const [posts, videos, heroes, shoots] = await Promise.allSettled([
       draftsAPI.getDrafts(),
       videoGenerationAPI.getDrafts(),
       heroVideoAPI.list(),
+      photoshootAPI.library(),
     ]);
     const bad: string[] = [];
     const all: LibraryItem[] = [];
@@ -65,6 +66,8 @@ const Library: React.FC = () => {
     else bad.push('step-by-step videos');
     if (heroes.status === 'fulfilled') ((heroes.value as any)?.jobs || []).forEach((j: any) => { const c = fromHeroJob(j); if (c) all.push(c); });
     else bad.push('Hero videos');
+    if (shoots.status === 'fulfilled') ((shoots.value as any)?.photos || []).forEach((p: any) => { const c = fromPhotoshootPhoto(p); if (c) all.push(c); });
+    else bad.push('photoshoots');
     setItems(all); setProblems(bad); setLoading(false);
   }, []);
 
@@ -86,6 +89,7 @@ const Library: React.FC = () => {
     if (i.source === 'hero') navigate('/reels/hero');
     else if (i.source === 'video-draft') navigate(`/reels?jobId=${encodeURIComponent(i.id)}`);
     else if (i.source === 'reel' && i.jobId) navigate(`/reels?jobId=${encodeURIComponent(i.jobId)}`);
+    else if (i.source === 'photoshoot') navigate('/photoshoot');
     else navigate('/drafts');
   };
 
@@ -111,7 +115,7 @@ const Library: React.FC = () => {
       <div>
         <GravityLabel gold className="mb-2">Library</GravityLabel>
         <h1 className="text-[26px] sm:text-[32px] font-semibold leading-tight text-[var(--gv-text-primary)]">Everything you have made</h1>
-        <p className="mt-2 text-[14.5px] text-[var(--gv-text-secondary)]">Images and videos in one place. Open one to download it, post it, schedule it or keep editing.</p>
+        <p className="mt-2 text-[14.5px] text-[var(--gv-text-secondary)]">Images, videos and photoshoots in one place. Open one to download it, post it, schedule it or keep editing.</p>
       </div>
 
       <div className="space-y-3">

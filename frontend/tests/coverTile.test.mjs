@@ -26,7 +26,8 @@ const deepOf = (p) => {
 };
 
 test('every palette in the component has its colours in the stylesheet', () => {
-  assert.deepEqual(palettes, ['gold', 'coral', 'teal', 'blue', 'ink']);
+  // plum (2026-10-19): the Photoshoot tile and the Product photoshoot pack, in the Photoshoot accent family.
+  assert.deepEqual(palettes, ['gold', 'coral', 'teal', 'blue', 'ink', 'plum']);
   for (const p of palettes) assert.equal(deepOf(p).length, 3);
 });
 

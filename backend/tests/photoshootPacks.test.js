@@ -149,6 +149,7 @@ test('the catalogue shows each pack with its price, posts equivalent and time', 
   assert.strictEqual(m.minutes, minutesFor(4));
   assert.strictEqual(minutesFor(4), 2); assert.strictEqual(minutesFor(8), 4); assert.strictEqual(minutesFor(1), 1);
   assert.ok(!JSON.stringify(c).includes('Rules for this photo'), 'no prompt text in the catalogue');
+  assert.deepStrictEqual(c.costs, { photoshoot_image: q, image_generated: costs.QUARK_COSTS.image_generated, studio_video: costs.QUARK_COSTS.studio_video });
 });
 
 test('only the generator file reaches the image model, and it is the one file tests replace', () => {

@@ -77,5 +77,7 @@
   "components/CompetitorTiles.tsx",
   "utils/competitorsHome.ts",
   "utils/homeDrafts.ts",
-  "components/home/DraftSheet.tsx"
+  "components/home/DraftSheet.tsx",
+  "pages/Photoshoot.tsx",
+  "utils/photoshoot.ts"
 ]

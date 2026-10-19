@@ -32,7 +32,8 @@ import {
   Inbox,
   Shield,
   Images,
-  Binoculars
+  Binoculars,
+  Camera
 } from 'lucide-react';
 import { User } from '../types';
 import NotificationBell from './NotificationBell';
@@ -194,6 +195,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     ...(showsMyPlan ? [{ path: '/plan', label: 'My plan', icon: ClipboardList }] : []),
     { path: '/campaigns',        label: 'Create content',    icon: Sparkles },
     { path: '/reels',            label: 'Videos',            icon: PlayCircle },
+    { path: '/photoshoot',       label: 'Photoshoot',        icon: Camera },
     { path: '/drafts',           label: 'Review and approve', icon: PenTool, badge: 'drafts' as const },
     { path: '/library',          label: 'Library',           icon: Images },
     { path: '/content-calendar', label: 'Calendar',          icon: CalendarDays },
@@ -239,6 +241,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     if (pathname.startsWith('/competitors')) return { title: 'Competitors', crumb: '' };
     if (pathname.startsWith('/ai-memory') || pathname.startsWith('/ai-history') || pathname.startsWith('/ai-performance')) return { title: 'Brand memory', crumb: '' };
     if (pathname.startsWith('/library')) return { title: 'Library', crumb: '' };
+    if (pathname.startsWith('/photoshoot')) return { title: 'Photoshoot', crumb: '' };
     if (pathname.startsWith('/drafts')) return { title: 'Review and approve', crumb: '' };
     if (pathname.startsWith('/idea-inbox')) return { title: 'Content ideas', crumb: '' };
     if (pathname.startsWith('/upload')) return { title: 'Upload and schedule', crumb: '' };

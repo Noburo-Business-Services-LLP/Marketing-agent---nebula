@@ -193,3 +193,19 @@
   .nb-home-next { padding: 14px 14px 6px; }
   .nb-home-num-value { font-size: 21px; }
 }
+
+/* ---- Photoshoot tab and the ready-made packs rail (2026-10-19) ---- */
+.nb-home-ps-tab { display: flex; flex-direction: column; gap: 10px; padding: 10px 2px 4px; }
+.nb-home-ps-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.nb-home-ps-chip {
+  display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  color: #6B2A75; background: #F4E1F8; border: 1px solid #E6C2EE; text-decoration: none;
+}
+.nb-home-ps-chip:hover { background: #EED3F4; }
+.nb-home-packs { margin-top: 14px; }
+/* A sideways rail at every width: each pack keeps a readable width, the row scrolls inside itself. */
+.nb-home-packs-rail { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; scrollbar-width: thin; }
+.nb-home-packs-item { flex: 0 0 min(78%, 250px); min-width: 0; scroll-snap-align: start; }
+@media (max-width: 639px) { .nb-home-ps-chip { min-height: 40px; } }
+/* Five create tiles on a phone: the last one spans both columns, so "Photoshoot" never breaks inside the word. */
+@media (max-width: 639px) { .nb-home-create .nb-tile-grid > :last-child:nth-child(odd) { grid-column: 1 / -1; } }

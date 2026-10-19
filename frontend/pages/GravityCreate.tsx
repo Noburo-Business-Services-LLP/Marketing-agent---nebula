@@ -15,8 +15,8 @@ import PostDesignPanel from '../components/PostDesignPanel';
 import ModeExplainer from '../components/ModeExplainer';
 import CoverTile, { type CoverPalette } from '../components/CoverTile';
 import TileGrid from '../components/TileGrid';
-import { SinglePostArt, CampaignArt, CarouselArt, LinkedInArt, VideoArt } from '../components/art';
-import { CREATE_TILES, VIDEO_ENTRY, actionCostKey, createTileCost, videoEntryCost } from '../utils/createTiles';
+import { SinglePostArt, CampaignArt, CarouselArt, LinkedInArt, VideoArt, PhotoshootArt } from '../components/art';
+import { CREATE_TILES, VIDEO_ENTRY, PHOTOSHOOT_ENTRY, actionCostKey, createTileCost, videoEntryCost, photoshootEntryCost } from '../utils/createTiles';
 import IdeaBoxTools, { ReadUpload } from '../components/IdeaBoxTools';
 import { appendText, mergeDetails } from '../utils/ideaFiles';
 import { DEFAULT_DESIGN, PostDesign, designRequestFields } from '../utils/postDesign';
@@ -232,6 +232,9 @@ const GravityCreate: React.FC = () => {
     const topic = String(p.topic || '').trim();
     // A mode on its own (a Home tile) only picks the type; the plan's hand-over is always a carousel.
     const wanted: CreateMode | null = p.mode && (['single', 'campaign', 'carousel', 'linkedin'] as const).includes(p.mode) ? p.mode : null;
+    // A Photoshoot photo ("Use in Create") is picked as the product picture of the post; only a stored https link is taken.
+    const photo = p.photo && /^https:\/\//i.test(String(p.photo.imageUrl || '')) ? p.photo : null;
+    if (photo) setPickedProducts([{ id: '', name: String(photo.name || 'Photoshoot photo').slice(0, 100), imageUrl: photo.imageUrl } as PickedAsset]);
     if (!topic && !p.platform && !p.language) { if (wanted) setMode(wanted); return; }
     setMode(wanted || 'carousel');
     if (topic) { setName(topic.slice(0, 80)); setDescription(topic); }
@@ -1092,10 +1095,11 @@ const GravityCreate: React.FC = () => {
 
   return (
     <div className="max-w-[960px] mx-auto pb-24">
-      {/* What to make: five cover tiles in one even row, Video first (two columns on a phone), each a small poster with
-          the art filling it. The four modes only set the mode; Video is made on its own page, so its tile opens that page. */}
+      {/* What to make: six cover tiles in one even row, Video first and Photoshoot second (two columns on a phone), each a
+          small poster with the art filling it. The four modes only set the mode; Video and Photoshoot are made on their own
+          pages, so their tiles open those pages. */}
       <div className="mt-1 mb-3">
-        <TileGrid columns={5} size="small" label="What do you want to create?">
+        <TileGrid columns={6} size="small" label="What do you want to create?">
           <CoverTile
             title={VIDEO_ENTRY.title}
             subtitle={VIDEO_ENTRY.subtitle}
@@ -1103,6 +1107,14 @@ const GravityCreate: React.FC = () => {
             palette="ink"
             art={VIDEO_ART}
             to={VIDEO_ENTRY.to}
+          />
+          <CoverTile
+            title={PHOTOSHOOT_ENTRY.title}
+            subtitle={PHOTOSHOOT_ENTRY.subtitle}
+            price={photoshootEntryCost(quarkCosts) || undefined}
+            palette="plum"
+            art={<PhotoshootArt />}
+            to={PHOTOSHOOT_ENTRY.to}
           />
           {CREATE_TILES.map((t) => (
             <CoverTile

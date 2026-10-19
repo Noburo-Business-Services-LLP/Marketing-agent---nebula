@@ -89,7 +89,11 @@ function packView(pack) {
 
 function catalogue() {
   const q = perPhoto();
-  return { perPhoto: { quarks: q, price: priceText(q), worth: worthText(q) }, packs: PACKS.map(packView), maxProducts: caps.MAX_PRODUCTS, maxPhotos: caps.MAX_PHOTOS_PER_JOB };
+  return {
+    perPhoto: { quarks: q, price: priceText(q), worth: worthText(q) }, packs: PACKS.map(packView), maxProducts: caps.MAX_PRODUCTS, maxPhotos: caps.MAX_PHOTOS_PER_JOB,
+    // What the page needs to write any total in posts' worth with the shared wording (all from config/apiCosts.js).
+    costs: { photoshoot_image: q, image_generated: QUARK_COSTS.image_generated, studio_video: QUARK_COSTS.studio_video }
+  };
 }
 
 /** The photos of a job: count per product, scenes in the pack's order. Pure. */

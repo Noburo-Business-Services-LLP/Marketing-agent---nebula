@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CREATE_TILES, VIDEO_ENTRY, actionCostKey, createTileCost, videoEntryCost } from '../utils/createTiles.ts';
+import { CREATE_TILES, VIDEO_ENTRY, PHOTOSHOOT_ENTRY, actionCostKey, createTileCost, videoEntryCost, photoshootEntryCost } from '../utils/createTiles.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -81,12 +81,24 @@ test('Video is offered as an entry that opens the existing Videos page, with its
   assert.ok(read('App.tsx').includes('path="/reels"'), 'the destination route exists');
 });
 
-test('the five choices are cover tiles of one structure in one row, and the theme field is gone', () => {
+test('the six choices are cover tiles of one structure in one row, and the theme field is gone', () => {
   const page = read('pages/GravityCreate.tsx');
-  assert.ok(page.includes('<TileGrid columns={5} size="small"'), 'one even row of five');
-  assert.equal((page.match(/<CoverTile\b/g) || []).length, 2, 'the mode tiles and the Video tile use the same cover tile');
+  // Photoshoot joined on 2026-10-19 (its page exists now), second after Video.
+  assert.ok(page.includes('<TileGrid columns={6} size="small"'), 'one even row of six');
+  assert.equal((page.match(/<CoverTile\b/g) || []).length, 3, 'the mode tiles, the Video tile and the Photoshoot tile use the same cover tile');
   assert.ok(!/<Tile\b/.test(page), 'no compact tile left on the chooser');
   assert.ok(page.includes("palette=\"ink\"") && /single: 'gold', campaign: 'coral', carousel: 'teal', linkedin: 'blue'/.test(page), 'each type has its own colour grade');
   assert.ok(!/Theme or festival|create-theme|setTheme/.test(page), 'no theme or festival field');
   assert.ok(!/theme: theme/.test(page), 'no theme value is sent');
+});
+
+test('Photoshoot is the second tile, after Video and before the four modes, and opens its page with its price', () => {
+  assert.deepEqual({ ...PHOTOSHOOT_ENTRY }, { title: 'Photoshoot', subtitle: 'Product photos in ready-made packs', accent: 'photoshoot', to: '/photoshoot' });
+  assert.equal(photoshootEntryCost({ photoshoot_image: 10 }), '10 Quarks for each photo');
+  assert.equal(photoshootEntryCost({}), '');
+  const page = read('pages/GravityCreate.tsx');
+  const v = page.indexOf('to={VIDEO_ENTRY.to}'); const p = page.indexOf('to={PHOTOSHOOT_ENTRY.to}'); const m = page.indexOf('CREATE_TILES.map((t) => (');
+  assert.ok(v > 0 && v < p && p < m, 'order: Video, Photoshoot, then Single post, Campaign, Carousel, LinkedIn');
+  assert.ok(read('App.tsx').includes('path="/photoshoot"'), 'the destination route exists');
+  assert.ok(!/[!\u2014]/.test(PHOTOSHOOT_ENTRY.title + PHOTOSHOOT_ENTRY.subtitle));
 });

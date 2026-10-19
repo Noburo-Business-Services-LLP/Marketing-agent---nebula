@@ -177,8 +177,9 @@ test('the describe box hands the idea to Create or Videos through the one-shot p
   assert.equal(describeHandoff('post', 'x'.repeat(DESCRIBE_MAX + 50), '').data.topic.length, DESCRIBE_MAX);
 });
 
-test('the four create tiles open the right screen and mode', () => {
-  assert.deepEqual(HOME_CREATE_TILES.map((t) => t.key), ['single', 'carousel', 'campaign', 'video']);
+test('the create tiles open the right screen and mode', () => {
+  // Photoshoot joined on 2026-10-19, once its page existed (tests/photoshoot.test.mjs covers it).
+  assert.deepEqual(HOME_CREATE_TILES.map((t) => t.key), ['single', 'carousel', 'campaign', 'video', 'photoshoot']);
   assert.deepEqual(createTileHandoff('carousel'), { target: 'carousel', route: '/campaigns', data: { mode: 'carousel', source: 'home' } });
   assert.deepEqual(createTileHandoff('video'), { target: null, route: '/reels', data: null });
 });

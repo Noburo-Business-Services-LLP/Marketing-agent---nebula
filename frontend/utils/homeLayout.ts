@@ -4,6 +4,7 @@
 import type { HomeAction, HomeNumber, HomeSummary } from '../types';
 import { changeText, formatCount, formatPercent, formatShort } from './formatCount.ts';
 import type { CarouselPrefill, VideoPrefill } from './prefill.ts';
+import { packTileLines, type PhotoshootCatalogue } from './photoshoot.ts';
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -173,16 +174,32 @@ export function describeHandoff(tab: 'post' | 'video', text: string, language: s
   return { target: 'carousel', route: '/campaigns', data: { mode: 'single', topic: idea, ...(lang ? { language: lang } : {}), source: 'home' } };
 }
 
-export type HomeCreateKey = 'single' | 'carousel' | 'campaign' | 'video';
-export const HOME_CREATE_TILES: ReadonlyArray<{ key: HomeCreateKey; title: string; subtitle: string; accent: 'create' | 'video' }> = [
+export type HomeCreateKey = 'single' | 'carousel' | 'campaign' | 'video' | 'photoshoot';
+export const HOME_CREATE_TILES: ReadonlyArray<{ key: HomeCreateKey; title: string; subtitle: string; accent: 'create' | 'video' | 'photoshoot' }> = [
   { key: 'single', title: 'Post', subtitle: 'One image with a caption', accent: 'create' },
   { key: 'carousel', title: 'Carousel', subtitle: 'Swipeable slides', accent: 'create' },
   { key: 'campaign', title: 'Campaign', subtitle: 'A series for one goal', accent: 'create' },
   { key: 'video', title: 'Video', subtitle: 'A short video', accent: 'video' },
+  { key: 'photoshoot', title: 'Photoshoot', subtitle: 'Product photos in packs', accent: 'photoshoot' },
 ];
+
+/** The tabs of the "Describe what you want" box. Photoshoot has nothing to type: it opens a ready-made pack. */
+export const HOME_DESCRIBE_TABS: ReadonlyArray<{ key: 'post' | 'video' | 'photoshoot'; label: string }> = [
+  { key: 'post', label: 'Post' }, { key: 'video', label: 'Video' }, { key: 'photoshoot', label: 'Photoshoot' },
+];
+
+/** The Home packs rail: one compact tile per Photoshoot pack, with its photos, time and price (from the server). */
+export function packRailItems(catalogue: PhotoshootCatalogue | null | undefined, postsOnly = false): Array<{ key: string; title: string; line: string; price: string; to: string }> {
+  if (!catalogue || !Array.isArray(catalogue.packs)) return [];
+  return catalogue.packs.map((p) => {
+    const l = packTileLines(p, catalogue.costs, postsOnly);
+    return { key: p.key, title: p.title, line: l.subtitle.charAt(0).toUpperCase() + l.subtitle.slice(1), price: l.price, to: `/photoshoot?pack=${encodeURIComponent(p.key)}` };
+  });
+}
 
 export function createTileHandoff(key: HomeCreateKey): { target: 'carousel' | null; route: string; data: CarouselPrefill | null } {
   if (key === 'video') return { target: null, route: '/reels', data: null };
+  if (key === 'photoshoot') return { target: null, route: '/photoshoot', data: null };
   return { target: 'carousel', route: '/campaigns', data: { mode: key, source: 'home' } };
 }
 

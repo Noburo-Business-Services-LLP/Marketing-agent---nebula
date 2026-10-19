@@ -13,7 +13,7 @@ import './CoverTile.css';
  * A real link (`to`) or a real button (`onClick`), never a clickable div. Styles are plain CSS in
  * CoverTile.css; motion only runs when the visitor has not asked for reduced motion.
  */
-export const COVER_PALETTES = ['gold', 'coral', 'teal', 'blue', 'ink'] as const;
+export const COVER_PALETTES = ['gold', 'coral', 'teal', 'blue', 'ink', 'plum'] as const;
 export type CoverPalette = typeof COVER_PALETTES[number];
 
 export interface CoverTileProps {

@@ -1,9 +1,9 @@
 /**
- * The Library merges three lists (post and image drafts, step-by-step video drafts, Hero videos) into one
+ * The Library merges four lists (post and image drafts, step-by-step video drafts, Hero videos, Photoshoot photos) into one
  * card shape, so one page can browse, filter and open all of them. Pure functions only.
  */
 export type LibraryKind = 'image' | 'video';
-export type LibrarySource = 'post' | 'reel' | 'video-draft' | 'hero';
+export type LibrarySource = 'post' | 'reel' | 'video-draft' | 'hero' | 'photoshoot';
 export type LibraryStatus = 'creating' | 'draft' | 'ready' | 'scheduled' | 'posted' | 'archived' | 'failed';
 
 export interface LibraryItem {
@@ -100,6 +100,18 @@ export function fromHeroJob(j: any): LibraryItem | null {
     caption: '', platforms: list(j.publish && j.publish.platforms), createdAt: ms(j.createdAt),
     finish: j.finish,
     ...(j.prompt ? { heroSource: { prompt: String(j.prompt), tweak: j.tweak } } : {}),
+  };
+}
+
+/** One finished Photoshoot photo the customer keeps in the Library (GET /api/photoshoot/library), tagged Photoshoot. */
+export function fromPhotoshootPhoto(p: any): LibraryItem | null {
+  // The server only sends stored https links; the sample-data preview uses small inline pictures.
+  if (!p || !p.jobId || !Number.isInteger(p.index) || !/^(https:\/\/|data:image\/)/i.test(String(p.url || ''))) return null;
+  const title = [text(p.product, 60), text(p.scene, 40)].filter(Boolean).join(', ') || 'Photoshoot photo';
+  return {
+    id: `${p.jobId}-${p.index}`, kind: 'image', source: 'photoshoot', title, status: 'ready',
+    thumbnailUrl: String(p.url), mediaUrl: String(p.url), caption: text(p.packTitle, 80) ? `Photoshoot: ${text(p.packTitle, 80)}` : 'Photoshoot',
+    platforms: [], createdAt: ms(p.createdAt), jobId: String(p.jobId),
   };
 }
 

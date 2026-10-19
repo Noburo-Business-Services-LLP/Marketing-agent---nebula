@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarCheck, Check, ClipboardCheck, Eye, Heart, ImageIcon, MessageCircle, Minus, Users, Wallet } from 'lucide-react';
 import type { HomeSummary } from '../../types';
 import Tile from '../Tile';
 import TileGrid from '../TileGrid';
-import { SinglePostArt, CarouselArt, CampaignArt, VideoArt } from '../art';
+import { SinglePostArt, CarouselArt, CampaignArt, VideoArt, PhotoshootArt } from '../art';
+import { PackProductArt, PackMarketplaceArt, PackFestivalArt, PackLifestyleArt, PackFlatLayArt, PackWhiteArt } from '../art/packs';
+import { photoshootAPI } from '../../services/api';
+import type { PhotoshootCatalogue } from '../../utils/photoshoot';
 import { setPrefill } from '../../utils/prefill';
 import { todayRows } from '../../utils/home';
 import {
-  numberTiles, numbersMode, actionRows, balanceView, describeHandoff, createTileHandoff, statusWord,
-  HOME_CREATE_TILES, DESCRIBE_MAX, type Banner, type HomeCreateKey, type NumberKey,
+  numberTiles, numbersMode, actionRows, balanceView, describeHandoff, createTileHandoff, statusWord, packRailItems,
+  HOME_CREATE_TILES, HOME_DESCRIBE_TABS, DESCRIBE_MAX, type Banner, type HomeCreateKey, type NumberKey,
 } from '../../utils/homeLayout';
 import '../ideaBox.css';
 
@@ -150,13 +153,33 @@ export const DoThisNext: React.FC<{ summary: HomeSummary; planBannerShown: boole
 };
 
 const CREATE_ART: Record<HomeCreateKey, React.ReactNode> = {
-  single: <SinglePostArt />, carousel: <CarouselArt />, campaign: <CampaignArt />, video: <VideoArt />,
+  single: <SinglePostArt />, carousel: <CarouselArt />, campaign: <CampaignArt />, video: <VideoArt />, photoshoot: <PhotoshootArt />,
+};
+const PACK_ART: Record<string, React.ReactNode> = {
+  product: <PackProductArt />, marketplace: <PackMarketplaceArt />, festival: <PackFestivalArt />,
+  lifestyle: <PackLifestyleArt />, flatlay: <PackFlatLayArt />, white: <PackWhiteArt />,
 };
 
-export const CreateToday: React.FC<{ language?: string | null }> = ({ language }) => {
+/** The Photoshoot packs from the server (prices from config/apiCosts.js), loaded once per visit. Null while loading or on failure. */
+function usePhotoshootPacks(enabled: boolean): PhotoshootCatalogue | null {
+  const [packs, setPacks] = useState<PhotoshootCatalogue | null>(null);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let live = true;
+    photoshootAPI.packs().then((c) => { if (live && c && Array.isArray(c.packs)) setPacks(c); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [enabled]);
+  return packs;
+}
+
+type DescribeTab = 'post' | 'video' | 'photoshoot';
+
+export const CreateToday: React.FC<{ language?: string | null; postsOnly?: boolean; showPacks?: boolean }> = ({ language, postsOnly = false, showPacks = true }) => {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<'post' | 'video'>('post');
+  const [tab, setTab] = useState<DescribeTab>('post');
   const [text, setText] = useState('');
+  const catalogue = usePhotoshootPacks(showPacks);
+  const rail = packRailItems(catalogue, postsOnly);
   const open = (key: HomeCreateKey) => {
     const h = createTileHandoff(key);
     if (h.target && h.data) setPrefill(h.target, h.data);
@@ -164,49 +187,78 @@ export const CreateToday: React.FC<{ language?: string | null }> = ({ language }
   };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (tab === 'photoshoot') { navigate('/photoshoot'); return; }
     const h = describeHandoff(tab, text, language);
     if (!h) return;
     if (h.target === 'video') setPrefill('video', h.data); else setPrefill('carousel', h.data);
     navigate(h.route);
   };
-  const tabs: Array<{ key: 'post' | 'video'; label: string }> = [{ key: 'post', label: 'Post' }, { key: 'video', label: 'Video' }];
   const onTabKey = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
     e.preventDefault();
-    const next = tab === 'post' ? 'video' : 'post';
+    const i = HOME_DESCRIBE_TABS.findIndex((t) => t.key === tab);
+    const next = HOME_DESCRIBE_TABS[(i + (e.key === 'ArrowRight' ? 1 : HOME_DESCRIBE_TABS.length - 1)) % HOME_DESCRIBE_TABS.length].key;
     setTab(next);
     document.getElementById(`home-tab-${next}`)?.focus();
   };
   return (
     <section className="nb-home-card nb-home-create" aria-labelledby="home-create-title">
       <div className="nb-home-label"><h2 id="home-create-title">What will you create today?</h2></div>
-      <TileGrid columns={4} size="small" label="Choose what to make">
+      <TileGrid columns={5} size="small" label="Choose what to make">
         {HOME_CREATE_TILES.map((t) => (
-          t.key === 'video'
-            ? <Tile key={t.key} variant="choice" title={t.title} subtitle={t.subtitle} accent={t.accent} art={CREATE_ART[t.key]} to="/reels" />
+          t.key === 'video' || t.key === 'photoshoot'
+            ? <Tile key={t.key} variant="choice" title={t.title} subtitle={t.subtitle} accent={t.accent} art={CREATE_ART[t.key]} to={createTileHandoff(t.key).route} />
             : <Tile key={t.key} variant="choice" title={t.title} subtitle={t.subtitle} accent={t.accent} art={CREATE_ART[t.key]} onClick={() => open(t.key)} />
         ))}
       </TileGrid>
       <form className="nb-home-describe nb-ideabox" onSubmit={submit}>
         <div className="nb-home-tabs" role="tablist" aria-label="What to make from your idea">
-          {tabs.map((t) => (
+          {HOME_DESCRIBE_TABS.map((t) => (
             <button key={t.key} id={`home-tab-${t.key}`} type="button" role="tab" className="nb-home-tab" aria-selected={tab === t.key} aria-controls="home-describe-panel" tabIndex={tab === t.key ? 0 : -1} onKeyDown={onTabKey} onClick={() => setTab(t.key)}>{t.label}</button>
           ))}
         </div>
         <div id="home-describe-panel" role="tabpanel" aria-labelledby={`home-tab-${tab}`}>
-        <label htmlFor="home-describe" className="sr-only">Describe what you want</label>
-        <textarea
-          id="home-describe" className="nb-ideabox-field gravity-bare" value={text} maxLength={DESCRIBE_MAX} rows={2}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit(); } }}
-          placeholder={tab === 'post' ? 'Describe what you want, for example a post about this weekend\'s offer' : 'Describe the video, for example a short look behind the counter'}
-        />
+        {tab === 'photoshoot' ? (
+          <div className="nb-home-ps-tab">
+            <p className="nb-home-quiet">Photoshoots use ready-made packs of your product photos, so there is nothing to type. Pick a pack to start.</p>
+            {rail.length > 0 && (
+              <div className="nb-home-ps-chips" role="group" aria-label="Photoshoot packs">
+                {rail.map((r) => <Link key={r.key} to={r.to} className="nb-home-ps-chip">{r.title}</Link>)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <label htmlFor="home-describe" className="sr-only">Describe what you want</label>
+            <textarea
+              id="home-describe" className="nb-ideabox-field gravity-bare" value={text} maxLength={DESCRIBE_MAX} rows={2}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit(); } }}
+              placeholder={tab === 'post' ? 'Describe what you want, for example a post about this weekend\'s offer' : 'Describe the video, for example a short look behind the counter'}
+            />
+          </>
+        )}
         </div>
         <div className="nb-home-describe-foot">
-          <span>{tab === 'post' ? 'Opens Create content with your idea filled in.' : 'Opens Videos with your idea filled in.'}</span>
-          <button type="submit" className="nb-home-btn" data-primary="true" disabled={!text.trim()}>Continue<ArrowRight size={14} aria-hidden="true" /></button>
+          <span>{tab === 'post' ? 'Opens Create content with your idea filled in.' : tab === 'video' ? 'Opens Videos with your idea filled in.' : 'Opens Photoshoot, where you choose products and see the price first.'}</span>
+          <button type="submit" className="nb-home-btn" data-primary="true" disabled={tab !== 'photoshoot' && !text.trim()}>{tab === 'photoshoot' ? 'Open Photoshoot' : 'Continue'}<ArrowRight size={14} aria-hidden="true" /></button>
         </div>
       </form>
+      {rail.length > 0 && (
+        <div className="nb-home-packs" aria-labelledby="home-packs-title">
+          <div className="nb-home-label">
+            <h2 id="home-packs-title">Ready-made photoshoot packs</h2>
+            <Link to="/photoshoot" className="nb-home-link">See all</Link>
+          </div>
+          <div className="nb-home-packs-rail" role="list">
+            {rail.map((r) => (
+              <div key={r.key} role="listitem" className="nb-home-packs-item">
+                <Tile variant="choice" title={r.title} subtitle={r.line} footer={r.price || undefined} accent="photoshoot" art={PACK_ART[r.key] || <PhotoshootArt />} to={r.to} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 };

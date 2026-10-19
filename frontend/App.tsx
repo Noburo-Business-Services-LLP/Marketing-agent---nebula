@@ -16,6 +16,8 @@ import GravityHome from './pages/GravityHome';
 import MyPlan from './pages/MyPlan';
 // Developer page for the tile and illustration set; the condition below is false in a production build.
 const ArtShowcase = import.meta.env.DEV ? React.lazy(() => import('./pages/ArtShowcase')) : null;
+// The Photoshoot studio loads only when it is opened, so the rest of the app does not carry it.
+const Photoshoot = React.lazy(() => import('./pages/Photoshoot'));
 import GravityCreate from './pages/GravityCreate';
 import GravityApprove from './pages/GravityApprove';
 import Library from './pages/Library';
@@ -294,6 +296,7 @@ const App: React.FC = () => {
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<GravityApprove user={user} />} />
                     <Route path="/library" element={<Library />} />
+                    <Route path="/photoshoot" element={<React.Suspense fallback={null}><Photoshoot /></React.Suspense>} />
                     <Route path="/reels" element={<VideosEntry />} />
                     <Route path="/reels/studio" element={<ReelGenerator />} />
                     <Route path="/reels/hero" element={<HeroVideo />} />

@@ -5,6 +5,7 @@ import { serverRejectedSession } from '../utils/sessionErrors';
 import type { BlueprintView } from '../utils/blueprint';
 import type { BestPostsResponse } from '../utils/competitorsHome';
 import type { DraftAnswer, DraftKind, DraftOptions } from '../utils/homeDrafts';
+import type { PhotoshootCatalogue, PhotoshootOptions, PhotoshootJob, PhotoshootProduct } from '../utils/photoshoot';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -4985,4 +4986,22 @@ export const studioVideosAPI = {
   approveReference: async (kind: 'person' | 'place', url: string, name: string): Promise<{ success: boolean; asset?: { id: string; name: string; url: string }; message?: string }> =>
     apiCall('/videos/reference/approve', { method: 'POST', body: JSON.stringify({ kind, url, name }) }, true),
   remove: async (id: string): Promise<{ success: boolean }> => apiCall(`/videos/${encodeURIComponent(id)}`, { method: 'DELETE' }, true),
+};
+
+/** The Photoshoot studio (backend routes/photoshoot.js). A refused request throws with the server's answer on `data`. */
+export const photoshootAPI = {
+  packs: async (): Promise<PhotoshootCatalogue> => apiCall('/photoshoot/packs', {}, true),
+  options: async (): Promise<PhotoshootOptions> => apiCall('/photoshoot/options', {}, true),
+  create: async (b: { key: string; pack: string; productIds: string[]; count: number; aspectRatio: string; background?: string; placeId?: string }): Promise<{ success: boolean; job?: PhotoshootJob; replay?: boolean; message?: string }> =>
+    apiCall('/photoshoot/jobs', { method: 'POST', body: JSON.stringify(b) }, true),
+  list: async (): Promise<{ success: boolean; jobs: PhotoshootJob[] }> => apiCall('/photoshoot/jobs', {}, true),
+  get: async (id: string): Promise<{ success: boolean; job?: PhotoshootJob; message?: string }> => apiCall(`/photoshoot/jobs/${encodeURIComponent(id)}`, {}, true),
+  redo: async (id: string, index: number, key: string): Promise<{ success: boolean; job?: PhotoshootJob; message?: string }> =>
+    apiCall(`/photoshoot/jobs/${encodeURIComponent(id)}/photos/${index}/redo`, { method: 'POST', body: JSON.stringify({ key }) }, true),
+  setInLibrary: async (id: string, index: number, inLibrary: boolean): Promise<{ success: boolean; inLibrary?: boolean }> =>
+    apiCall(`/photoshoot/jobs/${encodeURIComponent(id)}/photos/${index}`, { method: 'PATCH', body: JSON.stringify({ inLibrary }) }, true),
+  library: async (): Promise<{ success: boolean; photos: Array<{ jobId: string; index: number; url: string; kind: string; pack: string; packTitle: string; scene: string; product: string; aspectRatio: string; createdAt: string }> }> =>
+    apiCall('/photoshoot/library', {}, true),
+  upload: async (name: string, imageData: string): Promise<{ success: boolean; product?: PhotoshootProduct; message?: string }> =>
+    apiCall('/photoshoot/upload', { method: 'POST', body: JSON.stringify({ name, imageData }) }, true),
 };

@@ -99,6 +99,14 @@
   // ?planstate= ready | old | building | failed | stale | none picks the My plan variant (kept for the tab).
   if (params.get('planstate')) sessionStorage.setItem('audit-plan-state', params.get('planstate'));
   var PSTATE = sessionStorage.getItem('audit-plan-state') || 'ready';
+  // ?photoshootstate= ready | empty | nophoto | free | off | running | partial | failed | client | error picks the Photoshoot
+  // page variant (kept for the tab): ready = packs, products with photos and an earlier finished photoshoot; empty = no
+  // products; nophoto = products without photos; free = free plan (packs and prices, a calm plan note); off = the switch is
+  // off; running = a photoshoot being made (it moves on with each check); partial = finished with one photo not made and
+  // its refund notice, plus a new version of another photo; failed = no photo made, all refunded; client = inside an agency
+  // client (posts' worth, no Quarks, no plan note); error = the options fail to load. Shaped like backend/services/photoshoot.
+  if (params.get('photoshootstate')) sessionStorage.setItem('audit-photoshoot-state', params.get('photoshootstate'));
+  var PSSTATE = sessionStorage.getItem('audit-photoshoot-state') || 'ready';
   var INSIDE = false;
   if (AGENCY) {
     try {
@@ -144,6 +152,47 @@
 
   var now = new Date();
   var iso = function (days) { var d = new Date(now); d.setDate(d.getDate() + days); return d.toISOString(); };
+  // Photoshoot sample pictures (inline, no files) and the catalogue, priced like config/apiCosts.js (10 per photo).
+  var PS_IMG = [svg('#F5D7A1', 'Croissant'), svg('#CDE8D6', 'Sourdough'), svg('#F3D3E8', 'Cake'), svg('#FFE6B3', 'Pickle'), svg('#E3DACB', 'Shop'), svg('#D9E4F5', 'New')];
+  var PS_TICKS = 0;
+  var PS_COSTS = { photoshoot_image: 10, image_generated: 11, studio_video: 161 };
+  var psPrice = function (q) { var posts = Math.max(1, Math.round(q / 11)); return q >= 161 ? q + " Quarks (about " + Math.max(1, Math.round(q / 161)) + " video's worth)" : q + ' Quarks (about ' + posts + (posts === 1 ? " post's" : " posts'") + ' worth)'; };
+  var PS_PACKS = [
+    ['product', 'Product photoshoot', 'Styled studio and setting shots', [4, 6], 6, ['1:1', '4:5'], ['cream', 'grey', 'pastel', 'deep'], true, ['Studio light', 'Hero angle', 'On a surface', 'Close detail', 'In a setting', 'On display']],
+    ['marketplace', 'Marketplace pack', 'Square photos on pure white for online shops', [4], 4, ['1:1'], [], false, ['Front', 'Side', 'Angle', 'Close-up']],
+    ['festival', 'Festival pack', 'Your product in warm festive scenes', [4, 8], 8, ['1:1', '4:5', '9:16'], [], false, ['Lights and lamps', 'Flowers', 'Gift ready', 'Celebration table', 'Colour pattern', 'Evening glow', 'Brass and silk', 'Celebration']],
+    ['lifestyle', 'Lifestyle and in use', 'Natural everyday settings, no people', [4, 6], 6, ['4:5', '1:1', '9:16'], [], true, ['At home', 'On the table', 'Outdoors', 'Ready to use', 'On the shelf', 'On the go']],
+    ['flatlay', 'Flat lay', 'Top-down arrangements with props', [4], 4, ['1:1', '4:5'], ['wood', 'marble', 'linen', 'pastel'], false, ['Minimal', 'Colourful', 'Natural', 'Everything you need']],
+    ['white', 'Clean white background', 'Catalogue and website photos', [4], 4, ['1:1', '4:5'], [], false, ['Front', 'Angle', 'From above', 'Reflection']]
+  ];
+  var PS_LABEL = { '1:1': 'Square', '4:5': 'Portrait', '9:16': 'Story', cream: 'Warm cream', grey: 'Soft grey', pastel: 'Pastel', deep: 'Deep colour', wood: 'Natural wood', marble: 'Marble', linen: 'Linen' };
+  var psCatalogue = function () {
+    return { success: true, perPhoto: { quarks: 10, price: psPrice(10), worth: "about 1 post's worth" }, maxProducts: 3, maxPhotos: 24, costs: PS_COSTS,
+      packs: PS_PACKS.map(function (p) { return { key: p[0], title: p[1], subtitle: p[2], counts: p[3], defaultCount: p[4],
+        aspectRatios: p[5].map(function (k) { return { key: k, label: PS_LABEL[k] }; }), backgrounds: p[6].map(function (k) { return { key: k, label: PS_LABEL[k] }; }),
+        place: p[7], scenes: p[8].map(function (l, i) { return { key: 's' + i, label: l }; }), quarks: 10 * p[4], price: psPrice(10 * p[4]), worth: '', minutes: Math.ceil(p[4] / 2) }; }) };
+  };
+  var psJob = function (status, o) {
+    o = o || {};
+    var count = o.count || 6; var done = status === 'done' ? count : status === 'failed' ? 0 : status === 'partial' ? count - 1 : (o.done === undefined ? 2 : o.done);
+    var labels = (PS_PACKS.filter(function (p) { return p[0] === (o.pack || 'product'); })[0] || PS_PACKS[0])[8];
+    var photos = [];
+    for (var i = 0; i < count; i += 1) {
+      var st = status === 'failed' ? 'failed' : status === 'partial' && i === 2 ? 'failed' : i < done || (status === 'partial' && i > 2 && i <= done) ? 'done' : i === done && status === 'running' ? 'making' : 'waiting';
+      if (status === 'partial') st = i === 2 ? 'failed' : 'done';
+      photos.push({ index: i, scene: 's' + i, sceneLabel: labels[i % labels.length], product: 'Butter croissant', status: st, url: st === 'done' ? PS_IMG[i % 4] : '', inLibrary: st === 'done' && i !== 1 });
+    }
+    var failed = photos.filter(function (p) { return p.status === 'failed'; }).length;
+    return {
+      id: o.id || 'ps-j1', kind: 'pack', pack: o.pack || 'product', packTitle: o.packTitle || 'Product photoshoot', parent: null, parentIndex: null, status: status,
+      aspectRatio: '1:1', background: 'cream', products: [{ id: 'ps-p1', name: 'Butter croissant' }], place: null, photoCount: count,
+      done: photos.filter(function (p) { return p.status === 'done'; }).length, failed: failed, photos: photos, quarks: 10 * count, refundedQuarks: status === 'failed' ? 10 * count : 10 * failed,
+      minutes: Math.ceil(count / 2),
+      notice: status === 'partial' ? '1 of ' + count + ' photos could not be made. You were not charged for it.' : status === 'failed' ? 'The photos could not be made this time. You were not charged. Please try again.' : '',
+      versions: status === 'partial' ? [{ id: 'ps-v1', index: 4, status: 'done', url: PS_IMG[1], inLibrary: true }] : [],
+      createdAt: o.createdAt || iso(0), finishedAt: status === 'running' ? null : iso(0)
+    };
+  };
   var ymd = function (days) { return iso(days).slice(0, 10); };
 
   var businessProfile = {
@@ -598,7 +647,7 @@
     }],
     ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user, actingAgency: user.actingAgency || null, actingCsm: null }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
-    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7, image_generated: 11, campaign_full: 12, carousel_generated: 4, campaign_text: 3, studio_video: 161 }, units: {} })],
+    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7, image_generated: 11, campaign_full: 12, carousel_generated: 4, campaign_text: 3, studio_video: 161, photoshoot_image: 10 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {
       var price = function (inr) { var gst = Math.round(inr * 18); return { inr: inr, gstPaise: gst, chargePaise: inr * 100 + gst }; };
       var feat = function (posts, videos) { return ['Up to ' + posts + ' posts a month, or', 'up to ' + videos + ' short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time']; };
@@ -844,6 +893,39 @@
       var body = { success: true, kind: post ? 'response_post' : 'witty_comment', draft: draft, quarks: post ? 8 : 6, price: post ? "8 Quarks (about 1 post's worth)" : "6 Quarks (about 1 post's worth)", language: lang || 'english' };
       return DSTATE === 'slow' ? { __status: 200, __delay: 4000, body: body } : body;
     }],
+    // ---- Photoshoot studio (pages/Photoshoot.tsx), shaped like backend/services/photoshoot/service.js ----
+    ['GET', /^\/photoshoot\/packs$/, function () { return ok(psCatalogue()); }],
+    ['GET', /^\/photoshoot\/options$/, function () {
+      if (PSSTATE === 'error') return { __status: 500, body: { success: false, message: 'We could not do that just now. Please try again.' } };
+      var products = PSSTATE === 'empty' ? [] : PSSTATE === 'nophoto'
+        ? [{ id: 'ps-p1', name: 'Butter croissant', hasPhoto: false, thumbnail: '' }, { id: 'ps-p2', name: 'Country sourdough', hasPhoto: false, thumbnail: '' }]
+        : [{ id: 'ps-p1', name: 'Butter croissant', hasPhoto: true, thumbnail: PS_IMG[0] }, { id: 'ps-p2', name: 'Country sourdough', hasPhoto: true, thumbnail: PS_IMG[1] },
+           { id: 'ps-p3', name: 'Chocolate cake (1 kg)', hasPhoto: true, thumbnail: PS_IMG[2] }, { id: 'ps-p4', name: 'Gift hamper', hasPhoto: false, thumbnail: '' },
+           { id: 'ps-p5', name: 'மாங்காய் ஊறுகாய்', hasPhoto: true, thumbnail: PS_IMG[3] }];
+      return ok(Object.assign(psCatalogue(), {
+        enabled: PSSTATE !== 'off', entitled: PSSTATE !== 'free', locked: PSSTATE === 'free' ? 'upgrade' : null,
+        postsOnly: PSSTATE === 'client' || AGENCY, pass: PSSTATE === 'client' || MODE === 'agency-client',
+        products: products, places: PSSTATE === 'empty' ? [] : [{ id: 'ps-l1', name: 'Our shop counter', thumbnail: PS_IMG[4] }],
+        perDay: 60, left: PSSTATE === 'running' ? 54 : 46
+      }));
+    }],
+    ['GET', /^\/photoshoot\/jobs$/, function () {
+      if (PSSTATE === 'empty' || PSSTATE === 'free' || PSSTATE === 'error') return ok({ jobs: [] });
+      var list = [psJob(PSSTATE === 'running' ? 'running' : PSSTATE === 'partial' ? 'partial' : PSSTATE === 'failed' ? 'failed' : 'done')];
+      if (PSSTATE === 'ready') list.push(psJob('done', { id: 'ps-j0', pack: 'marketplace', packTitle: 'Marketplace pack', count: 4, createdAt: iso(-6) }));
+      return ok({ jobs: list });
+    }],
+    ['GET', /^\/photoshoot\/jobs\/[^/]+$/, function () {
+      if (PSSTATE === 'running') { PS_TICKS += 1; return ok({ job: PS_TICKS >= 4 ? psJob('done') : psJob('running', { done: Math.min(5, 2 + PS_TICKS) }) }); }
+      return ok({ job: psJob(PSSTATE === 'partial' ? 'partial' : PSSTATE === 'failed' ? 'failed' : 'done') });
+    }],
+    ['POST', /^\/photoshoot\/jobs$/, function () { PS_TICKS = 0; return { __status: 202, body: { success: true, job: psJob('running', { done: 0 }) } }; }],
+    ['POST', /^\/photoshoot\/jobs\/[^/]+\/photos\/\d+\/redo$/, function () { return { __status: 202, body: { success: true, job: psJob('running', { id: 'ps-redo', count: 1, done: 0 }) } }; }],
+    ['PATCH', /^\/photoshoot\/jobs\/[^/]+\/photos\/\d+$/, function (req) { var on = true; try { on = JSON.parse(req.body || '{}').inLibrary !== false; } catch (e) { on = true; } return ok({ inLibrary: on }); }],
+    ['GET', /^\/photoshoot\/library$/, function () {
+      return ok({ photos: [0, 1, 2, 3].map(function (i) { return { jobId: 'ps-j1', index: i, url: PS_IMG[i % PS_IMG.length], kind: 'pack', pack: 'product', packTitle: 'Product photoshoot', scene: ['Studio light', 'Hero angle', 'On a surface', 'Close detail'][i], product: 'Butter croissant', aspectRatio: '1:1', createdAt: iso(-1) }; }) });
+    }],
+    ['POST', /^\/photoshoot\/upload$/, function () { return { __status: 201, body: { success: true, product: { id: 'ps-new', name: 'New product', hasPhoto: true, thumbnail: PS_IMG[5] } } }; }],
     // ---- Social listening (Stage 5): the "What people say about you" card on My plan and the Inbox page ----
     ['GET', /^\/listening$/, function () {
       if (LSTATE === 'locked') return { __status: 403, body: { success: false, upgradeRequired: true, reason: 'addon', feature: 'inbox', message: 'Inbox is an add-on.' } };

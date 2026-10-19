@@ -6,7 +6,7 @@ import React from 'react';
  * On a phone, `phone="row"` shows each tile as a row (picture left, text right) so a choice of several tiles stays short.
  * `size="small"` is the tight grid for small `choice` tiles: 2 columns on a phone, 3 on a tablet, then `columns` in one even row.
  */
-const TileGrid: React.FC<{ children: React.ReactNode; columns?: 3 | 4 | 5; label?: string; className?: string; phone?: 'stack' | 'row'; size?: 'regular' | 'small' }> = ({ children, columns = 3, label, className, phone = 'stack', size = 'regular' }) => (
+const TileGrid: React.FC<{ children: React.ReactNode; columns?: 3 | 4 | 5 | 6; label?: string; className?: string; phone?: 'stack' | 'row'; size?: 'regular' | 'small' }> = ({ children, columns = 3, label, className, phone = 'stack', size = 'regular' }) => (
   <div
     className={`nb-tile-grid${className ? ` ${className}` : ''}`}
     data-phone={phone}

@@ -108,7 +108,7 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
           {showWeek && <ThisWeekCard language={language} />}
         </div>
         <div className="nb-home-col">
-          <CreateToday language={language} />
+          <CreateToday language={language} postsOnly={showsPostsNotQuarks(user as any)} showPacks={!isStaffSelf} />
           {loading && !summary && <Skeleton kind="today" />}
           {summary && <TodayPlan summary={summary} failed={blockFailed(summary, 'today')} />}
         </div>

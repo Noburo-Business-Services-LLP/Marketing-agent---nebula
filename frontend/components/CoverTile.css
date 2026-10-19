@@ -22,6 +22,7 @@
 .nb-cover[data-palette="teal"] { --cover-mid: #128079; --cover-deep: #031F20; --cover-deep-rgb: 2 20 21; --cover-glow-rgb: 80 214 202; }
 .nb-cover[data-palette="blue"] { --cover-mid: #0B5DB8; --cover-deep: #041631; --cover-deep-rgb: 3 14 32; --cover-glow-rgb: 60 150 245; }
 .nb-cover[data-palette="ink"] { --cover-mid: #4630A0; --cover-deep: #0B0A24; --cover-deep-rgb: 8 7 26; --cover-glow-rgb: 150 120 255; }
+.nb-cover[data-palette="plum"] { --cover-mid: #8E2FA3; --cover-deep: #24072B; --cover-deep-rgb: 26 5 31; --cover-glow-rgb: 232 140 255; }
 
 /* Light streaks across the cover, and a fine grain (an SVG noise, under 400 bytes). */
 .nb-cover::before {
@@ -45,6 +46,7 @@
 .nb-cover[data-palette="teal"] .nb-cover-art { --art-h: 130%; --art-right: -36px; --art-top: -12%; --art-rot: 4deg; }
 .nb-cover[data-palette="blue"] .nb-cover-art { --art-h: 128%; --art-right: -110px; --art-top: -2%; --art-rot: -6deg; }
 .nb-cover[data-palette="ink"] .nb-cover-art { --art-h: 126%; --art-right: -56px; --art-top: -20%; --art-rot: -4deg; }
+.nb-cover[data-palette="plum"] .nb-cover-art { --art-h: 128%; --art-right: -34px; --art-top: -12%; --art-rot: 5deg; }
 
 /* Dark-to-clear scrim from the bottom left, in the tile's own deepest tone, so the white text always reads. */
 .nb-cover-scrim {

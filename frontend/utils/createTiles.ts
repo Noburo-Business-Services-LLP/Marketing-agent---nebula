@@ -33,6 +33,15 @@ export function createTileCost(mode: CreateModeKey, costs: Record<string, number
 /** The Video entry under the four modes: it opens the Videos page, it does not change the mode. */
 export const VIDEO_ENTRY = { title: 'Video', subtitle: 'A short video for your business', accent: 'video', to: '/reels' } as const;
 
+/** The Photoshoot entry, second after Video (owner's order: Video, Photoshoot, Single post, Campaign, Carousel, LinkedIn). */
+export const PHOTOSHOOT_ENTRY = { title: 'Photoshoot', subtitle: 'Product photos in ready-made packs', accent: 'photoshoot', to: '/photoshoot' } as const;
+
+/** "10 Quarks for each photo" or "" while the price is unknown. */
+export function photoshootEntryCost(costs: Record<string, number> | null | undefined): string {
+  const unit = Number(costs?.photoshoot_image);
+  return Number.isFinite(unit) && unit > 0 ? `${unit.toLocaleString('en-IN')} ${unit === 1 ? 'Quark' : 'Quarks'} for each photo` : '';
+}
+
 /** "161 Quarks (about 1 video's worth)" or "" while the price is unknown. */
 export function videoEntryCost(costs: Record<string, number> | null | undefined): string {
   const unit = Number(costs?.studio_video);
