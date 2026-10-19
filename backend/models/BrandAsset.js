@@ -52,7 +52,7 @@ const brandAssetSchema = new mongoose.Schema({
     // rows, left/center/right columns. 'center' kept as a 7th option for
     // anyone relying on it already; it isn't offered in the grid UI.
     enum: ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right', 'center'],
-    default: 'bottom-right'
+    default: 'top-right'
   },
   // For logos: default size percentage (relative to poster)
   defaultSize: {

@@ -822,7 +822,7 @@ const BrandAssets: React.FC = () => {
                       >
                         <span className="flex items-center gap-1.5">
                           <LayoutGrid className="w-3 h-3" />
-                          Position: {LOGO_GRID_LABELS[(logo.defaultPosition as LogoGridPosition)] || 'Bottom right'}
+                          Position: {LOGO_GRID_LABELS[(logo.defaultPosition as LogoGridPosition)] || 'Top right'}
                         </span>
                       </button>
 
@@ -837,7 +837,7 @@ const BrandAssets: React.FC = () => {
                           </p>
                           <div className="grid grid-cols-3 gap-1">
                             {LOGO_GRID.map((pos) => {
-                              const active = (logo.defaultPosition || 'bottom-right') === pos;
+                              const active = (logo.defaultPosition || 'top-right') === pos;
                               return (
                                 <button
                                   key={pos}

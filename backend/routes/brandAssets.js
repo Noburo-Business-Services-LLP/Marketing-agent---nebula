@@ -276,7 +276,7 @@ router.post('/upload', protect, async (req, res) => {
       fileSize: uploadResult.bytes || 0,
       format: uploadResult.format || 'png',
       isPrimary: shouldSetPrimary,
-      defaultPosition: defaultPosition || 'bottom-right',
+      defaultPosition: defaultPosition || 'top-right',
       defaultSize: defaultSize || 'medium'
     });
     
