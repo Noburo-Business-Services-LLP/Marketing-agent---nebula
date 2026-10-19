@@ -29,8 +29,8 @@ test('each mode is charged under the same action the server charges', () => {
 });
 
 test('the cost line uses the existing Quark wording with the posts equivalent beside it', () => {
-  assert.equal(createTileCost('single', COSTS), "11 Quarks (about 1 post's worth)");
-  assert.equal(createTileCost('linkedin', COSTS), "3 Quarks (about 1 post's worth)");
+  assert.equal(createTileCost('single', COSTS), '11 Quarks');
+  assert.equal(createTileCost('linkedin', COSTS), '3 Quarks');
   assert.equal(createTileCost('campaign', COSTS), '12 Quarks for each post');
   assert.equal(createTileCost('carousel', COSTS), '4 Quarks for each slide');
 });
@@ -39,7 +39,7 @@ test('no cost line when the price is not known yet', () => {
   assert.equal(createTileCost('single', {}), '');
   assert.equal(createTileCost('campaign', undefined), '');
   assert.equal(createTileCost('carousel', { carousel_generated: 0 }), '');
-  assert.equal(createTileCost('single', { image_generated: 1 }), "1 Quark (about 1 post's worth)");
+  assert.equal(createTileCost('single', { image_generated: 1 }), '1 Quark');
 });
 
 test('the copy follows the voice rules', () => {
@@ -74,7 +74,7 @@ test('the Create tile copy file is in the voice scope', () => {
 
 test('Video is offered as an entry that opens the existing Videos page, with its price', () => {
   assert.deepEqual({ ...VIDEO_ENTRY }, { title: 'Video', subtitle: 'A short video for your business', accent: 'video', to: '/reels' });
-  assert.equal(videoEntryCost(COSTS), "161 Quarks (about 1 video's worth)");
+  assert.equal(videoEntryCost(COSTS), '161 Quarks');
   assert.equal(videoEntryCost({}), '');
   const page = read('pages/GravityCreate.tsx');
   assert.ok(page.includes('VIDEO_ENTRY.to') && page.includes('<VideoArt'), 'the page shows it');

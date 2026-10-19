@@ -1,7 +1,6 @@
 // The Create content mode tiles: their copy, and the price line under each one.
 // Prices are never typed here: they come from the per-action costs the server reports
 // (the same numbers the Create button shows), written with the existing Quark helpers.
-import { priceWithWorth } from './plans.ts';
 import type { TileAccent } from './tiles.ts';
 
 export type CreateModeKey = 'single' | 'campaign' | 'carousel' | 'linkedin';
@@ -21,13 +20,13 @@ export function actionCostKey(mode: CreateModeKey): string {
   return 'image_generated';
 }
 
-/** "11 Quarks (about 1 post's worth)", "12 Quarks for each post" or "" while the price is unknown. */
+/** "11 Quarks", "12 Quarks for each post" or "" while the price is unknown. */
 export function createTileCost(mode: CreateModeKey, costs: Record<string, number> | null | undefined): string {
   const unit = Number(costs?.[actionCostKey(mode)]);
   if (!Number.isFinite(unit) || unit <= 0) return '';
   if (mode === 'campaign') return `${unit.toLocaleString('en-IN')} ${unit === 1 ? 'Quark' : 'Quarks'} for each post`;
   if (mode === 'carousel') return `${unit.toLocaleString('en-IN')} ${unit === 1 ? 'Quark' : 'Quarks'} for each slide`;
-  return priceWithWorth(unit, costs);
+  return `${unit.toLocaleString('en-IN')} ${unit === 1 ? 'Quark' : 'Quarks'}`;
 }
 
 /** The Video entry under the four modes: it opens the Videos page, it does not change the mode. */
@@ -42,8 +41,8 @@ export function photoshootEntryCost(costs: Record<string, number> | null | undef
   return Number.isFinite(unit) && unit > 0 ? `${unit.toLocaleString('en-IN')} ${unit === 1 ? 'Quark' : 'Quarks'} for each photo` : '';
 }
 
-/** "161 Quarks (about 1 video's worth)" or "" while the price is unknown. */
+/** "161 Quarks" or "" while the price is unknown. */
 export function videoEntryCost(costs: Record<string, number> | null | undefined): string {
   const unit = Number(costs?.studio_video);
-  return Number.isFinite(unit) && unit > 0 ? priceWithWorth(unit, costs) : '';
+  return Number.isFinite(unit) && unit > 0 ? `${unit.toLocaleString('en-IN')} ${unit === 1 ? 'Quark' : 'Quarks'}` : '';
 }

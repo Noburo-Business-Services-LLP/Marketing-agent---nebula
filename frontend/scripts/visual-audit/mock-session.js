@@ -647,7 +647,7 @@
     }],
     ['GET', /^\/auth\/me$/, function () { return LOGGED_OUT ? { __status: 401, body: { success: false, message: 'Not signed in' } } : ok({ user: user, actingAgency: user.actingAgency || null, actingCsm: null }); }],
     ['GET', /^\/auth\/business-context$/, ok({ businessLocation: businessProfile.businessLocation, company: businessProfile, geography: { city: 'Chennai', country: 'India' } })],
-    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7, image_generated: 11, campaign_full: 12, carousel_generated: 4, campaign_text: 3, studio_video: 161, photoshoot_image: 10 }, units: {} })],
+    ['GET', /^\/credits/, ok({ credits: credits, trial: { startDate: iso(-3), expiresAt: iso(4), daysLeft: 4, isExpired: false }, costs: { post: 10, reel: 50, heroClip: 250, blueprint: 7, image_generated: 11, campaign_full: 11, carousel_generated: 8, campaign_text: 4, studio_video: 161, photoshoot_image: 10 }, units: {} })],
     ['GET', /^\/payment\/plans/, function () {
       var price = function (inr) { var gst = Math.round(inr * 18); return { inr: inr, gstPaise: gst, chargePaise: inr * 100 + gst }; };
       var feat = function (posts, videos) { return ['Up to ' + posts + ' posts a month, or', 'up to ' + videos + ' short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time']; };
