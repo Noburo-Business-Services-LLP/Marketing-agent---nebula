@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, Bot, Loader2, Plus, Save, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
+import { AlertCircle, Bot, Lightbulb, Loader2, Plus, Save, Send, ShieldAlert, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { AutoReplySettings, inboxAPI } from '../services/api';
 import UpgradePrompt from '../components/UpgradePrompt';
 import InboxConfirmDialog from '../components/InboxConfirmDialog';
@@ -24,6 +24,13 @@ const defaultSettings: AutoReplySettings = {
     signature: ''
   }
 };
+
+// The three ways a new message is handled, as choice tiles. Sending on its own still needs "Use automatic replies" ticked.
+const MODES: Array<{ id: AutoReplySettings['automationMode']; title: string; text: string; icon: React.ElementType }> = [
+  { id: 'suggested', title: 'Only suggest', text: 'A drafted reply waits in the conversation. You send it.', icon: Lightbulb },
+  { id: 'approval_required', title: 'Ask me first', text: 'Each drafted reply waits in your approval list.', icon: ShieldCheck },
+  { id: 'fully_automatic', title: 'Send on its own', text: 'Replies go out without asking, within the safety checks.', icon: Send },
+];
 
 const CHANNEL_LABELS: Record<string, string> = {
   messages: 'Direct messages',
@@ -168,6 +175,27 @@ const AutoReplySettingsPage: React.FC<{ onSaved?: (settings: AutoReplySettings) 
             {saved ? 'Saved' : 'Save settings'}
           </button>
         </div>
+        <div className="mt-4">
+          <p id="auto-mode-label" className={`mb-2 text-xs font-semibold ${MUTED}`}>When a new message arrives</p>
+          <div className="nb-ix-modes" role="radiogroup" aria-labelledby="auto-mode-label">
+            {MODES.map(({ id, title, text, icon: Icon }) => (
+              <label key={id} className="nb-ix-mode" data-checked={settings.automationMode === id ? 'true' : 'false'}>
+                <input
+                  type="radio"
+                  name="auto-mode"
+                  className="sr-only"
+                  checked={settings.automationMode === id}
+                  onChange={() => chooseMode(id)}
+                />
+                <Icon aria-hidden="true" />
+                <span><strong>{title}</strong><span>{text}</span></span>
+              </label>
+            ))}
+          </div>
+          {settings.automationMode !== 'suggested' && !settings.enabled && (
+            <p className={`mt-2 text-xs ${MUTED}`}>Tick "Use automatic replies" below for this to apply. Until then Nebulaa only suggests replies.</p>
+          )}
+        </div>
         {saveError && (
           <p role="alert" className={`mt-3 flex items-start gap-1.5 text-[13px] font-semibold ${ERROR_TEXT}`}>
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{saveError}
@@ -182,12 +210,6 @@ const AutoReplySettingsPage: React.FC<{ onSaved?: (settings: AutoReplySettings) 
             <span className={`text-sm ${MUTED}`}>Use automatic replies</span>
             <input type="checkbox" checked={settings.enabled} onChange={(e) => setSettings(prev => ({ ...prev, enabled: e.target.checked }))} />
           </label>
-          <label className={`mt-4 block text-xs font-semibold ${MUTED}`} htmlFor="auto-mode">When a new message arrives</label>
-          <select id="auto-mode" className={`${FIELD} mt-1`} value={settings.automationMode} onChange={(e) => chooseMode(e.target.value as AutoReplySettings['automationMode'])}>
-            <option value="suggested">Only suggest a reply</option>
-            <option value="approval_required">Ask me before sending</option>
-            <option value="fully_automatic">Send automatically</option>
-          </select>
           <label className={`mt-3 block text-xs font-semibold ${MUTED}`} htmlFor="auto-tone">Tone of voice</label>
           <select id="auto-tone" className={`${FIELD} mt-1`} value={settings.businessTone} onChange={(e) => setSettings(prev => ({ ...prev, businessTone: e.target.value }))}>
             <option value="professional">Professional</option>

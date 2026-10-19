@@ -5,8 +5,10 @@ import {
   GONE_LINE, PENDING_EMPTY, PENDING_HELP, PENDING_TITLE, approveBody, canApprove, failureFromError, pendingAuthor, pendingBadge,
   pendingWhere, notSentLine, timeAgo,
 } from '../utils/inbox';
-import { BTN, BTN_MAIN, CARD, ERROR_TEXT, FIELD, MUTED, TEXT } from './inboxStyles';
 import { customerMessage } from '../utils/errors';
+import { approvalReason } from '../utils/inboxView';
+import { InboxAvatar } from './inbox/InboxOverview';
+import './inbox/inbox.css';
 
 /**
  * The replies Nebulaa drafted and is holding for the owner. Each one can be edited, sent or discarded.
@@ -82,69 +84,73 @@ const PendingApprovals: React.FC<{ onChanged?: (count: number) => void }> = ({ o
     }
   };
 
+  // Nothing waiting and nothing to report: the tile above already says so, so the card stays out of the way.
+  if (loaded && !loadError && items.length === 0 && !sentNote) return null;
+
   return (
-    <section aria-labelledby="pending-title" className={`${CARD} p-4 sm:p-5`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 id="pending-title" className={`text-[18px] font-semibold ${TEXT}`}>{PENDING_TITLE}</h2>
-        <span
-          aria-label={`${items.length} waiting`}
-          className={`inline-flex min-w-[24px] items-center justify-center rounded-full px-2 py-0.5 text-[12px] font-bold ${items.length ? 'bg-[var(--gv-accent)] text-[var(--gv-accent-ink)]' : 'bg-[var(--gv-surface-2)] text-[var(--gv-text-secondary)]'}`}
-        >
-          {pendingBadge(items.length)}
-        </span>
+    <section aria-labelledby="pending-title" className="nb-ix-card nb-ix-approvals">
+      <div className="nb-ix-section-head">
+        <h2 id="pending-title">
+          {PENDING_TITLE}
+          <span className="nb-ix-count" data-zero={items.length ? 'false' : 'true'} aria-label={`${items.length} waiting`}>{pendingBadge(items.length)}</span>
+        </h2>
       </div>
 
-      {sentNote && <p role="status" className={`mt-2 flex items-center gap-1.5 text-[13px] ${TEXT}`}><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{sentNote}</p>}
+      {sentNote && <p role="status" className="nb-ix-muted inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{sentNote}</p>}
 
-      {!loaded && <div className="py-4" role="status" aria-label="Loading"><Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none text-[var(--gv-accent-text)]" aria-hidden="true" /></div>}
+      {!loaded && <div role="status" aria-label="Loading"><Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none text-[var(--gv-accent-text)]" aria-hidden="true" /></div>}
 
       {loaded && loadError && (
-        <div className="mt-2">
-          <p role="alert" className={`text-[14px] ${ERROR_TEXT}`}>{loadError}</p>
-          <button type="button" className={`${BTN} mt-2`} onClick={load}>Try again</button>
+        <div>
+          <p role="alert" className="nb-ix-alert"><AlertCircle aria-hidden="true" />{loadError}</p>
+          <button type="button" className="nb-ix-btn2 mt-2" onClick={load}>Try again</button>
         </div>
       )}
 
-      {loaded && !loadError && items.length === 0 && <p className={`mt-1 text-[14px] ${MUTED}`}>{PENDING_EMPTY}</p>}
+      {loaded && !loadError && items.length === 0 && <p>{PENDING_EMPTY}</p>}
 
       {loaded && items.length > 0 && (
         <>
-          <p className={`mt-1 text-[14px] leading-relaxed ${MUTED}`}>{PENDING_HELP}</p>
-          <ul className="mt-3 space-y-3">
+          <p>{PENDING_HELP}</p>
+          <ul className="flex flex-col gap-2.5">
             {items.map((item) => {
               const working = busy[item.id];
               const value = edits[item.id] ?? item.draft_text ?? '';
+              const why = approvalReason(item.reason);
               return (
-                <li key={item.id} className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-3 sm:p-4">
-                  <div className="flex flex-wrap items-baseline gap-x-2">
-                    <p className={`text-[14px] font-semibold ${TEXT}`}>{pendingAuthor(item)}</p>
-                    <p className={`text-[12px] ${MUTED}`}>{pendingWhere(item)}{item.created_at ? `, ${timeAgo(item.created_at)} ago` : ''}</p>
+                <li key={item.id} className="nb-ix-approval">
+                  <div className="nb-ix-approval-who">
+                    <InboxAvatar name={pendingAuthor(item)} platform={item.platform || item.conversation?.platform} />
+                    <div>
+                      <p className="nb-ix-approval-name">{pendingAuthor(item)}</p>
+                      <p className="nb-ix-approval-where">{pendingWhere(item)}{item.created_at ? `, ${timeAgo(item.created_at)} ago` : ''}</p>
+                      {item.original_message && <p className="nb-ix-quote">{item.original_message}</p>}
+                      {why && <p className="nb-ix-reason">Why it waits: {why}</p>}
+                    </div>
                   </div>
-                  {item.original_message && <p className={`mt-1 whitespace-pre-wrap text-[14px] leading-relaxed ${TEXT}`}>{item.original_message}</p>}
-                  {item.reason && <p className={`mt-1 text-[12px] ${MUTED}`}>Why it is waiting: {item.reason}</p>}
-                  <label className={`mt-3 block text-[12px] font-semibold ${MUTED}`} htmlFor={`pending-${item.id}`}>Suggested reply (you can change it)</label>
-                  <textarea
-                    id={`pending-${item.id}`}
-                    value={value}
-                    onChange={(e) => setEdits((cur) => ({ ...cur, [item.id]: e.target.value }))}
-                    rows={3}
-                    disabled={Boolean(working)}
-                    className={`${FIELD} mt-1 resize-y`}
-                  />
-                  {failures[item.id] && (
-                    <p role="alert" className={`mt-2 flex items-start gap-1.5 text-[13px] leading-relaxed ${ERROR_TEXT}`}>
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{failures[item.id]}
-                    </p>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" className={BTN_MAIN} onClick={() => approve(item)} disabled={Boolean(working) || !canApprove(edits[item.id], item.draft_text)}>
-                      {working === 'send' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
-                      Approve and send
-                    </button>
-                    <button type="button" className={BTN} onClick={() => discard(item)} disabled={Boolean(working)}>
-                      {working === 'discard' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
-                      Discard
-                    </button>
+                  <div className="nb-ix-approval-draft">
+                    <label htmlFor={`pending-${item.id}`}>Suggested reply (you can change it)</label>
+                    <textarea
+                      id={`pending-${item.id}`}
+                      value={value}
+                      onChange={(e) => setEdits((cur) => ({ ...cur, [item.id]: e.target.value }))}
+                      rows={3}
+                      disabled={Boolean(working)}
+                      className="nb-ix-field"
+                    />
+                    {failures[item.id] && (
+                      <p role="alert" className="nb-ix-alert"><AlertCircle aria-hidden="true" />{failures[item.id]}</p>
+                    )}
+                    <div className="nb-ix-row-actions">
+                      <button type="button" className="nb-ix-btn" onClick={() => approve(item)} disabled={Boolean(working) || !canApprove(edits[item.id], item.draft_text)}>
+                        {working === 'send' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+                        Approve and send
+                      </button>
+                      <button type="button" className="nb-ix-btn2" onClick={() => discard(item)} disabled={Boolean(working)}>
+                        {working === 'discard' ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
+                        Discard
+                      </button>
+                    </div>
                   </div>
                 </li>
               );

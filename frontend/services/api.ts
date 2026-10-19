@@ -1368,6 +1368,10 @@ export const apiService = {
       activePlatforms: string[];
       missingPlatforms: string[];
     };
+    /** Whether comment and message updates were switched on for this account: on, off (never) or failed. */
+    liveUpdates?: 'on' | 'off' | 'failed';
+    /** Whether a Google Business Profile is among the connected accounts. */
+    reviewsConnected?: boolean;
     aiEngagement: {
       replySuggestions: boolean;
       priorityTagging: boolean;
@@ -1590,6 +1594,8 @@ export const apiService = {
   getGoogleReviews: async (): Promise<{
     success: boolean;
     connected: boolean;
+    /** true when a Google profile is connected but the reviews could not be read just now. */
+    loadFailed?: boolean;
     message?: string;
     summary?: { averageRating?: number; totalReviewCount?: number } | null;
     reviews: Array<{ id: string; rating: number; text: string; reviewer: string; createdAt?: string | null; replied: boolean; existingReply: string; needsApproval: boolean }>;
@@ -4627,7 +4633,7 @@ export const inboxAPI = {
     success: boolean;
     conversation: InboxConversation;
     messages: InboxMessage[];
-    ai?: { suggestions?: string[]; sentiment?: string; spam_score?: number; priority?: string };
+    ai?: { suggestions?: string[]; sentiment?: string; spam_score?: number; priority?: string; suggestionsSource?: 'drafted' | 'general' };
   }> => {
     return inboxCall(`/conversations/${encodeURIComponent(conversationId)}/messages`);
   },

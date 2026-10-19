@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   CHIP_LABELS, chipLabel, countText, isGoogleConnected, repliesGoOutOnTheirOwn, messagesTile, messagesCountLine, reviewsTile, autoTile,
   autoStatus, overviewTiles, tileAccessibleName, partFromParam, EXPLAINER, EXPLAINER_STEPS, explainerAction, ADDON_NOTE, ADDON_LINE,
+  INBOX_LIVE_PROVEN, EXPLAINER_VERSIONS, lastMessageLine, ADDON_NOTE_CLIENT,
 } from '../utils/inboxOverview.ts';
 import { parseColor, ratio } from '../scripts/visual-audit/contrast-math.mjs';
 
@@ -33,6 +34,24 @@ test('Messages and comments: Needs setup without Instagram or Facebook, Connecte
   assert.equal(messagesTile({ ...base, connectedCount: 0 }).line, 'Connect Instagram or Facebook');
   assert.equal(messagesTile({ ...base, inboxStatus: 'needs_setup' }).status, 'needs_setup');
   assert.equal(messagesTile(base).status, 'connected');
+});
+
+test('the Messages tile shows when the last message arrived and asks for live updates when they are off', () => {
+  const now = Date.parse('2026-10-19T10:00:00Z');
+  assert.equal(lastMessageLine('2026-10-19T09:55:00Z', now), 'Last message 5 min ago');
+  assert.equal(lastMessageLine('2026-10-19T09:59:40Z', now), 'Last message just now');
+  assert.equal(lastMessageLine('2026-10-19T07:00:00Z', now), 'Last message 3 hours ago');
+  assert.equal(lastMessageLine('2026-10-18T09:00:00Z', now), 'Last message 1 day ago');
+  assert.equal(lastMessageLine(null, now), '');
+  assert.equal(lastMessageLine('nonsense', now), '');
+  const t = messagesTile({ ...base, lastAt: '2026-10-19T09:55:00Z', now });
+  assert.equal(t.subtitle, 'Last message 5 min ago');
+  assert.equal(messagesTile(base).subtitle, 'Instagram and Facebook');
+  assert.deepEqual([messagesTile({ ...base, liveUpdates: 'off' }).status, messagesTile({ ...base, liveUpdates: 'off' }).line], ['needs_setup', 'Switch on live updates']);
+  assert.deepEqual([messagesTile({ ...base, liveUpdates: 'failed' }).status, messagesTile({ ...base, liveUpdates: 'failed' }).line], ['needs_setup', 'Live updates could not start']);
+  assert.equal(messagesTile({ ...base, liveUpdates: 'on' }).status, 'connected');
+  // No add-on or nothing connected wins over live updates.
+  assert.equal(messagesTile({ ...base, liveUpdates: 'off', connectedCount: 0 }).line, 'Connect Instagram or Facebook');
 });
 
 test('the counts line puts approvals first, then unread, never a zero count', () => {
@@ -77,11 +96,15 @@ test('Automatic replies are On only when a reply can really go out on its own', 
   const ruled = { ...autoOn, automationMode: 'suggested', responseRules: [{ enabled: true, action: 'auto_reply' }] };
   assert.equal(repliesGoOutOnTheirOwn(ruled), true);
   assert.equal(repliesGoOutOnTheirOwn({ ...ruled, responseRules: [{ enabled: false, action: 'auto_reply' }] }), false);
-  assert.deepEqual(autoStatus(ruled), { status: 'on', line: 'Your rules send some replies' });
+  assert.deepEqual(autoStatus(ruled), { status: 'on', line: 'Your rules can send some replies' });
+  assert.deepEqual(autoStatus(ruled, true), { status: 'on', line: 'Your rules send some replies' });
 });
 
 test('Automatic replies tile wording', () => {
-  assert.deepEqual(autoStatus(autoOn), { status: 'on', line: 'Replies go out on their own' });
+  // Until the owner's live test passes, the tile says what is set, not that replies go out.
+  assert.equal(INBOX_LIVE_PROVEN, false);
+  assert.deepEqual(autoStatus(autoOn), { status: 'on', line: 'Set to send on its own' });
+  assert.deepEqual(autoStatus(autoOn, true), { status: 'on', line: 'Replies go out on their own' });
   assert.deepEqual(autoStatus({ ...autoOn, automationMode: 'approval_required' }), { status: 'off', line: 'Each reply waits for your approval' });
   assert.deepEqual(autoStatus({ ...autoOn, automationMode: 'approval_required', enabled: false }), { status: 'off', line: 'Suggested replies only' });
   assert.deepEqual(autoStatus(null), { status: 'off', line: 'Suggested replies only' });
@@ -102,8 +125,18 @@ test('the part comes from the address', () => {
   assert.equal(partFromParam('other'), 'messages');
 });
 
+test('until the live test passes the explainer says what is set up, never that it has worked', () => {
+  assert.equal(EXPLAINER, EXPLAINER_VERSIONS.ready);
+  assert.equal(EXPLAINER.badge, 'Set up and ready to test');
+  const ready = [EXPLAINER.title, ...EXPLAINER.lines, EXPLAINER.safety].join(' ');
+  assert.match(ready, /is set up to read/);
+  assert.match(ready, /draft a reply/);
+  for (const claim of [/reads each new/, /writes a reply/, /go out on their own\./, /tested/i, /proven/i, /works/i]) assert.doesNotMatch(ready, claim);
+  assert.equal(EXPLAINER_VERSIONS.proven.badge, '');
+});
+
 test('the explainer says the honest things and none of the banned ones', () => {
-  const all = [EXPLAINER.title, ...EXPLAINER.lines, EXPLAINER.safety, ...EXPLAINER_STEPS.flatMap((s) => [s.title, s.text]), ...Object.values(ADDON_NOTE)].join(' ');
+  const all = [EXPLAINER.title, ...EXPLAINER.lines, EXPLAINER.safety, ...EXPLAINER_STEPS.flatMap((s) => [s.title, s.text]), ...Object.values(ADDON_NOTE), ADDON_NOTE_CLIENT].join(' ');
   assert.match(all, /waits for you/);
   assert.match(all, /only when you switch that on/);
   assert.match(all, /switch it off any time/);
@@ -114,8 +147,10 @@ test('the explainer says the honest things and none of the banned ones', () => {
   assert.deepEqual(EXPLAINER_STEPS.map((s) => s.title), ['Connect', 'Choose how careful', 'Review or let it run']);
 });
 
-test('the explainer button: add-on, then connect, then none', () => {
-  assert.deepEqual(explainerAction({ entitled: false, connectedCount: 2 }), { label: 'See the Inbox add-on', to: '/trial-expired' });
+test('the explainer button: add-on, then connect, then none; never See plans inside a client or staff pass', () => {
+  assert.deepEqual(explainerAction({ entitled: false, connectedCount: 2 }), { label: 'See plans', to: '/trial-expired' });
+  assert.equal(explainerAction({ entitled: false, connectedCount: 2, clientPass: true }), null);
+  assert.deepEqual(explainerAction({ entitled: true, connectedCount: 0, clientPass: true }), { label: 'Connect an account', to: '/connect-socials' });
   assert.deepEqual(explainerAction({ entitled: true, connectedCount: 0 }), { label: 'Connect an account', to: '/connect-socials' });
   assert.equal(explainerAction({ entitled: true, connectedCount: 1 }), null);
 });
@@ -143,7 +178,7 @@ test('the strip keeps every row full and the tiles the same height; motion only 
 });
 
 test('the step glyphs follow the art rules', () => {
-  for (const f of ['Frame', 'Connect', 'Careful', 'Run']) {
+  for (const f of ['Frame', 'Connect', 'Careful', 'Run', 'Live', 'Stars']) {
     const src = read(`components/art/inbox/${f}.tsx`);
     assert.ok(Buffer.byteLength(src) <= 2048, `${f} is at most 2 KB`);
     assert.doesNotMatch(src, /<text\b|<image\b|<script\b|dangerouslySetInnerHTML|https?:\/\//);

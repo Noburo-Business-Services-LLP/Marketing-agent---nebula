@@ -9,12 +9,16 @@ import ListeningCard from '../components/ListeningCard';
 import { InboxPartTiles, AutoReplyExplainer, InboxNote } from '../components/inbox/InboxOverview';
 import { InboxArt } from '../components/art/Inbox';
 import { ReviewsArt } from '../components/art/Reviews';
+import { AutoReplyArt } from '../components/art/AutoReply';
+import { LiveUpdatesArt } from '../components/art/inbox/Live';
 import '../components/inbox/inbox.css';
 import { inboxConnectedCount } from '../utils/inbox';
 import { upgradeInfoOf } from '../utils/plans';
 import {
-  ADDON_NOTE, explainerAction, isGoogleConnected, overviewTiles, partFromParam, type InboxPart, type ReplySettingsLike,
+  ADDON_NOTE, ADDON_NOTE_CLIENT, explainerAction, isGoogleConnected, overviewTiles, partFromParam, type InboxPart, type ReplySettingsLike,
 } from '../utils/inboxOverview';
+import { holdsClientPass, liveNote, messagesBodyState } from '../utils/inboxView';
+import { customerMessage } from '../utils/errors';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -34,16 +38,20 @@ const SocialInbox: React.FC = () => {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState<boolean | null>(null);
   const [settings, setSettings] = useState<ReplySettingsLike | null>(null);
+  const [liveUpdates, setLiveUpdates] = useState<string | null>(null);
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveError, setLiveError] = useState('');
+  // Inside a client's account (agency) or with a staff pass nobody can buy the add-on here.
+  const clientPass = useMemo(() => holdsClientPass(typeof window !== 'undefined' ? window.localStorage : null), []);
 
   const part = partFromParam(params.get('tab'));
 
-  const load = useCallback(async (isCancelled: () => boolean = () => false) => {
-    setState('loading');
-    // Three reads, all from our own database. The Google reviews list itself is only fetched when that part is opened.
-    const [summary, replySettings, home] = await Promise.allSettled([
+  const load = useCallback(async (isCancelled: () => boolean = () => false, quiet = false) => {
+    if (!quiet) setState('loading');
+    // Reads from our own database only. The Google reviews list itself is fetched when that part is opened.
+    const [summary, replySettings] = await Promise.allSettled([
       apiService.getSocialInboxSummary(),
       inboxAPI.getSettings(),
-      apiService.getHomeSummary(),
     ]);
     if (isCancelled()) return;
     if (summary.status === 'rejected') {
@@ -62,8 +70,16 @@ const SocialInbox: React.FC = () => {
     setUnread(s.unreadMessageCount ?? 0);
     setPending(s.pendingCount ?? 0);
     setLastSyncAt(s.syncStatus?.lastSyncAt ?? null);
+    setLiveUpdates(typeof s.liveUpdates === 'string' ? s.liveUpdates : null);
     setSettings(replySettings.status === 'fulfilled' ? (replySettings.value.settings || null) : null);
-    setGoogleConnected(home.status === 'fulfilled' && home.value && home.value.connected ? isGoogleConnected(home.value.connected.platforms) : null);
+    if (typeof s.reviewsConnected === 'boolean') {
+      setGoogleConnected(s.reviewsConnected);
+    } else {
+      // An older server: read the connected accounts from the Home summary instead.
+      const home = await apiService.getHomeSummary().catch(() => null);
+      if (isCancelled()) return;
+      setGoogleConnected(home && home.connected ? isGoogleConnected(home.connected.platforms) : null);
+    }
     setState('ready');
   }, []);
 
@@ -74,6 +90,19 @@ const SocialInbox: React.FC = () => {
   }, [load]);
 
   const onPendingChange = useCallback((n: number) => setPending(n), []);
+
+  // Switch on live updates (registers this account's comment and message hooks), then read the summary again.
+  const switchOnLive = async () => {
+    setLiveBusy(true);
+    setLiveError('');
+    try {
+      const res = await apiService.registerWebhook();
+      if (!res || res.success === false) setLiveError(customerMessage(res?.message, 'Live updates could not be switched on. Please try again in a few minutes.'));
+      await load(undefined, true);
+    } finally {
+      setLiveBusy(false);
+    }
+  };
   const onSettingsSaved = useCallback((s: AutoReplySettings) => setSettings(s), []);
 
   const open = (next: InboxPart) => {
@@ -83,8 +112,8 @@ const SocialInbox: React.FC = () => {
   };
 
   const tiles = useMemo(
-    () => overviewTiles({ entitled, connectedCount, inboxStatus, pending, unread, googleConnected, settings }),
-    [entitled, connectedCount, inboxStatus, pending, unread, googleConnected, settings],
+    () => overviewTiles({ entitled, connectedCount, inboxStatus, pending, unread, googleConnected, settings, liveUpdates, lastAt: lastSyncAt }),
+    [entitled, connectedCount, inboxStatus, pending, unread, googleConnected, settings, liveUpdates, lastSyncAt],
   );
 
   if (state === 'loading') {
@@ -111,16 +140,25 @@ const SocialInbox: React.FC = () => {
     : connectedCount === 0
       ? 'Connect Instagram or Facebook to see its comments and messages here.'
       : `Comments and messages from your ${connectedCount} connected ${connectedCount === 1 ? 'account' : 'accounts'}, in one list.${unread > 0 ? ` ${unread} ${unread === 1 ? 'is' : 'are'} waiting for a reply.` : ''}`;
-  const action = explainerAction({ entitled, connectedCount });
+  const action = explainerAction({ entitled, connectedCount, clientPass });
+  const bodyState = messagesBodyState({ entitled, connectedCount, liveUpdates });
+  const live = liveNote(liveUpdates);
 
   let body: React.ReactNode;
   if (!entitled) {
-    // Without the add-on: what the chosen part does, with the one button, then the explainer that sells automatic replies.
+    // Without the add-on: a calm note for the chosen part (See plans, except inside a client or staff pass), then the explainer.
+    const noteText = clientPass ? ADDON_NOTE_CLIENT : ADDON_NOTE[part];
+    const noteArt = part === 'reviews' ? <ReviewsArt /> : part === 'auto-reply' ? <AutoReplyArt /> : <InboxArt />;
     body = part === 'auto-reply'
-      ? <AutoReplyExplainer action={action} />
+      ? (
+        <>
+          {clientPass && <InboxNote title="Part of the Inbox add-on" text={noteText} art={noteArt} />}
+          <AutoReplyExplainer action={action} />
+        </>
+      )
       : (
         <>
-          <InboxNote title="Part of the Inbox add-on" text={ADDON_NOTE[part]} art={part === 'reviews' ? <ReviewsArt /> : <InboxArt />} action={action} />
+          <InboxNote title="Part of the Inbox add-on" text={noteText} art={noteArt} action={action} />
           <AutoReplyExplainer />
         </>
       );
@@ -133,20 +171,31 @@ const SocialInbox: React.FC = () => {
         <AutoReplySettingsPage onSaved={onSettingsSaved} />
       </>
     );
-  } else if (connectedCount === 0) {
+  } else if (bodyState === 'connect') {
     body = (
       <InboxNote
-        title="Your inbox is empty for now"
-        text="Once your Instagram or Facebook account is connected, its comments and messages appear here, and you can reply to all of them from one place."
+        title="Connect Instagram or Facebook"
+        text="Once an account is connected, its comments and direct messages appear here with a reply drafted for each, and you can answer all of them from one place."
         art={<InboxArt />}
+        marks={['instagram', 'facebook']}
         action={{ label: 'Connect an account', to: '/connect-socials' }}
       />
     );
   } else {
     body = (
       <>
+        {live && (
+          <InboxNote
+            role="status"
+            tone="warn"
+            title={live.title}
+            text={liveError || live.text}
+            art={<LiveUpdatesArt />}
+            action={{ label: liveBusy ? 'Switching on' : live.action, onClick: switchOnLive, busy: liveBusy }}
+          />
+        )}
+        <UnifiedInbox lastSyncAt={lastSyncAt} liveUpdates={liveUpdates} onPendingChange={onPendingChange} />
         <ListeningCard showRecent />
-        <UnifiedInbox lastSyncAt={lastSyncAt} onPendingChange={onPendingChange} />
       </>
     );
   }
