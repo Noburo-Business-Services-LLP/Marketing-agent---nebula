@@ -91,12 +91,15 @@ async function spend(userId, cost, { action = 'spend', description = '', ref = '
   // A frozen client (over the agency's limit) cannot spend or reserve the shared pool by any path, pass or no pass:
   // scheduled jobs, automatic replies and queued work are refused like a balance that is too low. Refunds are not blocked.
   if (workspaceId && frozen) return { success: false, balance: null, spent: 0, frozen: true };
-  const entry = { action, amount: -amount, description: description || action, createdAt: new Date() };
+  // `ref` is written in the same atomic update as the debit: the proof of the charge that crash recovery reads when the
+  // ledger row (written after, and allowed to fail) is missing. See chargeProof.
+  const entry = { action, amount: -amount, description: description || action, createdAt: new Date(), ...(ref ? { ref: String(ref) } : {}) };
   const filter = { _id: workspaceId ? payerId : userId, 'credits.balance': { $gte: amount } };
   if (workspaceId) Object.assign(filter, agencyRules.CLIENT_PAYER_FILTER);
   const doc = await User.findOneAndUpdate(filter, spendPipeline(amount, entry), { new: true });
   if (!doc) return { success: false, balance: null, spent: 0 };
   record({ user: workspaceId ? payerId : userId, workspace: workspaceId || undefined, type: 'spend', quarks: -amount, balanceAfter: doc.credits.balance, action, ref });
+  forgetSummary(workspaceId ? payerId : userId, workspaceId);
   // What this cost us, for the daily ceiling and the staff screen. Never blocks the spend.
   try { require('./spendGuard').record(action, units); } catch (_) { /* cost tracking is best effort */ }
   return { success: true, balance: doc.credits.balance, spent: amount, user: doc, payerId: workspaceId ? payerId : String(userId), workspaceId };
@@ -118,10 +121,59 @@ async function refundTo(userId, quarks, { action = 'refund', ref = '', payerId =
     if (!r.payerId) return { ok: false, payerId: null };
     if (r.workspaceId) { target = r.payerId; workspaceId = r.workspaceId; }
   }
-  const out = await User.updateOne({ _id: target }, { $inc: { 'credits.balance': amount, 'credits.totalUsed': -amount } });
+  // The history entry (with `ref`) lands in the same update as the credit: the proof that this refund happened even when
+  // the ledger row below cannot be written, so a retry never pays twice (see chargeProof).
+  const entry = { action, amount, description: action, createdAt: new Date(), ...(ref ? { ref: String(ref) } : {}) };
+  const out = await User.updateOne({ _id: target }, { $inc: { 'credits.balance': amount, 'credits.totalUsed': -amount }, $push: { 'credits.history': { $each: [entry], $slice: -100 } } });
   if (out && out.modifiedCount === 0) return { ok: false, payerId: null };
   record({ user: target, workspace: workspaceId || undefined, type: 'refund', quarks: amount, action, ref: ref || undefined });
+  forgetSummary(target, workspaceId);
   return { ok: true, payerId: String(target) };
+}
+
+/** The Home summary shows the balance: forget the cached answer of the wallet (and the client) whose balance moved. */
+function forgetSummary(...ids) {
+  try {
+    const cache = require('./homeSummaryCache').sharedCache();
+    for (const id of ids) if (id) cache.invalidate(String(id));
+  } catch (_) { /* the cache never breaks a payment */ }
+}
+
+/**
+ * Did the charge with this `ref` land, and was it refunded? The Quark ledger row is read first; when it is missing (it
+ * is written after the debit and a failed write is only logged), the credits.history entry written in the same atomic
+ * update as the debit decides. History is searched on the account itself, the recorded payer and its current payer
+ * (the agency pool for a client). Returns { spend: { payer, workspace, quarks, source } | null, refunded }.
+ * Throws when the lookup itself fails, so a caller can leave the money question open instead of guessing.
+ */
+async function chargeProof(ref, { userId = '', payerId = '' } = {}) {
+  const r = String(ref || '');
+  if (!r) return { spend: null, refunded: false };
+  const pick = (q) => (q && typeof q.lean === 'function' ? q.lean() : q);
+  const sel = (q) => (q && typeof q.select === 'function' ? q.select('user workspace quarks') : q);
+  const [spentRow, refundRow] = await Promise.all([pick(sel(QuarkLedger.findOne({ type: 'spend', ref: r }))), pick(sel(QuarkLedger.findOne({ type: 'refund', ref: r })))]);
+  let spend = spentRow ? { payer: String(spentRow.user), workspace: spentRow.workspace ? String(spentRow.workspace) : '', quarks: Math.abs(num(spentRow.quarks)), source: 'ledger' } : null;
+  let refunded = Boolean(refundRow);
+  if (spend && refunded) return { spend, refunded };
+  const ids = new Set([userId, payerId].filter(Boolean).map(String));
+  if (userId) {
+    const p = await require('./agency').resolvePayer(userId);
+    if (p && p.payerId) ids.add(String(p.payerId));
+  }
+  if (!ids.size) return { spend, refunded };
+  const q = User.find({ _id: { $in: [...ids] }, 'credits.history.ref': r });
+  const docs = (await pick(q && typeof q.select === 'function' ? q.select('_id credits.history') : q)) || [];
+  for (const d of docs) {
+    for (const h of (d.credits && d.credits.history) || []) {
+      if (!h || h.ref !== r) continue;
+      if (num(h.amount) < 0 && !spend) {
+        const payer = String(d._id);
+        spend = { payer, workspace: userId && payer !== String(userId) ? String(userId) : '', quarks: -num(h.amount), source: 'history' };
+      }
+      if (num(h.amount) > 0) refunded = true;
+    }
+  }
+  return { spend, refunded };
 }
 
 /** `settle` for whoever pays for `userId`: a client's activity expires the agency's Quarks, not its own empty record. */
@@ -201,5 +253,5 @@ function topupIsLive(topup, now = new Date()) {
 
 module.exports = {
   DAY, TOPUP_VALID_DAYS, PLAN_GRACE_DAYS, hasActivePlan, summarise, spend, spendPipeline, refundTo, settle, settleWallet,
-  planGrantUpdate, topupGrantUpdate, topupIsLive, record
+  planGrantUpdate, topupGrantUpdate, topupIsLive, record, chargeProof, forgetSummary
 };

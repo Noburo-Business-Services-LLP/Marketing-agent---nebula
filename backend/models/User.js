@@ -311,6 +311,9 @@ const userSchema = new mongoose.Schema({
       cost: { type: Number },
       description: { type: String },
       balanceAfter: { type: Number },
+      // The job or row a spend or refund was for (written in the same update as the balance change: the proof crash
+      // recovery reads when the Quark ledger row is missing).
+      ref: { type: String },
       createdAt: { type: Date, default: Date.now },
       timestamp: { type: Date, default: Date.now }
     }]

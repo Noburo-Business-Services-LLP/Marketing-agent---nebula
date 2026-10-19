@@ -300,6 +300,8 @@ function createPaymentRouter(deps = {}) {
       { _id: user._id, 'payments.razorpayPaymentId': { $ne: paymentId }, ...planGuard, ...gate },
       built.update, opts
     );
+    // A webhook credit has no signed-in request to clear the Home summary, so the account's cached balance is forgotten here.
+    if (doc) quarkBuckets.forgetSummary(user._id);
     if (doc && expiring > 0) quarkBuckets.record({ user: user._id, type: 'expiry', bucket: 'plan', quarks: -expiring, balanceAfter: doc.credits && doc.credits.balance, action: 'plan_expired' });
     if (!doc && record.kind === 'plan' && !alreadyApplied) {
       const fresh = await User.findById(user._id);

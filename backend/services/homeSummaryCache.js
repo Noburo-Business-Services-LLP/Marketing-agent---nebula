@@ -31,4 +31,9 @@ function createSummaryCache({ ttlMs = TTL_MS, max = MAX_ENTRIES, now = () => Dat
   return { get, set, invalidate, clear, size };
 }
 
-module.exports = { createSummaryCache, TTL_MS, MAX_ENTRIES };
+// The one cache of this server process: the Home route reads it, and money code (services/quarkBuckets.js) clears an
+// account's entry when its balance moves outside a request (a webhook credit, a background refund, an agency client's spend).
+let shared = null;
+const sharedCache = () => (shared = shared || createSummaryCache());
+
+module.exports = { createSummaryCache, sharedCache, TTL_MS, MAX_ENTRIES };

@@ -5,7 +5,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
-const { createSummaryCache } = require('../services/homeSummaryCache');
+const { sharedCache: sharedSummaryCache } = require('../services/homeSummaryCache');
 
 const toUserId = (user) => (!user ? null : user._id ? String(user._id) : user.id ? String(user.id) : null);
 const GENERIC_ERROR = 'We could not load your home page numbers. Please try again.';
@@ -15,7 +15,7 @@ const readLimiter = rateLimit({
   message: { success: false, message: 'You have sent too many requests. Please try again in a few minutes.' }
 });
 
-const sharedCache = createSummaryCache();
+const sharedCache = sharedSummaryCache();
 
 /** Middleware: after a write that succeeded, forget the signed-in account's cached summary. */
 function invalidateOnWrite(cache = sharedCache) {
