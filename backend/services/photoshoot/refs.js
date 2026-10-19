@@ -2,7 +2,7 @@
 /**
  * Safe handling of the photos a photoshoot reads: the customer's upload, and the reference photos loaded from their own
  * product and place records. The type is read from the file's first bytes (never from its name or a header), and the
- * size is limited. Links must be https and point at a public host name (no IP address, no local name).
+ * size is limited. Links must be https on port 443 and point at a public host name (no IP address, no local name).
  */
 const caps = require('../../config/photoshoot');
 
@@ -32,40 +32,68 @@ function readDataUrl(dataUrl, maxBytes = caps.UPLOAD_MAX_BYTES) {
   return { ok: true, mime, buffer };
 }
 
-/** True for an https link to a public host name. */
+/** True for an https link to a public host name on the standard port (443). */
 function safeUrl(url) {
   let u;
   try { u = new URL(String(url || '')); } catch (_) { return false; }
   if (u.protocol !== 'https:' || u.username || u.password) return false;
+  if (u.port && u.port !== '443') return false;
   const host = u.hostname.toLowerCase();
   if (!host.includes('.') || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return false;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':') || host.startsWith('[')) return false;
   return true;
 }
 
+const MAX_REDIRECTS = 2;
+const TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const header = (h, name) => { const v = h && (h[name] !== undefined ? h[name] : h[name.toLowerCase()]); return Array.isArray(v) ? v[0] : v; };
+
 /**
  * One reference photo as { mimeType, data } (base64) for the image model, or null. Accepts the product's stored data URL
- * or a safe https link. Never throws.
+ * or a safe https link. The link comes from the customer's own records, so it is treated as hostile: every host (also
+ * after a redirect, at most two) must resolve to public addresses only, checked again when the connection is made
+ * (the same helpers as the competitor pictures); only port 443, only image types, and the body is read with a running
+ * byte cap, so an endless stream is cut off early. Never throws.
+ * `request` (url, { timeoutMs, maxBytes }) -> { status, headers, body } and `resolve` (host) are replaceable for tests.
  */
-async function loadRef(src, { fetchImpl = (...a) => fetch(...a), maxBytes = caps.UPLOAD_MAX_BYTES, timeoutMs = 20000 } = {}) {
+async function loadRef(src, { request = null, resolve = null, maxBytes = caps.UPLOAD_MAX_BYTES, timeoutMs = 20000 } = {}) {
   try {
     const s = String(src || '');
     if (s.startsWith('data:')) {
       const r = readDataUrl(s, maxBytes);
       return r.ok ? { mimeType: r.mime, data: r.buffer.toString('base64') } : null;
     }
-    if (!safeUrl(s)) return null;
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), timeoutMs);
-    let res;
-    try { res = await fetchImpl(s, { redirect: 'error', signal: ctl.signal }); } finally { clearTimeout(timer); }
-    if (!res || !res.ok) return null;
-    const len = Number(res.headers && typeof res.headers.get === 'function' ? res.headers.get('content-length') : 0);
-    if (len && len > maxBytes) return null;
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (!buffer.length || buffer.length > maxBytes) return null;
-    const mime = sniffImage(buffer);
-    return mime ? { mimeType: mime, data: buffer.toString('base64') } : null;
+    const avatar = require('../competitors/avatar');
+    const get = request || ((url, o) => avatar.httpsGet(url, { ...o, lookup: avatar.safeLookup }));
+    const lookupAll = resolve || ((host) => require('dns').promises.lookup(host, { all: true }));
+    const started = Date.now();
+    let current = s;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+      if (!safeUrl(current)) return null;
+      const addrs = await lookupAll(new URL(current).hostname);
+      const list = (Array.isArray(addrs) ? addrs : [addrs]).map((a) => (a && typeof a === 'object' ? a.address : a)).filter(Boolean);
+      if (!list.length || list.some(avatar.isPrivateAddress)) return null;
+      const left = timeoutMs - (Date.now() - started);
+      if (left <= 0) return null;
+      const res = await get(current, { timeoutMs: left, maxBytes });
+      const status = Number(res && res.status);
+      if (status >= 300 && status < 400) {
+        const loc = header(res.headers, 'location');
+        if (!loc) return null;
+        current = new URL(String(loc), current).href;
+        continue;
+      }
+      if (status !== 200) return null;
+      const type = String(header(res.headers, 'content-type') || '').split(';')[0].trim().toLowerCase();
+      if (!TYPES.has(type)) return null;
+      const declared = Number(header(res.headers, 'content-length'));
+      if (Number.isFinite(declared) && declared > maxBytes) return null;
+      const buffer = Buffer.isBuffer(res.body) ? res.body : Buffer.from(res.body || []);
+      if (!buffer.length || buffer.length > maxBytes) return null;
+      const mime = sniffImage(buffer);
+      return mime ? { mimeType: mime, data: buffer.toString('base64') } : null;
+    }
+    return null;
   } catch (_) { return null; }
 }
 

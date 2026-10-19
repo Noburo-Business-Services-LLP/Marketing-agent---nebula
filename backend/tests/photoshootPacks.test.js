@@ -114,14 +114,15 @@ test('photo checks: the type comes from the bytes, links must be https to a publ
   for (const u of ['https://res.cloudinary.com/x/a.png', 'https://cdn.shop.example.in/p.jpg']) assert.ok(safeUrl(u), u);
   for (const u of ['http://res.cloudinary.com/x.png', 'https://127.0.0.1/a.png', 'https://10.0.0.5/a', 'https://localhost/a', 'https://metadata.internal/a', 'https://[::1]/a', 'https://user:pw@example.com/a', 'file:///etc/passwd', 'https://intranet/a']) assert.ok(!safeUrl(u), u);
   let fetched = 0;
-  const fakeFetch = async () => { fetched += 1; return { ok: true, headers: { get: () => '' }, arrayBuffer: async () => png }; };
-  assert.deepStrictEqual(await loadRef('https://res.cloudinary.com/x/a.png', { fetchImpl: fakeFetch }), { mimeType: 'image/png', data: png.toString('base64') });
-  assert.strictEqual(await loadRef('https://127.0.0.1/a.png', { fetchImpl: fakeFetch }), null);
+  const pub = async () => [{ address: '93.184.216.34', family: 4 }];
+  const fakeGet = async () => { fetched += 1; return { status: 200, headers: { 'content-type': 'image/png' }, body: png }; };
+  assert.deepStrictEqual(await loadRef('https://res.cloudinary.com/x/a.png', { request: fakeGet, resolve: pub }), { mimeType: 'image/png', data: png.toString('base64') });
+  assert.strictEqual(await loadRef('https://127.0.0.1/a.png', { request: fakeGet, resolve: pub }), null);
   assert.strictEqual(fetched, 1, 'an unsafe link is never fetched');
-  const html = async () => ({ ok: true, headers: { get: () => '' }, arrayBuffer: async () => Buffer.from('<html>hello world</html>') });
-  assert.strictEqual(await loadRef('https://example.com/a.png', { fetchImpl: html }), null);
-  const huge = async () => ({ ok: true, headers: { get: () => String(caps.UPLOAD_MAX_BYTES + 1) }, arrayBuffer: async () => png });
-  assert.strictEqual(await loadRef('https://example.com/a.png', { fetchImpl: huge }), null);
+  const html = async () => ({ status: 200, headers: { 'content-type': 'image/png' }, body: Buffer.from('<html>hello world</html>') });
+  assert.strictEqual(await loadRef('https://example.com/a.png', { request: html, resolve: pub }), null);
+  const huge = async () => ({ status: 200, headers: { 'content-type': 'image/png', 'content-length': String(caps.UPLOAD_MAX_BYTES + 1) }, body: png });
+  assert.strictEqual(await loadRef('https://example.com/a.png', { request: huge, resolve: pub }), null);
   assert.strictEqual((await loadRef(`data:image/png;base64,${png.toString("base64")}`)).mimeType, "image/png");
 });
 

@@ -30,6 +30,7 @@ const { buildPhotoPrompt, cleanName } = require('./prompt');
 const { readDataUrl, loadRef } = require('./refs');
 
 const ACTION = 'photoshoot_image';
+const STALE_QUEUED_MS = 3 * 60000;
 const BUSY = 'Making things is very busy right now. Please try again in a little while. Nothing was charged.';
 
 const MESSAGES = Object.freeze({
@@ -166,6 +167,13 @@ function defaultDeps() {
     recordSpend: (action, units) => require('../spendGuard').record(action, units),
     generate: (args) => require('./generator').createGenerator().make(args),
     loadRef: (src) => loadRef(src),
+    /** What the Quark ledger holds for one job: its spend row (the payer is the row's account) and whether a refund exists. */
+    ledgerFor: async (jobId) => {
+      const L = require('../../models/QuarkLedger');
+      const rows = await L.find({ ref: String(jobId), type: { $in: ['spend', 'refund'] } }).select('user type quarks').lean();
+      const spend = rows.find((r) => r.type === 'spend');
+      return { spend: spend ? { payer: String(spend.user), quarks: Math.abs(Number(spend.quarks) || 0) } : null, refunded: rows.some((r) => r.type === 'refund') };
+    },
     alert: (key, text) => { try { require('../opsAlerts').recordFailure(key, text); } catch (_) { /* best effort */ } },
     schedule: (fn) => setImmediate(fn),
     env: process.env,
@@ -516,8 +524,38 @@ function createPhotoshoot(given = {}) {
     }
   }
 
+  /**
+   * A row still queued after STALE_QUEUED_MS was left behind (the process died between the insert and marking the charge,
+   * or a close failed). It would lock the account out (one job in flight) and, if the spend landed, keep the Quarks.
+   * The ledger decides: a spend row for the job with no refund is refunded once, to the account that paid, never more than
+   * was charged; then the row is closed. The close claims the refund flag atomically, so concurrent sweeps cannot refund twice.
+   */
+  async function sweepStale() {
+    const before = new Date(deps.now().getTime() - STALE_QUEUED_MS);
+    const stuck = (await repo.staleQueued(before, 10)) || [];
+    let closed = 0;
+    for (const j of stuck) {
+      try {
+        const led = (await deps.ledgerFor(String(j._id))) || {};
+        const refund = led.spend && !led.refunded ? Math.max(0, led.spend.quarks) : 0;
+        const row = await repo.closeStale(j._id, { refundedQuarks: refund, now: deps.now() });
+        if (!row) continue;
+        closed += 1;
+        if (refund <= 0) continue;
+        let back = null;
+        try { back = await deps.refundTo(String(row.user), refund, { action: `${ACTION}_refund`, ref: String(row._id), payerId: led.spend.payer }); } catch (_) { back = null; }
+        if (!back || !back.ok) {
+          await repo.setRefundFailed(row._id).catch(() => null);
+          deps.alert('photoshoot_refund', `Photoshoot ${String(row._id)}: the refund of ${refund} Quarks for a stuck job did not land.`);
+        }
+      } catch (e) { console.error('[photoshoot] stale sweep failed:', e && e.message); }
+    }
+    return closed;
+  }
+
   /** Takes over jobs whose runner was lost (a restart): run by the loop, at start, and before a new job. */
   async function resumeLost() {
+    await sweepStale().catch(() => null);
     const lost = (await repo.lostJobs(deps.now(), 10)) || [];
     for (const j of lost) {
       if (running.has(String(j._id))) continue;
@@ -599,7 +637,7 @@ function createPhotoshoot(given = {}) {
     return rows.map((r) => ({ kind: r._id.kind, outcome: r._id.outcome || 'running', jobs: r.n, photos: r.photos }));
   }
 
-  return { packs, options, create, redo, get, list, library, setInLibrary, upload, runJob, resumeLost, finalize, dailyCounts, _locks: locks, _running: running };
+  return { packs, options, create, redo, get, list, library, setInLibrary, upload, runJob, resumeLost, finalize, sweepStale, dailyCounts, _locks: locks, _running: running };
 }
 
 module.exports = { createPhotoshoot, catalogue, packView, planPhotos, jobView, minutesFor, istDay, MESSAGES, ACTION, ACTION_USD_PER_PHOTO: () => ACTION_USD[ACTION] };

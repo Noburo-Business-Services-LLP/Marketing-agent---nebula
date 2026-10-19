@@ -69,6 +69,13 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
       return before;
     },
     setRefundFailed: async (id) => { const r = find(id); if (r) r.refundFailed = true; },
+    staleQueued: async (before, limit = 10) => rows.filter((r) => r.status === 'queued' && new Date(r.createdAt) < before).slice(0, limit).map((r) => ({ _id: r._id, user: r.user })),
+    closeStale: async (id, { refundedQuarks = 0, now }) => {
+      const r = find(id); if (!r || r.status !== 'queued' || r.refunded) return null;
+      const before = clone(r);
+      Object.assign(r, { status: 'failed', outcome: 'stale_queued', refunded: true, refundedQuarks, finishedAt: now }); delete r.inFlight;
+      return before;
+    },
     lostJobs: async (now, limit = 10) => rows.filter((r) => r.status === 'running' && (!r.leaseUntil || new Date(r.leaseUntil) < now)).slice(0, limit).map((r) => ({ _id: r._id, user: r.user })),
     listOwn: async (user, limit = 20) => clone(rows.filter((r) => S(r.user) === S(user) && r.kind === 'pack' && r.status !== 'refused').sort((a, b) => b.createdAt - a.createdAt).slice(0, limit)),
     childrenOf: async (user, parents) => clone(rows.filter((r) => S(r.user) === S(user) && r.parent && parents.map(S).includes(S(r.parent)))),

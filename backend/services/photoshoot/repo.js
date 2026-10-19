@@ -57,6 +57,16 @@ function createPhotoshootRepo({ Job = () => require('../../models/PhotoshootJob'
       { $set: { status, outcome, refunded: true, refundedQuarks, finishedAt: now }, $unset: { inFlight: 1, leaseOwner: 1, leaseUntil: 1 } },
       { new: false })),
     setRefundFailed: (id) => J().updateOne({ _id: id }, { $set: { refundFailed: true } }),
+    /** Rows still queued after `before`: the process died, or a close failed, between the insert and the charge being marked. */
+    staleQueued: (before, limit = 10) => lean(J().find({ status: 'queued', createdAt: { $lt: before } }).select('_id user').limit(limit)),
+    /**
+     * Closes a stale queued row and claims its refund in one step (so a second sweep, or another process, finds nothing to
+     * do). Returns the row before the change, or null when it was no longer queued or its refund was already claimed.
+     */
+    closeStale: (id, { refundedQuarks = 0, now }) => lean(J().findOneAndUpdate(
+      { _id: id, status: 'queued', refunded: { $ne: true } },
+      { $set: { status: 'failed', outcome: 'stale_queued', refunded: true, refundedQuarks, finishedAt: now }, $unset: { inFlight: 1 } },
+      { new: false })),
     lostJobs: (now, limit = 10) => lean(J().find({ status: 'running', $or: [{ leaseUntil: null }, { leaseUntil: { $lt: now } }] }).select('_id user').limit(limit)),
     listOwn: (user, limit = 20) => lean(J().find({ user, kind: 'pack', status: { $ne: 'refused' } }).sort({ createdAt: -1 }).limit(limit)),
     childrenOf: (user, parentIds) => lean(J().find({ user, parent: { $in: parentIds } }).sort({ createdAt: 1 })),
