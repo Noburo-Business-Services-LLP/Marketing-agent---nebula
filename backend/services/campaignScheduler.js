@@ -1,4 +1,6 @@
 const Campaign = require('../models/Campaign');
+const Draft = require('../models/Draft');
+const { publishGate } = require('./postLifecycle');
 const User = require('../models/User');
 const { publishCampaignToSocial } = require('./campaignPublisher');
 const { getPostStatus } = require('./socialMediaAPI');
@@ -188,6 +190,26 @@ async function waitForFacebookPostId({ profileKey = '', ayrsharePostId = '', ini
   return '';
 }
 
+// A post that is binned or archived, or an automation post nobody approved, must never go out.
+// Returns true when the linked Draft (if any) allows posting. A campaign with no Draft is always allowed.
+async function linkedDraftAllowsPosting(campaign) {
+  const draft = await Draft.findOne({ campaignId: campaign._id }).select('status origin contentCalendarId calendarDay').lean();
+  if (!draft) return true;
+  if (String(draft.status || '') === 'archived') return false;
+  return !publishGate(draft);
+}
+
+// After the scheduler posts a campaign, the linked Draft becomes posted (status 'published', the value the
+// publish-now route uses and the Library counts as Posted). Conditional on scheduled/approved, so it runs once,
+// never touches binned/archived posts, and a second run changes nothing.
+async function markLinkedDraftPosted(campaign, platforms, postedAt = new Date()) {
+  const used = Array.isArray(platforms) ? platforms : [];
+  return Draft.updateOne(
+    { campaignId: campaign._id, status: { $in: ['scheduled', 'approved'] } },
+    { $set: { status: 'published', publishedAt: postedAt, publishedPlatforms: used } }
+  );
+}
+
 async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
   const MAX_PUBLISH_ATTEMPTS = Number(process.env.CAMPAIGN_MAX_PUBLISH_ATTEMPTS || 3);
   // Nothing goes out for a frozen client, a client whose agency plan ended, or an account waiting to be deleted.
@@ -210,6 +232,12 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
 
   for (const campaign of dueCampaigns) {
     try {
+      if (!(await linkedDraftAllowsPosting(campaign))) {
+        // Take it out of the schedule (only if still scheduled) so it is not picked up again.
+        await Campaign.updateOne({ _id: campaign._id, status: 'scheduled' }, { $set: { status: 'draft' } });
+        console.warn(`[Campaign Scheduler] Skipped campaign ${campaign._id}: its post is binned, archived or not approved.`);
+        continue;
+      }
       const result = await publishCampaignToSocial(campaign);
       const nextRecurring = computeNextRecurringStartDate(campaign, { now });
 
@@ -276,6 +304,14 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
         }
 
         const updatedCampaign = await Campaign.findByIdAndUpdate(campaign._id, { $set: update }, { new: true });
+        // A repeating campaign keeps going, so its Draft stays scheduled; a one-off is done, so the Draft is posted.
+        if (!nextRecurring) {
+          try {
+            await markLinkedDraftPosted(campaign, campaign.platforms, update.publishedAt);
+          } catch (draftError) {
+            console.warn(`[Campaign Scheduler] Could not mark draft posted for campaign ${campaign._id}: ${draftError.message}`);
+          }
+        }
         await learnCampaignPublish(updatedCampaign || campaign, result);
         continue;
       }
@@ -364,4 +400,5 @@ function startCampaignScheduler({ intervalMs = 30_000, logger = console } = {}) 
 module.exports = {
   processDueCampaigns,
   startCampaignScheduler,
+  markLinkedDraftPosted,
 };

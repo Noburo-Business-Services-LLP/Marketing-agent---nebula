@@ -111,6 +111,9 @@ const draftSchema = new mongoose.Schema({
   // The day the plan meant it to go out (automation posts). Approving schedules it for this date when it is ahead.
   plannedDate: { type: Date, default: null },
   approvedAt: { type: Date, default: null },
+  // Set when the scheduler (or publish) sends it: when, and to which platforms.
+  publishedAt: { type: Date, default: null },
+  publishedPlatforms: [{ type: String }],
   binnedAt: { type: Date, default: null },
   binnedFrom: { type: String, default: '' },
   archivedFrom: { type: String, default: '' },
