@@ -1,0 +1,628 @@
+{
+ "plan": {
+  "promise": {
+   "text": "More enquiries for custom cakes from families nearby, with a steady flow of fresh-bake posts that bring people to the counter.",
+   "tag": "proposed"
+  },
+  "positioning": {
+   "audience": [
+    {
+     "text": "Families in Anna Nagar who order cakes for birthdays and festivals.",
+     "tag": "inference",
+     "factIds": [
+      "F3"
+     ]
+    }
+   ],
+   "territory": {
+    "name": "Your neighbourhood bakery",
+    "rationale": {
+     "text": "It fits a shop people walk to and a cake they order by name.",
+     "tag": "proposed"
+    },
+    "risk": {
+     "text": "It may sound general unless each post shows a real bake from the day.",
+     "tag": "proposed"
+    }
+   },
+   "line": {
+    "text": "Baked this morning, a short walk from your home.",
+    "tag": "proposed"
+   }
+  },
+  "whereToday": [
+   {
+    "text": "The bakery presents itself as a fresh bakery with made-to-order cakes in Chennai.",
+    "tag": "inference",
+    "factIds": [
+     "F2",
+     "F7"
+    ]
+   },
+   {
+    "text": "The main goal is more enquiries, so each post needs a clear way to ask.",
+    "tag": "inference",
+    "factIds": [
+     "F4"
+    ]
+   },
+   {
+    "text": "Instagram is active but posts are not regular yet.",
+    "tag": "verified",
+    "factIds": [
+     "F8"
+    ]
+   }
+  ],
+  "competitors": [
+   {
+    "name": "Rival Cakes",
+    "observations": [
+     {
+      "text": "Posts finished cakes with prices, mostly on weekends.",
+      "tag": "inference",
+      "factIds": [
+       "F9"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "Corner Patisserie",
+    "observations": [
+     {
+      "text": "Focuses on pastries and coffee rather than custom cakes.",
+      "tag": "inference",
+      "factIds": [
+       "F10"
+      ]
+     }
+    ]
+   }
+  ],
+  "pillars": [
+   {
+    "name": "Fresh from the oven",
+    "why": {
+     "text": "Daily bakes are what most visitors come in for.",
+     "tag": "inference",
+     "factIds": [
+      "F2"
+     ]
+    },
+    "example": {
+     "text": "Show the first tray of croissants at seven in the morning.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "name": "Cakes made to order",
+    "why": {
+     "text": "Custom cakes bring the biggest orders and the most enquiries.",
+     "tag": "inference",
+     "factIds": [
+      "F4"
+     ]
+    },
+    "example": {
+     "text": "Show one birthday cake from sketch to box.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "name": "Celebrations at home",
+    "why": {
+     "text": "Families in Anna Nagar plan birthdays and festivals around food.",
+     "tag": "inference",
+     "factIds": [
+      "F3"
+     ]
+    },
+    "example": {
+     "text": "Show a cake on a family table during Deepavali.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "name": "Behind the counter",
+    "why": {
+     "text": "People trust a bakery they can see working.",
+     "tag": "proposed"
+    },
+    "example": {
+     "text": "Introduce the baker who starts at four in the morning.",
+     "tag": "proposed"
+    }
+   }
+  ],
+  "calendar": [
+   {
+    "day": 1,
+    "pillar": "Cakes made to order",
+    "format": "reel",
+    "hook": {
+     "text": "Why our sourdough takes two days",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 2,
+    "pillar": "Celebrations at home",
+    "format": "carousel",
+    "hook": {
+     "text": "A birthday cake from sketch to box",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 3,
+    "pillar": "Behind the counter",
+    "format": "image post",
+    "hook": {
+     "text": "Three cakes for a small party",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 4,
+    "pillar": "Fresh from the oven",
+    "format": "story",
+    "hook": {
+     "text": "Ask us for an eggless version",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 5,
+    "pillar": "Cakes made to order",
+    "format": "reel",
+    "hook": {
+     "text": "Meet the baker who starts at four",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 6,
+    "pillar": "Celebrations at home",
+    "format": "image post",
+    "hook": {
+     "text": "What goes into a Deepavali hamper",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 7,
+    "pillar": "Behind the counter",
+    "format": "image post",
+    "hook": {
+     "text": "The first tray of the day",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 8,
+    "pillar": "Fresh from the oven",
+    "format": "reel",
+    "hook": {
+     "text": "Why our sourdough takes two days",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 9,
+    "pillar": "Cakes made to order",
+    "format": "carousel",
+    "hook": {
+     "text": "A birthday cake from sketch to box",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 10,
+    "pillar": "Celebrations at home",
+    "format": "image post",
+    "hook": {
+     "text": "Three cakes for a small party",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 11,
+    "pillar": "Behind the counter",
+    "format": "story",
+    "hook": {
+     "text": "Ask us for an eggless version",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 12,
+    "pillar": "Fresh from the oven",
+    "format": "reel",
+    "hook": {
+     "text": "Meet the baker who starts at four",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 13,
+    "pillar": "Cakes made to order",
+    "format": "image post",
+    "hook": {
+     "text": "What goes into a Deepavali hamper",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 14,
+    "pillar": "Celebrations at home",
+    "format": "image post",
+    "hook": {
+     "text": "The first tray of the day",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 15,
+    "pillar": "Behind the counter",
+    "format": "reel",
+    "hook": {
+     "text": "Why our sourdough takes two days",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 16,
+    "pillar": "Fresh from the oven",
+    "format": "carousel",
+    "hook": {
+     "text": "A birthday cake from sketch to box",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 17,
+    "pillar": "Cakes made to order",
+    "format": "image post",
+    "hook": {
+     "text": "Three cakes for a small party",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 18,
+    "pillar": "Celebrations at home",
+    "format": "story",
+    "hook": {
+     "text": "Ask us for an eggless version",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 19,
+    "pillar": "Behind the counter",
+    "format": "reel",
+    "hook": {
+     "text": "Meet the baker who starts at four",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 20,
+    "pillar": "Fresh from the oven",
+    "format": "image post",
+    "hook": {
+     "text": "What goes into a Deepavali hamper",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 21,
+    "pillar": "Cakes made to order",
+    "format": "image post",
+    "hook": {
+     "text": "The first tray of the day",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 22,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Why our sourdough takes two days",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 23,
+    "pillar": "Behind the counter",
+    "format": "carousel",
+    "hook": {
+     "text": "A birthday cake from sketch to box",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 24,
+    "pillar": "Fresh from the oven",
+    "format": "image post",
+    "hook": {
+     "text": "Three cakes for a small party",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 25,
+    "pillar": "Cakes made to order",
+    "format": "story",
+    "hook": {
+     "text": "Ask us for an eggless version",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 26,
+    "pillar": "Celebrations at home",
+    "format": "reel",
+    "hook": {
+     "text": "Meet the baker who starts at four",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 27,
+    "pillar": "Behind the counter",
+    "format": "image post",
+    "hook": {
+     "text": "What goes into a Deepavali hamper",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 28,
+    "pillar": "Fresh from the oven",
+    "format": "image post",
+    "hook": {
+     "text": "The first tray of the day",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 29,
+    "pillar": "Cakes made to order",
+    "format": "reel",
+    "hook": {
+     "text": "Why our sourdough takes two days",
+     "tag": "proposed"
+    }
+   },
+   {
+    "day": 30,
+    "pillar": "Celebrations at home",
+    "format": "carousel",
+    "hook": {
+     "text": "A birthday cake from sketch to box",
+     "tag": "proposed"
+    }
+   }
+  ],
+  "offers": [],
+  "channels": [
+   {
+    "channel": "Instagram",
+    "priority": 1,
+    "role": {
+     "text": "Show the day's bakes and finished cakes so people can picture their order.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "channel": "WhatsApp",
+    "priority": 2,
+    "role": {
+     "text": "Take cake orders and answer questions in one place.",
+     "tag": "proposed"
+    }
+   },
+   {
+    "channel": "Google Business Profile",
+    "priority": 3,
+    "role": {
+     "text": "Help people nearby find the shop, the hours and the reviews.",
+     "tag": "proposed"
+    }
+   }
+  ],
+  "icp": {
+   "who": [
+    {
+     "text": "Parents in Anna Nagar and nearby areas who order a cake for a child's birthday.",
+     "tag": "inference",
+     "factIds": [
+      "F3"
+     ]
+    },
+    {
+     "text": "Office teams who order for a colleague's farewell or a festival.",
+     "tag": "proposed"
+    }
+   ],
+   "pains": [
+    {
+     "text": "They worry a custom cake will not look like the picture.",
+     "tag": "proposed"
+    },
+    {
+     "text": "They want to know the price before they ask.",
+     "tag": "proposed"
+    }
+   ],
+   "where": [
+    {
+     "text": "Instagram in the evening and neighbourhood WhatsApp groups.",
+     "tag": "proposed"
+    }
+   ],
+   "triggers": [
+    {
+     "text": "A birthday two weeks away.",
+     "tag": "proposed"
+    },
+    {
+     "text": "Deepavali, Christmas and New Year.",
+     "tag": "proposed"
+    }
+   ]
+  },
+  "effort": [
+   {
+    "channel": "Instagram",
+    "organicPct": 80,
+    "paidPct": 20,
+    "nebulaaDoes": [
+     "posts",
+     "carousels",
+     "videos",
+     "captions and hashtags"
+    ],
+    "youDo": [
+     {
+      "text": "Reply to comments and messages the same day.",
+      "tag": "proposed"
+     },
+     {
+      "text": "Send one photo of a finished cake each week.",
+      "tag": "proposed"
+     }
+    ]
+   },
+   {
+    "channel": "WhatsApp",
+    "organicPct": 100,
+    "paidPct": 0,
+    "nebulaaDoes": [
+     "posts"
+    ],
+    "youDo": [
+     {
+      "text": "Answer order questions within the hour during shop hours.",
+      "tag": "proposed"
+     },
+     {
+      "text": "Share the weekly menu in your customer groups.",
+      "tag": "proposed"
+     }
+    ]
+   },
+   {
+    "channel": "Google Business Profile",
+    "organicPct": 100,
+    "paidPct": 0,
+    "nebulaaDoes": [
+     "posts",
+     "scheduling and publishing"
+    ],
+    "youDo": [
+     {
+      "text": "Ask happy customers for a review at the counter.",
+      "tag": "proposed"
+     }
+    ]
+   }
+  ],
+  "roadmap": [
+   {
+    "phase": "foundation",
+    "focus": {
+     "text": "Post regularly and make ordering easy.",
+     "tag": "proposed"
+    },
+    "actions": [
+     {
+      "text": "Post four times a week on Instagram.",
+      "tag": "proposed"
+     },
+     {
+      "text": "Add the WhatsApp order link to every post.",
+      "tag": "proposed"
+     }
+    ],
+    "measure": [
+     {
+      "text": "Posts go out on the planned days.",
+      "tag": "proposed"
+     },
+     {
+      "text": "People ask about orders in messages.",
+      "tag": "proposed"
+     }
+    ]
+   },
+   {
+    "phase": "storytelling",
+    "focus": {
+     "text": "Show the people and the craft behind the bakes.",
+     "tag": "proposed"
+    },
+    "actions": [
+     {
+      "text": "Introduce the team in short videos.",
+      "tag": "proposed"
+     },
+     {
+      "text": "Share one cake story each week.",
+      "tag": "proposed"
+     }
+    ],
+    "measure": [
+     {
+      "text": "More people save and share the posts.",
+      "tag": "proposed"
+     }
+    ]
+   },
+   {
+    "phase": "growth",
+    "focus": {
+     "text": "Turn followers into regular orders.",
+     "tag": "proposed"
+    },
+    "actions": [
+     {
+      "text": "Plan festival cakes early.",
+      "tag": "proposed"
+     },
+     {
+      "text": "Ask regular customers for reviews.",
+      "tag": "proposed"
+     }
+    ],
+    "measure": [
+     {
+      "text": "More cake enquiries each week.",
+      "tag": "proposed"
+     },
+     {
+      "text": "New reviews on the Google profile.",
+      "tag": "proposed"
+     }
+    ]
+   }
+  ],
+  "firstSteps": [
+   {
+    "text": "Connect Instagram so posts can go out for you.",
+    "tag": "proposed"
+   },
+   {
+    "text": "Add photos of your three best-selling cakes.",
+    "tag": "proposed"
+   },
+   {
+    "text": "Approve this week's posts.",
+    "tag": "proposed"
+   }
+  ]
+ }
+}

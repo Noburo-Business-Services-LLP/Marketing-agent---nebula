@@ -68,5 +68,7 @@
   "utils/createTiles.ts",
   "utils/home.ts",
   "utils/formatCount.ts",
-  "utils/draftStatus.ts"
+  "utils/draftStatus.ts",
+  "components/StrategyFunnel.tsx",
+  "utils/strategyLevels.ts"
 ]
