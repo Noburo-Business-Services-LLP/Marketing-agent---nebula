@@ -1117,6 +1117,88 @@
     ['GET', /^\/accounts/, ok({ accounts: [] })],
   ];
 
+  // ---- Performance and Brand pages (?perfstate= and ?brandstate=, kept for the tab). Only active when the parameter was
+  // given; without it the routes above answer as before. Pictures are same-origin files so the pages' https-or-http
+  // picture rule lets them show.
+  // perfstate: full = 30 daily snapshots, posts over 8 weeks with per-post numbers; latest = the same without per-post
+  // numbers (what real accounts have today); oneday = a single snapshot; nosocials = nothing connected; new = free and
+  // empty; partial = snapshots and posts fail, the summary loads; error = everything fails.
+  // brandstate: full = logo, colours, font, people, places, products, learned notes; empty = a new account; error = calls fail.
+  (function () {
+    if (params.get('perfstate')) sessionStorage.setItem('audit-perf-state', params.get('perfstate'));
+    if (params.get('brandstate')) sessionStorage.setItem('audit-brand-state', params.get('brandstate'));
+    var PF = sessionStorage.getItem('audit-perf-state') || '';
+    var BR = sessionStorage.getItem('audit-brand-state') || '';
+    var pic = function (name) { return location.origin + '/assets/showcase/' + name + '.webp'; };
+    var fail = { __status: 500, body: { success: false, message: 'Something went wrong.' } };
+    var extra = [];
+    if (PF) {
+      var days = PF === 'oneday' ? 1 : 30;
+      var hist = [];
+      for (var i = days - 1; i >= 0; i--) {
+        var k = 29 - i;
+        var f = 12000 + k * 9 + (i % 3);
+        var r = Math.round(4200 + 900 * Math.sin(k / 3) + k * 45);
+        hist.push({ date: iso(-i), platforms: { instagram: { followers: f, reach: r, impressions: r * 2, engagementRate: Math.round((3.2 + Math.sin(k / 4) * 0.8) * 100) / 100, posts: 200 + k, likes: 300 + k * 4 } }, totals: { followers: f, reach: r, impressions: r * 2, posts: 200 + k } });
+      }
+      var newest = hist[hist.length - 1];
+      var wk = hist.length > 7 ? hist[hist.length - 8] : null;
+      var pct = function (a, b) { return b ? Math.round(((a - b) / b) * 1000) / 10 : null; };
+      var engOf = function (h) { return h ? h.platforms.instagram.engagementRate : null; };
+      var posted = [];
+      var names = ['Weekend croissant drop', 'Sourdough Sunday', 'Birthday cake orders open', 'Morning coffee combo', 'Millet cookie launch', 'Behind the oven at 5am', 'Customer of the week', 'Festive sweets box'];
+      for (var j = 0; j < 14; j++) {
+        var perf = PF === 'full' ? { reach: 800 + ((j * 377) % 2400), likes: 40 + ((j * 53) % 160), comments: (j * 7) % 30, shares: (j * 3) % 12, engagement: 0 } : { reach: 0, likes: 0, comments: 0, shares: 0, engagement: 0 };
+        posted.push({ _id: 'perf-post-' + j, name: names[j % names.length], status: 'posted', platforms: [j % 3 ? 'instagram' : 'facebook'], publishedAt: iso(-j * 4 - (j % 2)), createdAt: iso(-j * 4 - 1), creative: { imageUrls: [pic(['food-1', 'food-2', 'food-3', 'hospitality-1'][j % 4])] }, performance: perf });
+      }
+      var weekStartMs = (function () { var x = new Date(now.getTime() + 330 * 60000); var back = (x.getUTCDay() + 6) % 7; return Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate() - back) - 330 * 60000; })();
+      var inWeek = function (from) { return posted.filter(function (c) { var t = new Date(c.publishedAt).getTime(); return t >= from && t < from + 7 * 86400000; }).length; };
+      var thisW = inWeek(weekStartMs), lastW = inWeek(weekStartMs - 7 * 86400000);
+      var sumFor = function () {
+        var s = homeSummary();
+        if (PF === 'new') { HSTATE = 'new'; s = homeSummary(); HSTATE = sessionStorage.getItem('audit-home-state') || 'full'; return s; }
+        if (PF === 'nosocials') {
+          var c = 'Connect an account to see this.';
+          s.numbers.reach = none(c); s.numbers.engagement = none(c); s.numbers.followers = none(c);
+          s.connected = { count: 0, platforms: [] };
+        } else {
+          s.numbers.reach = num(newest.totals.reach, wk ? wk.totals.reach : null, wk ? pct(newest.totals.reach, wk.totals.reach) : null, { asOf: ymd(0), stale: false });
+          s.numbers.engagement = num(engOf(newest), wk ? engOf(wk) : null, wk ? pct(engOf(newest), engOf(wk)) : null, { unit: 'percent', asOf: ymd(0), stale: false });
+          s.numbers.followers = num(newest.totals.followers, wk ? wk.totals.followers : null, wk ? pct(newest.totals.followers, wk.totals.followers) : null, { change: wk ? newest.totals.followers - wk.totals.followers : null, asOf: ymd(0), stale: false });
+          s.connected = { count: 1, platforms: ['instagram'] };
+        }
+        s.numbers.postsPublishedThisWeek = num(thisW, lastW, pct(thisW, lastW));
+        return s;
+      };
+      extra.push(['GET', /^\/home\/summary/, function () { return PF === 'error' ? fail : sumFor(); }]);
+      extra.push(['GET', /^\/analytics\/history/, function () { return PF === 'error' || PF === 'partial' ? fail : ok({ history: PF === 'nosocials' || PF === 'new' ? [] : hist, days: 35 }); }]);
+      extra.push(['GET', /^\/campaigns\/?$/, function () { return PF === 'error' || PF === 'partial' ? fail : ok({ campaigns: PF === 'new' ? [] : posted, counts: {} }); }]);
+    }
+    if (BR) {
+      var people = [{ _id: 'br-p1', type: 'character', name: 'Asha', url: pic('hospitality-2') }, { _id: 'br-p2', type: 'character', name: 'Ravi', url: pic('hospitality-3') }];
+      var places = [{ _id: 'br-e1', type: 'environment', name: 'Shop front', url: pic('food-3') }];
+      var brLogos = BR === 'full' ? [{ _id: 'br-l1', type: 'logo', name: 'Primary logo', url: location.origin + '/assets/logo-nebulaa.png', isPrimary: true, createdAt: iso(-9) }] : [];
+      var brProducts = BR === 'full' ? [{ _id: 'br-pr1', name: 'Butter croissant', imageUrl: pic('food-1') }, { _id: 'br-pr2', name: 'Country sourdough', imageUrl: pic('food-2') }, { _id: 'br-pr3', name: 'Gift hamper' }] : [];
+      var brProfile = BR === 'full' ? Object.assign({}, intelligenceProfile, { brandName: 'Sunrise Bakery', assets: { primaryColor: '#D8527A', secondaryColor: '#F5A623', fontType: 'Playfair Display', primaryLogoUrl: brLogos[0].url } }) : { _id: 'audit-ip-1', assets: {} };
+      extra.push(['GET', /^\/brand-assets\/logos/, function () { return BR === 'error' ? fail : ok({ logos: brLogos, assets: brLogos }); }]);
+      extra.push(['GET', /^\/brand-assets\/intelligence-profile/, function () { return BR === 'error' ? fail : ok({ profile: brProfile, data: brProfile }); }]);
+      extra.push(['GET', /^\/brand-assets\/?(\?|$)/, function (c) {
+        if (BR === 'error') return fail;
+        var all = BR === 'full' ? brLogos.concat(people, places) : [];
+        var t = c.url.searchParams.get('type');
+        var rows = t ? all.filter(function (a) { return a.type === t; }) : all;
+        return ok({ assets: rows, count: rows.length });
+      }]);
+      extra.push(['GET', /^\/products\/?$/, function () { return BR === 'error' ? fail : ok({ products: brProducts, data: brProducts, total: brProducts.length, categories: [] }); }]);
+      extra.push(['GET', /^\/ai-memory\/summary/, function () {
+        if (BR === 'error') return fail;
+        var notes = BR === 'full' ? [{ _id: 'n1', text: 'Reels at 7pm do best', category: 'timing', confidence: 0.8 }, { _id: 'n2', text: 'Short captions win', category: 'copy', confidence: 0.6 }, { _id: 'n3', text: 'Close-up food photos', category: 'visual', confidence: 0.7 }] : [];
+        return ok({ summary: { performanceMemories: BR === 'full' ? 18 : 0, campaignMemories: 0, videoMemories: 0 }, brandMemory: { learnedNotes: notes, learnedNotesUpdatedAt: notes.length ? iso(-3) : null }, winners: [], recentCampaigns: [], recentVideos: [] });
+      }]);
+    }
+    for (var e = extra.length - 1; e >= 0; e--) ROUTES.unshift(extra[e]);
+  })();
+
   var GENERIC_GET = function () {
     return ok({ data: [], items: [], results: [], list: [], total: 0, count: 0 });
   };
