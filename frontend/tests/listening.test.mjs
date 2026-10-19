@@ -201,3 +201,35 @@ test('wording guard: helper strings and component source', () => {
     assert.ok(!/[A-Za-z.]!(?=[\s'"`<.]|$)/m.test(visible), 'no exclamation mark in wording: ' + f);
   }
 });
+
+test('the ring: one arc per part, lengths follow the bar widths and add up to the circle', async () => {
+  const { donutArcs, donutLead } = await import('../utils/listening.ts');
+  const C = 100;
+  const arcs = donutArcs(ready(), C, 0);
+  assert.deepEqual(arcs.map((a) => a.key), ['positive', 'neutral', 'negative']);
+  assert.equal(Math.round(arcs.reduce((n, a) => n + a.length, 0)), 100);
+  assert.equal(arcs[1].offset, -arcs[0].length);
+  const one = donutArcs(ready({ counts: { positive: 5, neutral: 0, negative: 0 }, percentages: null }), C);
+  assert.equal(one.length, 1);
+  assert.equal(one[0].length, 100, 'a single part has no gap');
+  assert.deepEqual(donutLead(ready()), { percent: 62, label: 'positive', key: 'positive' });
+  assert.equal(donutLead(ready({ counts: { positive: 0, neutral: 0, negative: 0 } })), null);
+  assert.equal(donutLead(ready({ counts: { positive: 1, neutral: 1, negative: 8 }, percentages: null })).key, 'negative');
+});
+
+test('the card colours keep 4.5 to 1, the three parts keep their brand colours, and motion waits for no reduced motion', async () => {
+  const { parseColor, ratio } = await import('../scripts/visual-audit/contrast-math.mjs');
+  const css = fs.readFileSync(new URL('../components/listening.css', import.meta.url), 'utf8');
+  const pairs = [['#FFF0C7', '#6B3F00'], ['#F3ECDD', '#4A3A24'], ['#FFE3D0', '#9A3412'], ['#FFF1D2', '#5E4A31'], ['#FFF4EE', '#8A3A15'], ['#FFF4EE', '#2B1D0E'],
+    ['#FFFFFF', '#5E4A31'], ['#FFF9EC', '#5E4A31'], ['#FFE2A1', '#6B3F00'], ['#FFFDF8', '#7A4A00']];
+  for (const [bg, fg] of pairs) {
+    assert.ok(css.includes(bg) && css.includes(fg), `${bg} and ${fg} are used`);
+    const r = ratio(parseColor(fg), parseColor(bg));
+    assert.ok(r >= 4.5, `${fg} on ${bg} is ${r.toFixed(2)} to 1`);
+  }
+  for (const c of ['#F5A623', '#D9C7A3', '#EE6330']) assert.ok(css.includes(c), c);
+  assert.ok(!/animation:/.test(css.split('@media (prefers-reduced-motion: no-preference)')[0]));
+  const src = fs.readFileSync(new URL('../components/ListeningCard.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /<table/, 'no plain table: count tiles instead');
+  assert.match(src, /role="img" aria-label=\{barSummary\(res\)\}/, 'the ring has a text alternative');
+});

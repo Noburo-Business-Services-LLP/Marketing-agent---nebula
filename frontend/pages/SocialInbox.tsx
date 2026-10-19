@@ -11,6 +11,7 @@ import { InboxArt } from '../components/art/Inbox';
 import { ReviewsArt } from '../components/art/Reviews';
 import { AutoReplyArt } from '../components/art/AutoReply';
 import { LiveUpdatesArt } from '../components/art/inbox/Live';
+import PageHeader from '../components/PageHeader';
 import '../components/inbox/inbox.css';
 import { inboxConnectedCount } from '../utils/inbox';
 import { upgradeInfoOf } from '../utils/plans';
@@ -123,7 +124,7 @@ const SocialInbox: React.FC = () => {
   if (state === 'error') {
     return (
       <div className="nb-ix">
-        <header className="nb-ix-head"><h1>Inbox</h1></header>
+        <PageHeader eyebrow="Inbox" title="Messages and" emphasis="reviews" />
         <InboxNote
           role="alert"
           title="We could not load your inbox"
@@ -202,12 +203,7 @@ const SocialInbox: React.FC = () => {
 
   return (
     <div className="nb-ix">
-      <header className="nb-ix-head">
-        <div>
-          <h1>Inbox</h1>
-          <p className="nb-ix-lede">{lede}</p>
-        </div>
-      </header>
+      <PageHeader eyebrow="Inbox" title="Messages and" emphasis="reviews" description={lede} />
       <InboxPartTiles tiles={tiles} current={part} onOpen={open} />
       {body}
     </div>

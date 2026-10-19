@@ -203,3 +203,28 @@ export function recentLinkLabel(r: { platform?: string; date?: string }): string
   const d = dayText(r && r.date);
   return `Open the conversation${p ? ` on ${p}` : ''}${d ? ` from ${d}` : ''}`;
 }
+
+export interface DonutArc { key: ListeningLabel; length: number; offset: number; gap: number }
+/**
+ * The ring on the card: one arc per part that exists, in order positive, neutral, negative, from the bar widths (sum 100,
+ * a part that exists is at least 2 so it stays visible). `circumference` is the circle's length; a small gap separates arcs.
+ */
+export function donutArcs(res: ListeningResponse | null | undefined, circumference: number, gapLen = 2): DonutArc[] {
+  const rows = barRows(res).filter((r) => r.width > 0);
+  const gap = rows.length > 1 ? gapLen : 0;
+  let at = 0;
+  return rows.map((r) => {
+    const full = (r.width / 100) * circumference;
+    const arc = { key: r.key, length: Math.max(0.5, full - gap), offset: -at, gap: circumference - Math.max(0.5, full - gap) };
+    at += full;
+    return arc;
+  });
+}
+
+/** The big word in the ring: the largest part ("62%" and "positive"). Ties go positive, then neutral. */
+export function donutLead(res?: ListeningResponse | null): { percent: number; label: string; key: ListeningLabel } | null {
+  const rows = barRows(res);
+  if (rows.every((r) => r.count === 0)) return null;
+  const top = [...rows].sort((a, b) => b.percent - a.percent)[0];
+  return { percent: top.percent, label: top.label.toLowerCase(), key: top.key };
+}

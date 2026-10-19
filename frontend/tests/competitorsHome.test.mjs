@@ -142,3 +142,39 @@ test('wording guard: the helper copy and the component copy are plain, kind and 
     assert.ok(!/src="http/.test(src), `${file} must not load an outside picture`);
   }
 });
+
+test('posts a week as bars: one per stored week, oldest first, labelled, heights from the largest week', async () => {
+  const { weekBars, weekBarsSummary } = await import('../utils/competitorInsights.ts');
+  const bars = weekBars([{ weekStart: '2026-09-28', postsInWindow: 2, avgLikes: 1 }, { weekStart: '2026-10-05', postsInWindow: 0, avgLikes: 0 }, { weekStart: '2026-10-12', postsInWindow: 5, avgLikes: 3 }], '2026-10-12');
+  assert.deepEqual(bars.map((b) => [b.posts, b.height, b.current]), [[2, 40, false], [0, 0, false], [5, 100, true]]);
+  assert.equal(bars[0].label, 'Week of 28 September: 2 posts');
+  assert.equal(weekBarsSummary(bars), 'Posts a week: 28 September: 2 posts; 5 October: 0 posts; 12 October: 5 posts.');
+  assert.deepEqual(weekBars(null), []);
+  assert.equal(weekBars([{ weekStart: 'x', postsInWindow: 3 }]).length, 0);
+  assert.equal(weekBars(Array.from({ length: 6 }, (_, i) => ({ weekStart: `2026-09-0${i + 1}`, postsInWindow: 1 }))).length, 4);
+});
+
+test('post pictures: only our stored copies or inline pictures load; never an Instagram link', async () => {
+  const { thumbSrc, workingView, galleryView, gallerySpans } = await import('../utils/competitorsHome.ts');
+  const ours = 'https://res.cloudinary.com/demo/image/upload/v1/nebula-competitor-posts/abc-p-X1.webp';
+  assert.equal(thumbSrc(ours), ours);
+  assert.equal(thumbSrc('data:image/svg+xml;utf8,%3Csvg%3E'), 'data:image/svg+xml;utf8,%3Csvg%3E');
+  for (const bad of ['https://scontent.cdninstagram.com/x.jpg', 'https://res.cloudinary.com/demo/image/upload/v1/nebula-competitor-avatars/abc.webp', 'javascript:alert(1)', 'data:text/html,x', null, undefined, '']) assert.equal(thumbSrc(bad), null, String(bad));
+  const w = workingView({ competitorId: 'c1', name: 'Sweet Co Bakery', handle: 'sweetco', period: 'week', type: 'video', likes: 1240, comments: 86, at: '2026-10-18T05:00:00Z',
+    url: 'https://www.instagram.com/p/A1/', ref: 'c1.p-A1', reason: 'A reel on Sunday 18 October with 1,240 likes.', worked: 'Reels got 3 times the likes of photos on average this month.',
+    action: { label: 'Make a post like this', kind: 'video', mode: null, brief: 'A reel.' }, thumbUrl: ours });
+  assert.equal(w.thumb, ours);
+  assert.equal(w.byline, 'From @sweetco');
+  assert.deepEqual(w.counts, { likes: '1,240', comments: '86' });
+  assert.equal(w.why, 'Reels got 3 times the likes of photos on average this month.');
+  assert.equal(workingView({ ...w, competitorId: 'c1', name: 'X', handle: '', worked: null, reason: 'A photo.', likes: 3, comments: null, thumbUrl: 'https://scontent.cdninstagram.com/x.jpg', type: 'image', url: 'x', at: 'y', action: w.action }).thumb, null);
+  const g = galleryView({ id: 'c1', name: 'Sweet', handle: 'sweetco', gallery: [
+    { ref: 'a', pick: 'best', type: 'video', likes: 10, comments: 1, at: '2026-10-18T05:00:00Z', url: 'https://www.instagram.com/p/A1/', thumbUrl: ours },
+    { ref: 'b', pick: 'latest', type: 'image', likes: null, comments: null, at: '2026-10-18T05:00:00Z', url: 'https://evil.com/', thumbUrl: null }] });
+  assert.deepEqual(g.map((x) => [x.label, x.thumb ? 'ours' : null, x.url ? 'link' : null, x.likes]), [['Best', 'ours', 'link', '10 likes'], ['New', null, null, null]]);
+  assert.match(g[0].alt, /^@sweetco: a reel from Sunday 18 October$/);
+  assert.deepEqual(gallerySpans(6), { wide: 6, narrow: 3, spans: [1, 1, 1, 1, 1, 1] });
+  assert.deepEqual(gallerySpans(5).spans, [1, 1, 1, 1, 2]);
+  assert.deepEqual(gallerySpans(4), { wide: 4, narrow: 2, spans: [1, 1, 1, 1] });
+  assert.deepEqual(gallerySpans(2), { wide: 2, narrow: 2, spans: [1, 1] });
+});

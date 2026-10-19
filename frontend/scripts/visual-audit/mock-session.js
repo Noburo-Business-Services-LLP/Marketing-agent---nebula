@@ -66,7 +66,8 @@
   // puterr / put403 / put429 = saving a handle is refused.
   // GET /competitors/best-posts (tiles, What's working, Trending for you) follows the same parameter, plus:
   // trackeroff = weekly checks not running and nothing stored yet, waiting = first check pending, states = one tile per
-  // handle state without data, few = one competitor with too few posts for a pattern. all = the default mix with data.
+  // handle state without data, few = one competitor with too few posts for a pattern. all = the default mix with data
+  // (with small inline post pictures); nothumbs = the same with the post pictures switched off.
   if (params.get('compstate')) sessionStorage.setItem('audit-comp-state', params.get('compstate'));
   var CSTATE = sessionStorage.getItem('audit-comp-state') || 'all';
   // ?draftstate= ok | blocked | error | limit | busy | balance | off | locked | slow picks the Home drafts answer
@@ -384,8 +385,8 @@
     o.insight = function () {
       var st = o.state === 'current' || o.state === 'stale' ? 'tracking' : o.state;
       var base = { id: o.id, name: o.name, handle: o.handle || undefined, handleStatus: o.handleStatus, status: st, trend: [], lastCheckedAt: null, weekOf: null, isCurrentWeek: false, previousWeekOf: null, lastCheckedOn: null };
-      if (o.state === 'current') { base.trend = [{ weekStart: '2026-09-28', postsInWindow: 2, avgLikes: 30 }, { weekStart: '2026-10-05', postsInWindow: 2, avgLikes: 41 }, { weekStart: '2026-10-12', postsInWindow: 5, avgLikes: 52 }]; base.weekOf = '2026-10-12'; base.isCurrentWeek = true; base.previousWeekOf = '2026-10-05'; base.lastCheckedOn = '2026-10-13'; base.lastCheckedAt = '2026-10-13T04:00:00.000Z'; }
-      if (o.state === 'stale') { base.trend = [{ weekStart: '2026-09-07', postsInWindow: 5, avgLikes: 20 }, { weekStart: '2026-09-14', postsInWindow: 3, avgLikes: 18 }]; base.weekOf = '2026-09-14'; base.previousWeekOf = '2026-09-07'; base.lastCheckedOn = '2026-09-15'; base.lastCheckedAt = '2026-09-15T04:00:00.000Z'; }
+      if (o.state === 'current') { base.followers = { value: 5400, change: 120 }; base.trend = [{ weekStart: '2026-09-28', postsInWindow: 2, avgLikes: 30 }, { weekStart: '2026-10-05', postsInWindow: 2, avgLikes: 41 }, { weekStart: '2026-10-12', postsInWindow: 5, avgLikes: 52 }]; base.weekOf = '2026-10-12'; base.isCurrentWeek = true; base.previousWeekOf = '2026-10-05'; base.lastCheckedOn = '2026-10-13'; base.lastCheckedAt = '2026-10-13T04:00:00.000Z'; }
+      if (o.state === 'stale') { base.followers = { value: 2310, change: null }; base.trend = [{ weekStart: '2026-09-07', postsInWindow: 5, avgLikes: 20 }, { weekStart: '2026-09-14', postsInWindow: 3, avgLikes: 18 }]; base.weekOf = '2026-09-14'; base.previousWeekOf = '2026-09-07'; base.lastCheckedOn = '2026-09-15'; base.lastCheckedAt = '2026-09-15T04:00:00.000Z'; }
       if (o.state === 'paused' || o.state === 'failed') { base.trend = [{ weekStart: '2026-09-14', postsInWindow: 3, avgLikes: 18 }]; base.weekOf = '2026-09-14'; base.lastCheckedOn = '2026-09-22'; }
       return base;
     };
@@ -411,6 +412,27 @@
     return Object.assign({ id: id, name: name, handle: handle || '', status: status, profileUrl: linked ? 'https://www.instagram.com/' + handle + '/' : null,
       followers: null, postsThisWeek: null, bestPost: null, worked: null, weekOf: null, isCurrentWeek: false, lastCheckedOn: null }, extra || {});
   }
+  // Post pictures for the preview only: small inline gradient drawings (no files, no request), like our stored 4:5 copies.
+  // ?compstate=nothumbs is the same data with ENABLE_COMPETITOR_THUMBS off (every thumbUrl null: tiles without pictures).
+  var THUMB_SCENES = [
+    ['#F5A623', '#EE6330', '<circle cx="180" cy="200" r="90" fill="#FFF3D6"/><circle cx="180" cy="200" r="60" fill="#E9B26A"/><path d="M120 330h120l-20 60h-80z" fill="#7A4A00"/>'],
+    ['#1F9D9A', '#F5D7A1', '<rect x="90" y="150" width="180" height="200" rx="18" fill="#FFFDF8"/><rect x="110" y="170" width="140" height="110" rx="10" fill="#F5A623"/><path d="M150 205l40 22-40 22z" fill="#FFFDF8"/>'],
+    ['#D8527A', '#FFCB2E', '<rect x="70" y="140" width="110" height="140" rx="12" fill="#FFFDF8"/><rect x="190" y="160" width="100" height="140" rx="12" fill="#FFF0C7"/><circle cx="125" cy="300" r="40" fill="#EE6330"/>'],
+    ['#5B6BDC', '#D6F1EF', '<path d="M60 360c60-120 180-120 240 0z" fill="#FFFDF8"/><circle cx="250" cy="150" r="40" fill="#FFCB2E"/>'],
+    ['#7B5CC4', '#FFE3D0', '<ellipse cx="180" cy="300" rx="120" ry="40" fill="#FFFDF8"/><rect x="130" y="170" width="100" height="120" rx="20" fill="#F5A623"/>'],
+    ['#3E8B5A', '#FFF0C7', '<circle cx="130" cy="220" r="55" fill="#FFFDF8"/><circle cx="230" cy="260" r="65" fill="#FFCB2E"/><rect x="80" y="330" width="200" height="16" rx="8" fill="#FFFDF8"/>']
+  ];
+  var thumbSvg = function (i) {
+    if (CSTATE === 'nothumbs') return null;
+    var t = THUMB_SCENES[i % THUMB_SCENES.length];
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 450"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + t[0] + '"/><stop offset="1" stop-color="' + t[1] + '"/></linearGradient></defs><rect width="360" height="450" fill="url(#g)"/>' + t[2] + '</svg>');
+  };
+  var galleryOf = function (id, start, n, types) {
+    return Array.from({ length: n }, function (_, i) {
+      return { ref: id + '.p-Audit' + i, pick: i < 3 ? 'best' : 'latest', type: types[i % types.length], likes: i < 3 ? 1240 - i * 310 : 40 + i * 7, comments: i < 3 ? 40 - i * 9 : 2,
+        at: hoursAgo(3 + i * 26), url: 'https://www.instagram.com/p/AuditG' + id.replace(/\W/g, '') + i + '/', thumbUrl: thumbSvg(start + i) };
+    });
+  };
   function bestPostsAnswer() {
     var week = istMondayOf(now);
     var cd = nextChildrensDay();
@@ -418,37 +440,45 @@
     var make = function (kind, mode, brief) { return { label: 'Make a post like this', kind: kind, mode: mode, brief: brief }; };
     var sweet = bpCard('cmp-1', 'Sweet Co Bakery', 'sweetco', 'tracking', {
       followers: { value: 5400, change: 120 }, postsThisWeek: { value: 5, atLeast: false },
-      bestPost: { period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/', ref: 'cmp-1.p-AuditReel1' },
+      bestPost: { period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/', ref: 'cmp-1.p-AuditReel1', thumbUrl: thumbSvg(1) },
+      gallery: galleryOf('cmp-1', 1, 6, ['video', 'image', 'carousel']),
       worked: { kind: 'format', best: 'video', ratio: 3.4, text: 'Reels got 3 times the likes of photos on average this month.' },
       weekOf: week, isCurrentWeek: true, lastCheckedOn: istDay(new Date(now.getTime() - 2 * 36e5)) });
     var crumb = bpCard('cmp-6', 'Crumb and Co', 'crumbandco', 'tracking', {
       followers: { value: 128450, change: -35 }, postsThisWeek: { value: 12, atLeast: true },
-      bestPost: { period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/', ref: 'cmp-6.p-AuditCarousel2' },
+      bestPost: { period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/', ref: 'cmp-6.p-AuditCarousel2', thumbUrl: thumbSvg(2) },
+      gallery: galleryOf('cmp-6', 2, 5, ['carousel', 'image']),
       worked: { kind: 'day', best: 'weekend', ratio: 2.1, text: 'Weekend posts got 2.1 times the likes of weekday posts on average this month.' },
       weekOf: week, isCurrentWeek: true, lastCheckedOn: istDay(new Date(now.getTime() - 2 * 36e5)) });
-    var green = bpCard('cmp-2', 'Green Leaf Cafe', 'greenleafcafe', 'tracking', { followers: { value: 2310, change: null }, weekOf: '2026-09-14', lastCheckedOn: '2026-09-15' });
+    var green = bpCard('cmp-2', 'Green Leaf Cafe', 'greenleafcafe', 'tracking', { followers: { value: 2310, change: null }, weekOf: '2026-09-14', lastCheckedOn: '2026-09-15',
+      // An old reading: no best post in the last 30 days, only its newest posts from before the last check.
+      gallery: [0, 1].map(function (i) { return { ref: 'cmp-2.p-AuditGreen' + i, pick: 'latest', type: 'image', likes: 30 - i * 8, comments: 1, at: '2026-09-1' + (3 - i) + 'T08:00:00.000Z', url: 'https://www.instagram.com/p/AuditGreen' + i + '/', thumbUrl: thumbSvg(4 + i) }; }) });
     var harbour = bpCard('cmp-3', 'Harbour Dental Care', 'harbourdental', 'unconfirmed');
     var studio = bpCard('cmp-5', 'Studio Nine Salon', 'studionine', 'private', { lastCheckedOn: istDay(new Date(now.getTime() - DAYMS)) });
     var meera = bpCard('cmp-4', 'Meera Jewellers With A Very Long Business Name That Has To Wrap', '', 'no_handle');
     var working = [
       { competitorId: 'cmp-1', name: 'Sweet Co Bakery', handle: 'sweetco', period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/', ref: 'cmp-1.p-AuditReel1',
-        reason: 'A reel on ' + longDayM(reelAt) + ' with 1,240 likes and 86 comments, their best this week.', worked: sweet.worked.text,
+        reason: 'A reel on ' + longDayM(reelAt) + ' with 1,240 likes and 86 comments, their best this week.', worked: sweet.worked.text, thumbUrl: thumbSvg(1),
         action: make('video', null, 'A reel about Fresh bakes, in the style that works: reels are getting the most likes this month.') },
       { competitorId: 'cmp-6', name: 'Crumb and Co', handle: 'crumbandco', period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/', ref: 'cmp-6.p-AuditCarousel2',
-        reason: 'A carousel on ' + longDayM(carAt) + ' with 310 likes and 12 comments, their best this week.', worked: crumb.worked.text,
+        reason: 'A carousel on ' + longDayM(carAt) + ' with 310 likes and 12 comments, their best this week.', worked: crumb.worked.text, thumbUrl: thumbSvg(2),
         action: make('post', 'carousel', 'A carousel about Fresh bakes, in the style that works: posted at the weekend.') }
     ];
     var festival = cd.away <= 30 ? { id: 'festival:childrens_day', source: 'festival', label: 'Coming up', title: "Children's Day",
       reason: longDayM(cd.date + 'T00:00:00+05:30') + ', ' + (cd.away === 0 ? 'today' : cd.away === 1 ? 'tomorrow' : 'in ' + cd.away + ' days') + '.',
       action: make('post', 'single', "A post for Children's Day on 14 November, about Fresh bakes.") } : null;
+    var news = { id: 'news:halloween', source: 'news', label: 'From the news calendar', title: 'Halloween', reason: 'Saturday 31 October, in 12 days.',
+      idea: 'Dress up a product or your counter for the day and post a playful photo or short reel.', action: make('post', 'single', 'A post for Halloween on 31 October, about Fresh bakes.') };
+    var news2 = { id: 'news:world_diabetes_day', source: 'news', label: 'From the news calendar', title: 'World Diabetes Day', reason: 'Saturday 14 November, in 26 days.',
+      idea: 'Share one simple, accurate habit for healthier days, or your low-sugar options if you have them.', action: make('post', 'single', 'A post for World Diabetes Day on 14 November, about Fresh bakes.') };
     var plan = { id: 'plan:0', source: 'plan', label: 'From your plan', title: 'Fresh bakes', reason: 'One of the themes in your plan.', action: make('post', 'single', 'A post about Fresh bakes, one of the themes in your plan.') };
     var own = { id: 'own:best', source: 'own', label: 'From your own posts', title: 'Your best post this month', reason: 'Your reel on ' + longDayM(hoursAgo(4 * 24)) + ' got 240 likes and 18 comments.',
       action: make('video', null, 'A new reel about Our new sourdough loaf, in the style of your best post this month.') };
     var compTrend = { id: 'competitor:cmp-1', source: 'competitor', label: 'From a competitor', title: 'What worked for Sweet Co Bakery', reason: sweet.worked.text, action: working[0].action };
-    var base = { asOf: now.toISOString(), weekStart: week, entitled: true, trackerOn: true, state: 'ready', competitors: [], working: [], trending: [], degraded: [] };
+    var base = { asOf: now.toISOString(), weekStart: week, entitled: true, trackerOn: true, thumbsOn: CSTATE !== 'nothumbs', state: 'ready', competitors: [], working: [], trending: [], degraded: [] };
     var only = function (list) { return list.filter(Boolean); };
     if (CSTATE === 'locked') return Object.assign(base, { entitled: false, state: 'not_entitled', trending: only([own, festival]) });
-    if (CSTATE === 'empty') return Object.assign(base, { state: 'no_competitors', trending: only([festival, plan]) });
+    if (CSTATE === 'empty') return Object.assign(base, { state: 'no_competitors', trending: only([festival, news, plan]) });
     if (CSTATE === 'trackeroff' || CSTATE === 'waiting') {
       return Object.assign(base, { trackerOn: CSTATE !== 'trackeroff', state: CSTATE === 'trackeroff' ? 'tracker_off' : 'waiting',
         competitors: [bpCard('cmp-1', 'Sweet Co Bakery', 'sweetco', 'waiting'), bpCard('cmp-6', 'Crumb and Co', 'crumbandco', 'waiting'), harbour], trending: only([festival, plan]) });
@@ -466,7 +496,7 @@
         reason: 'A photo on ' + longDayM(few.bestPost.at) + ' with 38 likes and 2 comments, their best this month.', worked: null,
         action: make('post', 'single', 'A photo post about Fresh bakes, in the style of the best recent posts in your market.') }], trending: only([festival]) });
     }
-    return Object.assign(base, { competitors: [sweet, crumb, green, harbour, studio], working: working, trending: only([compTrend, own, festival, plan]) });
+    return Object.assign(base, { competitors: [sweet, crumb, green, harbour, studio], working: working, trending: only([compTrend, own, festival, news, news2, plan]) });
   }
 
   // ---- Home summary (GET /home/summary), shaped exactly like backend/services/homeSummary.js ----------------------------

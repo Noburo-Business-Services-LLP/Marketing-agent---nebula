@@ -153,3 +153,24 @@ test('the screens keep their promises: suggestions at every width, the work firs
   for (const state of ['not_connected', 'failed', 'empty']) assert.match(reviews, new RegExp(`view === '${state}'`));
   assert.match(reviews, /Nothing is posted to Google from here/);
 });
+
+test('the filter bar: three labelled chips, each asking the server for known words only', async () => {
+  const { INBOX_VIEWS, inboxFilterFor, threadLine } = await import('../utils/inboxView.ts');
+  assert.deepEqual(INBOX_VIEWS.map((v) => v.label), ['All', 'Needs reply', 'Important']);
+  assert.deepEqual(inboxFilterFor('all'), { status: '', priority: '' });
+  assert.deepEqual(inboxFilterFor('needs_reply'), { status: 'unread', priority: '' });
+  assert.deepEqual(inboxFilterFor('important'), { status: '', priority: 'important' });
+  assert.deepEqual(threadLine({ participant_username: 'meera', platform: 'instagram' }, 'Comment'), ['@meera', 'Instagram', 'Comment']);
+  assert.deepEqual(threadLine({ platform: 'facebook' }, ''), ['Facebook']);
+  assert.deepEqual(threadLine(null), []);
+});
+
+test('the conversations panel: no dropdown filters, no developer button for customers, roomy suggestions', () => {
+  const unified = read('pages/UnifiedInbox.tsx');
+  assert.doesNotMatch(unified, /<select/, 'filters are chips, not dropdowns');
+  assert.match(unified, /INBOX_VIEWS\.map/);
+  assert.match(unified, /role="switch"/, 'automatic replies is a labelled switch');
+  assert.match(unified, /devtools=1/, 'the developer tool needs an explicit opt-in on top of a development build');
+  const css = read('components/inbox/inbox.css');
+  assert.doesNotMatch(css.split('.nb-ix-suggest ul')[1]?.split('}')[0] || '', /overflow-x: auto/, 'suggestions wrap, never clip sideways');
+});

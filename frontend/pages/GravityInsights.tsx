@@ -10,6 +10,7 @@ import {
   type BestPost, type KpiKey, type KpiTile,
 } from '../utils/performanceView';
 import { formatShort } from '../utils/formatCount';
+import PageHeader from '../components/PageHeader';
 import '../components/performance/performance.css';
 
 // Performance: the four figures the owner asked for (reach, engagement, new followers, posts published), each with a
@@ -203,9 +204,7 @@ const GravityInsights: React.FC = () => {
     <div className="nb-perf">
       <header className="nb-perf-hero nb-perf-in" style={{ ['--i' as any]: 0 }}>
         <div className="nb-perf-hero-id">
-          <p className="nb-perf-eyebrow">Performance</p>
-          <h1>How your posts are <em>doing</em></h1>
-          <p className="nb-perf-lede">{heroLine(tiles)}</p>
+          <PageHeader eyebrow="Performance" title="How your posts are" emphasis="doing" description={heroLine(tiles)} />
           <ul className="nb-perf-meta" aria-label="About these numbers">
             {asOf && <li data-tone={stale ? 'coral' : 'lilac'}><CalendarDays aria-hidden />{stale ? `Last update ${dayMonth(asOf)}, waiting for newer numbers` : `Updated ${dayMonth(asOf)}`}</li>}
             {connected !== null && <li>{connected === 0 ? 'No account connected' : `${connected} ${connected === 1 ? 'account' : 'accounts'} connected`}</li>}

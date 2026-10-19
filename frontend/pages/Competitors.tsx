@@ -3,7 +3,7 @@ import { apiService } from '../services/api';
 import { CompetitorPost } from '../types';
 import { Loader2, Search, RotateCw, ExternalLink, Heart, MessageCircle, Plus, Instagram, Twitter, Linkedin, Facebook, Youtube, Sparkles, X, EyeOff, Users, MapPin } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
-import { GravityHero, GravityEmphasis } from '../components/gravity';
+import PageHeader, { PageEmphasis } from '../components/PageHeader';
 import UpgradePrompt from '../components/UpgradePrompt';
 import CompetitorInsights from '../components/CompetitorInsights';
 import { CompetitorBoard } from '../components/CompetitorTiles';
@@ -354,11 +354,10 @@ const Competitors: React.FC = () => {
         </div>
       )}
 
-      <GravityHero
-        align="left"
+      <PageHeader
         eyebrow="Competitors"
-        headline={<>Who else is in the <GravityEmphasis>room</GravityEmphasis>?</>}
-        subcopy="Track market rivals with real-time search."
+        title={<>Who else is in the <PageEmphasis>room</PageEmphasis>?</>}
+        description="Their public posts, checked once a week: what is working for them and what you can make from it."
       />
 
       <CompetitorBoard onLocked={onInsightsLocked} />

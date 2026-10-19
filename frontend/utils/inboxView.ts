@@ -156,3 +156,22 @@ export function holdsClientPass(storage?: { getItem: (k: string) => string | nul
     return false;
   }
 }
+
+// ---- the labelled filter bar (owner, 2026-10-19: segmented chips instead of three cramped dropdowns) ----
+export type InboxView = 'all' | 'needs_reply' | 'important';
+export const INBOX_VIEWS: ReadonlyArray<{ key: InboxView; label: string }> = [
+  { key: 'all', label: 'All' }, { key: 'needs_reply', label: 'Needs reply' }, { key: 'important', label: 'Important' },
+];
+/** What one chip asks the server for: Needs reply = not read yet, Important = high or urgent (server word 'important'). */
+export function inboxFilterFor(view: InboxView): { status: string; priority: string } {
+  if (view === 'needs_reply') return { status: 'unread', priority: '' };
+  if (view === 'important') return { status: '', priority: 'important' };
+  return { status: '', priority: '' };
+}
+/** The thread's one calm line: '@handle', the platform and the kind, in that order, only those that are known. */
+export function threadLine(c?: { participant_username?: string | null; platform?: string | null } | null, kind?: string | null): string[] {
+  if (!c) return [];
+  const platform = String(c.platform || '').toLowerCase();
+  const name = platform === 'facebook' ? 'Facebook' : platform === 'instagram' ? 'Instagram' : platform ? platform[0].toUpperCase() + platform.slice(1) : '';
+  return [c.participant_username ? `@${c.participant_username}` : '', name, kind || ''].filter(Boolean);
+}

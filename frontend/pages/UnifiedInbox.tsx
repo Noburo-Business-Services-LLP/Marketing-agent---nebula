@@ -25,14 +25,14 @@ import {
   ARRIVE_LINE, INBOX_PLATFORMS, REPLY_BOX_HINT, REPLY_PLACEHOLDER, conversationKind, failureFromError, isInboxPlatform, kindLabel,
   lastReceivedLine, messageKindLabel, notSentLine, platformLabel, replySucceeded, replyingToLine, sendState, timeAgo,
 } from '../utils/inbox';
-import { alertTitle, conversationChips, suggestionsHeading, threadFacts } from '../utils/inboxView';
+import { INBOX_VIEWS, alertTitle, conversationChips, inboxFilterFor, suggestionsHeading, threadFacts, threadLine, type InboxView } from '../utils/inboxView';
+import { PlatformMark } from '../components/plan/PlanMarks';
 
-// The Simulate button is for developers only: it exists in a dev build and is gone from the live site.
+// The Simulate tool is for developers only and never shows on a customer screen (owner, 2026-10-19): it needs a
+// development build AND ?devtools=1 in the address. The backend's developer routes answer 404 in production anyway.
 // @ts-ignore import.meta.env is added by the build tool
-const SHOW_SIMULATE: boolean = Boolean(import.meta.env && import.meta.env.DEV);
-
-const priorities = ['all', 'low', 'normal', 'high', 'urgent'];
-const priorityWord: Record<string, string> = { low: 'Low', normal: 'Normal', high: 'Important', urgent: 'Urgent' };
+const DEV_BUILD: boolean = Boolean(import.meta.env && import.meta.env.DEV);
+const SHOW_SIMULATE: boolean = DEV_BUILD && typeof window !== 'undefined' && /[?&#]devtools=1\b/.test(window.location.href);
 
 /**
  * The conversations: a list of compact rows with platform marks on the left, the thread and the reply sheet on the right.
@@ -52,9 +52,10 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
   const [suggestionsSource, setSuggestionsSource] = useState<string | undefined>(undefined);
   // On a narrow screen only the list or the thread shows; picking a row opens the thread.
   const [view, setView] = useState<'list' | 'thread'>('list');
-  const [status, setStatus] = useState('all');
+  // The filter bar: one of All / Needs reply / Important, and where from (everywhere, Instagram or Facebook).
+  const [show, setShow] = useState<InboxView>('all');
   const [platform, setPlatform] = useState('all');
-  const [priority, setPriority] = useState('all');
+  const { status, priority } = inboxFilterFor(show);
   const [search, setSearch] = useState('');
   const [reply, setReply] = useState('');
   const [notifications, setNotifications] = useState<Array<{ id: string; title: string; message: string; type: string; createdAt: string }>>([]);
@@ -96,9 +97,9 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
     setLoading(true);
     try {
       const result = await inboxAPI.getConversations({
-        status: status === 'all' ? '' : status,
+        status,
         platform: platform === 'all' ? '' : platform,
-        priority: priority === 'all' ? '' : priority,
+        priority,
         search,
       });
       const list = result.conversations || [];
@@ -133,8 +134,8 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
     if (conversationsRef.current.some(item => item.id === linkedId)) {
       wantedId.current = '';
       setSelectedId(linkedId);
-    } else if (status !== 'all' || platform !== 'all' || priority !== 'all' || search) {
-      setStatus('all'); setPlatform('all'); setPriority('all'); setSearch('');
+    } else if (show !== 'all' || platform !== 'all' || search) {
+      setShow('all'); setPlatform('all'); setSearch('');
     }
   }, [location.key, linkedId]);
 
@@ -350,7 +351,7 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
   };
 
   const lastLine = lastReceivedLine(lastSyncAt);
-  const filtering = status !== 'all' || platform !== 'all' || priority !== 'all' || Boolean(search.trim());
+  const filtering = show !== 'all' || platform !== 'all' || Boolean(search.trim());
   const openConversation = (id: string) => { setSelectedId(id); setView('thread'); };
   const pickSuggestion = (text: string) => { setReply(text); window.setTimeout(() => replyRef.current?.focus(), 0); };
   const facts = threadFacts(selected);
@@ -361,7 +362,7 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
       <div className="nb-ix-unified flex flex-col gap-4">
         <PendingApprovals onChanged={onPendingChange} />
         <InboxWelcome />
-        {SHOW_SIMULATE && <button type="button" onClick={simulateTestEvent} disabled={simulating} className="nb-ix-btn2 self-start">{simulating ? <Loader2 className="animate-spin" /> : <Sparkles />} Simulate (developers only)</button>}
+        {SHOW_SIMULATE && <button type="button" onClick={simulateTestEvent} disabled={simulating} className="nb-ix-btn2 self-start">{simulating ? <Loader2 className="animate-spin" /> : <Sparkles />} Add a test comment</button>}
       </div>
     );
   }
@@ -378,39 +379,42 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
                 Conversations
                 <span className="nb-ix-count" data-zero={unreadCount ? 'false' : 'true'} aria-label={`${unreadCount} unread`}>{unreadCount > 99 ? '99+' : unreadCount}</span>
               </h2>
-              <span className="nb-ix-livedot" data-on={live ? 'true' : 'false'} title="Whether this page is getting new messages without a reload">
-                {live ? 'Updating live' : 'Refresh for new messages'}
-              </span>
+              <button type="button" onClick={loadConversations} className="nb-ix-btn2 nb-ix-iconbtn" title="Refresh the list" aria-label="Refresh the list"><RefreshCw aria-hidden="true" /></button>
             </div>
-            <div className="nb-ix-arrive">
-              <span>{liveUpdates === 'off' || liveUpdates === 'failed' ? 'Live updates are not on yet.' : ARRIVE_LINE}</span>
-              {lastLine && <span>{lastLine}.</span>}
-              <button type="button" onClick={loadConversations} className="nb-ix-linkbtn"><RefreshCw aria-hidden="true" /> Refresh</button>
-            </div>
+            <p className="nb-ix-arrive">
+              <span className="nb-ix-livedot" data-on={live ? 'true' : 'false'} title="Whether this page is getting new messages without a reload">{live ? 'Updating live' : 'Refresh for new messages'}</span>
+              <span>{liveUpdates === 'off' || liveUpdates === 'failed' ? 'Live updates are not on yet.' : lastLine ? `${lastLine}.` : ARRIVE_LINE}</span>
+            </p>
             <label className="nb-ix-search">
               <Search aria-hidden="true" />
               <input
                 value={search}
                 onChange={event => setSearch(event.target.value)}
-                placeholder="Search conversations"
+                placeholder="Search names and messages"
                 aria-label="Search conversations"
                 className="gravity-bare"
               />
             </label>
-            <div className="nb-ix-filters">
-              <select aria-label="Show" value={status} onChange={event => setStatus(event.target.value)}>
-                <option value="all">All</option>
-                <option value="unread">Unread</option>
-                <option value="read">Read</option>
-                <option value="replied">Replied</option>
-              </select>
-              <select aria-label="Where from" value={platform} onChange={event => setPlatform(event.target.value)}>
-                <option value="all">Everywhere</option>
-                {INBOX_PLATFORMS.map(item => <option key={item} value={item}>{platformLabel(item)}</option>)}
-              </select>
-              <select aria-label="How important" value={priority} onChange={event => setPriority(event.target.value)}>
-                {priorities.map(item => <option key={item} value={item}>{item === 'all' ? 'Importance' : priorityWord[item]}</option>)}
-              </select>
+            <div className="nb-ix-filterbar">
+              <div className="nb-ix-fgroup" role="group" aria-labelledby="nb-ix-f-show">
+                <span id="nb-ix-f-show" className="nb-ix-flabel">Show</span>
+                <span className="nb-ix-seg">
+                  {INBOX_VIEWS.map(v => (
+                    <button key={v.key} type="button" aria-pressed={show === v.key} onClick={() => setShow(v.key)} className="nb-ix-segbtn">{v.label}</button>
+                  ))}
+                </span>
+              </div>
+              <div className="nb-ix-fgroup" role="group" aria-labelledby="nb-ix-f-where">
+                <span id="nb-ix-f-where" className="nb-ix-flabel">From</span>
+                <span className="nb-ix-pchips">
+                  <button type="button" aria-pressed={platform === 'all'} onClick={() => setPlatform('all')} className="nb-ix-pchip">All</button>
+                  {INBOX_PLATFORMS.map(item => (
+                    <button key={item} type="button" aria-pressed={platform === item} onClick={() => setPlatform(item)} className="nb-ix-pchip">
+                      <PlatformMark platform={item === 'facebook' ? 'facebook' : 'instagram'} size={18} />{platformLabel(item)}
+                    </button>
+                  ))}
+                </span>
+              </div>
             </div>
             {notifications.length > 0 && (
               <details className="nb-ix-alerts">
@@ -423,7 +427,7 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
             {SHOW_SIMULATE && (
               <button type="button" onClick={simulateTestEvent} disabled={simulating} className="nb-ix-btn2">
                 {simulating ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                Simulate (developers only)
+                Add a test comment
               </button>
             )}
           </div>
@@ -443,7 +447,7 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
             <div className="nb-ix-empty">
               <strong>Nothing matches</strong>
               <p>No conversation matches these filters or this search.</p>
-              <button type="button" className="nb-ix-btn2" onClick={() => { setStatus('all'); setPlatform('all'); setPriority('all'); setSearch(''); }}>Show everything</button>
+              <button type="button" className="nb-ix-btn2" onClick={() => { setShow('all'); setPlatform('all'); setSearch(''); }}>Show everything</button>
             </div>
           ) : (
             <ul className="nb-ix-rows" aria-label="Conversations">
@@ -460,6 +464,7 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
                       data-unread={unread ? 'true' : 'false'}
                       className="nb-ix-row"
                     >
+                      <span className="nb-ix-row-dot" aria-hidden="true" />
                       <InboxAvatar name={name} platform={item.platform} />
                       <span className="nb-ix-row-main">
                         <span className="nb-ix-row-top">
@@ -487,32 +492,33 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
                   <InboxAvatar name={selected.participant_name || selected.participant_username} platform={selected.platform} size="lg" />
                   <div>
                     <h3>{selected.participant_name || selected.participant_username || 'Someone'}</h3>
-                    <p>{selected.participant_username ? `@${selected.participant_username} on ` : 'On '}{platformLabel(selected.platform)}, {kindLabel(selectedChannelType).toLowerCase()}</p>
+                    <p className="nb-ix-thread-line">
+                      {threadLine(selected, kindLabel(selectedChannelType)).map((part, i) => <span key={i}>{part}</span>)}
+                      {facts.filter(f => f.label !== 'Status').map(f => (
+                        <span key={f.label} className="nb-ix-chip" data-tone={f.value.includes('unhappy') || f.value.includes('urgent') ? 'alert' : f.label === 'Spam' ? 'muted' : f.value.includes('positive') ? 'good' : 'warn'}>{f.value}</span>
+                      ))}
+                    </p>
                   </div>
                 </div>
                 <div className="nb-ix-thread-tools">
                   {canReply && (
                     <button
                       type="button"
+                      role="switch"
                       onClick={onToggleClick}
                       disabled={autoReplySaving}
+                      aria-checked={selectedAutoReplyEnabled}
                       aria-pressed={selectedAutoReplyEnabled}
                       className="nb-ix-toggle"
-                      title={`Automatic replies for ${platformLabel(selected.platform)} ${selectedChannelType === 'comment' ? 'comments' : 'messages'}`}
+                      aria-label={`Automatic replies for ${platformLabel(selected.platform)} ${selectedChannelType === 'comment' ? 'comments' : 'messages'}`}
                     >
                       {autoReplySaving ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Bot aria-hidden="true" />}
-                      <span>Automatic replies {selectedAutoReplyEnabled ? 'on' : 'off'}</span>
+                      <span className="nb-ix-toggle-text"><span>Automatic replies</span><small>{selectedAutoReplyEnabled ? 'On' : 'Off'}</small></span>
                       <span className="nb-ix-switch" aria-hidden="true" />
                     </button>
                   )}
                   <button type="button" onClick={() => markStatus('read')} className="nb-ix-btn2 nb-ix-iconbtn" title="Mark as read" aria-label="Mark as read"><CheckCheck aria-hidden="true" /></button>
-                  <button type="button" onClick={loadConversations} className="nb-ix-btn2 nb-ix-iconbtn" title="Refresh" aria-label="Refresh"><RefreshCw aria-hidden="true" /></button>
                 </div>
-                {facts.length > 0 && (
-                  <span className="nb-ix-facts" aria-label="About this conversation">
-                    {facts.map(f => <span key={f.label} className="nb-ix-chip" data-tone={f.label === 'Status' ? 'kind' : f.value.includes('unhappy') || f.value.includes('urgent') ? 'alert' : f.label === 'Spam' ? 'muted' : f.value.includes('positive') ? 'good' : 'warn'}>{f.label}: {f.value}</span>)}
-                  </span>
-                )}
               </header>
 
               <div ref={messagesContainerRef} className="nb-ix-msgs" aria-live="polite">
@@ -588,7 +594,12 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
                         <p><Sparkles aria-hidden="true" /> {suggestionsHeading(suggestionsSource)}</p>
                         <ul aria-label={`${suggestionsHeading(suggestionsSource)}: pick one to put it in your reply box`}>
                           {suggestions.map(suggestion => (
-                            <li key={suggestion}><button type="button" onClick={() => pickSuggestion(suggestion)}>{suggestion}</button></li>
+                            <li key={suggestion}>
+                              <button type="button" onClick={() => pickSuggestion(suggestion)} aria-pressed={reply === suggestion}>
+                                <span>{suggestion}</span>
+                                <small>{reply === suggestion ? 'In your reply box' : 'Use this'}</small>
+                              </button>
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -598,7 +609,7 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
                         ref={replyRef}
                         value={reply}
                         onChange={event => setReply(event.target.value)}
-                        rows={3}
+                        rows={4}
                         aria-label="Your reply"
                         placeholder={REPLY_PLACEHOLDER}
                         className="gravity-bare"
@@ -619,10 +630,10 @@ const UnifiedInbox: React.FC<{ lastSyncAt?: string | null; liveUpdates?: string 
               </div>
             </>
           ) : (
-            <div className="nb-ix-empty">
+            <div className="nb-ix-empty nb-ix-empty-thread">
               <InboxArt />
-              <strong>Pick a conversation</strong>
-              <p>Comments and messages from Instagram and Facebook are listed on the left.</p>
+              <strong>Pick a conversation to read it here</strong>
+              <p>Comments and messages from Instagram and Facebook are listed on the left. Open one to see the whole thread, suggested replies and your reply box.</p>
             </div>
           )}
         </section>

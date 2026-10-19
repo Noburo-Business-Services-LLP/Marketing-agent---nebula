@@ -12,6 +12,9 @@ export interface CompetitorRow {
   /** Set only when it is exactly the week before weekOf. */
   previousWeekOf?: string | null;
   lastCheckedOn?: string | null;
+  /** Followers from the newest good reading; change only when the reading before is exactly the week before. */
+  followers?: { value: number; change: number | null } | null;
+  avatarUrl?: string | null;
 }
 export interface CompetitorHighlight { competitorId?: string; name?: string; text: string }
 export interface CompetitorInsightsResponse {
@@ -161,4 +164,27 @@ export function competitorsUpgradeCopy(reason: 'upgrade' | 'addon' | 'quarks'): 
   if (reason === 'quarks') return { message: 'You have used everything your plan includes for now. See plans to continue.', actionLabel: 'See plans' };
   if (reason === 'upgrade') return { message: 'Tracking competitors is not included in your current plan. See plans to change it.', actionLabel: 'See plans' };
   return { message: 'Tracking competitors is an add-on. See plans to add it.', actionLabel: 'See plans' };
+}
+
+export interface WeekBar { weekStart: string; posts: number; height: number; label: string; current: boolean }
+/**
+ * The small bar line of posts per week, one bar per stored week (up to four, oldest first), each labelled with its week.
+ * Heights are shares of the largest week (a week with posts is at least 12 so it stays visible; 0 posts is a flat stub).
+ */
+export function weekBars(trend?: CompetitorTrendPoint[] | null, currentWeek?: string | null): WeekBar[] {
+  const list = (Array.isArray(trend) ? trend : []).filter((t) => t && Number.isFinite(weekMs(t.weekStart))).slice(-4);
+  const max = Math.max(0, ...list.map((t) => (Number.isFinite(t.postsInWindow) ? t.postsInWindow : 0)));
+  return list.map((t) => {
+    const n = Number.isFinite(t.postsInWindow) && t.postsInWindow > 0 ? Math.round(t.postsInWindow) : 0;
+    const day = shortDay(t.weekStart);
+    return {
+      weekStart: t.weekStart, posts: n, height: n === 0 || max === 0 ? 0 : Math.max(12, Math.round((n / max) * 100)),
+      label: `Week of ${day}: ${n === 1 ? '1 post' : `${n} posts`}`, current: !!currentWeek && t.weekStart === currentWeek,
+    };
+  });
+}
+
+/** One sentence for the whole bar line, so nothing depends on seeing it. */
+export function weekBarsSummary(bars: WeekBar[]): string {
+  return bars.length ? `Posts a week: ${bars.map((b) => b.label.replace(/^Week of /, '')).join('; ')}.` : '';
 }

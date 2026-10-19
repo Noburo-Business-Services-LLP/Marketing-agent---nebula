@@ -6,7 +6,9 @@ import type { Handoff } from './homeLayout.ts';
 
 export type BoardStatus = 'tracking' | 'no_handle' | 'unconfirmed' | 'waiting' | 'failed' | 'private' | 'paused';
 export type PostKind = 'video' | 'image' | 'carousel';
-export interface BestPost { period: 'week' | 'month'; type: PostKind; likes: number; comments: number | null; at: string; url: string; ref?: string }
+export interface BestPost { period: 'week' | 'month'; type: PostKind; likes: number; comments: number | null; at: string; url: string; ref?: string; thumbUrl?: string | null }
+/** One post of a competitor's gallery row: their best 3 of 30 days ('best') and newest ones ('latest'). */
+export interface GalleryPost { ref: string; pick: 'best' | 'latest'; type: PostKind; likes: number | null; comments: number | null; at: string; url: string; thumbUrl?: string | null }
 export interface WorkedLine { kind: 'format' | 'day' | 'time'; best: string; ratio: number; text: string }
 export interface CompetitorCard {
   id: string; name: string; handle: string; status: BoardStatus; profileUrl: string | null;
@@ -16,16 +18,17 @@ export interface CompetitorCard {
   weekOf: string | null; isCurrentWeek: boolean; lastCheckedOn: string | null;
   /** Our own stored 96 x 96 copy of their profile picture, or null (initials are shown then). */
   avatarUrl?: string | null;
+  gallery?: GalleryPost[];
 }
 export interface MakeAction { label: string; kind: 'post' | 'video'; mode: 'single' | 'carousel' | null; brief: string }
 export interface WorkingPost {
   competitorId: string; name: string; handle: string; period: 'week' | 'month'; type: PostKind; likes: number; comments: number | null;
-  at: string; url: string; ref?: string; reason: string; worked: string | null; action: MakeAction;
+  at: string; url: string; ref?: string; reason: string; worked: string | null; action: MakeAction; thumbUrl?: string | null;
 }
-export type TrendSource = 'competitor' | 'own' | 'festival' | 'plan';
-export interface TrendItem { id: string; source: TrendSource; label: string; title: string; reason: string; action: MakeAction }
+export type TrendSource = 'competitor' | 'own' | 'festival' | 'news' | 'plan';
+export interface TrendItem { id: string; source: TrendSource; label: string; title: string; reason: string; idea?: string | null; action: MakeAction }
 export interface BestPostsResponse {
-  success?: boolean; staff?: boolean; entitled: boolean; trackerOn: boolean;
+  success?: boolean; staff?: boolean; entitled: boolean; trackerOn: boolean; thumbsOn?: boolean;
   state: 'not_entitled' | 'no_competitors' | 'tracker_off' | 'waiting' | 'ready' | 'error';
   competitors: CompetitorCard[]; working: WorkingPost[]; trending: TrendItem[]; degraded: string[]; weekStart: string; asOf: string;
 }
@@ -166,9 +169,55 @@ export function trendHandoff(a: MakeAction | null | undefined, language: string 
   return { target: 'carousel', route: '/campaigns', data: { mode: a.mode === 'carousel' ? 'carousel' : 'single', topic: brief, ...(lang ? { language: lang } : {}), source: 'home' } };
 }
 
-export interface WorkingRow { key: string; title: string; reason: string; worked: string | null; kind: PostKind; url: string | null; ref: string; action: MakeAction }
+export interface WorkingRow {
+  key: string; title: string; reason: string; worked: string | null; kind: PostKind; url: string | null; ref: string; action: MakeAction;
+  handle: string; thumb: string | null; counts: { likes: string; comments: string | null } | null; why: string; byline: string;
+}
 export function workingView(w: WorkingPost): WorkingRow {
-  return { key: `${w.competitorId}:${w.at}`, title: w.name, reason: w.reason, worked: w.worked, kind: w.type, url: POST_LINK.test(String(w.url || '')) ? w.url : null, ref: String(w.ref || ''), action: w.action };
+  const handle = /^[A-Za-z0-9._]{1,30}$/.test(String(w.handle || '')) ? w.handle : '';
+  return {
+    key: `${w.competitorId}:${w.at}`, title: w.name, reason: w.reason, worked: w.worked, kind: w.type, url: POST_LINK.test(String(w.url || '')) ? w.url : null, ref: String(w.ref || ''), action: w.action,
+    handle, thumb: thumbSrc(w.thumbUrl),
+    counts: isNum(w.likes) ? { likes: formatCount(w.likes), comments: isNum(w.comments) && w.comments > 0 ? formatCount(w.comments) : null } : null,
+    // "Why it worked": the stored pattern when there is one, else the plain reason (type, day, likes).
+    why: w.worked || w.reason,
+    byline: handle ? `From @${handle}` : `From ${String(w.name || 'a competitor')}`,
+  };
+}
+
+// Only our own stored copies are ever loaded (never a link to Instagram). Inline pictures make no request at all; the
+// sample-data preview uses them.
+const STORED_THUMB = /^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_-]+\/image\/upload\/(?:[A-Za-z0-9_,.:-]+\/)*nebula-competitor-posts\/[A-Za-z0-9_-]{1,140}\.(?:webp|jpg|jpeg|png)$/;
+const INLINE_THUMB = /^data:image\/(?:svg\+xml|webp|png);/;
+/** The picture link a post card may load, or null (the card then shows the post type on a tint). */
+export function thumbSrc(url: string | null | undefined): string | null {
+  const u = typeof url === 'string' ? url : '';
+  if (u.length <= 320 && STORED_THUMB.test(u)) return u;
+  if (u.length <= 16000 && INLINE_THUMB.test(u)) return u;
+  return null;
+}
+
+export interface GalleryTile { key: string; pick: 'best' | 'latest'; label: string; kind: PostKind; url: string | null; thumb: string | null; likes: string | null; alt: string }
+/** A competitor's gallery row on the Competitors page (best first, then the newest), at most six. */
+export function galleryView(c: CompetitorCard): GalleryTile[] {
+  const list = Array.isArray(c?.gallery) ? c.gallery : [];
+  return list.slice(0, 6).map((g, i) => ({
+    key: g.ref || `${c.id}:${i}`, pick: g.pick === 'latest' ? 'latest' : 'best', label: g.pick === 'latest' ? 'New' : 'Best',
+    kind: g.type, url: POST_LINK.test(String(g.url || '')) ? g.url : null, thumb: thumbSrc(g.thumbUrl),
+    likes: isNum(g.likes) ? plural(g.likes, 'like', 'likes') : null,
+    alt: `${c.handle ? `@${c.handle}` : c.name}: a ${NOUN[g.type] || 'post'}${dayOf(g.at) ? ` from ${dayOf(g.at)}` : ''}`,
+  }));
+}
+
+/** Columns for the gallery row: every post in one row when wide (up to six); three a row when narrow, the last row filled. */
+export function gallerySpans(count: number): { wide: number; narrow: number; spans: number[] } {
+  const n = Math.max(0, Math.min(6, Math.floor(count) || 0));
+  const narrow = n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3;
+  const spans: number[] = [];
+  let left = narrow;
+  for (let i = 0; i < n; i++) { spans.push(1); left -= 1; if (left === 0) left = narrow; }
+  if (n && left !== narrow) spans[spans.length - 1] += left;
+  return { wide: Math.max(1, n), narrow, spans };
 }
 
 /** How a draft names the post it starts from: "Sweet Co Bakery's reel". */
@@ -177,10 +226,10 @@ export function draftSourceTitle(name: string | null | undefined, kind: PostKind
   return `${n}'s ${NOUN[kind as PostKind] || 'post'}`;
 }
 
-export interface TrendRow { key: string; tone: TrendSource; label: string; title: string; reason: string; action: MakeAction }
+export interface TrendRow { key: string; tone: TrendSource; label: string; title: string; reason: string; idea: string | null; action: MakeAction }
 export function trendView(t: TrendItem): TrendRow {
-  const tone: TrendSource = (['competitor', 'own', 'festival', 'plan'] as const).includes(t.source) ? t.source : 'plan';
-  return { key: t.id, tone, label: t.label, title: t.title, reason: t.reason, action: t.action };
+  const tone: TrendSource = (['competitor', 'own', 'festival', 'news', 'plan'] as const).includes(t.source) ? t.source : 'plan';
+  return { key: t.id, tone, label: t.label, title: t.title, reason: t.reason, idea: typeof t.idea === 'string' && t.idea.trim() ? t.idea.trim() : null, action: t.action };
 }
 
 /** Each Home section shows only with real data; the competitors one also shows its quiet note. Staff see none. */

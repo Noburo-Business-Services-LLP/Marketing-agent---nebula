@@ -1,30 +1,58 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { MessageCircleReply, MessagesSquare, Quote, TrendingUp } from 'lucide-react';
 import { apiService } from '../services/api';
 import type { ListeningResponse } from '../types';
-import { LOAD_ERROR, LOCKED_NOTE, TITLE, barRows, barSummary, basedOn, cardState, dayText, lastCheckedLine, notEnoughLines, platformName, quoteLabel, quoteText, quotesFor, recentLinkLabel, recentNegativeRows, waitingText, weeklyNote } from '../utils/listening';
-import type { ListeningLabel } from '../utils/listening';
-
-const CARD = 'mb-6 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 sm:p-6';
-const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gv-accent)]';
-const BTN = `inline-flex items-center justify-center rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 min-h-[44px] text-[13px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] ${FOCUS}`;
-const LINK = `rounded-md font-semibold text-[var(--gv-text-primary)] underline underline-offset-2 hover:text-[var(--gv-accent)] ${FOCUS}`;
-const TEXT2 = 'text-[var(--gv-text-secondary)]';
-const H = 'text-[18px] font-semibold text-[var(--gv-text-primary)]';
-
-/** Segment fills. Words and counts sit beside the bar, and the negative part is striped, so colour is never the only signal. */
-const FILL: Record<ListeningLabel, React.CSSProperties> = {
-  positive: { background: 'var(--gv-accent)' },
-  neutral: { background: 'var(--gv-text-muted)' },
-  negative: { background: 'repeating-linear-gradient(135deg, var(--gv-coral) 0 4px, var(--gv-coral-text) 4px 8px)' },
-};
+import { PlatformMark } from './plan/PlanMarks';
+import { markOf } from '../utils/inboxView';
+import {
+  LOAD_ERROR, LOCKED_NOTE, TITLE, barRows, barSummary, basedOn, cardState, dayText, donutArcs, donutLead, lastCheckedLine, notEnoughLines,
+  platformName, quoteText, quotesFor, recentLinkLabel, recentNegativeRows, waitingText, weeklyNote,
+} from '../utils/listening';
+import './listening.css';
 
 interface Props {
-  /** Inbox page: also lists the latest negative comments, as links to the conversation. */
+  /** Inbox page: also lists the latest negative comments, with a Reply button to the conversation. */
   showRecent?: boolean;
   /** My plan: an account without the Inbox add-on sees one calm line instead of nothing. */
   lockedNote?: boolean;
 }
+
+const R = 46;
+const C = 2 * Math.PI * R;
+
+/** The three-colour ring: warm gold positive, soft sand neutral, coral negative (striped, so colour is never the only signal). */
+const Ring: React.FC<{ res: ListeningResponse }> = ({ res }) => {
+  const id = useId().replace(/:/g, '');
+  const arcs = donutArcs(res, C);
+  const lead = donutLead(res);
+  return (
+    <div className="nb-ls-ring" role="img" aria-label={barSummary(res)}>
+      <svg viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <defs>
+          <pattern id={`nb-ls-stripe-${id}`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="6" height="6" fill="#EE6330" />
+            <rect width="2.4" height="6" fill="#C2410C" />
+          </pattern>
+        </defs>
+        <circle cx="60" cy="60" r={R} className="nb-ls-ring-track" />
+        <g transform="rotate(-90 60 60)">
+          {arcs.map((a) => (
+            <circle key={a.key} cx="60" cy="60" r={R} className="nb-ls-arc" data-part={a.key}
+              stroke={a.key === 'negative' ? `url(#nb-ls-stripe-${id})` : undefined}
+              strokeDasharray={`${a.length} ${a.gap}`} strokeDashoffset={a.offset} />
+          ))}
+        </g>
+      </svg>
+      {lead && (
+        <span className="nb-ls-ring-mid" aria-hidden="true">
+          <strong>{lead.percent}%</strong>
+          <span>{lead.label}</span>
+        </span>
+      )}
+    </div>
+  );
+};
 
 /** What people say about you: how many of the recent comments and messages were positive, neutral and negative. */
 const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false }) => {
@@ -48,11 +76,20 @@ const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false
 
   useEffect(() => { alive.current = true; load(); return () => { alive.current = false; }; }, [load]);
 
+  const head = (sub?: React.ReactNode) => (
+    <div className="nb-ls-head">
+      <span className="nb-ls-icon" aria-hidden="true"><MessagesSquare /></span>
+      <div>
+        <h2 id="listening-title">{TITLE}</h2>
+        {sub}
+      </div>
+    </div>
+  );
+
   if (!loaded) {
     return (
-      <section aria-labelledby="listening-title" className={CARD} aria-busy="true">
-        <h2 id="listening-title" className={H}>{TITLE}</h2>
-        <p role="status" className={`mt-1 text-[14px] ${TEXT2}`}>Loading…</p>
+      <section aria-labelledby="listening-title" className="nb-ls" aria-busy="true">
+        {head(<p role="status" className="nb-ls-sub">Loading…</p>)}
       </section>
     );
   }
@@ -63,9 +100,9 @@ const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false
   if (state === 'locked') {
     if (!lockedNote) return null;
     return (
-      <p className={`mb-6 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-4 py-3 text-[14px] leading-relaxed ${TEXT2}`}>
+      <p className="nb-ls-locked">
         {LOCKED_NOTE.before}
-        <Link to="/trial-expired" className={LINK}>{LOCKED_NOTE.link}</Link>
+        <Link to="/trial-expired">{LOCKED_NOTE.link}</Link>
         {LOCKED_NOTE.after}
       </p>
     );
@@ -78,86 +115,87 @@ const ListeningCard: React.FC<Props> = ({ showRecent = false, lockedNote = false
   const lines = state === 'not_enough' ? notEnoughLines(res) : null;
 
   return (
-    <section aria-labelledby="listening-title" className={CARD}>
-      <h2 id="listening-title" className={H}>{TITLE}</h2>
+    <section aria-labelledby="listening-title" className="nb-ls">
+      {head(state === 'ready' && res ? <p className="nb-ls-sub">{basedOn(res)}{lastChecked ? ` ${lastChecked}` : ''}</p> : undefined)}
 
       {state === 'error' && (
-        <div className="mt-2">
-          <p role="alert" className="text-[14px] text-[var(--gv-text-primary)]">{LOAD_ERROR}</p>
-          <button type="button" className={`${BTN} mt-3`} onClick={load}>Try again</button>
+        <div className="nb-ls-quiet">
+          <p role="alert">{LOAD_ERROR}</p>
+          <button type="button" className="nb-ls-btn" onClick={load}>Try again</button>
         </div>
       )}
 
       {lines && (
-        <>
-          <p className="mt-1 text-[14px] font-medium text-[var(--gv-text-primary)]">{lines.headline}</p>
-          <p className={`mt-1 text-[14px] leading-relaxed ${TEXT2}`}>{lines.note}</p>
-        </>
+        <div className="nb-ls-quiet">
+          <p><strong>{lines.headline}</strong> {lines.note}</p>
+        </div>
       )}
 
       {state === 'waiting' && (
-        <p className={`mt-1 text-[14px] leading-relaxed ${TEXT2}`}>{(res && res.message) || waitingText()}</p>
+        <div className="nb-ls-quiet"><p>{(res && res.message) || waitingText()}</p></div>
       )}
 
       {state === 'ready' && res && (
         <>
-          <p className={`mt-1 text-[14px] ${TEXT2}`}>{basedOn(res)}</p>
-          {lastChecked && <p className={`text-[14px] ${TEXT2}`}>{lastChecked}</p>}
-
-          <div role="img" aria-label={barSummary(res)} className="mt-4 flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
-            {rows.filter((r) => r.width > 0).map((r) => (
-              <div key={r.key} data-segment={r.key} style={{ width: `${r.width}%`, ...FILL[r.key] }} />
-            ))}
-          </div>
-
-          <table className="mt-3 w-full text-left text-[14px]">
-            <caption className="sr-only">Comments and messages by how they read</caption>
-            <thead className="text-[12.5px] font-medium text-[var(--gv-text-secondary)]"><tr><th scope="col" className="pb-1 pr-2 font-medium">Kind</th><th scope="col" className="pb-1 pr-2 text-right font-medium">Comments and messages</th><th scope="col" className="pb-1 text-right font-medium">Share</th></tr></thead>
-            <tbody>
+          <div className="nb-ls-hero">
+            <Ring res={res} />
+            <ul className="nb-ls-tiles" aria-label="Comments and messages by how they read">
               {rows.map((r) => (
-                <tr key={r.key} className="border-t border-[var(--gv-border-subtle)] first:border-t-0">
-                  <th scope="row" className="py-1.5 pr-2 font-medium text-[var(--gv-text-primary)]">
-                    <span aria-hidden="true" className="mr-2 inline-block h-3 w-3 rounded-sm align-middle" style={FILL[r.key]} />
-                    {r.label}
-                  </th>
-                  <td className={`py-1.5 pr-2 text-right tabular-nums ${TEXT2}`}>{r.count}</td>
-                  <td className="py-1.5 text-right tabular-nums font-medium text-[var(--gv-text-primary)]">{r.percent}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {res.trend && <p className="mt-3 break-words text-[14px] leading-relaxed text-[var(--gv-text-primary)]">{res.trend}</p>}
-          <p className={`mt-3 text-[12.5px] ${TEXT2}`}>{weeklyNote()}</p>
-
-          {quotes.length > 0 && (
-            <ul className="mt-4 space-y-3" aria-label="What some people wrote">
-              {quotes.map((q, i) => (
-                <li key={q.id || i}>
-                  <figure className="m-0 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] px-3 py-2">
-                    <blockquote className="m-0 break-words text-[14px] leading-relaxed text-[var(--gv-text-primary)]">“{quoteText(q)}”</blockquote>
-                    <figcaption className="mt-1 text-[12.5px] text-[var(--gv-text-secondary)]">{quoteLabel(q)}</figcaption>
-                  </figure>
+                <li key={r.key} className="nb-ls-tile" data-part={r.key}>
+                  <span className="nb-ls-tile-top"><span className="nb-ls-dot" aria-hidden="true" />{r.label}</span>
+                  <strong className="nb-ls-tile-n">{r.percent}%</strong>
+                  <span className="nb-ls-tile-c">{r.count === 1 ? '1 comment' : `${r.count} comments`}</span>
                 </li>
               ))}
             </ul>
+          </div>
+
+          {res.trend && (
+            <p className="nb-ls-callout"><TrendingUp aria-hidden="true" /><span>{res.trend}</span></p>
+          )}
+
+          {quotes.length > 0 && (
+            <div className="nb-ls-block">
+              <h3>What some people wrote</h3>
+              <ul className="nb-ls-quotes" data-count={quotes.length}>
+                {quotes.map((q, i) => (
+                  <li key={q.id || i}>
+                    <figure className="nb-ls-quote" data-part={q.label === 'negative' ? 'negative' : 'positive'}>
+                      <Quote className="nb-ls-quote-mark" aria-hidden="true" />
+                      <blockquote>{quoteText(q)}</blockquote>
+                      <figcaption>
+                        <PlatformMark platform={markOf(q.platform)} size={20} />
+                        <span className="nb-ls-quote-meta">{[platformName(q.platform), dayText(q.date)].filter(Boolean).join(', ')}</span>
+                        <span className="nb-ls-chip" data-part={q.label === 'negative' ? 'negative' : 'positive'}>{q.label === 'negative' ? 'Negative' : 'Positive'}</span>
+                      </figcaption>
+                    </figure>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {recent.length > 0 && (
-            <div className="mt-4">
-              <h3 className="text-[14px] font-semibold text-[var(--gv-text-primary)]">Recently negative</h3>
-              <ul className="mt-1 divide-y divide-[var(--gv-border-subtle)]">
+            <div className="nb-ls-block">
+              <h3>Recently negative</h3>
+              <ul className="nb-ls-recent">
                 {recent.map((r) => (
-                  <li key={r.id}>
-                    <Link to={r.href} aria-label={`${recentLinkLabel(r)}: ${r.preview}`} className={`block min-h-[44px] break-words py-2 text-[14px] text-[var(--gv-text-primary)] hover:text-[var(--gv-accent)] ${FOCUS}`}>
-                      <span className="underline underline-offset-2">{r.preview}</span>
-                      <span className="block text-[12.5px] text-[var(--gv-text-secondary)]">{[platformName(r.platform), dayText(r.date)].filter(Boolean).join(', ')}</span>
+                  <li key={r.id} className="nb-ls-recent-row">
+                    <PlatformMark platform={markOf(r.platform)} size={22} />
+                    <span className="nb-ls-recent-text">
+                      <span className="nb-ls-recent-preview">{r.preview}</span>
+                      <span className="nb-ls-recent-meta">{[platformName(r.platform), dayText(r.date)].filter(Boolean).join(', ')}</span>
+                    </span>
+                    <Link to={r.href} className="nb-ls-btn" aria-label={`Reply. ${recentLinkLabel(r)}: ${r.preview}`}>
+                      <MessageCircleReply aria-hidden="true" />Reply
                     </Link>
                   </li>
                 ))}
               </ul>
             </div>
           )}
+
+          <p className="nb-ls-foot">{weeklyNote()}</p>
         </>
       )}
     </section>

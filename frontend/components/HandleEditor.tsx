@@ -1,11 +1,14 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { BadgeCheck, PenLine } from 'lucide-react';
 import { apiService } from '../services/api';
 import { customerMessage } from '../utils/errors';
 import { HandleAction, handleActionLabel, validateHandle } from '../utils/competitorInsights';
+import './CompetitorTiles.css';
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gv-accent)]';
 const BTN = `inline-flex items-center justify-center rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 min-h-[44px] text-[13px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-60 ${FOCUS}`;
-const LINK = `inline-flex items-center rounded-md min-h-[44px] text-[13px] font-semibold text-[var(--gv-text-primary)] underline underline-offset-2 hover:text-[var(--gv-accent)] ${FOCUS}`;
+// The opener is a real button (owner, 2026-10-19: Confirm and Edit handle must not look like underlined links). Confirm is the gold one.
+const OPEN_BTN = `nb-handle-open inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 min-h-[38px] text-[13px] font-semibold ${FOCUS}`;
 const FALLBACK = 'We could not save the handle. Please try again.';
 
 export interface SavedHandle { id: string; name: string; handle: string; handleStatus: string }
@@ -63,7 +66,12 @@ const HandleEditor: React.FC<Props> = ({ competitorId, competitorName, handle = 
   };
 
   if (!open) {
-    return <button ref={opener} type="button" className={LINK} onClick={openIt} aria-label={`${handleActionLabel(action)} for ${competitorName}`}>{handleActionLabel(action)}</button>;
+    return (
+      <button ref={opener} type="button" className={OPEN_BTN} data-action={action} onClick={openIt} aria-label={`${handleActionLabel(action)} for ${competitorName}`}>
+        {action === 'confirm' ? <BadgeCheck aria-hidden="true" className="h-4 w-4" /> : <PenLine aria-hidden="true" className="h-4 w-4" />}
+        {handleActionLabel(action)}
+      </button>
+    );
   }
 
   return (
