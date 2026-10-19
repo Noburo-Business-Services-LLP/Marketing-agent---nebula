@@ -69,6 +69,8 @@
   "utils/home.ts",
   "utils/formatCount.ts",
   "utils/draftStatus.ts",
+  "utils/homeLayout.ts",
+  "components/home/HomeBlocks.tsx",
   "components/StrategyFunnel.tsx",
   "utils/strategyLevels.ts"
 ]

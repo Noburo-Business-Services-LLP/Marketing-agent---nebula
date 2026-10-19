@@ -75,9 +75,10 @@
   // error = fails to load; locked = no Inbox add-on (403); waiting = scored before, next weekly check pending.
   if (params.get('listenstate')) sessionStorage.setItem('audit-listen-state', params.get('listenstate'));
   var LSTATE = sessionStorage.getItem('audit-listen-state') || 'ready';
-  // ?homestate= full | new | nosocials | building | client | free | error | slow picks the Home summary variant (kept for the tab):
+  // ?homestate= full | new | nosocials | building | client | free | degraded | error | slow picks the Home summary variant (kept for the tab):
   // full = a settled paid account with data, new = nothing yet and an unfinished profile, nosocials = paid but nothing connected,
   // building = the plan is being built, client = an agency client workspace, free = a free account, error = the summary fails,
+  // degraded = some sources failed (numbers, today, balance say so per block),
   // slow = the summary answers after 4 seconds. The agency-client session mode shows the client variant by itself.
   if (params.get('homestate')) sessionStorage.setItem('audit-home-state', params.get('homestate'));
   var HSTATE = sessionStorage.getItem('audit-home-state') || 'full';
@@ -367,6 +368,13 @@
       s.nextActions = [{ id: 'plan_building', kind: 'plan', title: 'Your plan is being built', detail: 'It usually takes a few minutes. You do not need to wait.', to: null, info: true }];
       s.numbers.followers = none('Your first numbers arrive within a day of connecting.'); s.numbers.reach = none('Your first numbers arrive within a day of connecting.'); s.numbers.engagement = none('Your first numbers arrive within a day of connecting.');
       s.numbers.draftsWaiting = num(0, null, null); s.recent = []; s.today = [];
+    }
+    if (st === 'degraded') {
+      // Some sources failed this time: their blocks say so, the rest of Home still shows.
+      var nl = 'We could not load this just now. Please try again in a moment.';
+      s.numbers.reach = none(nl); s.numbers.engagement = none(nl); s.numbers.followers = none(nl);
+      s.today = []; s.degraded = ['snapshots', 'today', 'balance'];
+      s.balance = { available: false, quarks: null, posts: null, videos: null, showQuarks: true, text: '', paused: false };
     }
     if (st === 'client') {
       s.account = Object.assign(s.account, { tier: 'agency', clientWorkspace: true, pass: true, showsPostsNotQuarks: true });

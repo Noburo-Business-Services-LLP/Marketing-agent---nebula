@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Film, FileText, Images, Loader2 } from 'lucide-react';
+import { CalendarDays, Film, FileText, Images, Loader2 } from 'lucide-react';
 import { apiService } from '../services/api';
 import type { WeekItem, WeekPrefill, WeekProposal, WeekResponse, WeekWriteResponse } from '../types';
 import { actionsFor, buildPrefill, cardState, countsOf, headline, isSlow, isWorking, itemAction, itemLine, pollDelay, scaledNote, visibleCount } from '../utils/week';
 import { setPrefill } from '../utils/prefill';
 
-const CARD = 'mb-8 rounded-2xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] p-4 sm:p-6';
+// Compact card (styles in components/home/home.css, loaded by Home, the only page that shows this card).
+const CARD = 'nb-home-card';
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--gv-accent)]';
-const BTN_MAIN = `inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--gv-accent)] px-4 min-h-[44px] text-[13px] font-semibold text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)] disabled:opacity-50 ${FOCUS}`;
-const BTN = `inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 min-h-[44px] text-[13px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-50 ${FOCUS}`;
+const BTN_MAIN = `inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--gv-accent)] px-4 min-h-[44px] sm:min-h-[36px] text-[13px] font-semibold text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)] disabled:opacity-50 ${FOCUS}`;
+const BTN = `inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 min-h-[44px] sm:min-h-[36px] text-[13px] font-semibold text-[var(--gv-text-primary)] hover:bg-[var(--gv-surface-2)] disabled:opacity-50 ${FOCUS}`;
 const LOAD_ERROR = 'We could not load this week. Please try again.';
 
 const KIND_ICON = { post: FileText, carousel: Images, video: Film } as const;
@@ -147,14 +148,17 @@ const ThisWeekCard: React.FC<Props> = ({ language }) => {
   else top = <p className="mt-1 text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">{state === 'ready' ? headline(counts) : 'Here is where this week stands.'}</p>;
 
   return (
-    <section aria-labelledby="this-week-title" data-tour="this-week" className={CARD}>
-      <h2 id="this-week-title" className="text-[18px] font-semibold text-[var(--gv-text-primary)]">This week</h2>
+    <section id="this-week" aria-labelledby="this-week-title" data-tour="this-week" className={CARD}>
+      <div className="nb-home-cardhead">
+        <span className="nb-home-mark" data-mark="posts" aria-hidden="true"><CalendarDays /></span>
+        <h2 id="this-week-title">This week</h2>
+      </div>
       {top}
       {note && state !== 'top_up' && <p className="mt-3 rounded-lg bg-[var(--gv-surface-2)] px-3 py-2 text-[13px] text-[var(--gv-text-secondary)]">{note}</p>}
       {error && <p role="alert" className="mt-3 text-[13px] font-medium text-[var(--gv-text-primary)]">{error}</p>}
 
       {items.length > 0 && state !== 'top_up' && state !== 'skipped' && (
-        <ul ref={listRef} className="mt-4 divide-y divide-[var(--gv-border-subtle)] rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)]">
+        <ul ref={listRef} className="mt-3 divide-y divide-[var(--gv-border-subtle)] rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)]">
           {items.slice(0, visibleCount(items.length, expanded)).map((item) => {
             const Icon = KIND_ICON[item.kind] || FileText;
             const line = itemLine(item);
@@ -207,7 +211,7 @@ const ThisWeekCard: React.FC<Props> = ({ language }) => {
       )}
 
       {actions.approve && (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className={BTN_MAIN} disabled={busy} onClick={() => approve()}>{busy ? 'Starting…' : 'Approve'}</button>
           <button type="button" className={BTN} disabled={busy} onClick={skipWeek}>Skip this week</button>
         </div>
