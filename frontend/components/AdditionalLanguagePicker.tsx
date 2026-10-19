@@ -13,18 +13,21 @@ interface Props {
   value: string[];
   onChange: (next: string[]) => void;
   labels: AdditionalLanguageLabels;
+  /** The base languages to offer (the questionnaire offers the six the writers support). A chosen one always stays visible. */
+  offer?: string[];
 }
 
 /** Optional chips for the extra languages a client also posts in. Shared by sign-up and Settings. */
-const AdditionalLanguagePicker: React.FC<Props> = ({ primary, value, onChange, labels }) => {
+const AdditionalLanguagePicker: React.FC<Props> = ({ primary, value, onChange, labels, offer }) => {
   const selected = cleanSelection(value, primary);
   const atCap = isAtCap(selected);
+  const codes = availableOptions(primary).filter((code) => !offer || offer.includes(code) || selected.includes(code));
   return (
     <div>
       <p id="additional-languages-label" className="block text-sm font-bold mb-1 text-[var(--gv-text-primary)]">{labels.title}</p>
       <p className="text-xs mb-2 text-[var(--gv-text-muted)]">{labels.hint}</p>
       <div role="group" aria-labelledby="additional-languages-label" className="flex flex-wrap gap-2">
-        {availableOptions(primary).map((code) => {
+        {codes.map((code) => {
           const on = selected.includes(code);
           const locked = atCap && !on;
           return (

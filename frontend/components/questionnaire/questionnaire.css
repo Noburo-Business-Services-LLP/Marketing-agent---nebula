@@ -1,0 +1,107 @@
+/* The business-profile questions (sign-up and Settings). Plain CSS, brand gold on cream, no dark panels.
+   Rows of tiles always fill the width: a wrapping flex row whose children grow from a basis, so a short last row
+   stretches across, and every tile of a row has the same height (align-items: stretch). */
+
+.nb-q { display: flex; flex-direction: column; gap: 8px; }
+.nb-q + .nb-q { margin-top: 20px; }
+.nb-q-title { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.35; color: var(--gv-text-primary, #14203A); }
+.nb-q-optional { font-size: 12px; font-weight: 500; color: var(--gv-text-muted, #6D6250); }
+.nb-q-required { color: #C2410C; font-weight: 700; }
+.nb-q-hint { margin: -4px 0 2px; font-size: 12.5px; line-height: 1.45; color: var(--gv-text-muted, #6D6250); }
+
+.nb-q-tiles { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; }
+.nb-q-tile {
+  position: relative;
+  flex: 1 1 var(--nb-q-basis, 120px);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid #E5D8BF;
+  border-radius: 12px;
+  background: #FFFDF8;
+  color: var(--gv-text-primary, #14203A);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+}
+.nb-q-tiles--chip .nb-q-tile { justify-content: center; text-align: center; padding: 10px 26px; }
+/* Picture tiles: the drawing above a centred name, short and even; the one-line explanation shows when the tile is
+   wide enough to keep it on one or two lines (a container query on the tile itself). */
+.nb-q-tiles--art .nb-q-tile {
+  container-type: inline-size;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 4px;
+  min-height: 0;
+  padding: 10px 4px 12px;
+  text-align: center;
+}
+.nb-q-tiles--art .nb-q-tile-words { align-items: center; }
+.nb-q-tiles--art .nb-q-tile-label { overflow-wrap: normal; }
+@container (max-width: 139px) { .nb-q-tiles--art .nb-q-tile-sub { display: none; } }
+@container (max-width: 96px) { .nb-q-tiles--art .nb-q-tile-label { font-size: 12px; letter-spacing: -0.01em; } }
+.nb-q-tile:hover { border-color: #E2B866; }
+.nb-q-tile.is-on {
+  border-color: #F5A623;
+  background: #FFF4DA;
+  box-shadow: 0 0 0 1px #F5A623 inset, 0 6px 16px rgba(176, 112, 0, 0.12);
+}
+.nb-q-tile:focus-visible { outline: 3px solid #7A4A00; outline-offset: 2px; }
+
+.nb-q-tile-art { flex: 0 0 auto; display: flex; }
+.nb-q-glyph { display: block; width: 56px; height: 44px; }
+.nb-q-tile-words { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nb-q-tile-label { font-size: 13.5px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.nb-q-tile-sub { font-size: 12px; line-height: 1.35; color: var(--gv-text-muted, #6D6250); overflow-wrap: anywhere; }
+
+/* The small gold tick on a chosen tile. */
+.nb-q-tick { position: absolute; top: 6px; right: 6px; width: 14px; height: 14px; border-radius: 50%; background: transparent; }
+.nb-q-tile.is-on .nb-q-tick {
+  background: #F5A623 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%231A1208' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat;
+}
+.nb-q-tiles--chip .nb-q-tile.is-on .nb-q-tick { top: 50%; transform: translateY(-50%); right: 8px; }
+
+/* The follow-up questions of one branch sit in a soft gold card so it is clear they belong together. */
+.nb-q-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid #EFD089;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #FFF9EC 0%, #FFF4DE 100%);
+}
+.nb-q-branch .nb-q + .nb-q { margin-top: 0; }
+.nb-q-branch + .nb-q-branch { margin-top: 12px; }
+.nb-q-branch-title { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8A5200; }
+
+.nb-q-other { margin-top: 8px; }
+
+/* Mix in everyday English words: a switch under the language tiles. */
+.nb-q-switch { display: flex; align-items: center; gap: 12px; margin-top: 4px; padding: 10px 14px; border: 1px solid #E5D8BF; border-radius: 12px; background: #FFFDF8; cursor: pointer; }
+.nb-q-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.nb-q-switch-track { flex: 0 0 auto; position: relative; width: 38px; height: 22px; border-radius: 999px; background: #E5D8BF; transition: background-color .15s ease; }
+.nb-q-switch-dot { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 2px rgba(43, 29, 14, .25); transition: transform .15s ease; }
+.nb-q-switch input:checked + .nb-q-switch-track { background: #F5A623; }
+.nb-q-switch input:checked + .nb-q-switch-track .nb-q-switch-dot { transform: translateX(16px); }
+.nb-q-switch input:focus-visible + .nb-q-switch-track { outline: 3px solid #7A4A00; outline-offset: 2px; }
+.nb-q-switch-words { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+@media (max-width: 480px) {
+  .nb-q-tiles { gap: 8px; }
+  .nb-q-tiles--chip .nb-q-tile { flex-basis: calc(50% - 4px); }
+  .nb-q-branch { padding: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-q-tile, .nb-q-switch-track, .nb-q-switch-dot { transition: none; }
+}
+
+/* Settings passes its own label classes for the titles; the spacing stays the questionnaire's. */
+.nb-q .nb-q-title-custom { margin: 0; }
+.nb-q .nb-q-title-custom .nb-q-optional { text-transform: none; letter-spacing: 0; }

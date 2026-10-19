@@ -34,7 +34,10 @@ export interface BusinessProfile {
   // Old single answer, kept so saved profiles still load; reachAreas is the one to use now.
   geographicReach?: GeographicReach;
   reachAreas?: ReachArea[];
-  b2b?: { companySize?: CompanySize; decisionMaker?: string; salesCycle?: SalesCycle };
+  // People who buy (B2C or Both): optional age groups. Values in constants/businessQuestions.ts.
+  ageGroups?: string[];
+  // Business buyers (B2B or Both). customerIndustries are the industry group ids plus 'government'.
+  b2b?: { customerIndustries?: string[]; companySize?: CompanySize; decisionMaker?: string; salesCycle?: SalesCycle };
   customerType?: CustomerType;
   pricePositioning?: PricePositioning;
   keyDifferentiator?: string;

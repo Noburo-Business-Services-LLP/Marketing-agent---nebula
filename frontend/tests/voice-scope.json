@@ -104,5 +104,8 @@
   "hooks/usePostAccess.ts",
   "components/ItemActions.tsx",
   "utils/itemActions.ts",
-  "utils/scheduleAll.ts"
+  "utils/scheduleAll.ts",
+  "components/questionnaire/Questions.tsx",
+  "constants/businessQuestions.ts",
+  "components/BusinessProfileFields.tsx"
 ]

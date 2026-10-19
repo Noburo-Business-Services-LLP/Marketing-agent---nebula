@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  ONBOARDING_STRINGS, ONBOARDING_LANGS, getChoices, fillTemplate, splitTemplate,
-  INDUSTRY_VALUES, VOICE_VALUES, GENDER_VALUES, GOAL_VALUES, CONTENT_LANGUAGE_BASES,
+  ONBOARDING_STRINGS, ONBOARDING_LANGS, getChoices, fillTemplate, splitTemplate, CONTENT_LANGUAGE_BASES,
 } from '../components/onboarding/onboardingStrings.ts';
+import { QUESTION_WORDS } from '../constants/businessQuestions.ts';
 import { LANG_STORAGE_KEY } from '../components/onboarding/onboardingLangStore.ts';
 import { GUIDE_STEPS, GUIDE_LANGS } from '../components/onboarding/guideData.ts';
 import { CONTENT_LANGUAGES } from '../constants/languages.ts';
@@ -35,7 +35,8 @@ test('the three languages are en, ta and hi, matching the step guide', () => {
 
 test('every key in English exists in Tamil and Hindi, and nothing extra', () => {
   const base = Object.keys(flat(en));
-  assert.ok(base.length > 150, 'expected the full question set');
+  // The choice words moved to constants/businessQuestions.ts (2026-10-20); the page's own words are about 120.
+  assert.ok(base.length > 100, 'expected the full question set');
   for (const lang of ['ta', 'hi']) {
     const keys = Object.keys(flat(ONBOARDING_STRINGS[lang]));
     assert.deepEqual(base.filter((k) => !keys.includes(k)), [], `${lang} is missing keys`);
@@ -92,71 +93,21 @@ test('Tamil and Hindi use no Tamil or Hindi digits', () => {
   }
 });
 
-test('choice labels cover exactly the English values', () => {
+test('language names cover exactly the base languages', () => {
   for (const lang of ONBOARDING_LANGS) {
-    const s = ONBOARDING_STRINGS[lang];
-    assert.deepEqual(Object.keys(s.industryLabels).sort(), [...INDUSTRY_VALUES].sort());
-    assert.deepEqual(Object.keys(s.voiceLabels).sort(), [...VOICE_VALUES].sort());
-    assert.deepEqual(Object.keys(s.genderLabels).sort(), [...GENDER_VALUES].sort());
-    assert.deepEqual(Object.keys(s.goalLabels).sort(), [...GOAL_VALUES].sort());
-    assert.deepEqual(Object.keys(s.languageNames).sort(), [...CONTENT_LANGUAGE_BASES].sort());
+    assert.deepEqual(Object.keys(ONBOARDING_STRINGS[lang].languageNames).sort(), [...CONTENT_LANGUAGE_BASES].sort());
   }
 });
 
-test('the values saved on the profile are the English ones from before, in every language', () => {
-  // These are the values the form has always saved. They must never change with the language.
-  const saved = {
-    industries: ['Technology / SaaS', 'E-commerce / Retail', 'Food & Beverage', 'Restaurants / Cafes / Bars', 'Salon & Spa', 'Gym & Fitness', 'Grocery & Supermarket', 'Electronics & Mobile', 'Fashion & Apparel', 'Beauty & Wellness', 'Healthcare', 'Education', 'Finance / Fintech', 'Real Estate', 'Travel & Hospitality', 'Media & Entertainment', 'Professional Services', 'Manufacturing', 'Automotive', 'Jewellery', 'Home & Furniture', 'Non-profit', 'Other'],
-    voices: ['Professional', 'Friendly', 'Witty', 'Empathetic', 'Bold', 'Educational'],
-    genders: ['mostly_men', 'mostly_women', 'both_equally', 'families'],
-    goals: ['Brand Awareness', 'Lead Generation', 'Direct Sales', 'Community Engagement', 'Website Traffic'],
-    contentLanguages: CONTENT_LANGUAGES.map((l) => l.value),
-  };
-  for (const lang of ONBOARDING_LANGS) {
-    const c = getChoices(lang);
-    for (const group of Object.keys(saved)) {
-      assert.deepEqual(c[group].map((o) => o.value), saved[group], `${lang}.${group}`);
-    }
-  }
-});
-
-test('the same answers give an identical payload in English, Tamil and Hindi', () => {
-  // Pick the 3rd industry, 2 voices, the 4th audience, 2 goals and the 14th post language, as a person would by tapping.
-  const payloadFor = (lang) => {
-    const c = getChoices(lang);
-    return JSON.stringify({
-      industry: c.industries[2].value,
-      brandVoice: [c.voices[1].value, c.voices[4].value],
-      targetGender: c.genders[3].value,
-      marketingGoals: [c.goals[0].value, c.goals[2].value],
-      contentLanguage: c.contentLanguages[13].value,
-      accountKind: c.accountKinds[1].value,
-    });
-  };
-  const english = payloadFor('en');
-  assert.equal(payloadFor('ta'), english);
-  assert.equal(payloadFor('hi'), english);
-  assert.equal(english, JSON.stringify({
-    industry: 'Food & Beverage', brandVoice: ['Friendly', 'Bold'], targetGender: 'families',
-    marketingGoals: ['Brand Awareness', 'Direct Sales'], contentLanguage: 'telugu_english_mix', accountKind: 'several',
-  }));
-});
-
-test('English labels are what the form showed before translation', () => {
-  const c = getChoices('en');
-  assert.deepEqual(c.contentLanguages.map((o) => o.label), CONTENT_LANGUAGES.map((l) => l.label));
-  assert.equal(c.industries.find((o) => o.value === 'Restaurants / Cafes / Bars').label, 'Restaurants, Cafés & Bars');
-  assert.equal(c.goals[0].label, 'More people know about my business');
-});
-
-test('the page sends values, never translated labels', () => {
+// The questionnaire's choices (industry, who you sell to, where, voice, goals, language) are checked in
+// tests/businessQuestions.test.mjs: they come from constants/businessQuestions.ts, shared with Settings.
+test('the page uses the shared questions and sends values, never translated labels', () => {
   const src = fs.readFileSync(path.join(ROOT, 'pages/Onboarding.tsx'), 'utf8');
-  assert.match(src, /<option key=\{o\.value\} value=\{o\.value\}>\{o\.label\}<\/option>/);
-  assert.match(src, /toggleGoal\(goal\)/);
-  assert.match(src, /handleChange\('targetGender', option\.value/);
-  assert.match(src, /handleChange\('contentLanguage', option\.value/);
+  for (const c of ['IndustryQuestion', 'SellsToQuestion', 'ReachQuestion', 'CustomerBranchQuestions', 'GoalsQuestion', 'VoiceQuestion', 'LanguageQuestion']) {
+    assert.match(src, new RegExp(`<${c} lang=\\{lang\\}`), c);
+  }
   assert.doesNotMatch(src, /handleChange\([^)]*\bt\./, 'a translated string must not be saved');
-  assert.doesNotMatch(src, /toggleGoal\(goalLabel|brandVoice.*voiceLabel/);
+  assert.doesNotMatch(src, /both_equally|geographicReach: 'local_city'/, 'no audience answer is assumed');
 });
 
 test('every question on the page comes from the strings file, not typed into the page', () => {
@@ -172,7 +123,8 @@ test('the step guide names the same buttons the screen shows', () => {
     const s = ONBOARDING_STRINGS[lang];
     const text = (n) => GUIDE_STEPS[n].lines[lang].join(' ');
     assert.ok(text(1).includes(s.analyze), `${lang} step 1 should name "${s.analyze}"`);
-    assert.ok(text(2).includes(s.voiceLabels.Friendly), `${lang} step 2 should name "${s.voiceLabels.Friendly}"`);
+    const friendly = QUESTION_WORDS[lang].voices.Friendly;
+    assert.ok(text(3).includes(friendly), `${lang} step 3 should name "${friendly}"`);
     assert.ok(text(4).includes(s.connect), `${lang} step 4 should name "${s.connect}"`);
     assert.ok(text(4).includes(s.skipForNow), `${lang} step 4 should name "${s.skipForNow}"`);
     assert.ok(text(4).includes(s.finishSetup), `${lang} step 4 should name "${s.finishSetup}"`);

@@ -19,23 +19,10 @@ export const ONBOARDING_LANGS: OnboardingLang[] = ['en', 'ta', 'hi'];
 
 /* ---------- Values saved on the profile. English, always. ---------- */
 
-export const INDUSTRY_VALUES = [
-  'Technology / SaaS', 'E-commerce / Retail', 'Food & Beverage', 'Restaurants / Cafes / Bars',
-  'Salon & Spa', 'Gym & Fitness', 'Grocery & Supermarket', 'Electronics & Mobile',
-  'Fashion & Apparel', 'Beauty & Wellness', 'Healthcare', 'Education', 'Finance / Fintech',
-  'Real Estate', 'Travel & Hospitality', 'Media & Entertainment', 'Professional Services',
-  'Manufacturing', 'Automotive', 'Jewellery', 'Home & Furniture', 'Non-profit', 'Other',
-] as const;
-
-export const VOICE_VALUES = ['Professional', 'Friendly', 'Witty', 'Empathetic', 'Bold', 'Educational'] as const;
-
-export const GENDER_VALUES = ['mostly_men', 'mostly_women', 'both_equally', 'families'] as const;
+// The questionnaire's own values and words (industry, who you sell to, where, voice, goals, language) live in
+// constants/businessQuestions.ts, shared with Settings. Only the sign-up page's own words are here.
 
 export const ACCOUNT_KIND_VALUES = ['one', 'several'] as const;
-
-export const GOAL_VALUES = [
-  'Brand Awareness', 'Lead Generation', 'Direct Sales', 'Community Engagement', 'Website Traffic',
-] as const;
 
 /** Must match frontend/constants/languages.ts (a test checks it). */
 export const CONTENT_LANGUAGE_BASES = [
@@ -75,26 +62,19 @@ export interface OnboardingStrings {
   analyze: string;
   websiteAnalyzedInline: string;
   websiteHint: string;
-  industry: string;
-  chooseOne: string;
-  industryHint: string;
   city: string;
   cityPlaceholder: string;
   cityHint: string;
   // Step 2
   step2Heading: string;
-  voiceLabel: string;
-  pickAny: string;
   heroProduct: string;
   heroProductPlaceholder: string;
   heroProductHint: string;
   whoBuys: string;
   whoBuysPlaceholder: string;
-  whoBuysMore: string;
   accountKindQuestion: string;
   // Step 3
   step3Heading: string;
-  pickOneOrMore: string;
   competitors: string;
   competitorsHint: string;
   discoveryTitle: string;
@@ -104,7 +84,6 @@ export interface OnboardingStrings {
   differentiator: string;
   differentiatorPlaceholder: string;
   differentiatorHint: string;
-  postLanguage: string;
   additionalLanguages: string;
   additionalLanguagesHint: string;
   additionalLanguagesFull: string;
@@ -132,6 +111,7 @@ export interface OnboardingStrings {
   errCity: string;
   errHero: string;
   errWhoBuys: string;
+  errSellsTo: string;
   errGoal: string;
   errPostLanguage: string;
   errVerify: string;
@@ -162,10 +142,6 @@ export interface OnboardingStrings {
   showcaseBannerPrefix: string;
   showcaseLabels: Record<string, string>;
   // Choices (keys are the English values above)
-  industryLabels: Record<(typeof INDUSTRY_VALUES)[number], string>;
-  voiceLabels: Record<(typeof VOICE_VALUES)[number], string>;
-  genderLabels: Record<(typeof GENDER_VALUES)[number], string>;
-  goalLabels: Record<(typeof GOAL_VALUES)[number], string>;
   accountKindLabels: Record<(typeof ACCOUNT_KIND_VALUES)[number], string>;
   languageNames: Record<(typeof CONTENT_LANGUAGE_BASES)[number], string>;
   languageMix: string;            // {lang}
@@ -201,26 +177,19 @@ const en: OnboardingStrings = {
   analyze: 'Analyze',
   websiteAnalyzedInline: 'Website analyzed. The form is filled in with what we found.',
   websiteHint: 'Enter your website URL and click Analyze to auto-fill your business details',
-  industry: 'Type of business',
-  chooseOne: 'Choose one',
-  industryHint: 'The broader industry your business operates in.',
   city: 'City or town',
   cityPlaceholder: 'e.g. Cuddalore, Tamil Nadu',
   cityHint: 'Enter the city/region where your business primarily operates',
 
   step2Heading: 'Your customers',
-  voiceLabel: 'How should your posts sound?',
-  pickAny: '(pick any)',
   heroProduct: 'What do you sell most?',
   heroProductPlaceholder: 'e.g. Masala powders, bridal gold sets, family meals',
   heroProductHint: 'Your best-known product or service. Keep it short.',
   whoBuys: 'Who buys from you?',
   whoBuysPlaceholder: 'e.g. Families in Cuddalore, women 25 to 45, small shop owners',
-  whoBuysMore: 'Who buys more?',
   accountKindQuestion: 'Do you run one business or manage several brands for clients?',
 
-  step3Heading: 'What do you want most?',
-  pickOneOrMore: 'Pick one or more.',
+  step3Heading: 'Your goals and your voice',
   competitors: 'Your Competitors',
   competitorsHint: "Add specific competitors you'd like to track, or skip this. Nebulaa will automatically discover competitors based on your business and location.",
   discoveryTitle: 'AI-Powered Discovery:',
@@ -230,7 +199,6 @@ const en: OnboardingStrings = {
   differentiator: 'What makes you different?',
   differentiatorPlaceholder: 'e.g. 25 years of family craftsmanship',
   differentiatorHint: 'One line. Why should someone choose you?',
-  postLanguage: 'Language for your posts',
   additionalLanguages: 'Also post in',
   additionalLanguagesHint: 'Optional. Choose up to three more languages. You can turn any post into these languages later.',
   additionalLanguagesFull: 'Three languages are chosen. Remove one to choose another.',
@@ -258,6 +226,7 @@ const en: OnboardingStrings = {
   errCity: 'Please enter your city or town.',
   errHero: 'Please tell us what you sell most.',
   errWhoBuys: 'Please tell us who buys from you.',
+  errSellsTo: 'Please choose who you sell to.',
   errGoal: 'Please pick at least one thing you want most.',
   errPostLanguage: 'Please choose the language for your posts.',
   errVerify: 'Could not verify business details. Please try again.',
@@ -298,46 +267,7 @@ const en: OnboardingStrings = {
     'Industrial & B2B': 'Industrial & B2B',
   },
 
-  industryLabels: {
-    'Technology / SaaS': 'Technology / SaaS',
-    'E-commerce / Retail': 'E-commerce / Retail',
-    'Food & Beverage': 'Food & Beverage',
-    'Restaurants / Cafes / Bars': 'Restaurants, Cafés & Bars',
-    'Salon & Spa': 'Salon & Spa',
-    'Gym & Fitness': 'Gym & Fitness',
-    'Grocery & Supermarket': 'Grocery & Supermarket',
-    'Electronics & Mobile': 'Electronics & Mobile',
-    'Fashion & Apparel': 'Fashion & Apparel',
-    'Beauty & Wellness': 'Beauty & Wellness',
-    'Healthcare': 'Healthcare',
-    'Education': 'Education',
-    'Finance / Fintech': 'Finance / Fintech',
-    'Real Estate': 'Real Estate',
-    'Travel & Hospitality': 'Travel & Hospitality',
-    'Media & Entertainment': 'Media & Entertainment',
-    'Professional Services': 'Professional Services',
-    'Manufacturing': 'Manufacturing',
-    'Automotive': 'Automotive',
-    'Jewellery': 'Jewellery',
-    'Home & Furniture': 'Home & Furniture',
-    'Non-profit': 'Non-profit',
-    'Other': 'Other',
-  },
-  voiceLabels: {
-    Professional: 'Professional', Friendly: 'Friendly', Witty: 'Witty',
-    Empathetic: 'Empathetic', Bold: 'Bold', Educational: 'Educational',
-  },
-  genderLabels: {
-    mostly_men: 'Mostly men', mostly_women: 'Mostly women', both_equally: 'Everyone', families: 'Families',
-  },
   accountKindLabels: { one: 'One business', several: 'Several brands for clients' },
-  goalLabels: {
-    'Brand Awareness': 'More people know about my business',
-    'Lead Generation': 'More enquiries and calls',
-    'Direct Sales': 'More sales',
-    'Community Engagement': 'More followers, likes and comments',
-    'Website Traffic': 'More visits to my website',
-  },
   languageNames: {
     english: 'English', tamil: 'Tamil', telugu: 'Telugu', hindi: 'Hindi', kannada: 'Kannada',
     malayalam: 'Malayalam', marathi: 'Marathi', bengali: 'Bengali', gujarati: 'Gujarati',
@@ -376,26 +306,19 @@ const ta: OnboardingStrings = {
   analyze: 'ஆய்வு செய்யுங்கள்',
   websiteAnalyzedInline: 'இணையதளத்தை ஆய்வு செய்தோம். கிடைத்த தகவல்களால் படிவம் நிரப்பப்பட்டது.',
   websiteHint: 'உங்கள் இணையதள முகவரியை எழுதி, ஆய்வு செய்யுங்கள் என்பதை அழுத்தினால் வணிக விவரங்கள் தானாக நிரம்பும்',
-  industry: 'வணிக வகை',
-  chooseOne: 'ஒன்றைத் தேர்ந்தெடுங்கள்',
-  industryHint: 'உங்கள் வணிகம் இயங்கும் பொதுவான துறை.',
   city: 'ஊர் அல்லது நகரம்',
   cityPlaceholder: 'எ.கா. கடலூர், தமிழ்நாடு',
   cityHint: 'உங்கள் வணிகம் முக்கியமாக இயங்கும் ஊரை அல்லது பகுதியை எழுதுங்கள்',
 
   step2Heading: 'உங்கள் வாடிக்கையாளர்கள்',
-  voiceLabel: 'உங்கள் பதிவுகள் எப்படிப் பேச வேண்டும்?',
-  pickAny: '(எத்தனை வேண்டுமானாலும் தேர்ந்தெடுக்கலாம்)',
   heroProduct: 'நீங்கள் அதிகம் விற்பது என்ன?',
   heroProductPlaceholder: 'எ.கா. மசாலாப் பொடிகள், திருமணத் தங்க நகைத் தொகுப்புகள், குடும்ப உணவுகள்',
   heroProductHint: 'உங்களுக்கு மிகவும் பெயர் பெற்ற பொருள் அல்லது சேவை. சுருக்கமாக எழுதுங்கள்.',
   whoBuys: 'உங்களிடம் யார் வாங்குகிறார்கள்?',
   whoBuysPlaceholder: 'எ.கா. கடலூரில் உள்ள குடும்பங்கள், 25 முதல் 45 வயது பெண்கள், சிறு கடைக்காரர்கள்',
-  whoBuysMore: 'யார் அதிகம் வாங்குகிறார்கள்?',
   accountKindQuestion: 'நீங்கள் ஒரு தொழிலை நடத்துகிறீர்களா, அல்லது வாடிக்கையாளர்களுக்காக பல பிராண்டுகளை நிர்வகிக்கிறீர்களா?',
 
-  step3Heading: 'உங்களுக்கு மிகவும் வேண்டியது என்ன?',
-  pickOneOrMore: 'ஒன்று அல்லது அதற்கு மேல் தேர்ந்தெடுங்கள்.',
+  step3Heading: 'உங்கள் இலக்குகளும் பதிவுகளின் பாணியும்',
   competitors: 'உங்கள் போட்டியாளர்கள்',
   competitorsHint: 'கண்காணிக்க விரும்பும் போட்டியாளர்களைச் சேர்க்கலாம், அல்லது விட்டுவிடலாம். உங்கள் வணிகம் மற்றும் இடத்தின் அடிப்படையில் Nebulaa போட்டியாளர்களைத் தானாகவே கண்டறியும்.',
   discoveryTitle: 'AI மூலம் கண்டறிதல்:',
@@ -405,7 +328,6 @@ const ta: OnboardingStrings = {
   differentiator: 'உங்களை வேறுபடுத்துவது எது?',
   differentiatorPlaceholder: 'எ.கா. 25 ஆண்டுகால குடும்பக் கைவினைத் திறன்',
   differentiatorHint: 'ஒரு வரி போதும். ஒருவர் ஏன் உங்களைத் தேர்ந்தெடுக்க வேண்டும்?',
-  postLanguage: 'பதிவுகளுக்கான மொழி',
   // needs a native-speaker read
   additionalLanguages: 'இந்த மொழிகளிலும் பதிவிடுங்கள்',
   additionalLanguagesHint: 'விருப்பத்திற்குரியது. மேலும் மூன்று மொழிகள் வரை தேர்ந்தெடுக்கலாம். எந்தப் பதிவையும் பின்னர் இந்த மொழிகளுக்கு மாற்றலாம்.',
@@ -434,6 +356,7 @@ const ta: OnboardingStrings = {
   errCity: 'உங்கள் ஊர் அல்லது நகரத்தை எழுதுங்கள்.',
   errHero: 'நீங்கள் அதிகம் விற்பதை எழுதுங்கள்.',
   errWhoBuys: 'உங்களிடம் யார் வாங்குகிறார்கள் என்பதை எழுதுங்கள்.',
+  errSellsTo: 'நீங்கள் யாருக்கு விற்கிறீர்கள் என்பதைத் தேர்ந்தெடுங்கள்.',
   errGoal: 'உங்களுக்கு மிகவும் வேண்டியதில் குறைந்தது ஒன்றைத் தேர்ந்தெடுங்கள்.',
   errPostLanguage: 'பதிவுகளுக்கான மொழியைத் தேர்ந்தெடுங்கள்.',
   errVerify: 'வணிக விவரங்களைச் சரிபார்க்க முடியவில்லை. மீண்டும் முயலுங்கள்.',
@@ -474,46 +397,7 @@ const ta: OnboardingStrings = {
     'Industrial & B2B': 'தொழிற்சாலை & B2B',
   },
 
-  industryLabels: {
-    'Technology / SaaS': 'தொழில்நுட்பம் / SaaS',
-    'E-commerce / Retail': 'இ-காமர்ஸ் / சில்லறை விற்பனை',
-    'Food & Beverage': 'உணவு & பானங்கள்',
-    'Restaurants / Cafes / Bars': 'உணவகங்கள், கஃபேக்கள் & பார்கள்',
-    'Salon & Spa': 'சலூன் & ஸ்பா',
-    'Gym & Fitness': 'ஜிம் & உடற்பயிற்சி',
-    'Grocery & Supermarket': 'மளிகை & சூப்பர் மார்க்கெட்',
-    'Electronics & Mobile': 'மின்னணு சாதனங்கள் & மொபைல்',
-    'Fashion & Apparel': 'ஃபேஷன் & ஆடைகள்',
-    'Beauty & Wellness': 'அழகு & ஆரோக்கியம்',
-    'Healthcare': 'சுகாதாரம்',
-    'Education': 'கல்வி',
-    'Finance / Fintech': 'நிதி / ஃபின்டெக்',
-    'Real Estate': 'ரியல் எஸ்டேட்',
-    'Travel & Hospitality': 'பயணம் & விருந்தோம்பல்',
-    'Media & Entertainment': 'ஊடகம் & பொழுதுபோக்கு',
-    'Professional Services': 'தொழில்முறை சேவைகள்',
-    'Manufacturing': 'உற்பத்தி',
-    'Automotive': 'வாகனத் துறை',
-    'Jewellery': 'நகைகள்',
-    'Home & Furniture': 'வீடு & மரச்சாமான்கள்',
-    'Non-profit': 'இலாப நோக்கற்ற அமைப்பு',
-    'Other': 'மற்றவை',
-  },
-  voiceLabels: {
-    Professional: 'தொழில்முறை', Friendly: 'நட்பான', Witty: 'நகைச்சுவை',
-    Empathetic: 'அக்கறையான', Bold: 'துணிச்சலான', Educational: 'கற்றுத்தரும்',
-  },
-  genderLabels: {
-    mostly_men: 'பெரும்பாலும் ஆண்கள்', mostly_women: 'பெரும்பாலும் பெண்கள்', both_equally: 'அனைவரும்', families: 'குடும்பங்கள்',
-  },
   accountKindLabels: { one: 'ஒரு தொழில்', several: 'வாடிக்கையாளர்களுக்கான பல பிராண்டுகள்' },
-  goalLabels: {
-    'Brand Awareness': 'என் வணிகம் அதிகம் பேருக்குத் தெரிய வேண்டும்',
-    'Lead Generation': 'அதிக விசாரணைகளும் அழைப்புகளும்',
-    'Direct Sales': 'அதிக விற்பனை',
-    'Community Engagement': 'அதிக பின்தொடர்பவர்கள், லைக்குகள், கருத்துகள்',
-    'Website Traffic': 'என் இணையதளத்துக்கு அதிக வருகைகள்',
-  },
   languageNames: {
     english: 'ஆங்கிலம்', tamil: 'தமிழ்', telugu: 'தெலுங்கு', hindi: 'இந்தி', kannada: 'கன்னடம்',
     malayalam: 'மலையாளம்', marathi: 'மராத்தி', bengali: 'வங்காளம்', gujarati: 'குஜராத்தி',
@@ -552,26 +436,19 @@ const hi: OnboardingStrings = {
   analyze: 'जाँचें',
   websiteAnalyzedInline: 'वेबसाइट जाँच ली गई। जो जानकारी मिली, उससे फ़ॉर्म भर दिया गया है।',
   websiteHint: 'अपनी वेबसाइट का पता लिखें और जाँचें दबाएँ। बिज़नेस की जानकारी अपने आप भर जाएगी',
-  industry: 'बिज़नेस का प्रकार',
-  chooseOne: 'एक चुनें',
-  industryHint: 'वह बड़ा क्षेत्र जिसमें आपका बिज़नेस आता है।',
   city: 'शहर या कस्बा',
   cityPlaceholder: 'जैसे: कुड्डालोर, तमिलनाडु',
   cityHint: 'वह शहर या इलाक़ा लिखें जहाँ आपका बिज़नेस मुख्य रूप से चलता है',
 
   step2Heading: 'आपके ग्राहक',
-  voiceLabel: 'आपकी पोस्ट का अंदाज़ कैसा हो?',
-  pickAny: '(जितने चाहें चुनें)',
   heroProduct: 'आप सबसे ज़्यादा क्या बेचते हैं?',
   heroProductPlaceholder: 'जैसे: मसाला पाउडर, दुल्हन के सोने के सेट, फ़ैमिली मील',
   heroProductHint: 'आपका सबसे जाना-पहचाना प्रोडक्ट या सेवा। छोटा लिखें।',
   whoBuys: 'आपसे कौन खरीदता है?',
   whoBuysPlaceholder: 'जैसे: कुड्डालोर के परिवार, 25 से 45 साल की महिलाएँ, छोटे दुकानदार',
-  whoBuysMore: 'कौन ज़्यादा खरीदता है?',
   accountKindQuestion: 'क्या आप एक व्यवसाय चलाते हैं या ग्राहकों के लिए कई ब्रांड संभालते हैं?',
 
-  step3Heading: 'आपको सबसे ज़्यादा क्या चाहिए?',
-  pickOneOrMore: 'एक या ज़्यादा चुनें।',
+  step3Heading: 'आपके लक्ष्य और पोस्ट का अंदाज़',
   competitors: 'आपके प्रतिस्पर्धी',
   competitorsHint: 'जिन प्रतिस्पर्धियों पर नज़र रखनी है, उन्हें जोड़ें, या इसे छोड़ दें। आपके बिज़नेस और जगह के आधार पर Nebulaa प्रतिस्पर्धियों को अपने आप ढूँढ लेगा।',
   discoveryTitle: 'AI से खोज:',
@@ -581,7 +458,6 @@ const hi: OnboardingStrings = {
   differentiator: 'आपको अलग क्या बनाता है?',
   differentiatorPlaceholder: 'जैसे: 25 साल की पारिवारिक कारीगरी',
   differentiatorHint: 'एक पंक्ति काफ़ी है। कोई आपको क्यों चुने?',
-  postLanguage: 'पोस्ट की भाषा',
   // needs a native-speaker read
   additionalLanguages: 'इन भाषाओं में भी पोस्ट करें',
   additionalLanguagesHint: 'वैकल्पिक। तीन तक और भाषाएँ चुन सकते हैं। आप किसी भी पोस्ट को बाद में इन भाषाओं में बदल सकते हैं।',
@@ -610,6 +486,7 @@ const hi: OnboardingStrings = {
   errCity: 'कृपया अपना शहर या कस्बा लिखें।',
   errHero: 'कृपया बताएँ कि आप सबसे ज़्यादा क्या बेचते हैं।',
   errWhoBuys: 'कृपया बताएँ कि आपसे कौन खरीदता है।',
+  errSellsTo: 'कृपया चुनें कि आप किसे बेचते हैं।',
   errGoal: 'कृपया जो सबसे ज़्यादा चाहिए, उसमें से कम से कम एक चुनें।',
   errPostLanguage: 'कृपया पोस्ट की भाषा चुनें।',
   errVerify: 'बिज़नेस की जानकारी जाँची नहीं जा सकी। कृपया फिर से कोशिश करें।',
@@ -650,46 +527,7 @@ const hi: OnboardingStrings = {
     'Industrial & B2B': 'इंडस्ट्रियल और B2B',
   },
 
-  industryLabels: {
-    'Technology / SaaS': 'टेक्नोलॉजी / SaaS',
-    'E-commerce / Retail': 'ई-कॉमर्स / रिटेल',
-    'Food & Beverage': 'खान-पान',
-    'Restaurants / Cafes / Bars': 'रेस्टोरेंट, कैफ़े और बार',
-    'Salon & Spa': 'सैलून और स्पा',
-    'Gym & Fitness': 'जिम और फ़िटनेस',
-    'Grocery & Supermarket': 'किराना और सुपरमार्केट',
-    'Electronics & Mobile': 'इलेक्ट्रॉनिक्स और मोबाइल',
-    'Fashion & Apparel': 'फ़ैशन और परिधान',
-    'Beauty & Wellness': 'ब्यूटी और वेलनेस',
-    'Healthcare': 'स्वास्थ्य सेवा',
-    'Education': 'शिक्षा',
-    'Finance / Fintech': 'वित्त / फ़िनटेक',
-    'Real Estate': 'रियल एस्टेट',
-    'Travel & Hospitality': 'यात्रा और आतिथ्य',
-    'Media & Entertainment': 'मीडिया और मनोरंजन',
-    'Professional Services': 'प्रोफ़ेशनल सेवाएँ',
-    'Manufacturing': 'विनिर्माण',
-    'Automotive': 'ऑटोमोबाइल',
-    'Jewellery': 'ज्वैलरी',
-    'Home & Furniture': 'घर और फ़र्नीचर',
-    'Non-profit': 'गैर-लाभकारी संस्था',
-    'Other': 'अन्य',
-  },
-  voiceLabels: {
-    Professional: 'प्रोफ़ेशनल', Friendly: 'दोस्ताना', Witty: 'मज़ेदार',
-    Empathetic: 'संवेदनशील', Bold: 'बेबाक', Educational: 'जानकारी देने वाला',
-  },
-  genderLabels: {
-    mostly_men: 'ज़्यादातर पुरुष', mostly_women: 'ज़्यादातर महिलाएँ', both_equally: 'सभी', families: 'परिवार',
-  },
   accountKindLabels: { one: 'एक व्यवसाय', several: 'ग्राहकों के कई ब्रांड' },
-  goalLabels: {
-    'Brand Awareness': 'ज़्यादा लोग मेरे बिज़नेस को जानें',
-    'Lead Generation': 'ज़्यादा पूछताछ और कॉल',
-    'Direct Sales': 'ज़्यादा बिक्री',
-    'Community Engagement': 'ज़्यादा फ़ॉलोअर, लाइक और कमेंट',
-    'Website Traffic': 'मेरी वेबसाइट पर ज़्यादा विज़िट',
-  },
   languageNames: {
     english: 'अंग्रेज़ी', tamil: 'तमिल', telugu: 'तेलुगु', hindi: 'हिन्दी', kannada: 'कन्नड़',
     malayalam: 'मलयालम', marathi: 'मराठी', bengali: 'बंगाली', gujarati: 'गुजराती',
@@ -724,19 +562,7 @@ export interface Choice { value: string; label: string }
 export function getChoices(lang: OnboardingLang) {
   const s = ONBOARDING_STRINGS[lang];
   return {
-    industries: INDUSTRY_VALUES.map((value): Choice => ({ value, label: s.industryLabels[value] })),
-    voices: VOICE_VALUES.map((value): Choice => ({ value, label: s.voiceLabels[value] })),
-    genders: GENDER_VALUES.map((value): Choice => ({ value, label: s.genderLabels[value] })),
     accountKinds: ACCOUNT_KIND_VALUES.map((value): Choice => ({ value, label: s.accountKindLabels[value] })),
-    goals: GOAL_VALUES.map((value): Choice => ({ value, label: s.goalLabels[value] })),
     baseLanguageNames: s.languageNames as Record<string, string>,
-    contentLanguages: CONTENT_LANGUAGE_BASES.flatMap((base): Choice[] => [
-      { value: base, label: s.languageNames[base] },
-    ]).concat(
-      CONTENT_LANGUAGE_BASES.filter((b) => b !== 'english').map((base): Choice => ({
-        value: `${base}_english_mix`,
-        label: fillTemplate(s.languageMix, { lang: s.languageNames[base] }),
-      })),
-    ),
   };
 }

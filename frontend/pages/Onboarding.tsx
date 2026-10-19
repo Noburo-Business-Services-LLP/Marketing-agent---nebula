@@ -11,6 +11,8 @@ import { ChevronRight, Check, Users, Megaphone, Sparkles, Loader2, Building, Ale
 import { useTheme } from '../context/ThemeContext';
 import AdditionalLanguagePicker from '../components/AdditionalLanguagePicker';
 import { cleanSelection } from '../utils/languages';
+import { IndustryQuestion, SellsToQuestion, ReachQuestion, CustomerBranchQuestions, GoalsQuestion, VoiceQuestion, LanguageQuestion } from '../components/questionnaire/Questions';
+import { LANGUAGES, VOICES, GOALS, SELLS_TO, matchChoice } from '../constants/businessQuestions';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -79,7 +81,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         industry: '',
         problemSolved: '',
         niche: '',
-        businessType: 'Both',
+        // Asked in step 2 now ("Who do you sell to?"), so nothing is assumed.
+        businessType: '',
         businessLocation: '',
         targetAudience: '',
         brandVoice: [] as string[],
@@ -91,8 +94,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         // Moved from CSM Brand DNA — customer fills these during onboarding now
         heroProduct: '',
         targetCustomerProfile: '',
-        targetGender: 'both_equally',
-        geographicReach: 'local_city',
+        // Optional answers start empty: nothing is assumed about the customers.
+        targetGender: '',
+        reachAreas: [],
+        ageGroups: [],
+        b2b: {},
         customerType: 'mix_new_repeat',
         pricePositioning: '',
         keyDifferentiator: '',
@@ -235,6 +241,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     };
 
+    // The shared questionnaire (also used by Settings) reports a field name and its value.
+    const qChange = (field: string, value: any) => handleChange(field as keyof BusinessProfile, value);
+    const qInput = 'w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] bg-white border-gray-300 text-gray-900 placeholder-gray-400';
+
     // Verify GST number against government database
     const verifyGSTNumber = useCallback(async () => {
         if (!formData.gstNumber || formData.gstNumber.length !== 15) return;
@@ -296,12 +306,16 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     name: result.data.companyName || formData.name,
                     industry: result.data.industry || formData.industry,
                     niche: result.data.niche || formData.niche,
-                    businessType: result.data.businessType || formData.businessType,
+                    businessType: (SELLS_TO as readonly string[]).includes(result.data.businessType) ? result.data.businessType : formData.businessType,
                     businessLocation: result.data.businessLocation || formData.businessLocation,
                     description: result.data.description || formData.description,
                     targetAudience: result.data.targetAudience || formData.targetAudience,
-                    brandVoice: brandVoiceArray,
-                    marketingGoals: result.data.suggestedGoals?.length > 0 ? result.data.suggestedGoals : formData.marketingGoals
+                    // Only suggestions that match a choice on screen are kept, so nothing is saved that the owner cannot see.
+                    brandVoice: brandVoiceArray.map((v) => matchChoice(v, VOICES)).filter(Boolean),
+                    marketingGoals: (() => {
+                        const known: string[] = (Array.isArray(result.data.suggestedGoals) ? result.data.suggestedGoals : []).map((g: string) => matchChoice(g, GOALS)).filter(Boolean);
+                        return known.length ? Array.from(new Set(known)) : formData.marketingGoals;
+                    })()
                 };
                 
                 setFormData(newFormData);
@@ -332,15 +346,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     }, [formData, t]);
 
-    const toggleGoal = (goal: string) => {
-        const current = formData.marketingGoals;
-        if (current.includes(goal)) {
-            handleChange('marketingGoals', current.filter(g => g !== goal));
-        } else {
-            handleChange('marketingGoals', [...current, goal]);
-        }
-    };
-
     // Only what we truly need to start. Everything else has a sensible default or is optional.
     const validateStep = (currentStep: number) => {
         if (currentStep === 1) {
@@ -350,6 +355,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             if (!formData.businessLocation || !formData.businessLocation.trim()) return t.errCity;
         }
         if (currentStep === 2) {
+            if (!formData.businessType) return t.errSellsTo;
             if (!formData.heroProduct || !formData.heroProduct.trim()) return t.errHero;
             if (!formData.targetCustomerProfile || !formData.targetCustomerProfile.trim()) return t.errWhoBuys;
         }
@@ -469,8 +475,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const finishOnboarding = async (connectedSocials?: {platform: string; username?: string}[]) => {
         try {
             // We ask fewer questions now, so fill the fields the rest of the app reads from the answers we have.
+            // The old single reach answer is never asked at sign-up, so a saved draft of this page must not send one.
+            const { geographicReach: _oldReach, ...answers } = formData as BusinessProfile & { geographicReach?: string };
             const profile = {
-                ...formData,
+                ...answers,
                 // Tone is optional in sign-up now; fall back to the same default the backend uses.
                 brandVoice: Array.isArray(formData.brandVoice) && formData.brandVoice.length ? formData.brandVoice : (formData.brandVoice || ['Professional']),
                 additionalLanguages: cleanSelection(formData.additionalLanguages, formData.contentLanguage),
@@ -725,24 +733,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                         </p>
                                     )}
                                 </div>
-                                <div>
-                                    <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.industry} <span className="text-red-500">*</span></label>
-                                    <select
-                                        className={`w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-[#F5A623] ${
-                                            theme === 'dark'
-                                                ? 'bg-[#070A12] border-[#F5A623]/30 text-[#ededed]'
-                                                : 'bg-white border-gray-300 text-gray-900'
-                                        }`}
-                                        value={formData.industry || ''}
-                                        onChange={e => handleChange('industry', e.target.value)}
-                                    >
-                                        <option value="">{t.chooseOne}</option>
-                                        {choices.industries.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                    <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-[#ededed]/50' : 'text-gray-500'}`}>
-                                        {t.industryHint}
-                                    </p>
-                                </div>
+                                <IndustryQuestion lang={lang} profile={formData} onChange={qChange} inputClassName={qInput} required />
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.city} <span className="text-red-500">*</span></label>
                                     <input 
@@ -788,39 +779,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
                                 <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{t.step2Heading}</h3>
 
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.voiceLabel} <span className="text-xs font-normal opacity-60">{t.pickAny}</span></label>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {choices.voices.map(({ value: voice, label: voiceLabel }) => {
-                                            const isSelected = Array.isArray(formData.brandVoice)
-                                                ? formData.brandVoice.includes(voice)
-                                                : formData.brandVoice === voice;
-                                            return (
-                                                <button
-                                                    key={voice}
-                                                    onClick={() => {
-                                                        const currentVoices = Array.isArray(formData.brandVoice)
-                                                            ? formData.brandVoice
-                                                            : formData.brandVoice ? [formData.brandVoice] : [];
-                                                        const newVoices = isSelected
-                                                            ? currentVoices.filter(v => v !== voice)
-                                                            : [...currentVoices, voice];
-                                                        handleChange('brandVoice', newVoices);
-                                                    }}
-                                                    className={`p-3 rounded-lg border text-sm font-medium break-words transition-all ${
-                                                        isSelected
-                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-                                                        : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
-                                                    }`}
-                                                >
-                                                    {isSelected && <span className="mr-1">✓</span>}{voiceLabel}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+                                <SellsToQuestion lang={lang} profile={formData} onChange={qChange} required />
+                                <ReachQuestion lang={lang} profile={formData} onChange={qChange} />
 
                                 <div>
                                     <label className={`block text-sm font-bold mb-1 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>
@@ -859,61 +819,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                     />
                                 </div>
 
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.whoBuysMore} <span className="text-xs font-normal text-gray-400">{t.optional}</span></label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        {choices.genders.map(option => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => handleChange('targetGender', option.value as any)}
-                                                className={`p-3 rounded-lg border text-center text-sm transition-all ${
-                                                    formData.targetGender === option.value
-                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-                                                        : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
-                                                }`}
-                                            >
-                                                {option.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-
+                                <CustomerBranchQuestions lang={lang} profile={formData} onChange={qChange} inputClassName={qInput} />
                             </div>
                         )}
 
                         {step === 3 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
                                 <h3 className={`text-xl font-bold ${theme === 'dark' ? 'text-[#ededed]' : 'text-gray-900'}`}>{t.step3Heading}</h3>
-                                <p className={`text-sm ${theme === 'dark' ? 'text-[#ededed]/60' : 'text-gray-500'}`}>{t.pickOneOrMore} <span className="text-red-500">*</span></p>
-                                
-                                <div className="space-y-3">
-                                    {choices.goals.map(({ value: goal, label: goalLabel }) => (
-                                        <div 
-                                            key={goal}
-                                            onClick={() => toggleGoal(goal)}
-                                            className={`p-4 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
-                                                formData.marketingGoals.includes(goal)
-                                                ? 'border-[#F5A623] bg-[#F5A623]/10 shadow-sm'
-                                                : theme === 'dark' 
-                                                    ? 'border-[#ededed]/20 hover:border-[#F5A623]/50'
-                                                    : 'border-gray-200 hover:border-gray-300'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${
-                                                     formData.marketingGoals.includes(goal) ? 'bg-[#F5A623] border-[#F5A623]' : theme === 'dark' ? 'border-[#ededed]/30' : 'border-gray-300'
-                                                }`}>
-                                                    {formData.marketingGoals.includes(goal) && <Check className="w-3 h-3 text-[#070A12]" />}
-                                                </div>
-                                                <span className={`font-medium ${formData.marketingGoals.includes(goal) ? 'text-[#F5A623]' : theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{goalLabel}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <GoalsQuestion lang={lang} profile={formData} onChange={qChange} required />
+                                <VoiceQuestion lang={lang} profile={formData} onChange={qChange} />
 
                                 {/* Competitors Section */}
                                 <div className="mt-6 pt-6 border-t border-slate-700/50">
@@ -1014,32 +928,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 </div>
 
 
-                                <div>
-                                    <label className={`block text-sm font-bold mb-2 ${theme === 'dark' ? 'text-[#ededed]/80' : 'text-gray-700'}`}>{t.postLanguage} <span className="text-red-500">*</span></label>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        {choices.contentLanguages.map(option => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => handleChange('contentLanguage', option.value as any)}
-                                                className={`p-3 rounded-lg border text-center text-sm font-medium transition-all ${
-                                                    formData.contentLanguage === option.value
-                                                        ? 'border-[#F5A623] bg-[#F5A623]/10 text-[#F5A623]'
-                                                        : theme === 'dark'
-                                                            ? 'border-[#ededed]/20 hover:border-[#F5A623]/50 text-[#ededed]/70'
-                                                            : 'border-gray-200 hover:border-[#F5A623]/50 text-gray-600'
-                                                }`}
-                                            >
-                                                {option.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                                <LanguageQuestion lang={lang} profile={formData} onChange={qChange} required />
 
                                 <AdditionalLanguagePicker
                                     primary={formData.contentLanguage}
                                     value={formData.additionalLanguages || []}
                                     onChange={next => handleChange('additionalLanguages', next as any)}
+                                    offer={[...LANGUAGES]}
                                     labels={{ title: t.additionalLanguages, hint: t.additionalLanguagesHint, full: t.additionalLanguagesFull, names: choices.baseLanguageNames }}
                                 />
 

@@ -42,11 +42,12 @@ function shortPayload(overrides = {}) {
   };
 }
 
-test('sign-up asks exactly 8 required questions', () => {
+// 2026-10-20: "Who do you sell to?" (one tap) became the ninth: it decides which customer questions follow.
+test('sign-up asks exactly 9 required questions', () => {
   const block = onboarding.slice(onboarding.indexOf('const validateStep'), onboarding.indexOf('const handleNext'));
   // Messages live in frontend/components/onboarding/onboardingStrings.ts (English, Tamil, Hindi); each required answer returns one.
   const required = block.match(/return t\.err\w+;/g) || [];
-  assert.strictEqual(required.length, 8);
+  assert.strictEqual(required.length, 9);
 });
 
 test('the shortened sign-up payload is valid for the User schema', () => {
