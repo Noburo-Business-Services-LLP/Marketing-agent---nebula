@@ -19,6 +19,8 @@ export interface PlanDayListProps {
   updateItemStatus: (item: ContentCalendarItem, status: ContentCalendarItem['status']) => void;
   createDraft: (item: ContentCalendarItem) => void;
   moveItem: (itemId: string, direction: -1 | 1) => void;
+  /** opens the post made for this day in its post sheet (the shared post actions) */
+  openDraft?: (draftId: string) => void;
 }
 
 const panel: React.CSSProperties = { background: 'var(--gv-panel)', borderColor: 'var(--gv-border-subtle)', color: 'var(--gv-text-primary)' };
@@ -127,10 +129,10 @@ const PlanCard: React.FC<PlanDayListProps & { item: ContentCalendarItem }> = (p)
           Reject
         </button>
         {item.generatedDraftId ? (
-          <a href={`/drafts?draftId=${item.generatedDraftId}`} className={btnBase} style={panel}>
+          <button type="button" onClick={() => p.openDraft?.(String(item.generatedDraftId))} className={btnBase} style={panel}>
             <Sparkles className="w-3.5 h-3.5" />
-            View Draft
-          </a>
+            Open post
+          </button>
         ) : (
           <button type="button" onClick={() => p.createDraft(item)} disabled={busy || Boolean(item.generatedCampaignId)} className={btnBase} style={item.generatedCampaignId ? panel : accentBtn}>
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}

@@ -23,7 +23,7 @@ const NUMBER_DEFS: ReadonlyArray<{ key: NumberKey; field: keyof HomeSummary['num
   { key: 'engagement', field: 'engagement', title: 'Engagement', to: '/analytics' },
   { key: 'followers', field: 'followers', title: 'Followers', to: '/analytics' },
   { key: 'posts', field: 'postsPublishedThisWeek', title: 'Posts this week', to: '/content-calendar' },
-  { key: 'drafts', field: 'draftsWaiting', title: 'Drafts waiting', to: '/drafts' },
+  { key: 'drafts', field: 'draftsWaiting', title: 'Needs approval', to: '/library?view=approve' },
   { key: 'messages', field: 'unrepliedMessages', title: 'Unread messages', to: '/inbox' },
 ];
 

@@ -33,6 +33,7 @@ import { startBackgroundReel } from '../utils/backgroundReel';
 import { useConfirm } from '../context/ConfirmContext';
 import PlanMonthGrid from '../components/calendar/PlanMonthGrid';
 import PlanDayList from '../components/calendar/PlanDayList';
+import { DraftPreviewModal } from '../components/DraftPreviewModal';
 
 // Reel days are the ones Approve auto-builds; everything else just gets a status.
 const isReelItem = (item: ContentCalendarItem) => /reel|video/i.test(String(item?.format || ''));
@@ -57,6 +58,14 @@ const ContentCalendar: React.FC = () => {
   const [editingId, setEditingId] = useState('');
   const [draftItem, setDraftItem] = useState<Partial<ContentCalendarItem>>({});
   const [error, setError] = useState('');
+  // The post made for a plan day opens in its post sheet (approve, schedule, download...), not on another page.
+  const [openPost, setOpenPost] = useState<Draft | null>(null);
+  const openDraft = async (draftId: string) => {
+    try {
+      const r: any = await draftsAPI.getDraft(draftId);
+      if (r?.draft) setOpenPost(r.draft); else setError('We could not open that post. Please try again.');
+    } catch { setError('We could not open that post. Please try again.'); }
+  };
   const [activeDetailTab, setActiveDetailTab] = useState<'calendar' | 'planning' | 'drafts'>('calendar');
   const [weeklyDrafts, setWeeklyDrafts] = useState<Draft[]>([]);
   const [loadingWeeklyDrafts, setLoadingWeeklyDrafts] = useState(false);
@@ -636,7 +645,17 @@ const ContentCalendar: React.FC = () => {
         updateItemStatus={updateItemStatus}
         createDraft={createDraft}
         moveItem={moveItem}
+        openDraft={openDraft}
       />
+      {openPost && (
+        <DraftPreviewModal
+          key={String((openPost as any)._id)}
+          draft={openPost}
+          onClose={() => setOpenPost(null)}
+          onSuccess={() => { setOpenPost(null); loadCalendar(true); }}
+          onChanged={() => loadCalendar(true)}
+        />
+      )}
       </>
       )}
     </div>

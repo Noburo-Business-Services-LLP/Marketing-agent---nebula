@@ -76,7 +76,7 @@ function nextActions(input, options) {
       kind: 'billing', title: "Top up to make this week's posts", detail: 'Your balance is too low for the posts planned this week.', to: '/trial-expired'
     } : null),
     review_drafts: () => (drafts > 0 ? {
-      kind: 'drafts', title: `Review ${noun(drafts, 'post', 'posts')}`, detail: `${noun(drafts, 'post is', 'posts are')} waiting for your approval.`, to: '/drafts', count: drafts
+      kind: 'drafts', title: `Approve ${noun(drafts, 'post', 'posts')}`, detail: `${noun(drafts, 'post Nebulaa made is', 'posts Nebulaa made are')} waiting for your approval.`, to: '/library?view=approve', count: drafts
     } : null),
     reply_messages: () => (messages > 0 ? {
       kind: 'inbox', title: `Reply to ${noun(messages, 'message', 'messages')}`, detail: `${noun(messages, 'message is', 'messages are')} unread.`, to: '/inbox', count: messages

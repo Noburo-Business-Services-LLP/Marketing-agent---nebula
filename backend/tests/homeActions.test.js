@@ -72,7 +72,11 @@ test('rule 6: drafts waiting give a count; zero, null and negative give nothing'
   const a = nextActions(withIn({ draftsWaiting: 7 }));
   assert.strictEqual(a[0].id, 'review_drafts');
   assert.strictEqual(a[0].count, 7);
-  assert.strictEqual(a[0].to, '/drafts');
+  // Needs approval lives in the Library now (navigation phase 2): the same count, the Library's approval view.
+  assert.strictEqual(a[0].to, '/library?view=approve');
+  assert.match(a[0].title, /^Approve 7 posts$/);
+  assert.match(a[0].detail, /waiting for your approval/);
+  assert.match(nextActions(withIn({ draftsWaiting: 1 }))[0].title, /^Approve 1 post$/);
   for (const v of [0, null, undefined, -2, NaN]) assert.deepStrictEqual(ids(withIn({ draftsWaiting: v })), [], String(v));
 });
 

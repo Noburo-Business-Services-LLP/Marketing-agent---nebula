@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Plus, Loader2 } from 'lucide-react';
-import { apiService } from '../services/api';
+import { apiService, draftsAPI } from '../services/api';
+import { DraftPreviewModal } from '../components/DraftPreviewModal';
+import { draftByCampaign } from '../utils/calendarPosts';
 import { Campaign } from '../types';
 import { PageEmphasis } from '../components/PageHeader';
 
@@ -55,18 +57,26 @@ const GravityCalendar: React.FC = () => {
   const [anchorMonth, setAnchorMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  // The posts behind the calendar entries: clicking one opens its post sheet (the shared post actions), not a list.
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [openDraft, setOpenDraft] = useState<any | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await apiService.getCampaigns();
-        if (!cancelled) setCampaigns(Array.isArray(res?.campaigns) ? res.campaigns : []);
-      } finally { if (!cancelled) setLoading(false); }
-    })();
-    return () => { cancelled = true; };
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    try {
+      const [res, posts] = await Promise.allSettled([apiService.getCampaigns(), draftsAPI.getDrafts()]);
+      if (res.status === 'fulfilled') setCampaigns(Array.isArray(res.value?.campaigns) ? res.value.campaigns : []);
+      if (posts.status === 'fulfilled') setDrafts(Array.isArray(posts.value?.drafts) ? posts.value.drafts : []);
+    } finally { setLoading(false); }
   }, []);
+  useEffect(() => { load(); }, [load]);
+  const byCampaign = useMemo(() => draftByCampaign(drafts), [drafts]);
+  const openPost = (campaignId: string, status: string) => {
+    const d = byCampaign.get(String(campaignId));
+    if (d) { setOpenDraft(d); return; }
+    // An older calendar post that is not linked to its post: the Library lists it with its actions.
+    navigate(`/library?view=${status === 'posted' || status === 'published' || status === 'completed' ? 'posted' : status === 'draft' ? 'approve' : 'scheduled'}`);
+  };
 
   // A calendar grid always shows whole weeks — the last few days of the
   // previous month and the first few of the next fill out the first/last
@@ -231,7 +241,8 @@ const GravityCalendar: React.FC = () => {
                       {posts.slice(0, 3).map((p) => (
                         <button
                           key={p.id}
-                          onClick={() => navigate('/drafts')}
+                          onClick={() => openPost(p.id, String(p.status || '').toLowerCase())}
+                          aria-label={`Open ${p.title}, ${p.time}`}
                           className="w-full flex items-center gap-2 p-1.5 rounded-md bg-[var(--gv-surface-1)] hover:bg-[var(--gv-surface-3)] transition-colors text-left group"
                         >
                           <div className="w-7 h-7 rounded flex-shrink-0 bg-[var(--gv-surface-2)] overflow-hidden">
@@ -260,6 +271,16 @@ const GravityCalendar: React.FC = () => {
             </div>
           ))}
         </div>
+      )}
+
+      {openDraft && (
+        <DraftPreviewModal
+          key={String(openDraft._id)}
+          draft={openDraft}
+          onClose={() => setOpenDraft(null)}
+          onSuccess={() => { setOpenDraft(null); load(true); }}
+          onChanged={() => load(true)}
+        />
       )}
 
       <div className="mt-8 flex justify-center">

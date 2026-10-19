@@ -181,7 +181,7 @@ const ThisWeekCard: React.FC<Props> = ({ language }) => {
                       : <span className="inline-flex items-center gap-2 px-1 text-[12.5px] text-[var(--gv-text-secondary)]"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />Making…</span>)}
                     {act === 'retry' && <button type="button" className={BTN} disabled={busy} onClick={() => approve([item.id])}>Try again</button>}
                     {act === 'top_up' && <Link to="/trial-expired" className={LINK}>Top up</Link>}
-                    {item.kind === 'post' && item.status === 'made' && <Link to="/drafts" className={LINK}>Review and approve</Link>}
+                    {item.kind === 'post' && item.status === 'made' && <Link to="/library?view=approve" className={LINK}>Review and approve</Link>}
                     {canMake && <button type="button" className={BTN_MAIN} onClick={() => makeIt(item)}>{item.kind === 'video' ? 'Make this video' : 'Make this carousel'}</button>}
                     {actions.changeItems && editing !== item.id && (
                       <>
