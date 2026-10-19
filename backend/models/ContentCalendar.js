@@ -65,6 +65,10 @@ const contentCalendarSchema = new mongoose.Schema({
     enum: ['none', 'pending', 'ready', 'failed'],
     default: 'none'
   },
+  // When a cover render last started, and when the automatic retry last ran.
+  // The retry is allowed at most once a day per month (see maybeRetryCover).
+  lastCoverAttemptAt: { type: Date, default: null },
+  lastCoverRetryAt: { type: Date, default: null },
   generatedAt: { type: Date, default: Date.now },
   lastAutoRunAt: { type: Date, default: null }
 }, {

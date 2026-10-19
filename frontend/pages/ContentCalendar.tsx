@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { CalendarCover } from '../components/calendar/CalendarCover';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -398,17 +399,7 @@ const ContentCalendar: React.FC = () => {
                   month reads the same whether you're browsing the grid or
                   already inside it. */}
               <div className="relative h-28 bg-[#151515]">
-                {cal.coverImageUrl ? (
-                  <img src={cal.coverImageUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-[#F5A623]/[0.08] via-transparent to-transparent flex items-center justify-center">
-                    {cal.coverStatus === 'pending' ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-[#F5A623]/60" />
-                    ) : (
-                      <ImageIcon className="w-5 h-5 text-white/15" />
-                    )}
-                  </div>
-                )}
+                <CalendarCover imageUrl={cal.coverImageUrl} month={cal.month} businessName={cal.businessName} pending={cal.coverStatus === 'pending'} />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
                 {cal.approved && (
                   <span title="Approved" className="absolute top-2.5 right-2.5">
@@ -649,11 +640,7 @@ const ContentCalendar: React.FC = () => {
           type readable whatever the image turns out to be. */}
       <div className="relative rounded-2xl overflow-hidden border border-white/[0.08] bg-[#141414] mb-5">
         <div className="absolute inset-0">
-          {calendar.coverImageUrl ? (
-            <img src={calendar.coverImageUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[#F5A623]/[0.10] via-transparent to-transparent" />
-          )}
+          <CalendarCover variant="banner" imageUrl={calendar.coverImageUrl} month={calendar.month} businessName={calendar.businessName} pending={calendar.coverStatus === 'pending'} />
           <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/40" />
         </div>
 

@@ -582,7 +582,7 @@ async function generateCalendarCover(calendar, userProfile = {}) {
   if (!calendar?._id) return null;
 
   try {
-    await ContentCalendar.updateOne({ _id: calendar._id }, { $set: { coverStatus: 'pending' } });
+    await ContentCalendar.updateOne({ _id: calendar._id }, { $set: { coverStatus: 'pending', lastCoverAttemptAt: new Date() } });
 
     const items = (calendar.weeks || []).flatMap((w) => w.items || []);
     if (items.length === 0) {
@@ -668,6 +668,68 @@ async function generateCalendarCover(calendar, userProfile = {}) {
       await ContentCalendar.updateOne({ _id: calendar._id }, { $set: { coverStatus: 'failed' } });
     } catch (_) { /* the original failure is the one that matters */ }
     return null;
+  }
+}
+
+const COVER_STALE_PENDING_MS = 10 * 60 * 1000;
+const COVER_RETRY_GAP_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Self-healing covers. A cover that failed, or has been "pending" for more
+ * than 10 minutes (the server restarted mid-render), is made again, at most
+ * once per day per month, free to the customer, through the same generator
+ * and the same daily spend ceiling as everything else. It never throws and
+ * never waits for the render: callers can ignore the result.
+ *
+ * Returns { retried: boolean, reason }.
+ */
+async function maybeRetryCover(calendar, userProfile = {}, { now = new Date(), deps = {} } = {}) {
+  try {
+    if (!calendar || !calendar._id) return { retried: false, reason: 'no-calendar' };
+    const CC = deps.ContentCalendar || ContentCalendar;
+    const generate = deps.generate || generateCalendarCover;
+    const t = now.getTime();
+    const status = calendar.coverStatus;
+    const hasItems = (calendar.weeks || []).some((w) => (w.items || []).length > 0);
+    if (!hasItems) return { retried: false, reason: 'empty-plan' };
+    if (status !== 'failed' && status !== 'pending') return { retried: false, reason: 'not-retryable' };
+
+    const attemptAt = calendar.lastCoverAttemptAt || calendar.updatedAt || null;
+    const age = attemptAt ? t - new Date(attemptAt).getTime() : Infinity;
+    // A render that just started (or just failed) is left alone for 10 minutes.
+    if (age < COVER_STALE_PENDING_MS) return { retried: false, reason: 'too-soon' };
+
+    const lastRetry = calendar.lastCoverRetryAt ? new Date(calendar.lastCoverRetryAt).getTime() : 0;
+    if (lastRetry && t - lastRetry < COVER_RETRY_GAP_MS) return { retried: false, reason: 'already-today' };
+
+    const guard = deps.spendGuard || require('./spendGuard');
+    const allowed = await guard.check('image_generated');
+    if (allowed && allowed.ok === false) return { retried: false, reason: 'spend-guard' };
+
+    // Atomic claim: two page loads at once cannot both start a render.
+    const claim = await CC.updateOne(
+      {
+        _id: calendar._id,
+        coverStatus: status,
+        $or: [{ lastCoverRetryAt: null }, { lastCoverRetryAt: { $lt: new Date(t - COVER_RETRY_GAP_MS) } }]
+      },
+      { $set: { lastCoverRetryAt: now, lastCoverAttemptAt: now, coverStatus: 'pending' } }
+    );
+    if (!claim || !(claim.modifiedCount > 0 || claim.nModified > 0)) return { retried: false, reason: 'lost-claim' };
+
+    // The caller sends this document straight back, so it shows the new state.
+    calendar.coverStatus = 'pending';
+    calendar.lastCoverRetryAt = now;
+    calendar.lastCoverAttemptAt = now;
+
+    Promise.resolve()
+      .then(() => generate(calendar, userProfile))
+      .then(async (url) => { if (url) { try { await guard.record('image_generated', 1); } catch (_) { /* counting only */ } } })
+      .catch(() => { /* generateCalendarCover records the failure on the document */ });
+    return { retried: true, reason: status === 'pending' ? 'stale-pending' : 'failed' };
+  } catch (error) {
+    console.error('[ContentCalendar] cover retry check failed:', error.message);
+    return { retried: false, reason: 'error' };
   }
 }
 
@@ -944,6 +1006,7 @@ module.exports = {
   calendarPrompt,
   generateMonthlyCalendar,
   generateCalendarCover,
+  maybeRetryCover,
   monthLabel,
   normalizeLanguage,
   processAutoGeneration,

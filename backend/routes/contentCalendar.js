@@ -13,6 +13,7 @@ const {
   todaySuggestion,
   calendarMonth,
   generateCalendarCover,
+  maybeRetryCover,
   remapProposalItems
 } = require('../services/contentCalendarService');
 const { makeCooldown } = require('../services/routeCooldown');
@@ -25,6 +26,22 @@ async function getCurrentCalendar(userId) {
   return ContentCalendar.findOne({ userId, month: calendarMonth() }).sort({ createdAt: -1 });
 }
 
+// Months whose cover failed or got stuck are re-made, free, at most once a day each (see maybeRetryCover).
+// Never waited for: the page gets the calendar straight away and polls for the cover. At most `max` renders per request.
+async function healCovers(calendars, userId, max = 1) {
+  try {
+    const todo = (calendars || []).filter((c) => c && (c.coverStatus === 'failed' || c.coverStatus === 'pending'));
+    if (!todo.length) return;
+    const user = await User.findById(userId);
+    let started = 0;
+    for (const c of todo) {
+      if (started >= max) break;
+      const r = await maybeRetryCover(c, user);
+      if (r.retried) started += 1;
+    }
+  } catch (e) { /* the page must load regardless */ }
+}
+
 router.get('/', protect, async (req, res) => {
   try {
     let calendar = await getCurrentCalendar(req.user._id);
@@ -32,6 +49,7 @@ router.get('/', protect, async (req, res) => {
       const user = await User.findById(req.user._id);
       calendar = await generateMonthlyCalendar(user, null, await withPlanGuidance(req.user._id));
     }
+    await healCovers([calendar], req.user._id);
     res.json({ success: true, calendar });
   } catch (error) {
     console.error('Content calendar fetch error:', error);
@@ -41,6 +59,7 @@ router.get('/', protect, async (req, res) => {
 router.get('/history', protect, async (req, res) => {
   try {
     const calendars = await ContentCalendar.find({ userId: req.user._id }).sort({ month: -1 });
+    await healCovers(calendars, req.user._id);
     res.json({ success: true, calendars });
   } catch (error) {
     console.error('Content calendar history error:', error);
@@ -104,7 +123,9 @@ router.post('/cover', protect, async (req, res) => {
     if (!calendar) {
       return res.status(404).json({ success: false, message: 'No calendar for that month yet.' });
     }
-    if (calendar.coverStatus === 'pending') {
+    const startedAt = calendar.lastCoverAttemptAt || calendar.updatedAt;
+    const stuck = !startedAt || Date.now() - new Date(startedAt).getTime() > 10 * 60 * 1000;
+    if (calendar.coverStatus === 'pending' && !stuck) {
       return res.json({ success: true, status: 'pending' });
     }
 

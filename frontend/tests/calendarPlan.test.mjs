@@ -60,3 +60,32 @@ test('weekRangeLabel', () => {
   assert.equal(weekRangeLabel([], '2026-10'), '');
   assert.equal(weekRangeLabel([{ day: 5 }, { day: 9 }], ''), 'Days 5 to 9');
 });
+
+import { coverFallbackText, shouldShowCoverImage } from '../utils/calendarPlan.ts';
+import { readFileSync } from 'node:fs';
+
+test('cover fallback words: month name, year and business', () => {
+  const t = coverFallbackText('2026-10', 'Audit Bakery');
+  assert.equal(t.monthName, 'October'); assert.equal(t.year, '2026'); assert.equal(t.business, 'Audit Bakery');
+  assert.equal(t.label, 'October, 2026, Audit Bakery');
+  assert.equal(coverFallbackText('', '').monthName, 'Your plan');
+  assert.equal(coverFallbackText('2026-13', null).label, 'Your plan');
+  assert.equal(coverFallbackText('2026-02', 'x'.repeat(90)).business.length, 40);
+});
+
+test('the picture is used only when it is a real address that has not failed to load', () => {
+  assert.equal(shouldShowCoverImage('https://res.cloudinary.com/x.jpg'), true);
+  assert.equal(shouldShowCoverImage(''), false);
+  assert.equal(shouldShowCoverImage(undefined), false);
+  assert.equal(shouldShowCoverImage('data:image/png;base64,AAAA'), false);
+  assert.equal(shouldShowCoverImage('https://a/b.jpg', 'https://a/b.jpg'), false);
+  assert.equal(shouldShowCoverImage('https://a/new.jpg', 'https://a/b.jpg'), true);
+});
+
+test('both cover spots use the fallback component, which handles a broken picture', () => {
+  const page = readFileSync(new URL('../pages/ContentCalendar.tsx', import.meta.url), 'utf8');
+  const cover = readFileSync(new URL('../components/calendar/CalendarCover.tsx', import.meta.url), 'utf8');
+  assert.equal((page.match(/<CalendarCover /g) || []).length, 2);
+  assert.match(cover, /onError=/);
+  assert.match(cover, /font-serif-display/);
+});

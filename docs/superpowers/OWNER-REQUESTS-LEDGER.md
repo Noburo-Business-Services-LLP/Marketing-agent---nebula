@@ -43,9 +43,9 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [NOT STARTED] Video styles shown as visual tiles everywhere videos are chosen. (2026-10-18)
 
 ## Area: CALENDAR
-- [IN PROGRESS, 2026-10-19] Owner: the monthly plan card shows NO cover image (grey placeholder): fix and make sure a good cover or a nice built-in fallback always shows.
+- [DONE, NOT RELEASED (2026-10-19)] Owner: the monthly plan card showed NO cover (grey placeholder). Now a built-in cover (month in the display serif, gold glow, fine pattern, small calendar drawing, business name) shows whenever there is no picture, while it is being made, or if the picture will not load; on the card and the month banner. Real-database check: `backend/scripts/calendar-cover-check.js`.
 - [BUG, FIXED IN CODE, NOT RELEASED] Month cover image not loading (prompt `calendar.cover` was missing; restored). Failed months need a retry. (diagnosis 2026-10-18)
-- [DECISION NEEDED] Retry old failed covers automatically (one per day) and treat a stuck "pending" as retryable; add an image error fallback on the banner; stay free to the customer? (2026-10-18)
+- [DONE, NOT RELEASED (2026-10-19)] Failed covers and covers stuck on "pending" for over 10 minutes are retried automatically when the calendar or its history is loaded: at most once per day per month, one render per request, free to the customer, through the same spend ceiling (`image_generated`); never waits, never loops. The banner and card now fall back when the picture will not load. DECISION STILL OPEN: should covers ever cost a few Quarks? (default: free)
 - [NOT STARTED] Calendar month hero and "plan inputs" card like Scalio's ("<Business>'s October posts, in one tap"). (2026-10-18)
 
 ## Area: COMPETITORS / TRENDS
@@ -56,7 +56,7 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [NOT STARTED] Use the competitor insight to improve the plan day by day. (2026-10-18)
 
 ## Area: INBOX / REVIEWS / AUTOMATIC REPLIES
-- [IN PROGRESS, 2026-10-19] Owner on Library: two stacked rows of filter chips (All/Images/Videos and All/Drafts/Ready/Scheduled/Posted/Archived) look bulky: make it sleek, put Images and Videos side by side as a small toggle beside the status filters.
+- [DONE, NOT RELEASED (2026-10-19)] Owner on Library: the two stacked rows of big chips are now ONE compact row: a small All/Images/Videos segmented toggle, a thin divider, then small status chips (cream theme, gold selected state, focus rings, aria-pressed groups); on a phone the row scrolls sideways inside itself. Same filters and counts as before.
 - [NOT STARTED] Inbox has NEVER been tested live: does it receive Instagram/Facebook comments and messages, does it reply automatically; test sheet `docs/superpowers/ops/inbox-live-test.md`; Ayrshare Messaging add-on was inactive. (2026-10-18)
 - [NOT STARTED] Tiles with art for Messages and comments, Google reviews, Automatic replies; a sales-style explainer for automatic replies; status chips (Connected, Needs setup, Add-on). (2026-10-18)
 

@@ -68,3 +68,18 @@ export const weekRangeLabel = (items: Array<{ day: number }>, month: string | nu
   const name = MONTHS[parsed.m - 1];
   return first === last ? `${name} ${first}` : `${name} ${first} to ${last}`;
 };
+
+/** Words for the built-in cover: used whenever a month has no picture, the picture fails to load, or it is still being made. */
+export const coverFallbackText = (month?: string | null, businessName?: string | null): { monthName: string; year: string; business: string; label: string } => {
+  const parsed = parseMonth(month);
+  const monthName = parsed ? MONTHS[parsed.m - 1] : 'Your plan';
+  const year = parsed ? String(parsed.y) : '';
+  const business = String(businessName || '').trim().slice(0, 40);
+  return { monthName, year, business, label: [monthName, year, business].filter(Boolean).join(', ') };
+};
+
+/** A picture is worth showing only when it is a real address; anything else gets the built-in cover. */
+export const shouldShowCoverImage = (url?: string | null, failedUrl?: string | null): boolean => {
+  const u = String(url || '').trim();
+  return /^https?:\/\//i.test(u) && u !== failedUrl;
+};
