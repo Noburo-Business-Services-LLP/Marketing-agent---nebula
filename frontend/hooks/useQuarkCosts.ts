@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
+import type { CostPricing } from '../constants/quarks';
 
 /**
  * The Quark cost of each generation action, for showing a price right on
@@ -14,9 +15,11 @@ export interface QuarkPricing {
   costs: Record<string, number>;
   /** What one unit of each action is: "per slide", "per scene", "per post". */
   units: Record<string, string>;
+  /** Video part length and the Photoshoot packs, for the price list (backend/services/costList.js). */
+  pricing: CostPricing;
 }
 
-const EMPTY: QuarkPricing = { costs: {}, units: {} };
+const EMPTY: QuarkPricing = { costs: {}, units: {}, pricing: {} };
 
 let cache: QuarkPricing | null = null;
 let inFlight: Promise<QuarkPricing> | null = null;
@@ -26,7 +29,7 @@ async function loadCosts(): Promise<QuarkPricing> {
   if (!inFlight) {
     inFlight = apiService.getCredits()
       .then((res) => {
-        cache = { costs: res?.costs || {}, units: res?.units || {} };
+        cache = { costs: res?.costs || {}, units: res?.units || {}, pricing: (res as any)?.pricing || {} };
         return cache;
       })
       .catch(() => EMPTY)

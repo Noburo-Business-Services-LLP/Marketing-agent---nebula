@@ -1,0 +1,33 @@
+/* Settings > Billing price list (components/QuarkCostList.tsx). Tiles in one row share a height; the column count
+   follows the list's own width (container query), so 8 groups fill 1, 2 or 4 columns and every row is full. The
+   "Free of Quarks" tile runs across the whole width at the end. Cream theme tokens, a coloured dot per group. */
+.nb-qc { container-type: inline-size; display: flex; flex-direction: column; gap: 14px; }
+.nb-qc-head { display: flex; flex-direction: column; gap: 4px; }
+.nb-qc-title { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-weight: 400; font-size: 22px; line-height: 1.2; color: var(--gv-text-primary); }
+.nb-qc-lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--gv-text-secondary); max-width: 640px; }
+.nb-qc-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: stretch; margin: 0; padding: 0; list-style: none; }
+@container (min-width: 560px) { .nb-qc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 1120px) { .nb-qc-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.nb-qc-tile {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 14px 16px; border-radius: 14px;
+  background: var(--gv-panel); border: 1px solid var(--gv-border-subtle);
+  box-shadow: 0 1px 2px rgb(var(--gv-ink-rgb) / 0.05), 0 10px 24px -20px rgb(90 60 20 / 0.35);
+}
+.nb-qc-group { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--gv-text-primary); }
+.nb-qc-dot { width: 10px; height: 10px; border-radius: 999px; flex: 0 0 auto; }
+.nb-qc-blurb { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--gv-text-tertiary); }
+.nb-qc-rows { margin: 4px 0 0; display: flex; flex-direction: column; }
+.nb-qc-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--gv-border-subtle); }
+.nb-qc-row dt { display: flex; flex-direction: column; min-width: 0; }
+.nb-qc-label { font-size: 13px; font-weight: 600; color: var(--gv-text-primary); }
+.nb-qc-detail { font-size: 11.5px; color: var(--gv-text-tertiary); }
+.nb-qc-price { margin: 0; flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--gv-text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nb-qc-note { margin: auto 0 0; padding-top: 8px; font-size: 12px; line-height: 1.45; color: var(--gv-text-secondary); }
+.nb-qc-free { grid-column: 1 / -1; background: #F1F8EE; border-color: #C9E0B8; }
+.nb-qc-freelist { margin: 2px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 20px; }
+@container (min-width: 560px) { .nb-qc-freelist { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 1120px) { .nb-qc-freelist { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.nb-qc-freelist li { position: relative; padding-left: 14px; font-size: 13px; line-height: 1.45; color: var(--gv-text-primary); }
+.nb-qc-freelist li::before { content: ''; position: absolute; left: 0; top: 0.55em; width: 6px; height: 6px; border-radius: 999px; background: #3E8B5A; }
+.nb-qc-link { font-weight: 600; color: var(--gv-accent-text); text-decoration: underline; text-underline-offset: 2px; }
+.nb-qc-link:focus-visible { outline: 3px solid #7A4A00; outline-offset: 2px; border-radius: 4px; }

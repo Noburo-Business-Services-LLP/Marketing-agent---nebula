@@ -8,7 +8,7 @@ import { User, BillingData, BusinessProfile } from '../types';
 import BillingDetailsForm from '../components/BillingDetailsForm';
 import { tierLabel } from '../utils/plans';
 import { isInsideClient } from '../utils/agency';
-import { ACTION_LABELS, QUARK_GROUPS } from '../constants/quarks';
+import QuarkCostList from '../components/QuarkCostList';
 import { useQuarkPricing } from '../hooks/useQuarkCosts';
 import { buildStrategyPdf } from '../utils/strategyPdf';
 import { apiService, brandAssetsAPI } from '../services/api';
@@ -43,9 +43,11 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   // by the sidebar's account chip so clicking it lands somewhere useful
   // instead of always opening on the generic Profile tab.
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') === 'business' ? 'Business Profile' : 'Profile';
+  // ?tab=billing opens Billing (the Help page links there for the price list), ?tab=security opens Security.
+  const TAB_FROM_QUERY: Record<string, string> = { business: 'Business Profile', billing: 'Billing', security: 'Security' };
+  const asked = TAB_FROM_QUERY[searchParams.get('tab') || ''] || 'Profile';
+  const initialTab = insideClient && (asked === 'Billing' || asked === 'Security') ? 'Profile' : asked;
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [emailNotifications, setEmailNotifications] = useState(true);
   
   // API Status State
   const [apiStatus, setApiStatus] = useState<any>(null);
@@ -80,7 +82,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
 
   // Billing State
   const [billingData, setBillingData] = useState<BillingData | null>(null);
-  const { costs: quarkCosts, units: quarkUnits } = useQuarkPricing();
+  const { costs: quarkCosts } = useQuarkPricing();
   const balanceNote = (n: number) => (equivalentText(n, quarkCosts) ? `, ${equivalentText(n, quarkCosts)}` : '');
   const [loadingBilling, setLoadingBilling] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -300,7 +302,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
         eyebrow="Settings"
         title="Manage your"
         emphasis="account"
-        description={insideClient ? "Manage this client's profile and business details." : "Manage your profile, business details, notifications, security and billing in one place."}
+        description={insideClient ? "Manage this client's profile and business details." : "Manage your profile, business details, security and billing in one place."}
       />
 
       {/* Same pill-shaped switcher as Create's Campaign/Single post/Carousel
@@ -310,7 +312,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       )}
       <div className="mb-8 overflow-x-auto">
         <div className="inline-flex items-center gap-1 p-1 rounded-full bg-white/[0.03] border border-white/[0.06]">
-          {['Profile', 'Business Profile', 'Notifications', 'Security', 'Billing'].filter(tab => !insideClient || (tab !== 'Security' && tab !== 'Billing')).map(tab => (
+          {['Profile', 'Business Profile', 'Security', 'Billing'].filter(tab => !insideClient || (tab !== 'Security' && tab !== 'Billing')).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -412,24 +414,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                     }`}
                                   />
                                   {errors.email && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.email}</p>}
-                              </div>
-                          </div>
-
-                          <div className={`border-t pt-8 mb-8 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-200'}`}>
-                              <h3 className="font-serif-display text-[20px] text-[#F5F4F1] mb-6">Preferences</h3>
-                              <div className={`flex items-center justify-between p-4 rounded-lg border ${
-                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
-                              }`}>
-                                  <div>
-                                      <p className={`font-bold ${theme.text}`}>Email Notifications</p>
-                                      <p className={`text-sm ${theme.textSecondary}`}>Receive weekly digests and campaign alerts.</p>
-                                  </div>
-                                  <button 
-                                    onClick={() => setEmailNotifications(!emailNotifications)}
-                                    className={`w-12 h-6 rounded-full transition-colors relative ${emailNotifications ? 'bg-[#F5A623]' : isDarkMode ? 'bg-slate-600' : 'bg-slate-300'}`}
-                                  >
-                                      <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${emailNotifications ? 'left-7' : 'left-1'}`}></div>
-                                  </button>
                               </div>
                           </div>
 
@@ -646,14 +630,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                       </div>
                   )}
 
-                  {activeTab === 'Notifications' && (
-                      <div className={`text-center py-12 rounded-lg border border-dashed ${
-                        isDarkMode ? 'bg-[#0d1117] border-slate-700/50 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-400'
-                      }`}>
-                          <p>Advanced notification settings are not available yet.</p>
-                      </div>
-                  )}
-
                   {activeTab === 'Billing' && !insideClient && (
                       <div className="animate-in fade-in duration-300">
                           <h2 className="font-serif-display text-[22px] text-[#F5F4F1] mb-6">Billing and invoices</h2>
@@ -765,72 +741,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                 </div>
                               </div>
 
-                              {/* What each action costs. Grouped the way the work is
-                                  actually thought about — posts, carousels, video, edits —
-                                  because a flat list of twelve keys is what made the old
-                                  header popover unreadable. */}
-                              <div className={`p-5 rounded-lg border ${
-                                isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-slate-50 border-slate-200'
-                              }`}>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Quark Costs</p>
-                                <p className={`text-xs mb-4 ${theme.textSecondary}`}>
-                                  Every price is per unit of work, so bigger jobs cost proportionally more.
-                                </p>
-
-                                <div className="space-y-4">
-                                  {QUARK_GROUPS.map((group) => {
-                                    const rows = group.actions.filter((a) => (quarkCosts[a] || 0) > 0);
-                                    if (!rows.length) return null;
-                                    return (
-                                      <div key={group.title}>
-                                        <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                                          <p className={`text-[13px] font-semibold ${theme.text}`}>{group.title}</p>
-                                          {group.example && (
-                                            <p className="text-[11px] text-slate-500 tabular-nums shrink-0">
-                                              {group.example(quarkCosts)}
-                                            </p>
-                                          )}
-                                        </div>
-                                        <p className="text-[11.5px] text-slate-500 mb-2 leading-snug">{group.blurb}</p>
-                                        <div className={`rounded-lg overflow-hidden border ${
-                                          isDarkMode ? 'border-white/[0.06]' : 'border-slate-200'
-                                        }`}>
-                                          {rows.map((action, i) => (
-                                            <div
-                                              key={action}
-                                              className={`flex items-center justify-between gap-3 px-3 py-2 ${
-                                                isDarkMode ? 'bg-white/[0.03]' : 'bg-white'
-                                              } ${i > 0 ? (isDarkMode ? 'border-t border-white/[0.06]' : 'border-t border-slate-100') : ''}`}
-                                            >
-                                              <span className={`text-[13px] truncate ${theme.textSecondary}`}>
-                                                {ACTION_LABELS[action]?.icon} {ACTION_LABELS[action]?.label || action}
-                                              </span>
-                                              <span className="flex items-baseline gap-1.5 shrink-0">
-                                                <span className={`text-[13px] font-semibold tabular-nums ${theme.text}`}>
-                                                  {quarkCosts[action]}
-                                                </span>
-                                                {/* The unit is the whole point: "19" next to "Carousel"
-                                                    reads as the price of a carousel, which it isn't. */}
-                                                {quarkUnits[action] && (
-                                                  <span className="text-[11px] text-slate-500 w-[62px] text-left">
-                                                    {quarkUnits[action]}
-                                                  </span>
-                                                )}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-
-                                {(quarkCosts.competitor_scrape === 0) && (
-                                  <p className="text-[11.5px] text-slate-500 mt-4 pt-3 border-t border-slate-200/40">
-                                    Competitor Intel is free.
-                                  </p>
-                                )}
-                              </div>
+                              {/* What every paid action costs, from the server's cost map (constants/quarks.ts). */}
+                              <QuarkCostList />
 
                               {/* Payment History */}
                               <div>
