@@ -1,0 +1,118 @@
+/* Videos options (components/video/VideoOptions.tsx, pages/CreateVideo.tsx). Plain CSS, nothing compiled in the
+   browser. Symmetry rule (owner, 2026-10-19): every row fills the column edge to edge with equal tiles of one height,
+   sections sit on one grid with one rhythm, nothing hugs the left. Light only: cream panel, brand gold ring. */
+
+.nb-vopt { display: grid; gap: 26px; container: vopt / inline-size; }
+.nb-vopt-section { min-width: 0; margin: 0; }
+.nb-vopt-label {
+  margin: 0 0 10px; font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gv-text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nb-vopt-note { margin-left: 6px; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--gv-text-muted); }
+
+/* Two sections side by side; one alone fills the row. */
+.nb-vopt-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 16px; }
+.nb-vopt-pair > :only-child { grid-column: 1 / -1; }
+
+/* A row of equal tiles. --n columns on a wide screen, --n-phone on a phone. */
+.nb-vopt-tiles { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 10px; }
+
+.nb-vopt-tile {
+  position: relative; box-sizing: border-box; min-width: 0; height: 120px; padding: 12px 10px 12px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center;
+  border-radius: 16px; border: 1px solid var(--gv-border-subtle); background: var(--gv-panel);
+  box-shadow: 0 1px 2px rgb(43 29 14 / 0.04); cursor: pointer; outline: none;
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+.nb-vopt-tile[data-size="sm"] { height: 92px; }
+.nb-vopt-tile:hover:not(:disabled) { border-color: var(--gv-border-default); box-shadow: 0 2px 8px rgb(43 29 14 / 0.07); }
+.nb-vopt-tile[data-on="true"] { border-color: var(--gv-accent); background: #FFF6E3; box-shadow: 0 0 0 1px var(--gv-accent), 0 4px 14px rgb(232 163 61 / 0.18); }
+.nb-vopt-tile:focus-visible, .nb-vopt-toggle:focus-visible { box-shadow: 0 0 0 2px var(--gv-bg), 0 0 0 4px var(--gv-accent); }
+.nb-vopt-tile:disabled { cursor: not-allowed; opacity: .4; }
+
+.nb-vopt-art { display: flex; height: 44px; width: 100%; align-items: center; justify-content: center; margin-bottom: 2px; }
+.nb-vopt-tile[data-size="sm"] .nb-vopt-art { height: 38px; }
+.nb-vopt-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-width: 100%; overflow: hidden; font-size: 13.5px; font-weight: 650; line-height: 1.2; letter-spacing: -0.01em; color: var(--gv-text-primary); }
+.nb-vopt-tile[data-on="true"] .nb-vopt-name { color: var(--gv-accent-text); }
+.nb-vopt-line {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-width: 100%; overflow: hidden;
+  font-size: 11.5px; line-height: 1.3; color: var(--gv-text-tertiary);
+}
+
+/* The language glyph: the script sample (or a music note) in a soft round mark. */
+.nb-vopt-glyph {
+  display: grid; place-items: center; width: 42px; height: 42px; border-radius: 999px; background: #F6EBD6; color: #6D4A12;
+  font-size: 19px; font-weight: 600; line-height: 1; font-family: 'Plus Jakarta Sans', Inter, 'Noto Sans Tamil', 'Noto Sans Devanagari', system-ui, sans-serif;
+}
+.nb-vopt-glyph svg { width: 18px; height: 18px; }
+.nb-vopt-tile[data-on="true"] .nb-vopt-glyph { background: var(--gv-accent); color: #1A1208; }
+
+/* The platform mark. */
+.nb-vopt-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: var(--gv-surface-2); color: var(--gv-text-tertiary); }
+.nb-vopt-mark svg { width: 17px; height: 17px; }
+.nb-vopt-tile[data-on="true"] .nb-vopt-mark { background: var(--gv-accent); color: #1A1208; }
+
+/* The shape frame (ShapeArt from CreateOptions, drawn a little larger here). */
+.nb-vopt-art .nb-opt-shape { transform: scale(1.3); }
+
+/* A calm full-width strip of centred helper lines. */
+.nb-vopt-info {
+  margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px 16px;
+  border-radius: 14px; background: #FBF1DE; border: 1px solid #F0E0BF; text-align: center;
+}
+.nb-vopt-info-text { min-width: 0; font-size: 12.5px; line-height: 1.5; color: var(--gv-text-secondary); }
+.nb-vopt-info-text p { margin: 0; }
+.nb-vopt-info-text strong { font-weight: 650; color: var(--gv-text-primary); }
+
+/* The on and off tiles. */
+.nb-vopt-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.nb-vopt-toggles > :only-child { grid-column: 1 / -1; }
+.nb-vopt-toggle {
+  box-sizing: border-box; min-width: 0; height: 92px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; text-align: left;
+  border-radius: 16px; border: 1px solid var(--gv-border-subtle); background: var(--gv-panel); box-shadow: 0 1px 2px rgb(43 29 14 / 0.04);
+  cursor: pointer; outline: none; transition: border-color .15s, box-shadow .15s, background-color .15s;
+}
+.nb-vopt-toggle:hover:not(:disabled) { border-color: var(--gv-border-default); }
+.nb-vopt-toggle[data-on="true"] { border-color: var(--gv-accent); background: #FFF6E3; box-shadow: 0 0 0 1px var(--gv-accent); }
+.nb-vopt-toggle:disabled { cursor: not-allowed; }
+.nb-vopt-toggle:disabled .nb-vopt-toggle-art, .nb-vopt-toggle:disabled .nb-vopt-switch { opacity: .45; }
+.nb-vopt-toggle-art { flex: 0 0 auto; display: grid; place-items: center; width: 52px; height: 56px; border-radius: 12px; background: #F8EEDB; }
+.nb-vopt-toggle-text { min-width: 0; flex: 1 1 auto; display: grid; gap: 3px; }
+.nb-vopt-toggle .nb-vopt-name { white-space: normal; }
+.nb-vopt-toggle[data-on="true"] .nb-vopt-name { color: var(--gv-accent-text); }
+.nb-vopt-switch { flex: 0 0 auto; position: relative; width: 40px; height: 24px; border-radius: 999px; background: #E3D6BC; transition: background-color .15s; }
+.nb-vopt-switch > span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgb(43 29 14 / 0.25); transition: transform .15s; }
+.nb-vopt-toggle[data-on="true"] .nb-vopt-switch { background: var(--gv-accent); }
+.nb-vopt-toggle[data-on="true"] .nb-vopt-switch > span { transform: translateX(16px); }
+
+/* The closing line under the logo switch. */
+.nb-vopt-field { margin-top: 10px; }
+
+/* The heading over the people, place and product rows: centred, with a hairline either side. */
+.nb-vopt-divider { display: flex; align-items: center; gap: 14px; margin: 6px 0 0; }
+.nb-vopt-divider::before, .nb-vopt-divider::after { content: ""; flex: 1 1 0; height: 1px; background: var(--gv-border-subtle); }
+.nb-vopt-divider > span { font-size: 10.5px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gv-text-tertiary); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-vopt-tile, .nb-vopt-toggle, .nb-vopt-switch, .nb-vopt-switch > span { transition: none; }
+}
+
+/* Below about 760 px of column the paired sections would leave tiles too narrow for their lines: they stack. */
+@container vopt (max-width: 759px) {
+  .nb-vopt-pair { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A narrow column (a phone, or a tablet beside the menu): pairs stack, rows of four become two across. The column
+   width decides, not the screen, so the menu beside it is counted. */
+@container vopt (max-width: 599px) {
+  .nb-vopt-toggles { grid-template-columns: minmax(0, 1fr); }
+  .nb-vopt-tiles { grid-template-columns: repeat(var(--n-phone, 2), minmax(0, 1fr)); gap: 8px; }
+  /* Two across with an odd count (for example seven languages): the last tile fills the row, so no row ends short. */
+  .nb-vopt-tiles[data-two="true"] > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .nb-vopt-tile { height: 116px; padding: 10px 6px; }
+  .nb-vopt-tile[data-size="sm"] { height: 80px; padding: 8px 2px; }
+  .nb-vopt-tile[data-size="sm"] .nb-vopt-name { font-size: 10.5px; letter-spacing: -0.02em; }
+  .nb-vopt-line { font-size: 11px; }
+  .nb-vopt-divider > span { white-space: normal; text-align: center; }
+}

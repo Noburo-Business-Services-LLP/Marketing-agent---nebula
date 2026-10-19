@@ -1,9 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, ChevronDown, Download, Loader2, Package, Image as ImageIcon, User as UserIcon, Wand2, Trash2, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Calendar as CalendarIcon, Check, ChevronDown, Download, Loader2, Package, Image as ImageIcon, User as UserIcon, Wand2, Trash2, Sparkles, Music } from 'lucide-react';
 import { GravityHero, GravityEmphasis, GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 import IdeaBoxTools from '../components/IdeaBoxTools';
-import PlatformPicker from '../components/PlatformPicker';
+import PlatformIcon from '../components/PlatformIcon';
+import { ShapeArt, LogoPostArt } from '../components/CreateOptions';
+import { OptionSection, OptionPair, ChoiceTiles, MultiTiles, ToggleTile, InfoStrip } from '../components/video/VideoOptions';
+import { VoiceWaveArt } from '../components/art/video/VoiceWave';
+import { LengthTimelineArt } from '../components/art/video/LengthTimeline';
+import { SubtitlesPreviewArt } from '../components/art/video/SubtitlesPreview';
+import { TransitionArt } from '../components/art/video/Transition';
+import { languageGlyph, voiceName, voiceLine, SHAPE_CHOICES, partsLine, platformShort, YOURS_TITLE, YOURS_LINE } from '../utils/videoOptionTiles';
 import AssetPicker, { PickedAsset } from '../components/AssetPicker';
 import ReferenceMaker from '../components/ReferenceMaker';
 import CalendarIdeaPicker from '../components/CalendarIdeaPicker';
@@ -14,7 +21,7 @@ import {
   progressLabel, canChange, NO_CHANGE_NOTE, plainMessage, readChoices, saveChoices, SHOW_FIRST_STYLES,
   FALLBACK_TRANSITIONS, transitionOf, cleanEndLine, showTransitions, showSubtitles, finishPayload, END_LINE_MAX, NO_LOGO_HINT, SUBTITLES_HINT
 } from '../utils/videoOptions';
-import { choicesFor, platformLabel } from '../utils/platforms';
+import { choicesFor, platformLabel, platformHint } from '../utils/platforms';
 import { appendText, referenceAssetFromFile } from '../utils/ideaFiles';
 import { canPlan, waitMessage, CHANGE_IDEAS, StepKey } from '../utils/studioVideo';
 import { downloadImage } from '../utils/download';
@@ -37,9 +44,6 @@ const STEPS: Array<{ key: StepKey; label: string }> = [
   { key: 'check', label: 'Check the plan' },
 ];
 
-const tile = (on: boolean) => `text-left rounded-xl border px-4 py-3 transition-colors ${on
-  ? 'border-[var(--gv-accent)] bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]'
-  : 'border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`;
 const field = 'w-full rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-surface-1)] px-4 py-3 text-[14px] text-[var(--gv-text-primary)] placeholder:text-[var(--gv-text-muted)] outline-none focus:border-[var(--gv-accent)]';
 
 const PickRow: React.FC<{
@@ -401,107 +405,114 @@ const CreateVideo: React.FC = () => {
             )}
           </div>
 
-          <div>
-            <div className="gravity-label mb-2">Spoken language</div>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Spoken language">
-              {langs.map((l) => (
-                <button key={l.key} type="button" role="radio" aria-checked={language === l.key} onClick={() => setLanguage(l.key)} className={`${tile(language === l.key)} !py-2`}>{l.label}</button>
-              ))}
-            </div>
-            {isNewSpeech(language) && <p className="mt-2 text-[12.5px] text-[var(--gv-text-tertiary)]">{NEW_SPEECH_NOTE}</p>}
-          </div>
+          {/* The options, in the Create options style: one grid of full-width rows, equal tiles of one height. */}
+          <div className="nb-vopt !mt-8">
+            <OptionSection label="Spoken language" id="vopt-language">
+              <ChoiceTiles
+                label="Spoken language"
+                value={language}
+                onChange={setLanguage}
+                choices={langs.map((l) => {
+                  const glyph = languageGlyph(l.key, l.label);
+                  return { value: l.key, name: l.label, art: () => <span className="nb-vopt-glyph">{glyph ?? <Music />}</span> };
+                })}
+              />
+              {isNewSpeech(language) && <InfoStrip><p>{NEW_SPEECH_NOTE}</p></InfoStrip>}
+            </OptionSection>
 
-          {language !== 'none' && (
-            <div>
-              <div className="gravity-label mb-2">Voice</div>
-              <div className="inline-flex overflow-hidden rounded-xl border border-[var(--gv-border-default)]" role="radiogroup" aria-label="Voice">
-                {voices.map((v) => (
-                  <button key={v.key} type="button" role="radio" aria-checked={voice === v.key} onClick={() => setVoice(v.key)}
-                    className={`px-4 py-2 text-[14px] font-semibold transition-colors ${voice === v.key ? 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]' : 'bg-[var(--gv-surface-1)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`}>
-                    {v.key === 'male' ? 'Male' : v.key === 'female' ? 'Female' : v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+            <OptionSection label="Where will you post it?" note="optional" id="vopt-platforms">
+              <MultiTiles
+                label="Where will you post it?"
+                items={platformItems.map((p) => ({
+                  key: p.key, name: platformShort(p.key, p.label), hint: platformHint(p, 'video'),
+                  art: () => <span className="nb-vopt-mark"><PlatformIcon platform={p.key} /></span>,
+                }))}
+                selected={platforms}
+                onToggle={togglePlatform}
+              />
+            </OptionSection>
 
-          <div>
-            <div className="gravity-label mb-2">Where will you post it? <span className="font-normal normal-case text-[var(--gv-text-tertiary)]">· optional</span></div>
-            <PlatformPicker items={platformItems} selected={platforms} onToggle={togglePlatform} kind="video" className="flex-wrap" />
-          </div>
+            <OptionPair>
+              {language !== 'none' && (
+                <OptionSection label="Voice" id="vopt-voice">
+                  <ChoiceTiles
+                    label="Voice"
+                    value={voice}
+                    onChange={setVoice}
+                    choices={voices.map((v) => ({ value: v.key, name: voiceName(v.key, v.label), line: voiceLine(v.key), art: (on) => <VoiceWaveArt deep={v.key === 'male'} on={on} /> }))}
+                  />
+                </OptionSection>
+              )}
+              <OptionSection label="Shape" id="vopt-shape">
+                <ChoiceTiles
+                  label="Video shape"
+                  value={shape}
+                  onChange={(v) => pickShape(v as Shape)}
+                  choices={SHAPE_CHOICES.map((s) => ({
+                    value: s.value, name: s.name, line: suggestionHint(s.value, platforms, shapes, platformLabel) || s.use,
+                    art: (on) => <ShapeArt w={s.w} h={s.h} on={on} />,
+                  }))}
+                />
+              </OptionSection>
+            </OptionPair>
 
-          <div>
-            <div className="gravity-label mb-2">Shape</div>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" role="radiogroup" aria-label="Video shape">
-              {([['9:16', 'Vertical', 'Reels, Shorts, Stories'], ['16:9', 'Wide', 'YouTube, websites, LinkedIn']] as const).map(([v, label, hint]) => {
-                const sug = suggestionHint(v, platforms, shapes, platformLabel);
-                return (
-                  <button key={v} type="button" role="radio" aria-checked={shape === v} onClick={() => pickShape(v)} className={`${tile(shape === v)} !py-2`}>
-                    <span className="block text-[14px] font-semibold">{label}</span>
-                    <span className="block text-[12.5px] opacity-80">{sug || hint}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            <OptionSection label="Length" id="vopt-length">
+              <ChoiceTiles
+                label="Length of the video"
+                value={String(clips)}
+                onChange={(v) => setClips(Number(v))}
+                choices={lengthChoices.map((l) => ({
+                  value: String(l.clips), name: `${l.seconds} seconds`, line: partsLine(l.clips),
+                  art: (on) => <LengthTimelineArt parts={l.clips} of={Math.max(...lengthChoices.map((x) => x.clips))} on={on} />,
+                }))}
+              />
+              <InfoStrip>
+                <p>{lengthLine(seconds, clips)}</p>
+                {priceLine && <p>{priceLine}</p>}
+                {shortMsg && <p role="status"><strong>{shortMsg}</strong></p>}
+              </InfoStrip>
+            </OptionSection>
 
-          <div>
-            <div className="gravity-label mb-2">Length</div>
-            <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-xl border border-[var(--gv-border-default)]" role="radiogroup" aria-label="Length of the video">
-              {lengthChoices.map((l) => (
-                <button key={l.clips} type="button" role="radio" aria-checked={clips === l.clips} onClick={() => setClips(l.clips)}
-                  className={`min-w-[52px] px-3.5 py-2 text-[14px] font-semibold transition-colors ${clips === l.clips ? 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]' : 'bg-[var(--gv-surface-1)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`}>
-                  {l.seconds}s
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[12.5px] text-[var(--gv-text-secondary)]">{lengthLine(seconds, clips)}</p>
-            {priceLine && <p className="text-[12px] text-[var(--gv-text-tertiary)]">{priceLine}</p>}
-            {shortMsg && <p role="status" className="mt-1 text-[12.5px] font-medium text-[var(--gv-text-primary)]">{shortMsg}</p>}
-          </div>
-
-          {showTransitions(clips) && (
-            <div>
-              <div className="gravity-label mb-2">Between parts</div>
-              <div className="inline-flex max-w-full flex-wrap overflow-hidden rounded-xl border border-[var(--gv-border-default)]" role="radiogroup" aria-label="How the parts are joined">
-                {transitions.map((t) => (
-                  <button key={t.key} type="button" role="radio" aria-checked={transition === t.key} onClick={() => setTransition(transitionOf(t.key))}
-                    className={`px-3.5 py-2 text-[14px] font-semibold transition-colors ${transition === t.key ? 'bg-[var(--gv-accent-fill)] text-[var(--gv-accent-text)]' : 'bg-[var(--gv-surface-1)] text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {showSubtitles(language) && (
-            <label className="flex cursor-pointer items-start gap-3">
-              <input type="checkbox" role="switch" checked={subtitles} onChange={(e) => setSubtitles(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--gv-accent-fill)]" />
-              <span>
-                <span className="block text-[14px] font-semibold text-[var(--gv-text-primary)]">Subtitles</span>
-                <span className="block text-[12.5px] text-[var(--gv-text-secondary)]">{SUBTITLES_HINT}</span>
-              </span>
-            </label>
-          )}
-
-          <div>
-            <label className={`flex items-start gap-3 ${hasLogo ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'}`}>
-              <input type="checkbox" role="switch" checked={wantLogo && hasLogo} disabled={!hasLogo} onChange={(e) => setWantLogo(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--gv-accent-fill)]" />
-              <span>
-                <span className="block text-[14px] font-semibold text-[var(--gv-text-primary)]">Add my logo</span>
-                <span className="block text-[12.5px] text-[var(--gv-text-secondary)]">{hasLogo ? 'Your logo sits in a corner of the video' : NO_LOGO_HINT}</span>
-              </span>
-            </label>
-            {wantLogo && hasLogo && (
-              <div className="mt-3">
-                <label className="gravity-label mb-2 block" htmlFor="end-line">Closing line <span className="font-normal normal-case text-[var(--gv-text-tertiary)]">· optional</span></label>
-                <input id="end-line" value={endLine} onChange={(e) => setEndLine(cleanEndLine(e.target.value.slice(0, END_LINE_MAX + 20)))} className={field} maxLength={END_LINE_MAX} placeholder="For example: Order today, free delivery" />
-                <p className="mt-1 text-[12px] text-[var(--gv-text-tertiary)]">Shown with your logo over the last 2 seconds</p>
-              </div>
+            {showTransitions(clips) && (
+              <OptionSection label="Between parts" id="vopt-between">
+                <ChoiceTiles
+                  label="How the parts are joined"
+                  size="sm"
+                  value={transition}
+                  onChange={(v) => setTransition(transitionOf(v))}
+                  choices={transitions.map((t) => ({ value: t.key, name: t.label, art: (on) => <TransitionArt kind={t.key} on={on} /> }))}
+                />
+              </OptionSection>
             )}
-          </div>
 
-          <p className="text-center text-[13.5px] text-[var(--gv-text-secondary)]">Add your own people, place and products so the video looks like your business. Skip any of these and we will choose something believable.</p>
+            <OptionSection label="Finishing touches" id="vopt-finish">
+              <div className="nb-vopt-toggles">
+                {showSubtitles(language) && (
+                  <ToggleTile name="Subtitles" line={SUBTITLES_HINT} checked={subtitles} onChange={setSubtitles} art={(on) => <SubtitlesPreviewArt on={on} />} />
+                )}
+                <ToggleTile
+                  name="Add my logo"
+                  line={hasLogo ? 'Your logo sits in a corner of the video' : NO_LOGO_HINT}
+                  checked={wantLogo && hasLogo}
+                  disabled={!hasLogo}
+                  onChange={setWantLogo}
+                  art={() => <LogoPostArt position="top-right" />}
+                />
+              </div>
+              {wantLogo && hasLogo && (
+                <div className="nb-vopt-field">
+                  <label className="gravity-label mb-2 block" htmlFor="end-line">Closing line <span className="font-normal normal-case text-[var(--gv-text-tertiary)]">· optional</span></label>
+                  <input id="end-line" value={endLine} onChange={(e) => setEndLine(cleanEndLine(e.target.value.slice(0, END_LINE_MAX + 20)))} className={field} maxLength={END_LINE_MAX} placeholder="For example: Order today, free delivery" />
+                  <p className="mt-1 text-[12px] text-[var(--gv-text-tertiary)]">Shown with your logo over the last 2 seconds</p>
+                </div>
+              )}
+            </OptionSection>
+
+            <div>
+              <h3 className="nb-vopt-divider"><span>{YOURS_TITLE}</span></h3>
+              <p className="mx-auto mt-2 max-w-[560px] text-center text-[13px] leading-relaxed text-[var(--gv-text-secondary)]">{YOURS_LINE}</p>
+            </div>
+          </div>
           <PickRow Icon={UserIcon} title="Who appears" hint="A photo of the person: you, your team or a customer who agreed." picked={people}
             onPick={() => setPicker('character')} onClear={() => setPeople([])} pickLabel="Choose a photo" onCreate={people.length < 2 ? () => { setMakerSeed(who); setMaker('person'); } : undefined} createLabel={people.length ? 'Add another person' : 'Create with AI'} text={who} onText={setWho} placeholder="Or describe them: a smiling shopkeeper in her 40s, in a cotton saree" />
           {cast.length > 0 && people.length < 2 && (

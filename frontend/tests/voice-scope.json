@@ -93,5 +93,7 @@
   "utils/photoshoot.ts",
   "pages/SocialInbox.tsx",
   "components/inbox/InboxOverview.tsx",
-  "utils/inboxOverview.ts"
+  "utils/inboxOverview.ts",
+  "utils/videoOptionTiles.ts",
+  "components/video/VideoOptions.tsx"
 ]
