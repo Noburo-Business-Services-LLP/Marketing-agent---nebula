@@ -118,8 +118,18 @@ const PROVIDER_RATES = {
   // problems at low, Tamil 2 of 5 at low and 0 of 5 at medium). Kept a little pessimistic on purpose.
   picture_remake_rate: { english: 0.2, regional: 0.1 },
   // Share of customers writing in English. The rest start at medium. Unknown at scale, so it is set to half.
-  picture_english_share: 0.5
+  picture_english_share: 0.5,
+
+  // Photoshoot: the reference photos (the customer's product, and their place when chosen) sent with each picture are
+  // billed as image input. ESTIMATE, not measured yet: about USD 0.012 per reference photo at the edit endpoint's sizes.
+  // Verify on the owner's one real proof run (docs/superpowers/ops/photoshoot-real-proof.md) and correct it here.
+  photoshoot_reference_input_per_photo: 0.012
 };
+
+// Photoshoot pictures: the quality they are made at and the most reference photos one picture carries. The generator
+// (services/photoshoot) reads these same constants, so the price and the work cannot drift apart.
+const PHOTOSHOOT_QUALITY = 'medium';
+const PHOTOSHOOT_MAX_REFERENCES = 3;
 
 // The designed Blueprint PDF: cover, nine content pages and a closing page.
 const BLUEPRINT_PDF_PAGES = 11;
@@ -352,7 +362,15 @@ const ACTION_USD = {
 
   // Home drafts from a competitor's post (text only, nothing is posted anywhere): see homeDraft() above.
   home_response_post: homeDraft(TOKENS.home_response_post),
-  home_witty_comment: homeDraft(TOKENS.home_witty_comment)
+  home_witty_comment: homeDraft(TOKENS.home_witty_comment),
+
+  // One Photoshoot photo: one picture at PHOTOSHOOT_QUALITY (the same measured rate the post pictures use), the reference
+  // photos priced at the most a picture can carry (the safe side), and storing and serving it. No text model call (the
+  // prompt is written by code) and no proofreading (the photo carries no text). A pack is this times its photo count.
+  photoshoot_image:
+    PROVIDER_RATES.gpt_image_2_per_picture[PHOTOSHOOT_QUALITY] +
+    PHOTOSHOOT_MAX_REFERENCES * PROVIDER_RATES.photoshoot_reference_input_per_photo +
+    assetCost(INFRA.mb_per_image)
 };
 
 // ---------------------------------------------------------------------------
@@ -452,7 +470,8 @@ const ACTION_UNITS = {
   blueprint: 'per blueprint',
   blueprint_pdf: 'per designed Blueprint PDF',
   home_response_post: 'per draft',
-  home_witty_comment: 'per draft'
+  home_witty_comment: 'per draft',
+  photoshoot_image: 'per photo'
 };
 
 // ---------------------------------------------------------------------------
@@ -740,7 +759,7 @@ const ADDONS = {
 
 module.exports = {
   listeningCost, regionalCost, HOME_DRAFT_REWRITE_RATE, TOKENS,
-  PROVIDER_RATES, HERO_CLIP_SECONDS, STUDIO_CLIP_SECONDS, STUDIO_TRANSCRIBE_BLOCK_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
+  PROVIDER_RATES, PHOTOSHOOT_QUALITY, PHOTOSHOOT_MAX_REFERENCES, HERO_CLIP_SECONDS, STUDIO_CLIP_SECONDS, STUDIO_TRANSCRIBE_BLOCK_SECONDS, BLUEPRINT_PDF_PAGES, INFRA, ACTION_USD, QUARK_COSTS, ACTION_UNITS,
   MARGIN, marginFor, USD_PER_QUARK, INR_PER_USD, PLANS,
   assertPlanAllowance, TOPUP_PACKS, TOPUP_INR_PER_QUARK, outputsFor, GST_RATE, gstPaise, chargePaise, ADDONS, AGENCY,
   LABOUR, RETRY_FACTOR, OBSERVED_CAMPAIGN_FAILURE_RATE, DELIVERED, SERVICE_MARKUP,

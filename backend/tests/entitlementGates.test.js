@@ -22,7 +22,8 @@ async function run(feature, user, opts) {
   return { res, nexted };
 }
 
-const OUTSIDE = FEATURES.filter((f) => f !== 'create' && f !== 'video' && f !== 'blueprint');
+// Photoshoot is left out: it is not an outside-service add-on, every paid plan has it (tests/photoshootPacks.test.js).
+const OUTSIDE = FEATURES.filter((f) => f !== 'create' && f !== 'video' && f !== 'blueprint' && f !== 'photoshoot');
 
 test('free user is blocked from every outside-service feature with the plain upgrade body', async () => {
   for (const f of OUTSIDE) {

@@ -72,7 +72,8 @@ const ACTION_CATEGORY = {
   blueprint: 'blueprint',
   blueprint_pdf: 'blueprint',
   chat_message: 'other', competitor_scrape: 'other', listening_score: 'other', studio_transcription: 'other',
-  home_response_post: 'captions', home_witty_comment: 'captions'
+  home_response_post: 'captions', home_witty_comment: 'captions',
+  photoshoot_image: 'images'
 };
 
 /** Group of a Quark history action. `explicitOnly` returns undefined for an action nobody has placed yet. */

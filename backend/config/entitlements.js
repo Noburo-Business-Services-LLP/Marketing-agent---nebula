@@ -5,7 +5,7 @@
  */
 
 const TIERS = ['free', 'starter', 'professional', 'agency', 'managed'];
-const FEATURES = ['create', 'video', 'social_connect', 'publish', 'schedule', 'inbox', 'auto_reply', 'competitors', 'blueprint'];
+const FEATURES = ['create', 'video', 'social_connect', 'publish', 'schedule', 'inbox', 'auto_reply', 'competitors', 'blueprint', 'photoshoot'];
 
 // Feature -> the add-on that unlocks it on a paid plan.
 const FEATURE_ADDON = {
@@ -58,6 +58,8 @@ function canUse(user, feature) {
   if (feature === 'create' || feature === 'blueprint') return { allowed: true, reason: 'ok', message: '' };
 
   if (tier === 'free') return { allowed: false, reason: 'upgrade', message: MESSAGES.upgrade };
+  // Photoshoots come with every paid plan (and an agency's client workspaces, which carry the agency tier); no add-on.
+  if (feature === 'photoshoot') return { allowed: true, reason: 'ok', message: '' };
 
   const needed = FEATURE_ADDON[feature];
   const addons = addonsOf(user);

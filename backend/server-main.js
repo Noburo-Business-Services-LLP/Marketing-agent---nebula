@@ -325,7 +325,7 @@ app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 const BIG_BODY_PREFIXES = [
   '/api/campaigns', '/api/carousels', '/api/create-assist', '/api/drafts', '/api/brand-assets', '/api/video-generation', '/api/hero-video',
   '/api/products', '/api/ideas', '/api/content', '/api/social', '/api/ads', '/api/ad-campaigns', '/api/chat',
-  '/api/blueprint', '/api/brand', '/api/auth/update-profile', '/api/auth/complete-onboarding'
+  '/api/blueprint', '/api/brand', '/api/auth/update-profile', '/api/auth/complete-onboarding', '/api/photoshoot/upload'
 ];
 const smallJson = express.json({ limit: '1mb' });
 const bigJson = express.json({ limit: '40mb' });
@@ -488,6 +488,8 @@ app.use('/api/plan', require('./routes/plan'));
 app.use('/api/home', require('./routes/home'));
 // Home drafts from a competitor's stored post (a post in response, a witty comment to copy). Off unless ENABLE_COMPETITOR_DRAFTS=on.
 app.use('/api/home', require('./routes/homeDrafts'));
+// Photoshoot studio: packs of product photos (off unless ENABLE_PHOTOSHOOT=on; docs/superpowers/ops/photoshoot.md)
+app.use('/api/photoshoot', require('./routes/photoshoot'));
 app.use('/api/week', require('./routes/week'));
 app.use('/api/setup', require('./routes/week').setupRouter);
 app.use('/api/tour', require('./routes/tour'));
@@ -789,6 +791,13 @@ const startServer = async () => {
       startContentCalendarScheduler();
     } catch (schedulerError) {
       console.warn('Content calendar scheduler failed to start:', schedulerError.message);
+    }
+
+    // Pick up photoshoots a restart left half-made (off with ENABLE_PHOTOSHOOT_RESUME=off)
+    try {
+      require('./services/photoshoot').startPhotoshootResume();
+    } catch (schedulerError) {
+      console.warn('Photoshoot resume failed to start:', schedulerError.message);
     }
 
     // Pick up weekly posts a restart left half-made (off with ENABLE_WEEK_RECOVERY=off)
