@@ -99,12 +99,27 @@ async function scrapeLinkedInPosts(linkedinUrl) {
 
 const { sanitizeAdditionalLanguages } = require('../services/languageSupport');
 const { cleanAccountKind } = require('../services/accountKind');
+const { cleanBusinessProfile } = require('../services/businessProfile');
 
 // Keep the extra post languages to the allowed base codes, deduplicated,
 // at most three, and never the same language as the primary one.
+// Also cleans the questionnaire answers (old values mapped, unknown choices dropped) so a save never fails on them.
 function withCleanLanguages(profile) {
   if (!profile || typeof profile !== 'object') return profile;
-  return cleanAccountKind({ ...profile, additionalLanguages: sanitizeAdditionalLanguages(profile.additionalLanguages, profile.contentLanguage) });
+  const clean = cleanBusinessProfile(profile);
+  return cleanAccountKind({ ...clean, additionalLanguages: sanitizeAdditionalLanguages(clean.additionalLanguages, clean.contentLanguage) });
+}
+
+// OnboardingContext (outreach) words for the first goal and the business-customer size.
+function onboardingPrimaryGoal(goals) {
+  const first = String((Array.isArray(goals) ? goals[0] : goals) || '').toLowerCase();
+  if (/lead|enquir/.test(first)) return 'leads';
+  if (/sale/.test(first)) return 'sales';
+  if (/awareness|brand/.test(first)) return 'awareness';
+  return 'leads';
+}
+function onboardingCompanySize(size) {
+  return ({ solo: '1-10', small: '11-50', medium: '51-200', large: '1000+' })[size] || 'any';
 }
 
 // The public profile, with a client workspace's Quarks replaced by the agency pool balance (no history).
@@ -1376,8 +1391,8 @@ router.put('/complete-onboarding', protect, async (req, res) => {
         },
         targetCustomer: {
           description: businessProfile?.targetAudience || businessProfile?.goals || 'General audience',
-          roles: [],
-          companySize: 'any',
+          roles: businessProfile?.b2b?.decisionMaker ? [String(businessProfile.b2b.decisionMaker).slice(0, 120)] : [],
+          companySize: onboardingCompanySize(businessProfile?.b2b?.companySize),
           industries: [businessProfile?.industry || ''].filter(Boolean)
         },
         geography: {
@@ -1386,10 +1401,8 @@ router.put('/complete-onboarding', protect, async (req, res) => {
           countries: countries,
           businessLocation: businessProfile?.businessLocation || ''
         },
-        primaryGoal: businessProfile?.goals?.toLowerCase()?.includes('lead') ? 'leads' 
-          : businessProfile?.goals?.toLowerCase()?.includes('sale') ? 'sales'
-          : businessProfile?.goals?.toLowerCase()?.includes('awareness') ? 'awareness'
-          : 'leads',
+        // The goals are the list the questionnaire saves (an older field 'goals' never existed, so this was always 'leads').
+        primaryGoal: onboardingPrimaryGoal(businessProfile?.marketingGoals),
         // Handle brandVoice as array or string
         brandTone: Array.isArray(businessProfile?.brandVoice) 
           ? (businessProfile.brandVoice.length ? businessProfile.brandVoice : ['professional'])

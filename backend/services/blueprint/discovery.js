@@ -29,7 +29,7 @@ function leaves(v, out = []) {
 
 // Plain words for the typed business details, so the planner reads a sentence, not a code.
 const SELLS_TO = { B2B: 'other businesses', B2C: 'individual customers', Both: 'both businesses and individual customers' };
-const REACH_WORDS = { neighbourhood: 'the neighbourhood', city: 'the city', state: 'the state', india: 'across India', international: 'outside India' };
+const { REACH_WORDS, listWords } = require('../businessProfile');
 const PRICE_WORDS = { budget: 'budget', affordable: 'affordable', mid_range: 'mid-range', premium: 'premium', luxury: 'luxury' };
 function languageWords(code) {
   const s = String(code || '');
@@ -51,7 +51,8 @@ function typedFacts(input) {
   }
   if (input.industry) rows.push(['Industry', input.industry, input.industry]);
   if (SELLS_TO[input.businessType]) rows.push(['Sells to', SELLS_TO[input.businessType], input.businessType]);
-  if ((input.reachAreas || []).length) rows.push(['Where customers are', input.reachAreas.map((a) => REACH_WORDS[a] || a).join(', '), input.reachAreas[0]]);
+  if ((input.reachAreas || []).length) rows.push(['Where customers are', listWords(input.reachAreas.map((a) => REACH_WORDS[a] || a)), input.reachAreas[0]]);
+  for (const a of input.audience || []) rows.push(['Customers', a, a]);
   if (input.pricePositioning) rows.push(['Price level', PRICE_WORDS[input.pricePositioning] || input.pricePositioning, input.pricePositioning]);
   if (input.keyDifferentiator) rows.push(['What makes it different', input.keyDifferentiator, input.keyDifferentiator]);
   if (input.contentLanguage) rows.push(['Content language', languageWords(input.contentLanguage), input.contentLanguage]);

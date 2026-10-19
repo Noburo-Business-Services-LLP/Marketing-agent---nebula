@@ -5,6 +5,7 @@ const BrandAsset = require('../models/BrandAsset');
 const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { resolveOrganizationId } = require('./aiMemoryService');
 const { memorySectionLines } = require('./brandMemory/prompt');
+const { audienceFacts, sentence, industryOf } = require('./businessProfile');
 
 /**
  * The "Brand Memory" context block fed to the content-writing prompts.
@@ -41,31 +42,14 @@ function resolveBrandIdentity({ bp = {}, user = {}, brandProfile = null } = {}) 
   };
 }
 
-const REACH_LABEL = { neighbourhood: 'the neighbourhood', city: 'the city', state: 'the state', india: 'all of India', international: 'other countries' };
-const OLD_REACH = { hyperlocal: 'the neighbourhood', local_city: 'the city', regional: 'the region', state: 'the state', national: 'all of India', international: 'other countries' };
-const SIZE_LABEL = { solo: 'one-person businesses', small: 'small companies', medium: 'mid-size companies', large: 'large companies' };
-const CYCLE_LABEL = { days: 'a few days', weeks: 'a few weeks', months: 'several months' };
-const GENDER_LABEL = { mostly_men: 'mostly men', mostly_women: 'mostly women', families: 'families' };
-
 /**
  * The "who buys and where" lines for the content-writing prompts, from what the owner told us. Only what was
- * answered is written; a gender guess is never made, and business buyers get their own lines.
+ * answered is written; a gender or an age is never guessed, and business buyers get their own lines. The words come
+ * from services/businessProfile.js, the same reader the plan, the Blueprint and What Nebulaa learned use.
  */
 function describeAudience(bp = {}) {
-  const lines = [];
-  const type = String(bp.businessType || '');
-  if (type) lines.push(`- Sells to: ${type === 'B2B' ? 'other businesses' : type === 'B2C' ? 'individual customers' : 'both businesses and individual customers'}`);
-  const areas = Array.isArray(bp.reachAreas) && bp.reachAreas.length ? bp.reachAreas.map((a) => REACH_LABEL[a]).filter(Boolean) : (OLD_REACH[bp.geographicReach] ? [OLD_REACH[bp.geographicReach]] : []);
-  if (areas.length) lines.push(`- Customers are in: ${areas.join(', ')}`);
-  if (bp.pricePositioning) lines.push(`- Price level: ${String(bp.pricePositioning).replace('_', ' ')}`);
-  if (type !== 'B2B' && GENDER_LABEL[bp.targetGender]) lines.push(`- Customers are ${GENDER_LABEL[bp.targetGender]}`);
-  const b = bp.b2b || {};
-  if (type === 'B2B' || type === 'Both') {
-    if (SIZE_LABEL[b.companySize]) lines.push(`- Business customers are ${SIZE_LABEL[b.companySize]}`);
-    if (b.decisionMaker) lines.push(`- The buyer is usually: ${String(b.decisionMaker).trim().slice(0, 120)}`);
-    if (CYCLE_LABEL[b.salesCycle]) lines.push(`- A sale usually takes ${CYCLE_LABEL[b.salesCycle]}`);
-  }
-  if (bp.keyDifferentiator) lines.push(`- What makes it different: ${String(bp.keyDifferentiator).trim().slice(0, 200)}`);
+  const lines = audienceFacts(bp).map((f) => `- ${sentence(f.text)}`);
+  if (bp && bp.keyDifferentiator) lines.push(`- What makes it different: ${String(bp.keyDifferentiator).trim().slice(0, 200)}`);
   return lines;
 }
 
@@ -88,7 +72,7 @@ async function buildBrandMemoryBlock(userId) {
   lines.push('BRAND IDENTITY');
   const identity = resolveBrandIdentity({ bp, user, brandProfile });
   lines.push(`- Name: ${identity.name}`);
-  lines.push(`- Industry: ${bp.industry || 'Not set'}`);
+  lines.push(`- Industry: ${industryOf(bp) || 'Not set'}`);
   if (identity.description) lines.push(`- Description: ${identity.description}`);
   const tone = identity.tone;
   lines.push(`- Tone: ${Array.isArray(tone) ? tone.join(', ') : (tone || 'professional')}`);

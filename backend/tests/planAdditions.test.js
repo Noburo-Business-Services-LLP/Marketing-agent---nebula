@@ -101,7 +101,7 @@ test('the prompt names the products, the place, the facts and the two fixed list
   const text = renderTemplate(getPrompt('blueprint.plan').template, planner.buildPlanVars(sheet, input, null));
   assert.ok(!text.includes('{{'));
   assert.strictEqual((text.match(/\[typed: product\] Product: /g) || []).length, PLAN_LIMITS.MAX_PRODUCTS);
-  for (const s of ['Content language: Tamil mixed with English', 'Sells to: individual customers', 'Where customers are: the neighbourhood, the city', 'Price level: premium', 'What makes it different:']) assert.ok(text.includes(s), s);
+  for (const s of ['Content language: Tamil mixed with English', 'Sells to: individual customers', 'Where customers are: the neighbourhood and the city', 'Price level: premium', 'What makes it different:']) assert.ok(text.includes(s), s);
   for (const o of OFFLINE_CHANNELS) assert.ok(text.includes(`${o.id} (${o.name})`), o.id);
   for (const m of PLAN_METRICS) assert.ok(text.includes(`${m.id} (${m.name}`), m.id);
   assert.ok(text.includes('website_visits (Website visits, only with Website)'));

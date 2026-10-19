@@ -134,6 +134,14 @@ function normaliseInput(raw, { allowGuided = false, allowLearned = false } = {})
   if (clean(r.keyDifferentiator, PLAN_LIMITS.PRODUCT_TEXT)) profile.keyDifferentiator = clean(r.keyDifferentiator, PLAN_LIMITS.PRODUCT_TEXT);
   if (clean(r.industry, 60)) profile.industry = clean(r.industry, 60);
   if (/^[a-z_]{2,30}$/.test(String(r.contentLanguage || '')) && r.contentLanguage !== 'english') profile.contentLanguage = r.contentLanguage;
+  // More about the customers (ages, business buyers), as short plain clauses written by code from the profile answers.
+  const audience = [];
+  for (const a of (Array.isArray(r.audience) ? r.audience : []).slice(0, 12)) {
+    const line = clean(a, 160);
+    if (line && !audience.some((x) => x.toLowerCase() === line.toLowerCase())) audience.push(line);
+    if (audience.length >= 6) break;
+  }
+  if (audience.length) profile.audience = audience;
 
   const colours = (Array.isArray(r.colours) ? r.colours : []).map(hex).filter(Boolean).slice(0, LIMITS.MAX_COLOURS);
 

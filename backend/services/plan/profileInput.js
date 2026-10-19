@@ -4,6 +4,7 @@
 
 const { normaliseInput } = require('../blueprint/input');
 const { PLAN_LIMITS } = require('../../config/blueprint');
+const { reachAreasOf, audienceFacts, industryOf } = require('../businessProfile');
 
 const str = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
 const profileOf = (user) => (user && user.businessProfile && typeof user.businessProfile === 'object' ? user.businessProfile : {});
@@ -76,16 +77,17 @@ function detailsOf(user) {
   const city = str(str(p.businessLocation).replace(/\d{5,}/g, ' ')).replace(/^[,\s-]+|[,\s-]+$/g, '');
   if (city.length >= 2) out.city = city;
   if (['B2B', 'B2C', 'Both'].includes(p.businessType)) out.businessType = p.businessType;
-  const reach = Array.isArray(p.reachAreas) && p.reachAreas.length ? p.reachAreas : (OLD_REACH[p.geographicReach] ? [OLD_REACH[p.geographicReach]] : []);
+  const reach = reachAreasOf(p);
   if (reach.length) out.reachAreas = reach;
+  // Ages and business buyers (the facts above already cover sells-to, reach and price level).
+  const audience = audienceFacts(p).filter((f) => !['sellsTo', 'reach', 'price'].includes(f.key)).map((f) => f.text);
+  if (audience.length) out.audience = audience;
   if (str(p.pricePositioning)) out.pricePositioning = str(p.pricePositioning);
   if (str(p.keyDifferentiator)) out.keyDifferentiator = str(p.keyDifferentiator);
-  if (str(p.industry)) out.industry = str(p.industry);
+  if (industryOf(p)) out.industry = industryOf(p);
   if (str(p.contentLanguage)) out.contentLanguage = str(p.contentLanguage);
   return out;
 }
-// The old single reach answer, read as the nearest new one.
-const OLD_REACH = { hyperlocal: 'neighbourhood', local_city: 'city', regional: 'state', state: 'state', national: 'india', international: 'international' };
 
 // What Nebulaa learned (lines from services/brandMemory/prompt.js): plain strings, capped (the input check caps again).
 const learnedOf = (list) => (Array.isArray(list) ? list : []).map(str).filter(Boolean).slice(0, PLAN_LIMITS.MAX_LEARNED);

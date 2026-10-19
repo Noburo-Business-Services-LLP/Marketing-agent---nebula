@@ -78,13 +78,18 @@ const userSchema = new mongoose.Schema({
 
     // About the customers and the offer. Filled by the customer in Settings; a CSM can also fill them.
     targetCustomerProfile: { type: String, default: '' },
+    // Optional, never asked of a business that sells to businesses only. 'both_equally' is an old value that reads as everyone.
     targetGender: { type: String, enum: ['mostly_men', 'mostly_women', 'both_equally', 'families', ''], default: '' },
     // Old single answer, kept so saved profiles still load. 'reachAreas' below is the one to use now.
     geographicReach: { type: String, enum: ['hyperlocal', 'local_city', 'regional', 'state', 'national', 'international', ''], default: '' },
     // Where the customers are: any mix of these.
     reachAreas: { type: [{ type: String, enum: ['neighbourhood', 'city', 'state', 'india', 'international'] }], default: [] },
+    // People who buy (businessType B2C or Both): optional age groups. Values in config/businessQuestions.js.
+    ageGroups: { type: [{ type: String, enum: ['under_18', '18_24', '25_34', '35_44', '45_54', '55_plus'] }], default: [] },
     // For businesses that sell to other businesses (businessType B2B or Both).
     b2b: {
+      // Which kinds of businesses buy (the industry group ids of config/businessQuestions.js, plus government).
+      customerIndustries: { type: [{ type: String, enum: ['shops', 'food', 'health', 'services', 'technology', 'industry', 'community', 'government'] }], default: [] },
       companySize: { type: String, enum: ['solo', 'small', 'medium', 'large', ''], default: '' },
       decisionMaker: { type: String, default: '' },
       salesCycle: { type: String, enum: ['days', 'weeks', 'months', ''], default: '' }

@@ -84,6 +84,11 @@ router.post('/auto-discover', protect, requireFeature('competitors'), async (req
       website: websiteUrl || ''
     };
 
+    // Who buys and where, in plain words from the questionnaire (nothing is written for an empty answer).
+    const { audienceFacts, sentence, industryOf } = require('../services/businessProfile');
+    if (!onboardingContext?.company?.industry && industryOf(bp)) businessContext.industry = industryOf(bp);
+    const audienceLines = audienceFacts(bp).map((f) => `- ${sentence(f.text)}`).join('\n');
+
     console.log(' Business Context:', JSON.stringify(businessContext, null, 2));
 
     if (!businessContext.industry || businessContext.industry === 'General') {
@@ -127,7 +132,7 @@ BUSINESS:
 - Description: ${businessContext.description || 'Not provided'}
 - Target Customer: ${businessContext.targetCustomer || 'Not specified'}
 - Location: ${businessContext.location}
-- Website: ${businessContext.website || 'Not provided'}
+- Website: ${businessContext.website || 'Not provided'}${audienceLines ? `\n${audienceLines}` : ''}
 
 FIND EXACTLY 15 REAL COMPETITORS that offer similar products/services.
 

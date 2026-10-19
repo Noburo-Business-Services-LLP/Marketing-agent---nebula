@@ -6,13 +6,10 @@
  * where to find them, what makes them buy). Only what is stored is said; a gender is never guessed and business buyers
  * are only mentioned when the owner said so.
  */
-const { str, clip, plural, listWords, dayMonth, makeItem, sourceResult, claimText } = require('./common');
+const { str, clip, plural, dayMonth, makeItem, sourceResult, claimText } = require('./common');
 const { planOf } = require('./fromPlan');
 
-const SELLS_TO = { B2B: 'other businesses', B2C: 'individual customers', Both: 'both businesses and individual customers' };
-const REACH = { neighbourhood: 'the neighbourhood', city: 'the city', state: 'the state', india: 'all of India', international: 'other countries' };
-const OLD_REACH = { hyperlocal: 'the neighbourhood', local_city: 'the city', regional: 'the region', state: 'the state', national: 'all of India', international: 'other countries' };
-const PRICE = { budget: 'budget', affordable: 'affordable', mid_range: 'mid-range', premium: 'premium', luxury: 'luxury' };
+const { audienceFacts, industryOf } = require('../businessProfile');
 
 const claims = (list) => (Array.isArray(list) ? list : []).map(claimText).filter(Boolean).slice(0, 3);
 
@@ -32,23 +29,26 @@ function learnFromCustomers({ user = null, planDoc = null } = {}) {
     }));
   }
 
-  // The market, from the owner's answers.
-  const market = [];
-  const marketPrompt = [];
-  const type = String(bp.businessType || '');
-  if (SELLS_TO[type]) { market.push(`you sell to ${SELLS_TO[type]}`); marketPrompt.push(`the business sells to ${SELLS_TO[type]}`); }
-  const areas = Array.isArray(bp.reachAreas) && bp.reachAreas.length ? bp.reachAreas.map((a) => REACH[a]).filter(Boolean) : (OLD_REACH[bp.geographicReach] ? [OLD_REACH[bp.geographicReach]] : []);
-  if (areas.length) { market.push(`your customers are in ${listWords(areas)}`); marketPrompt.push(`its customers are in ${listWords(areas)}`); }
-  if (PRICE[bp.pricePositioning]) { market.push(`your prices are ${PRICE[bp.pricePositioning]}`); marketPrompt.push(`its prices are ${PRICE[bp.pricePositioning]}`); }
-  const industry = str(bp.industry);
-  if (market.length) {
-    answers += market.length;
-    const sentence = market.join(', ');
+  // The market and the business buyers, from the owner's answers (the same plain words every prompt reader uses).
+  // The gender answer stays out of the memory (it is only a hint for the writers, see brandMemory.describeAudience).
+  const BUYER_KEYS = ['buyers', 'size', 'decider', 'cycle'];
+  const facts = audienceFacts(bp).filter((f) => f.key !== 'gender');
+  const own = (t) => t.replace(/^sells to /, 'you sell to ').replace(/^customers are /, 'your customers are ').replace(/^business customers are /, 'your business customers are ').replace(/^prices are /, 'your prices are ');
+  const third = (t) => t.replace(/^sells to /, 'the business sells to ').replace(/^customers are /, 'its customers are ').replace(/^business customers are /, 'its business customers are ').replace(/^prices are /, 'its prices are ');
+  const industry = industryOf(bp);
+  const groups = [
+    { key: 'customers-market', kind: 'market', label: `Your market${industry ? ` (${clip(industry, 40)})` : ''}`, prompt: 'The market', list: facts.filter((f) => !BUYER_KEYS.includes(f.key)) },
+    { key: 'customers-buyers', kind: 'buyers', label: 'Your business customers', prompt: 'The business customers', list: facts.filter((f) => BUYER_KEYS.includes(f.key)) }
+  ];
+  for (const g of groups) {
+    if (!g.list.length) continue;
+    const join = g.list.some((f) => f.text.includes(',')) ? '; ' : ', ';
+    answers += g.list.length;
     items.push(makeItem({
-      key: 'customers-market', source: 'customers', kind: 'market', confidence: 'strong',
-      text: `Your market${industry ? ` (${clip(industry, 40)})` : ''}: ${sentence}.`,
-      promptLine: `The market: ${marketPrompt.join(', ')}.`,
-      evidenceCount: market.length, evidenceUnit: 'answers', evidenceText: `from ${plural(market.length, 'answer', 'answers')} in your business profile`
+      key: g.key, source: 'customers', kind: g.kind, confidence: 'strong',
+      text: `${g.label}: ${g.list.map((f) => (g.kind === 'buyers' ? f.text.replace(/^business customers are /, '') : own(f.text))).join(join)}.`,
+      promptLine: `${g.prompt}: ${g.list.map((f) => third(f.text)).join(join)}.`,
+      evidenceCount: g.list.length, evidenceUnit: 'answers', evidenceText: `from ${plural(g.list.length, 'answer', 'answers')} in your business profile`
     }));
   }
 
