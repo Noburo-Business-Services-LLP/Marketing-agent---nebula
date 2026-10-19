@@ -18,6 +18,9 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [PARTLY: Setup and This week restyled as compact cards with tour anchors kept (2026-10-19); Ideas card not built yet, Task 8] Setup, This week and Ideas cards restyled as tiles. (2026-10-18)
 
 ## Area: MY PLAN / STRATEGY (top-down view)
+- [IN PROGRESS, 2026-10-19] Owner: My plan is the base of all the marketing (customers, products, market, what you do, what you have not done): make the whole page visually RICH: tiles with images, animations and vector art, not plain text.
+- [IN PROGRESS, 2026-10-19] Owner: Create content option rows (language, platforms, aspect ratio, logo, look Clean/Balanced/Rich) look ugly: same dimensions but picture tiles that show how each choice looks; default logo position top right (not bottom right).
+- [NOT STARTED, 2026-10-19] Owner: the dark blue panel on Home (Do this next) is odd on a light theme: use the brand orange/gold instead. The Home Describe box has a hard border unlike the Create and Videos boxes: make all text boxes consistent.
 - [NOT STARTED, owner angry it is missing] A visual TOP-DOWN / funnel view of the strategy: company, products and services, customers and the ideal customer (ICP), positioning and message, marketing mix, channels (online and offline, organic and paid, who does what), then content, then the 30/60/90-day plan and the numbers to watch. Today My plan exists (released) but only as text sections ("Your business today", "Your customer", "Where to show up", roadmap, "This month's mix", "What to do first"); it has no visual funnel, no offline channels and no marketing-mix view. (originally in handover 8, restated 2026-10-18)
 - [NOT STARTED] My plan sections as tiles with art and a status line. (2026-10-18)
 - [DECISION NEEDED] Whether to add offline channels (hoardings, local events, WhatsApp, referrals) to the plan model and prompts (a planner change).
@@ -40,6 +43,7 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [NOT STARTED] Video styles shown as visual tiles everywhere videos are chosen. (2026-10-18)
 
 ## Area: CALENDAR
+- [IN PROGRESS, 2026-10-19] Owner: the monthly plan card shows NO cover image (grey placeholder): fix and make sure a good cover or a nice built-in fallback always shows.
 - [BUG, FIXED IN CODE, NOT RELEASED] Month cover image not loading (prompt `calendar.cover` was missing; restored). Failed months need a retry. (diagnosis 2026-10-18)
 - [DECISION NEEDED] Retry old failed covers automatically (one per day) and treat a stuck "pending" as retryable; add an image error fallback on the banner; stay free to the customer? (2026-10-18)
 - [NOT STARTED] Calendar month hero and "plan inputs" card like Scalio's ("<Business>'s October posts, in one tap"). (2026-10-18)
@@ -52,6 +56,7 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [NOT STARTED] Use the competitor insight to improve the plan day by day. (2026-10-18)
 
 ## Area: INBOX / REVIEWS / AUTOMATIC REPLIES
+- [IN PROGRESS, 2026-10-19] Owner on Library: two stacked rows of filter chips (All/Images/Videos and All/Drafts/Ready/Scheduled/Posted/Archived) look bulky: make it sleek, put Images and Videos side by side as a small toggle beside the status filters.
 - [NOT STARTED] Inbox has NEVER been tested live: does it receive Instagram/Facebook comments and messages, does it reply automatically; test sheet `docs/superpowers/ops/inbox-live-test.md`; Ayrshare Messaging add-on was inactive. (2026-10-18)
 - [NOT STARTED] Tiles with art for Messages and comments, Google reviews, Automatic replies; a sales-style explainer for automatic replies; status chips (Connected, Needs setup, Add-on). (2026-10-18)
 
