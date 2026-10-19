@@ -64,6 +64,9 @@
   // ?compstate= all | locked | empty | error | puterr | put403 | put429 picks the competitor tracking variant (kept for the tab):
   // all = every handle state on one account, locked = no add-on (403), empty = no competitors, error = the card fails to load,
   // puterr / put403 / put429 = saving a handle is refused.
+  // GET /competitors/best-posts (tiles, What's working, Trending for you) follows the same parameter, plus:
+  // trackeroff = weekly checks not running and nothing stored yet, waiting = first check pending, states = one tile per
+  // handle state without data, few = one competitor with too few posts for a pattern. all = the default mix with data.
   if (params.get('compstate')) sessionStorage.setItem('audit-comp-state', params.get('compstate'));
   var CSTATE = sessionStorage.getItem('audit-comp-state') || 'all';
   // ?tier= free | starter | professional gives the normal account that plan tier (kept for the tab); used to look at the Competitors menu entry.
@@ -289,6 +292,83 @@
     };
     return o;
   });
+
+  // ---- Competitor tiles and trends (GET /competitors/best-posts) --------------------------------------------------------
+  var DAYMS = 864e5;
+  var hoursAgo = function (h) { return new Date(now.getTime() - h * 36e5).toISOString(); };
+  var istMondayOf = function (d) { var x = new Date(d.getTime() + 330 * 60000); var back = (x.getUTCDay() + 6) % 7; var m = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate() - back)); return m.toISOString().slice(0, 10); };
+  var istDay = function (d) { return new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10); };
+  var MONTHS_M = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var DAYS_M = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var longDayM = function (isoStr) { var x = new Date(new Date(isoStr).getTime() + 330 * 60000); return DAYS_M[x.getUTCDay()] + ' ' + x.getUTCDate() + ' ' + MONTHS_M[x.getUTCMonth()]; };
+  function nextChildrensDay() {
+    var today = istDay(now); var y = Number(today.slice(0, 4)); var date = y + '-11-14';
+    if (date < today) date = (y + 1) + '-11-14';
+    var away = Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / DAYMS);
+    return { date: date, away: away };
+  }
+  function bpCard(id, name, handle, status, extra) {
+    var linked = handle && status !== 'no_handle' && status !== 'unconfirmed';
+    return Object.assign({ id: id, name: name, handle: handle || '', status: status, profileUrl: linked ? 'https://www.instagram.com/' + handle + '/' : null,
+      followers: null, postsThisWeek: null, bestPost: null, worked: null, weekOf: null, isCurrentWeek: false, lastCheckedOn: null }, extra || {});
+  }
+  function bestPostsAnswer() {
+    var week = istMondayOf(now);
+    var cd = nextChildrensDay();
+    var reelAt = hoursAgo(3); var carAt = hoursAgo(30);
+    var make = function (kind, mode, brief) { return { label: 'Make a post like this', kind: kind, mode: mode, brief: brief }; };
+    var sweet = bpCard('cmp-1', 'Sweet Co Bakery', 'sweetco', 'tracking', {
+      followers: { value: 5400, change: 120 }, postsThisWeek: { value: 5, atLeast: false },
+      bestPost: { period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/' },
+      worked: { kind: 'format', best: 'video', ratio: 3.4, text: 'Reels got 3 times the likes of photos on average this month.' },
+      weekOf: week, isCurrentWeek: true, lastCheckedOn: istDay(new Date(now.getTime() - 2 * 36e5)) });
+    var crumb = bpCard('cmp-6', 'Crumb and Co', 'crumbandco', 'tracking', {
+      followers: { value: 128450, change: -35 }, postsThisWeek: { value: 12, atLeast: true },
+      bestPost: { period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/' },
+      worked: { kind: 'day', best: 'weekend', ratio: 2.1, text: 'Weekend posts got 2.1 times the likes of weekday posts on average this month.' },
+      weekOf: week, isCurrentWeek: true, lastCheckedOn: istDay(new Date(now.getTime() - 2 * 36e5)) });
+    var green = bpCard('cmp-2', 'Green Leaf Cafe', 'greenleafcafe', 'tracking', { followers: { value: 2310, change: null }, weekOf: '2026-09-14', lastCheckedOn: '2026-09-15' });
+    var harbour = bpCard('cmp-3', 'Harbour Dental Care', 'harbourdental', 'unconfirmed');
+    var studio = bpCard('cmp-5', 'Studio Nine Salon', 'studionine', 'private', { lastCheckedOn: istDay(new Date(now.getTime() - DAYMS)) });
+    var meera = bpCard('cmp-4', 'Meera Jewellers With A Very Long Business Name That Has To Wrap', '', 'no_handle');
+    var working = [
+      { competitorId: 'cmp-1', name: 'Sweet Co Bakery', handle: 'sweetco', period: 'week', type: 'video', likes: 1240, comments: 86, at: reelAt, url: 'https://www.instagram.com/p/AuditReel1/',
+        reason: 'A reel on ' + longDayM(reelAt) + ' with 1,240 likes and 86 comments, their best this week.', worked: sweet.worked.text,
+        action: make('video', null, 'A reel about Fresh bakes, in the style that works: reels are getting the most likes this month.') },
+      { competitorId: 'cmp-6', name: 'Crumb and Co', handle: 'crumbandco', period: 'week', type: 'carousel', likes: 310, comments: 12, at: carAt, url: 'https://www.instagram.com/p/AuditCarousel2/',
+        reason: 'A carousel on ' + longDayM(carAt) + ' with 310 likes and 12 comments, their best this week.', worked: crumb.worked.text,
+        action: make('post', 'carousel', 'A carousel about Fresh bakes, in the style that works: posted at the weekend.') }
+    ];
+    var festival = cd.away <= 30 ? { id: 'festival:childrens_day', source: 'festival', label: 'Coming up', title: "Children's Day",
+      reason: longDayM(cd.date + 'T00:00:00+05:30') + ', ' + (cd.away === 0 ? 'today' : cd.away === 1 ? 'tomorrow' : 'in ' + cd.away + ' days') + '.',
+      action: make('post', 'single', "A post for Children's Day on 14 November, about Fresh bakes.") } : null;
+    var plan = { id: 'plan:0', source: 'plan', label: 'From your plan', title: 'Fresh bakes', reason: 'One of the themes in your plan.', action: make('post', 'single', 'A post about Fresh bakes, one of the themes in your plan.') };
+    var own = { id: 'own:best', source: 'own', label: 'From your own posts', title: 'Your best post this month', reason: 'Your reel on ' + longDayM(hoursAgo(4 * 24)) + ' got 240 likes and 18 comments.',
+      action: make('video', null, 'A new reel about Our new sourdough loaf, in the style of your best post this month.') };
+    var compTrend = { id: 'competitor:cmp-1', source: 'competitor', label: 'From a competitor', title: 'What worked for Sweet Co Bakery', reason: sweet.worked.text, action: working[0].action };
+    var base = { asOf: now.toISOString(), weekStart: week, entitled: true, trackerOn: true, state: 'ready', competitors: [], working: [], trending: [], degraded: [] };
+    var only = function (list) { return list.filter(Boolean); };
+    if (CSTATE === 'locked') return Object.assign(base, { entitled: false, state: 'not_entitled', trending: only([own, festival]) });
+    if (CSTATE === 'empty') return Object.assign(base, { state: 'no_competitors', trending: only([festival, plan]) });
+    if (CSTATE === 'trackeroff' || CSTATE === 'waiting') {
+      return Object.assign(base, { trackerOn: CSTATE !== 'trackeroff', state: CSTATE === 'trackeroff' ? 'tracker_off' : 'waiting',
+        competitors: [bpCard('cmp-1', 'Sweet Co Bakery', 'sweetco', 'waiting'), bpCard('cmp-6', 'Crumb and Co', 'crumbandco', 'waiting'), harbour], trending: only([festival, plan]) });
+    }
+    if (CSTATE === 'states') {
+      return Object.assign(base, { competitors: [sweet, meera, bpCard('cmp-6', 'Crumb and Co', 'crumbandco', 'failed', { lastCheckedOn: istDay(now) }),
+        bpCard('cmp-5', 'Studio Nine Salon', 'studionine', 'paused', { weekOf: '2026-09-14', lastCheckedOn: '2026-09-22' }), bpCard('cmp-2', 'Green Leaf Cafe', 'greenleafcafe', 'waiting')],
+        working: [working[0]], trending: only([compTrend, festival]) });
+    }
+    if (CSTATE === 'few') {
+      var few = bpCard('cmp-1', 'Sweet Co Bakery', 'sweetco', 'tracking', { followers: { value: 640, change: 4 }, postsThisWeek: { value: 0, atLeast: false },
+        bestPost: { period: 'month', type: 'image', likes: 38, comments: 2, at: hoursAgo(9 * 24), url: 'https://www.instagram.com/p/AuditPhoto3/' },
+        weekOf: week, isCurrentWeek: true, lastCheckedOn: istDay(now) });
+      return Object.assign(base, { competitors: [few], working: [{ competitorId: 'cmp-1', name: 'Sweet Co Bakery', handle: 'sweetco', period: 'month', type: 'image', likes: 38, comments: 2, at: few.bestPost.at, url: few.bestPost.url,
+        reason: 'A photo on ' + longDayM(few.bestPost.at) + ' with 38 likes and 2 comments, their best this month.', worked: null,
+        action: make('post', 'single', 'A photo post about Fresh bakes, in the style of the best recent posts in your market.') }], trending: only([festival]) });
+    }
+    return Object.assign(base, { competitors: [sweet, crumb, green, harbour, studio], working: working, trending: only([compTrend, own, festival, plan]) });
+  }
 
   // ---- Home summary (GET /home/summary), shaped exactly like backend/services/homeSummary.js ----------------------------
   var num = function (value, previous, changePct, extra) { return Object.assign({ value: value, previous: previous, changePct: changePct, available: true, reason: null, unit: 'count' }, extra || {}); };
@@ -730,6 +810,11 @@
         { competitorId: 'cmp-1', name: 'Sweet Co Bakery', text: 'Sweet Co Bakery posted 5 times this week, up from 2.', weight: 1.5 },
         { competitorId: 'cmp-1', name: 'Sweet Co Bakery', text: "Sweet Co Bakery's best post this week was a reel with 120 likes.", weight: 0.9 }
       ], competitors: rows });
+    }],
+    // ---- Competitors on Home and the Competitors page (GET /competitors/best-posts), shaped like backend/routes/competitorBestPosts.js ----
+    ['GET', /^\/competitors\/best-posts/, function () {
+      if (CSTATE === 'error') return { __status: 500, body: { success: false, message: 'We could not load your competitors just now. Please try again.' } };
+      return ok(bestPostsAnswer());
     }],
     // ---- Social listening (Stage 5): the "What people say about you" card on My plan and the Inbox page ----
     ['GET', /^\/listening$/, function () {

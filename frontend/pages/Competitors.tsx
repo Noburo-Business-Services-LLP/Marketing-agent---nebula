@@ -6,6 +6,7 @@ import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import { GravityHero, GravityEmphasis } from '../components/gravity';
 import UpgradePrompt from '../components/UpgradePrompt';
 import CompetitorInsights from '../components/CompetitorInsights';
+import { CompetitorBoard } from '../components/CompetitorTiles';
 import HandleEditor, { SavedHandle } from '../components/HandleEditor';
 import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 import { LOCKED_NOTE, competitorsUpgradeCopy, handleSavedNote, listHandleAction } from '../utils/competitorInsights';
@@ -360,7 +361,9 @@ const Competitors: React.FC = () => {
         subcopy="Track market rivals with real-time search."
       />
 
-      <CompetitorInsights showLink={false} onLocked={onInsightsLocked} />
+      <CompetitorBoard onLocked={onInsightsLocked} />
+
+      <CompetitorInsights showLink={false} onLocked={onInsightsLocked} showCompetitors={false} />
 
       {insightsLocked && !upgrade && (
         <p className="mb-6 rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)] px-4 py-3 text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">

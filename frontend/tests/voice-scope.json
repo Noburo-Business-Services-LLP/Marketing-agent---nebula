@@ -73,5 +73,7 @@
   "utils/homeLayout.ts",
   "components/home/HomeBlocks.tsx",
   "components/StrategyFunnel.tsx",
-  "utils/strategyLevels.ts"
+  "utils/strategyLevels.ts",
+  "components/CompetitorTiles.tsx",
+  "utils/competitorsHome.ts"
 ]

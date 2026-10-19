@@ -3,6 +3,7 @@ import { apiErrorFrom } from '../utils/plans';
 import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
 import type { BlueprintView } from '../utils/blueprint';
+import type { BestPostsResponse } from '../utils/competitorsHome';
 
 type CampaignInput = Partial<Campaign> & { tone?: string | null };
 
@@ -1405,6 +1406,8 @@ export const apiService = {
       throw e;
     }
   },
+  /** Competitor tiles, what is working and Trending for you, from stored data only (no add-on: entitled false, never a 403). */
+  getCompetitorBestPosts: async (): Promise<BestPostsResponse> => apiCall<BestPostsResponse>('/competitors/best-posts', { method: 'GET' }, true),
   /** What people say about the account: scored comments and messages. A 403 (no Inbox add-on) comes back as `{ locked: true }`, not an error. */
   getListening: async (): Promise<ListeningResponse> => {
     try { return await apiCall<ListeningResponse>('/listening', { method: 'GET' }, true); }

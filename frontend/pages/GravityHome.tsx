@@ -7,7 +7,8 @@ import ThisWeekCard from '../components/ThisWeekCard';
 import { isAgencyUser } from '../utils/agency';
 import { isHomeSummary, readCachedSummary, writeCachedSummary } from '../utils/home';
 import { actionRows, greeting, headline, isNewAccount, planBanner, blockFailed } from '../utils/homeLayout';
-import { BalanceChip, CompetitorsStrip, CreateToday, DoThisNext, NumbersStrip, Skeleton, PlanBanner, TodayPlan } from '../components/home/HomeBlocks';
+import { BalanceChip, CreateToday, DoThisNext, NumbersStrip, Skeleton, PlanBanner, TodayPlan } from '../components/home/HomeBlocks';
+import { HomeCompetitors } from '../components/CompetitorTiles';
 import '../components/home/home.css';
 
 // Home, the control room. The page reads ONE small answer, GET /api/home/summary (numbers, Do this next, this week,
@@ -110,9 +111,11 @@ const GravityHome: React.FC<{ user?: User | null }> = ({ user }) => {
           <CreateToday language={language} />
           {loading && !summary && <Skeleton kind="today" />}
           {summary && <TodayPlan summary={summary} failed={blockFailed(summary, 'today')} />}
-          {summary && <CompetitorsStrip summary={summary} />}
         </div>
       </div>
+
+      {/* Competitors and trends: read after the summary so the first paint keeps to three calls. No plan links inside a pass. */}
+      <HomeCompetitors enabled={showWeek && Boolean(summary || failed)} language={language} noPlanLinks={Boolean(summary?.account?.clientWorkspace || summary?.account?.pass || user?.actingAgency || csmPass)} />
 
       {summary && isNew && <NumbersStrip summary={summary} />}
     </div>

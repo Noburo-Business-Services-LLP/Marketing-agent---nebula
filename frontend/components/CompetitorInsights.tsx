@@ -17,11 +17,13 @@ interface Props {
   showLink?: boolean;
   /** Called once when the account does not have the add-on, so a page can show its own prompt. */
   onLocked?: () => void;
+  /** Show the per-competitor list. Off on the Competitors page, where every competitor already has its own tile. */
+  showCompetitors?: boolean;
 }
 
 /** What your competitors did this week, from their public posts. Renders nothing for accounts without the add-on;
  *  the Competitors page shows its own prompt for that (see onLocked). */
-const CompetitorInsights: React.FC<Props> = ({ showLink = true, onLocked }) => {
+const CompetitorInsights: React.FC<Props> = ({ showLink = true, onLocked, showCompetitors = true }) => {
   const [res, setRes] = useState<CompetitorInsightsResponse | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -105,7 +107,7 @@ const CompetitorInsights: React.FC<Props> = ({ showLink = true, onLocked }) => {
         </>
       )}
 
-      {(state === 'ready' || state === 'started') && competitors.length > 0 && (
+      {showCompetitors && (state === 'ready' || state === 'started') && competitors.length > 0 && (
         <ul className="mt-4 divide-y divide-[var(--gv-border-subtle)] rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)]" aria-label="Competitors we look at">
           {competitors.map((c) => {
             const trend = trendLabel(c.trend);

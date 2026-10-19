@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarCheck, Check, ClipboardCheck, Eye, Heart, ImageIcon, MessageCircle, Minus, Swords, Users, Wallet } from 'lucide-react';
+import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarCheck, Check, ClipboardCheck, Eye, Heart, ImageIcon, MessageCircle, Minus, Users, Wallet } from 'lucide-react';
 import type { HomeSummary } from '../../types';
 import Tile from '../Tile';
 import TileGrid from '../TileGrid';
@@ -8,7 +8,7 @@ import { SinglePostArt, CarouselArt, CampaignArt, VideoArt } from '../art';
 import { setPrefill } from '../../utils/prefill';
 import { todayRows } from '../../utils/home';
 import {
-  numberTiles, numbersMode, actionRows, balanceView, competitorsStrip, describeHandoff, createTileHandoff, statusWord,
+  numberTiles, numbersMode, actionRows, balanceView, describeHandoff, createTileHandoff, statusWord,
   HOME_CREATE_TILES, DESCRIBE_MAX, type Banner, type HomeCreateKey, type NumberKey,
 } from '../../utils/homeLayout';
 
@@ -244,22 +244,6 @@ export const TodayPlan: React.FC<{ summary: HomeSummary; failed: boolean }> = ({
         </ul>
       )}
     </section>
-  );
-};
-
-export const CompetitorsStrip: React.FC<{ summary: HomeSummary }> = ({ summary }) => {
-  if ((summary.degraded || []).includes('competitors')) return null;
-  const c = competitorsStrip(summary.competitors);
-  if (!c) return null;
-  return (
-    <Link to={c.to} className="nb-home-card nb-home-strip">
-      <span className="nb-home-mark" data-mark="competitors" aria-hidden="true"><Swords /></span>
-      <span className="nb-home-strip-text">
-        <span className="nb-home-strip-title">{c.title}</span>
-        <span className="nb-home-strip-sub">{c.detail}</span>
-      </span>
-      <ArrowRight size={16} className="nb-home-go" aria-hidden="true" />
-    </Link>
   );
 };
 
