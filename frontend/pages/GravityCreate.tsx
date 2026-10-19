@@ -268,8 +268,10 @@ const GravityCreate: React.FC = () => {
     if (!p) return;
     if (p.weekItemId) weekMark.current = { itemId: p.weekItemId, weekId: p.weekId };
     const topic = String(p.topic || '').trim();
-    if (!topic && !p.platform && !p.language) return;
-    setMode('carousel');
+    // A mode on its own (a Home tile) only picks the type; the plan's hand-over is always a carousel.
+    const wanted: CreateMode | null = p.mode && (['single', 'campaign', 'carousel', 'linkedin'] as const).includes(p.mode) ? p.mode : null;
+    if (!topic && !p.platform && !p.language) { if (wanted) setMode(wanted); return; }
+    setMode(wanted || 'carousel');
     if (topic) { setName(topic.slice(0, 80)); setDescription(topic); }
     const plat = String(p.platform || '').trim().toLowerCase();
     if (PLATFORMS.some((x) => x.key === plat && !x.soon)) setSelectedPlatforms([plat]);
@@ -278,7 +280,7 @@ const GravityCreate: React.FC = () => {
       const label = CONTENT_LANGUAGES.find((l) => l.value === id)?.label;
       if (label) setLanguage(label);
     }
-    setFromPlan(true);
+    setFromPlan(p.source !== 'home');
   }, []);
   const [openPopover, setOpenPopover] = useState<null | 'duration' | 'cadence' | 'tone' | 'style' | 'language'>(null);
   const [submitting, setSubmitting] = useState(false);

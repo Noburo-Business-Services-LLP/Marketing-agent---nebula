@@ -163,7 +163,7 @@ const CreateVideo: React.FC = () => {
     if (!p) return;
     if (p.weekItemId) weekMark.current = { itemId: p.weekItemId, weekId: p.weekId };
     const text = String(p.idea || '').trim();
-    if (text) { setIdea(text); setFromPlan(true); }
+    if (text) { setIdea(text); setFromPlan(p.source !== 'home'); }
     if (p.language) {
       planLanguage.current = p.language;
       setLanguage((cur) => nearestLanguage(p.language, ['english', 'tamil'], cur));
