@@ -54,6 +54,11 @@ const photoshootJobSchema = new mongoose.Schema({
   refunded: { type: Boolean, default: false },
   refundedQuarks: { type: Number, default: 0 },
   refundFailed: { type: Boolean },
+  // The resume loop's retries of a refund that did not land: tries so far, when the next one is due (also the hold
+  // while a retry runs), and true once it gave up and a person was alerted.
+  refundAttempts: { type: Number },
+  refundRetryAt: { type: Date },
+  refundGaveUp: { type: Boolean },
   leaseOwner: { type: String, maxlength: 80 },
   leaseUntil: { type: Date },
   chargedAt: Date,
@@ -68,5 +73,7 @@ photoshootJobSchema.index({ user: 1, createdAt: -1 });
 photoshootJobSchema.index({ user: 1, day: 1 });
 photoshootJobSchema.index({ status: 1, leaseUntil: 1 });
 photoshootJobSchema.index({ parent: 1 });
+// Refunds waiting for another try (the resume loop).
+photoshootJobSchema.index({ refundRetryAt: 1 }, { partialFilterExpression: { refundFailed: true }, name: 'refund_retry' });
 
 module.exports = mongoose.models.PhotoshootJob || mongoose.model('PhotoshootJob', photoshootJobSchema);

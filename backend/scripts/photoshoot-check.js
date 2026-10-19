@@ -462,6 +462,133 @@ async function runChecks() {
       assert.strictEqual(bad.status, 400);
     });
 
+    section = '(9) review 2026-10-19 fixes:';
+    const qb = require('../services/quarkBuckets');
+    const realRepo = require('../services/photoshoot/repo').createPhotoshootRepo();
+    // The stale sweep and the refund retry read every account; here they only see this run's throwaway accounts.
+    const ours = () => throwawayIds(mongoose.connection.db);
+    const scopedRepo = {
+      ...realRepo,
+      staleQueued: async (before, limit = 10) => Job.find({ status: 'queued', createdAt: { $lt: before }, user: { $in: await ours() } }).select('_id user').limit(limit).lean(),
+      refundsDue: async (now, limit = 10) => {
+        const due = (await realRepo.refundsDue(now, 200)).map((x) => x._id);
+        return due.length ? Job.find({ _id: { $in: due }, user: { $in: await ours() } }).select('_id').limit(limit).lean() : [];
+      }
+    };
+    const svcWith = (extra = {}) => createPhotoshoot({ ...fakes, repo: scopedRepo, runnerId: 'check-fix', alertNow: () => {}, ...extra });
+    const failLedgerWrites = async (fn) => {
+      const orig = QuarkLedger.create;
+      QuarkLedger.create = () => Promise.reject(new Error('simulated ledger write failure'));
+      const warn = console.warn; console.warn = () => {};
+      try { return await fn(); } finally { await sleep(200); QuarkLedger.create = orig; console.warn = warn; }
+    };
+    const throwingSpend = (ledgerFails) => async (uid, cost, o) => {
+      const run = () => qb.spend(uid, cost, o);
+      await (ledgerFails ? failLedgerWrites(run) : run());
+      throw new Error('simulated: the reply of the charge was lost');
+    };
+    const refundRows = (id) => QuarkLedger.countDocuments({ type: 'refund', ref: String(id) });
+    const queuedDoc = (u, extra = {}) => ({ user: u._id, key: key(), kind: 'pack', pack: 'marketplace', day: '2026-10-19', status: 'queued', inFlight: true, photoCount: 4, quarksPerPhoto: PER, quarks: 0, photos: [{ index: 0, productIndex: 0, status: 'pending', attempts: 0 }], createdAt: new Date(Date.now() - 10 * 60000), ...extra });
+
+    for (const [label, ledgerFails] of [['the ledger row was written', false], ['the ledger row also failed: only the history proves it', true]]) {
+      await check(`S1: a charge that throws after the debit landed is refunded at once, never closed as refused (${label})`, async () => {
+        const u = await mkUser(`throw-${ledgerFails ? 'h' : 'l'}`);
+        const p = await mkProduct(u, 'ZZ Throw item');
+        const before = await balanceOf(u._id);
+        const r = await svcWith({ spend: throwingSpend(ledgerFails) }).create({ _id: u._id, plan: { tier: 'starter' } }, pack(u, p));
+        charged(4);
+        assert.strictEqual(r.status, 503, JSON.stringify(r.body)); assert.strictEqual(r.body.refunded, true);
+        const row = await Job.findOne({ user: u._id }).lean();
+        assert.strictEqual(row.status, 'failed'); assert.strictEqual(row.outcome, 'ledger'); assert.strictEqual(row.refunded, true); assert.strictEqual(row.inFlight, undefined);
+        assert.strictEqual(await balanceOf(u._id), before);
+        await svcWith().sweepStale(); await svcWith().retryRefunds();
+        assert.strictEqual(await balanceOf(u._id), before, 'paid back once');
+        if (!ledgerFails) assert.strictEqual(await eventually(() => refundRows(row._id)), 1);
+      });
+    }
+
+    await check('S2: the stale sweep refunds a stuck queued job proven only by the history entry, once', async () => {
+      const u = await mkUser('stale-history');
+      const row = await Job.create(queuedDoc(u));
+      await failLedgerWrites(() => qb.spend(u._id, 4 * PER, { action: 'photoshoot_image', ref: String(row._id), units: 4 }));
+      charged(4);
+      assert.strictEqual(await QuarkLedger.countDocuments({ ref: String(row._id) }), 0, 'no ledger row');
+      const before = await balanceOf(u._id);
+      assert.ok((await svcWith().sweepStale()) >= 1);
+      const after = await Job.findById(row._id).lean();
+      assert.strictEqual(after.refundedQuarks, 4 * PER); assert.strictEqual(after.payerId, String(u._id));
+      assert.strictEqual(await balanceOf(u._id), before + 4 * PER);
+      await svcWith().sweepStale(); await svcWith().retryRefunds();
+      assert.strictEqual(await balanceOf(u._id), before + 4 * PER, 'once');
+    });
+
+    await check('S4: a refund that did not land is retried, lands once and the flag is cleared', async () => {
+      const u = await mkUser('retry');
+      await User.updateOne({ _id: u._id }, { $inc: { 'credits.balance': -4 * PER } });
+      const row = await Job.create(queuedDoc(u, { status: 'failed', outcome: 'none', inFlight: undefined, quarks: 4 * PER, payerId: String(u._id), refunded: true, refundedQuarks: 4 * PER, refundFailed: true }));
+      const before = await balanceOf(u._id);
+      assert.strictEqual(await svcWith().retryRefunds(), 1);
+      const after = await Job.findById(row._id).lean();
+      assert.strictEqual(after.refundFailed, undefined); assert.strictEqual(after.refundAttempts, 1);
+      assert.strictEqual(await balanceOf(u._id), before + 4 * PER);
+      await Promise.all([svcWith().retryRefunds(), svcWith().retryRefunds()]);
+      assert.strictEqual(await balanceOf(u._id), before + 4 * PER, 'never twice');
+      assert.strictEqual(await eventually(() => refundRows(row._id)), 1);
+    });
+
+    await check('S4: a retry that fails waits (back-off) and a refund already proven by the history is not paid again', async () => {
+      const u = await mkUser('retry-landed');
+      const row = await Job.create(queuedDoc(u, { status: 'failed', outcome: 'none', inFlight: undefined, quarks: PER, payerId: String(u._id), refunded: true, refundedQuarks: PER, refundFailed: true }));
+      const failing = svcWith({ refundTo: async () => ({ ok: false }) });
+      await failing.retryRefunds();
+      const held = await Job.findById(row._id).lean();
+      assert.strictEqual(held.refundFailed, true); assert.strictEqual(held.refundAttempts, 1); assert.ok(new Date(held.refundRetryAt) > new Date());
+      assert.strictEqual(await svcWith().retryRefunds(), 0, 'not due yet');
+      await failLedgerWrites(() => qb.refundTo(String(u._id), PER, { action: 'photoshoot_image_refund', ref: String(row._id), payerId: String(u._id) }));
+      await Job.updateOne({ _id: row._id }, { $set: { refundRetryAt: new Date(Date.now() - 1000) } });
+      const before = await balanceOf(u._id);
+      await svcWith().retryRefunds();
+      assert.strictEqual((await Job.findById(row._id).lean()).refundFailed, undefined);
+      assert.strictEqual(await balanceOf(u._id), before, 'nothing paid again');
+    });
+
+    await check('M1: the stale sweep refunded a slow charge first: the failed charged mark does not refund it again', async () => {
+      const u = await mkUser('slow-charge');
+      const p = await mkProduct(u, 'ZZ Slow item');
+      const before = await balanceOf(u._id);
+      const svc = svcWith({
+        spend: async (uid, cost, o) => {
+          const out = await qb.spend(uid, cost, o);
+          await Job.updateOne({ _id: o.ref }, { $set: { createdAt: new Date(Date.now() - 10 * 60000) } });
+          await sleep(200);
+          await svcWith().sweepStale(); // another process closes and refunds the row while this charge is slow
+          return out;
+        }
+      });
+      const r = await svc.create({ _id: u._id, plan: { tier: 'starter' } }, pack(u, p));
+      charged(4);
+      assert.strictEqual(r.status, 503);
+      const row = await Job.findOne({ user: u._id }).lean();
+      assert.strictEqual(row.outcome, 'stale_queued');
+      assert.strictEqual(await balanceOf(u._id), before, 'refunded once, not twice');
+      assert.strictEqual(await eventually(() => refundRows(row._id)), 1);
+    });
+
+    await check('M5: the upload follows the plan and the switch: nothing stored for a free account or while off', async () => {
+      const f = await call('POST', '/api/photoshoot/upload', T(free), { name: 'ZZ Free jar', imageData: `data:image/png;base64,${PNG_B64}` });
+      assert.strictEqual(f.status, 403); assert.strictEqual(f.body.upgradeRequired, true);
+      const off = await call('POST', '/off/api/photoshoot/upload', T(other), { name: 'ZZ Off jar', imageData: `data:image/png;base64,${PNG_B64}` });
+      assert.strictEqual(off.status, 503);
+      assert.strictEqual(await Product.countDocuments({ user: { $in: [free._id, other._id] }, name: { $in: ['ZZ Free jar', 'ZZ Off jar'] } }), 0);
+    });
+
+    await check('M7: a pack key is not replayed for a redo, and nothing is charged', async () => {
+      const before = await balanceOf(owner._id);
+      const r = await call('POST', `/api/photoshoot/jobs/${first._id}/photos/1/redo`, T(owner), { key: first.key });
+      assert.strictEqual(r.status, 409); assert.strictEqual(r.body.keyReused, true);
+      assert.strictEqual(await balanceOf(owner._id), before);
+    });
+
     section = '(8) safety at the end:';
     await check('no outside call was made and no real image model was reached', async () => {
       assert.strictEqual(outside, 0);

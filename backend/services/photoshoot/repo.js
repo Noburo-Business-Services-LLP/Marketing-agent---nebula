@@ -27,7 +27,15 @@ function createPhotoshootRepo({ Job = () => require('../../models/PhotoshootJob'
       return r.modifiedCount === 1;
     },
     closeRefused: (id, outcome, now) => J().updateOne({ _id: id, status: 'queued' }, { $set: { status: 'refused', outcome, finishedAt: now }, $unset: { inFlight: 1 } }),
-    closeLedger: (id, now) => J().updateOne({ _id: id }, { $set: { status: 'failed', outcome: 'ledger', refunded: true, finishedAt: now }, $unset: { inFlight: 1 } }),
+    /**
+     * The charge landed but could not be marked on the job: closes it and claims its refund in one step. Returns the row
+     * before the change, or null when it was no longer queued or its refund was already claimed (the stale sweep got
+     * there first), in which case the caller must not refund.
+     */
+    closeLedger: (id, { refundedQuarks = 0, payerId, now }) => lean(J().findOneAndUpdate(
+      { _id: id, status: 'queued', refunded: { $ne: true } },
+      { $set: { status: 'failed', outcome: 'ledger', refunded: true, refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now }, $unset: { inFlight: 1 } },
+      { new: false })),
     claimLease: (id, owner, now, until) => lean(J().findOneAndUpdate(
       { _id: id, status: 'running', $or: [{ leaseUntil: null }, { leaseUntil: { $lt: now } }, { leaseOwner: owner }] },
       { $set: { leaseOwner: owner, leaseUntil: until } }, { new: true })),
@@ -57,15 +65,22 @@ function createPhotoshootRepo({ Job = () => require('../../models/PhotoshootJob'
       { $set: { status, outcome, refunded: true, refundedQuarks, finishedAt: now }, $unset: { inFlight: 1, leaseOwner: 1, leaseUntil: 1 } },
       { new: false })),
     setRefundFailed: (id) => J().updateOne({ _id: id }, { $set: { refundFailed: true } }),
+    /** Refunds that did not land and are due for another try (see service.retryRefunds). */
+    refundsDue: (now, limit = 10) => lean(J().find(retryDue(now)).select('_id').limit(limit)),
+    /** Claims one retry: moves its time forward (the hold) and counts it, only if still due. The row after, or null. */
+    claimRefundRetry: (id, now, holdUntil) => lean(J().findOneAndUpdate({ _id: id, ...retryDue(now) }, { $set: { refundRetryAt: holdUntil }, $inc: { refundAttempts: 1 } }, { new: true })),
+    refundRetried: (id) => J().updateOne({ _id: id, refundFailed: true }, { $unset: { refundFailed: 1, refundRetryAt: 1 } }),
+    refundRetryLater: (id, at) => J().updateOne({ _id: id, refundFailed: true }, { $set: { refundRetryAt: at } }),
+    refundGaveUp: (id) => J().updateOne({ _id: id, refundFailed: true }, { $set: { refundGaveUp: true }, $unset: { refundRetryAt: 1 } }),
     /** Rows still queued after `before`: the process died, or a close failed, between the insert and the charge being marked. */
     staleQueued: (before, limit = 10) => lean(J().find({ status: 'queued', createdAt: { $lt: before } }).select('_id user').limit(limit)),
     /**
      * Closes a stale queued row and claims its refund in one step (so a second sweep, or another process, finds nothing to
      * do). Returns the row before the change, or null when it was no longer queued or its refund was already claimed.
      */
-    closeStale: (id, { refundedQuarks = 0, now }) => lean(J().findOneAndUpdate(
+    closeStale: (id, { refundedQuarks = 0, payerId, outcome = 'stale_queued', now }) => lean(J().findOneAndUpdate(
       { _id: id, status: 'queued', refunded: { $ne: true } },
-      { $set: { status: 'failed', outcome: 'stale_queued', refunded: true, refundedQuarks, finishedAt: now }, $unset: { inFlight: 1 } },
+      { $set: { status: 'failed', outcome, refunded: true, refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now }, $unset: { inFlight: 1 } },
       { new: false })),
     lostJobs: (now, limit = 10) => lean(J().find({ status: 'running', $or: [{ leaseUntil: null }, { leaseUntil: { $lt: now } }] }).select('_id user').limit(limit)),
     listOwn: (user, limit = 20) => lean(J().find({ user, kind: 'pack', status: { $ne: 'refused' } }).sort({ createdAt: -1 }).limit(limit)),
@@ -74,6 +89,10 @@ function createPhotoshootRepo({ Job = () => require('../../models/PhotoshootJob'
     setInLibrary: async (user, id, index, on) => (await J().updateOne({ _id: id, user, photos: { $elemMatch: { index, status: 'done' } } }, { $set: { 'photos.$.inLibrary': !!on } })).matchedCount === 1,
     countsByOutcome: (day) => J().aggregate([{ $match: { day } }, { $group: { _id: { kind: '$kind', outcome: '$outcome' }, n: { $sum: 1 }, photos: { $sum: '$photoCount' } } }])
   };
+}
+
+function retryDue(now) {
+  return { refundFailed: true, refundGaveUp: { $ne: true }, $or: [{ refundRetryAt: { $exists: false } }, { refundRetryAt: null }, { refundRetryAt: { $lte: now } }] };
 }
 
 function toId(v) {

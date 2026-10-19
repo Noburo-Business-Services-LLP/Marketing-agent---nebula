@@ -11,7 +11,7 @@ const AGENCY = '6a0000000000000000000004';
 const ago = (ms) => new Date(NOW.getTime() - ms);
 const MIN = 60000;
 
-function world({ ledger = [], refundFails = false } = {}) {
+function world({ ledger = [], refundFails = false, clock = { t: NOW } } = {}) {
   const repo = createFakePhotoshootRepo();
   const refunds = []; const alerts = []; const queue = [];
   const deps = {
@@ -21,7 +21,7 @@ function world({ ledger = [], refundFails = false } = {}) {
       return { spend: spend ? { payer: spend.payer, quarks: spend.quarks } : null, refunded: ledger.some((l) => l.type === 'refund' && l.ref === String(id)) };
     },
     refundTo: async (uid, q, o) => {
-      if (refundFails) return { ok: false };
+      if (typeof refundFails === 'function' ? refundFails() : refundFails) return { ok: false };
       refunds.push({ uid, q, payerId: o.payerId, ref: o.ref });
       ledger.push({ type: 'refund', ref: o.ref, quarks: q });
       return { ok: true };
@@ -29,10 +29,11 @@ function world({ ledger = [], refundFails = false } = {}) {
     alert: (k, t) => alerts.push([k, t]),
     schedule: (fn) => queue.push(fn),
     env: { ENABLE_PHOTOSHOOT: 'on' },
-    now: () => NOW,
+    now: () => clock.t,
     runnerId: 'r'
   };
-  return { svc: createPhotoshoot(deps), repo, refunds, alerts, ledger };
+  deps.alertNow = (k, t) => alerts.push([k, t]);
+  return { svc: createPhotoshoot(deps), deps, repo, refunds, alerts, ledger, clock };
 }
 
 const queuedDoc = (key, extra = {}) => ({
@@ -106,4 +107,69 @@ test('the sweep runs with the resume check, so a create is no longer locked out 
   await w.repo.insert(queuedDoc('key-000008'));
   await w.svc.resumeLost();
   assert.strictEqual(await w.repo.anyInFlight(U1), null);
+});
+
+// ---- review 2026-10-19: the history proof by default (S2) and the refund retry (S4) ----
+test('S2: by default the stale sweep reads the charge proof (history entry when the ledger row is missing)', async () => {
+  const qb = require('../services/quarkBuckets');
+  const orig = qb.chargeProof;
+  const w = world();
+  const row = await w.repo.insert(queuedDoc('key-000101'));
+  qb.chargeProof = async (ref, o) => (ref === String(row._id) && o.userId === U1 ? { spend: { payer: AGENCY, workspace: U1, quarks: 40, source: 'history' }, refunded: false } : { spend: null, refunded: false });
+  try {
+    delete w.deps.ledgerFor;
+    await createPhotoshoot(w.deps).sweepStale();
+  } finally { qb.chargeProof = orig; }
+  assert.deepStrictEqual(w.refunds, [{ uid: U1, q: 40, payerId: AGENCY, ref: String(row._id) }]);
+});
+
+const failedRefundRow = (key, extra = {}) => queuedDoc(key, { status: 'failed', outcome: 'none', refunded: true, refundedQuarks: 40, refundFailed: true, payerId: AGENCY, inFlight: undefined, ...extra });
+
+test('S4: a refund that did not land is retried, lands once, and the notice goes away', async () => {
+  const w = world();
+  const row = await w.repo.insert(failedRefundRow('key-000102'));
+  assert.strictEqual(await w.svc.retryRefunds(), 1);
+  assert.deepStrictEqual(w.refunds, [{ uid: U1, q: 40, payerId: AGENCY, ref: String(row._id) }]);
+  const after = await w.repo.findById(row._id);
+  assert.strictEqual(after.refundFailed, undefined);
+  await w.svc.retryRefunds(); await w.svc.resumeLost();
+  assert.strictEqual(w.refunds.length, 1, 'never twice');
+});
+
+test('S4: a refund that already landed (proof on the ledger) is marked, not paid again', async () => {
+  const w = world();
+  const row = await w.repo.insert(failedRefundRow('key-000103'));
+  w.ledger.push({ type: 'refund', ref: String(row._id), quarks: 40 });
+  await w.svc.retryRefunds();
+  assert.deepStrictEqual(w.refunds, []);
+  assert.strictEqual((await w.repo.findById(row._id)).refundFailed, undefined);
+});
+
+test('S4: retries back off, two at once claim once, and after the last one a person is alerted', async () => {
+  const clock = { t: NOW };
+  let tries = 0;
+  const w = world({ clock, refundFails: () => { tries += 1; return true; } });
+  const row = await w.repo.insert(failedRefundRow('key-000104'));
+  await Promise.all([w.svc.retryRefunds(), w.svc.retryRefunds()]);
+  assert.strictEqual(tries, 1);
+  await w.svc.retryRefunds();
+  assert.strictEqual(tries, 1, 'waits for the back-off');
+  const caps = require('../config/photoshoot');
+  for (let i = 0; i < caps.REFUND_RETRY_MAX + 3; i += 1) { clock.t = new Date(clock.t.getTime() + 24 * 3600000); await w.svc.retryRefunds(); }
+  assert.strictEqual(tries, caps.REFUND_RETRY_MAX);
+  const after = await w.repo.findById(row._id);
+  assert.strictEqual(after.refundGaveUp, true); assert.strictEqual(after.refundFailed, true);
+  assert.ok(w.alerts.some(([k]) => k === 'photoshoot_refund_gave_up'));
+});
+
+test('S4: the stale sweep records the payer, so a later retry pays the same wallet', async () => {
+  let fail = true;
+  const w = world({ refundFails: () => fail });
+  const row = await w.repo.insert(queuedDoc('key-000105'));
+  w.ledger.push({ type: 'spend', ref: String(row._id), payer: AGENCY, quarks: 40 });
+  await w.svc.sweepStale();
+  assert.strictEqual((await w.repo.findById(row._id)).refundFailed, true);
+  fail = false;
+  await w.svc.resumeLost();
+  assert.deepStrictEqual(w.refunds, [{ uid: U1, q: 40, payerId: AGENCY, ref: String(row._id) }]);
 });

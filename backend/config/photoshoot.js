@@ -26,6 +26,12 @@ module.exports = Object.freeze({
   LEASE_MS: 10 * 60 * 1000,
   // How often lost jobs are looked for (and once when the server starts).
   RESUME_EVERY_MS: 2 * 60 * 1000,
+  // A refund that did not land is tried again by the resume loop: at most this many times, waiting REFUND_RETRY_BASE_MS,
+  // then twice as long each time; after the last failure a person is alerted. A claimed retry holds the row this long.
+  REFUND_RETRY_MAX: 5,
+  REFUND_RETRY_BASE_MS: 2 * 60 * 1000,
+  REFUND_RETRY_HOLD_MS: 10 * 60 * 1000,
+  REFUND_RETRY_BATCH: 10,
   // A job still not finished this long after it was charged is closed: unfinished photos fail and are refunded.
   MAX_AGE_MS: 60 * 60 * 1000,
 

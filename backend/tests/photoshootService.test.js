@@ -64,6 +64,11 @@ function world({ wallet = {}, env = { ENABLE_PHOTOSHOOT: 'on' }, gens = [], guar
       return { ok: true, payerId: payer };
     },
     guard: async (a) => (guard ? guard(a) : { ok: true }),
+    // The charge proof, read from the in-memory money list (quarkBuckets.chargeProof in the real service).
+    ledgerFor: async (id) => {
+      const sp = money.find((m) => m.type === 'spend' && m.ref === String(id));
+      return { spend: sp ? { payer: sp.payer, quarks: sp.cost } : null, refunded: money.some((m) => m.type === 'refund' && m.ref === String(id)) };
+    },
     recordSpend: (a, u) => spendRecords.push([a, u]),
     loadRef: async (src) => (src ? { mimeType: 'image/png', data: Buffer.from(String(src)).toString('base64') } : null),
     generate: async (args) => {
@@ -549,4 +554,70 @@ test('planPhotos and jobView are pure and never leak the prompt', () => {
   const v = jobView({ _id: 'j', pack: 'festival', status: 'queued', photos, products: [{ name: 'Sweets box' }] });
   assert.strictEqual(v.status, 'running');
   assert.ok(v.photos.every((p) => p.status === 'waiting' && !('prompt' in p)));
+});
+
+// ---- review 2026-10-19: a charge that throws (S1), the refund claimed before paying (M1), upload gates (M5), keys (M7) ----
+test('S1: a charge that throws after the debit landed is refunded at once, never closed as "no balance"', async () => {
+  const w = world();
+  const spend = w.deps.spend;
+  w.deps.spend = async (...a) => { await spend(...a); throw new Error('reply lost'); };
+  const svc = createPhotoshoot(w.deps);
+  const r = await quiet(() => svc.create(userOf(U1), body()));
+  assert.strictEqual(r.status, 503); assert.strictEqual(r.body.creditsExhausted, undefined);
+  assert.strictEqual(w.purse.get(U1), 200, 'the debit was returned');
+  const row = w.repo.rows[0];
+  assert.notStrictEqual(row.status, 'refused'); assert.strictEqual(row.refunded, true); assert.strictEqual(row.inFlight, undefined);
+  assert.strictEqual(w.money.filter((m) => m.type === 'refund').length, 1);
+  await svc.sweepStale(); await w.drain();
+  assert.strictEqual(w.money.filter((m) => m.type === 'refund').length, 1, 'once');
+  assert.strictEqual(w.calls.gen, 0);
+});
+
+test('S1: a charge that throws with no sign of a debit is left for the stale sweep, which decides from the ledger later', async () => {
+  const w = world();
+  w.deps.spend = async () => { throw new Error('network'); };
+  const svc = createPhotoshoot(w.deps);
+  const r = await quiet(() => svc.create(userOf(U1), body()));
+  assert.strictEqual(r.status, 503); assert.strictEqual(r.body.message, MESSAGES.chargeUnsure);
+  assert.strictEqual(w.repo.rows[0].status, 'queued', 'not closed as refused');
+  w.clock.t = new Date(NOW.getTime() + 4 * 60000);
+  await svc.sweepStale();
+  assert.strictEqual(w.repo.rows[0].status, 'failed'); assert.strictEqual(w.repo.rows[0].inFlight, undefined);
+  assert.strictEqual(w.money.length, 0);
+});
+
+test('M1: a failed charged mark refunds only if it wins the refund claim (a stale sweep that refunded first is not doubled)', async () => {
+  const repo = createFakePhotoshootRepo({ fail: { markCharged: true } });
+  const w = world({ repo });
+  const spend = w.deps.spend;
+  // The charge is slow: the stale sweep finds the row, sees the spend and refunds it before markCharged runs.
+  w.deps.spend = async (...a) => { const out = await spend(...a); w.clock.t = new Date(NOW.getTime() + 4 * 60000); await svc.sweepStale(); return out; };
+  const svc = createPhotoshoot(w.deps);
+  await quiet(() => svc.create(userOf(U1), body()));
+  assert.strictEqual(w.money.filter((m) => m.type === 'refund').length, 1, 'refunded once');
+  assert.strictEqual(w.purse.get(U1), 200);
+});
+
+test('M5: upload follows the switch and the plan like the rest of the studio', async () => {
+  const off = world({ env: {} });
+  assert.strictEqual((await off.svc.upload(userOf(U1), { name: 'Pickle', imageData: PNG })).status, 503);
+  const w = world();
+  const free = await w.svc.upload(userOf(U1, { plan: { tier: 'free' } }), { name: 'Pickle', imageData: PNG });
+  assert.strictEqual(free.status, 403); assert.strictEqual(free.body.upgradeRequired, true);
+  assert.strictEqual(w.prods.filter((p) => (p.tags || []).includes('photoshoot-upload')).length, 0, 'nothing stored');
+});
+
+test('M7: a key is one request: a pack key is not replayed for a redo, nor a redo key for another photo', async () => {
+  const w = world();
+  const b = body();
+  const a = await w.svc.create(userOf(U1), b);
+  await w.drain();
+  const asRedo = await w.svc.redo(userOf(U1), a.body.job.id, 0, { key: b.key });
+  assert.strictEqual(asRedo.status, 409); assert.strictEqual(asRedo.body.message, MESSAGES.keyReused);
+  const k = key();
+  assert.strictEqual((await w.svc.redo(userOf(U1), a.body.job.id, 0, { key: k })).status, 202);
+  await w.drain();
+  assert.strictEqual((await w.svc.redo(userOf(U1), a.body.job.id, 1, { key: k })).status, 409);
+  assert.strictEqual((await w.svc.create(userOf(U1), { ...body(), key: k })).status, 409);
+  assert.strictEqual(w.money.filter((m) => m.type === 'spend').length, 2);
 });

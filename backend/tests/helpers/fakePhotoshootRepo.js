@@ -12,6 +12,7 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
   const rows = [];
   const S = (v) => String(v);
   const find = (id) => rows.find((r) => S(r._id) === S(id));
+  const due = (r, now) => r.refundFailed === true && r.refundGaveUp !== true && (!r.refundRetryAt || new Date(r.refundRetryAt) <= now);
   const leaseFree = (r, owner, now) => !r.leaseUntil || new Date(r.leaseUntil) < now || r.leaseOwner === owner;
   const repo = {
     rows, fail,
@@ -36,7 +37,12 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
       Object.assign(r, { status: 'running', quarks, payerId, chargedAt: now }); return true;
     },
     closeRefused: async (id, outcome, now) => { const r = find(id); if (r && r.status === 'queued') { Object.assign(r, { status: 'refused', outcome, finishedAt: now }); delete r.inFlight; } },
-    closeLedger: async (id, now) => { const r = find(id); if (r) { Object.assign(r, { status: 'failed', outcome: 'ledger', refunded: true, finishedAt: now }); delete r.inFlight; } },
+    closeLedger: async (id, { refundedQuarks = 0, payerId, now }) => {
+      const r = find(id); if (!r || r.status !== 'queued' || r.refunded) return null;
+      const before = clone(r);
+      Object.assign(r, { status: 'failed', outcome: 'ledger', refunded: true, refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now }); delete r.inFlight;
+      return before;
+    },
     claimLease: async (id, owner, now, until) => {
       const r = find(id); if (!r || r.status !== 'running' || !leaseFree(r, owner, now)) return null;
       Object.assign(r, { leaseOwner: owner, leaseUntil: until }); return clone(r);
@@ -69,11 +75,19 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
       return before;
     },
     setRefundFailed: async (id) => { const r = find(id); if (r) r.refundFailed = true; },
+    refundsDue: async (now, limit = 10) => rows.filter((r) => due(r, now)).slice(0, limit).map((r) => ({ _id: r._id })),
+    claimRefundRetry: async (id, now, holdUntil) => {
+      const r = find(id); if (!r || !due(r, now)) return null;
+      r.refundRetryAt = holdUntil; r.refundAttempts = (r.refundAttempts || 0) + 1; return clone(r);
+    },
+    refundRetried: async (id) => { const r = find(id); if (r && r.refundFailed) { delete r.refundFailed; delete r.refundRetryAt; } },
+    refundRetryLater: async (id, at) => { const r = find(id); if (r && r.refundFailed) r.refundRetryAt = at; },
+    refundGaveUp: async (id) => { const r = find(id); if (r && r.refundFailed) { r.refundGaveUp = true; delete r.refundRetryAt; } },
     staleQueued: async (before, limit = 10) => rows.filter((r) => r.status === 'queued' && new Date(r.createdAt) < before).slice(0, limit).map((r) => ({ _id: r._id, user: r.user })),
-    closeStale: async (id, { refundedQuarks = 0, now }) => {
+    closeStale: async (id, { refundedQuarks = 0, payerId, outcome = 'stale_queued', now }) => {
       const r = find(id); if (!r || r.status !== 'queued' || r.refunded) return null;
       const before = clone(r);
-      Object.assign(r, { status: 'failed', outcome: 'stale_queued', refunded: true, refundedQuarks, finishedAt: now }); delete r.inFlight;
+      Object.assign(r, { status: 'failed', outcome, refunded: true, refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now }); delete r.inFlight;
       return before;
     },
     lostJobs: async (now, limit = 10) => rows.filter((r) => r.status === 'running' && (!r.leaseUntil || new Date(r.leaseUntil) < now)).slice(0, limit).map((r) => ({ _id: r._id, user: r.user })),

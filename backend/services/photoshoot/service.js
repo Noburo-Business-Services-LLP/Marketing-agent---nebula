@@ -48,6 +48,8 @@ const MESSAGES = Object.freeze({
   frozen: 'This client is paused, so nothing can be made for it right now.',
   ledger: 'We could not start the photoshoot just now. Nothing was charged. Please try again.',
   failed: 'We could not start the photoshoot just now. Please try again.',
+  chargeUnsure: 'We could not start the photoshoot just now. If any Quarks were taken, they come back by themselves in a few minutes. Please try again shortly.',
+  keyReused: 'That request was already used for something else. Please reload the page and try again.',
   notFound: 'That photoshoot was not found.',
   redoNotReady: 'This photo can be made again once the photoshoot has finished.',
   upload: 'Please add a PNG, JPEG or WEBP photo of up to 6 MB.',
@@ -167,14 +169,21 @@ function defaultDeps() {
     recordSpend: (action, units) => require('../spendGuard').record(action, units),
     generate: (args) => require('./generator').createGenerator().make(args),
     loadRef: (src) => loadRef(src),
-    /** What the Quark ledger holds for one job: its spend row (the payer is the row's account) and whether a refund exists. */
-    ledgerFor: async (jobId) => {
-      const L = require('../../models/QuarkLedger');
-      const rows = await L.find({ ref: String(jobId), type: { $in: ['spend', 'refund'] } }).select('user type quarks').lean();
-      const spend = rows.find((r) => r.type === 'spend');
-      return { spend: spend ? { payer: String(spend.user), quarks: Math.abs(Number(spend.quarks) || 0) } : null, refunded: rows.some((r) => r.type === 'refund') };
+    /** Whether one job was charged (and by which wallet) and whether a refund exists: the Quark ledger rows, else the
+     *  credits.history entries written in the same update as the balance change (quarkBuckets.chargeProof). */
+    ledgerFor: async (jobId, userId) => {
+      const p = await quarks().chargeProof(String(jobId), { userId: userId ? String(userId) : '' });
+      return { spend: p.spend ? { payer: p.spend.payer, quarks: p.spend.quarks } : null, refunded: p.refunded };
     },
     alert: (key, text) => { try { require('../opsAlerts').recordFailure(key, text); } catch (_) { /* best effort */ } },
+    // A refund the loop gave up on: a person must finish it, so one occurrence is enough to send the alert.
+    alertNow: (key, text) => {
+      try {
+        const ops = require('../opsAlerts');
+        ops.recordFailure(key, text);
+        ops.notify({ key: `${key}:${text}`, subject: 'Nebulaa alert: a Photoshoot refund needs a person', text: `${text}\n\nSee docs/superpowers/ops/photoshoot.md (refunds that did not land).` });
+      } catch (_) { /* best effort */ }
+    },
     schedule: (fn) => setImmediate(fn),
     env: process.env,
     now: () => new Date(),
@@ -296,8 +305,9 @@ function createPhotoshoot(given = {}) {
     }
     const now = deps.now();
     await deps.settle(userId);
-    let paid = null;
-    try { paid = await deps.spend(userId, cost, { action: ACTION, description, ref: String(row._id), units: doc.photoCount }); } catch (_) { paid = null; }
+    let paid = null; let spendThrew = false;
+    try { paid = await deps.spend(userId, cost, { action: ACTION, description, ref: String(row._id), units: doc.photoCount }); } catch (_) { paid = null; spendThrew = true; }
+    if (spendThrew) return settleUnsureCharge(row, userId);
     if (!paid || !paid.success) {
       const frozen = Boolean(paid && paid.frozen);
       await repo.closeRefused(row._id, frozen ? 'frozen' : 'no_balance', deps.now()).catch(() => null);
@@ -309,16 +319,50 @@ function createPhotoshoot(given = {}) {
     let marked = false;
     try { marked = await repo.markCharged(row._id, { quarks: cost, payerId, now }); } catch (_) { marked = false; }
     if (!marked) {
-      // The charge is not on the job: nothing is called and the Quarks go straight back.
+      // The charge is not on the job: nothing is called and the Quarks go straight back, but only after this caller won
+      // the refund claim (the stale sweep may have closed and refunded the row already while the charge was slow).
+      const claimed = await repo.closeLedger(row._id, { refundedQuarks: cost, payerId, now: deps.now() }).catch(() => null);
+      if (!claimed) return reply(503, { message: MESSAGES.chargeUnsure }); // the stale sweep settles it from the ledger
       let back = null;
       try { back = await deps.refundTo(userId, cost, { action: `${ACTION}_refund`, ref: String(row._id), payerId }); } catch (_) { back = null; }
-      await repo.closeLedger(row._id, deps.now()).catch(() => null);
-      if (!back || !back.ok) deps.alert('photoshoot_refund', `Photoshoot ${String(row._id)}: the charge could not be recorded and the refund of ${cost} Quarks did not land.`);
+      if (!back || !back.ok) {
+        await repo.setRefundFailed(row._id).catch(() => null);
+        deps.alert('photoshoot_refund', `Photoshoot ${String(row._id)}: the charge could not be recorded and the refund of ${cost} Quarks did not land.`);
+      }
       return reply(503, { message: MESSAGES.ledger });
     }
     const job = { ...row, status: 'running', quarks: cost, payerId, chargedAt: now };
     deps.schedule(() => runJob(row._id).catch((e) => console.error('[photoshoot] runner failed:', e && e.message)));
     return reply(202, { job: jobView(job) });
+  }
+
+  /**
+   * The charge threw: it may or may not have landed. The proof decides at once when it can: a charge that landed is
+   * refunded once (the close claims the refund); with no sign of a charge, or when the lookup fails, the row stays queued
+   * and the stale sweep decides later from the same proof (a debit still in flight has landed by then). Never "refused".
+   */
+  async function settleUnsureCharge(row, userId) {
+    let led = null;
+    try { led = await deps.ledgerFor(String(row._id), userId); } catch (_) { led = null; }
+    if (!led || !led.spend) return reply(503, { message: MESSAGES.chargeUnsure });
+    const refund = led.refunded ? 0 : Math.max(0, led.spend.quarks);
+    const closed = await repo.closeStale(row._id, { refundedQuarks: refund, payerId: led.spend.payer, outcome: 'ledger', now: deps.now() }).catch(() => null);
+    if (!closed) return reply(503, { message: MESSAGES.chargeUnsure });
+    if (refund > 0) {
+      let back = null;
+      try { back = await deps.refundTo(userId, refund, { action: `${ACTION}_refund`, ref: String(row._id), payerId: led.spend.payer }); } catch (_) { back = null; }
+      if (!back || !back.ok) {
+        await repo.setRefundFailed(row._id).catch(() => null);
+        deps.alert('photoshoot_refund', `Photoshoot ${String(row._id)}: the charge failed half-way and the refund of ${refund} Quarks did not land.`);
+        return reply(503, { refunded: false, message: MESSAGES.chargeUnsure });
+      }
+    }
+    return reply(503, { refunded: refund > 0, message: MESSAGES.ledger });
+  }
+
+  /** The stored job for a reused key, only when it was the same request; another kind of request is refused. */
+  function replayFor(existing, same) {
+    return same(existing) ? reply(200, { replay: true, job: jobView(existing) }) : reply(409, { keyReused: true, message: MESSAGES.keyReused });
   }
 
   /** The checks shared by Create and Make this one again, before anything is written. */
@@ -340,15 +384,16 @@ function createPhotoshoot(given = {}) {
     const pre = await precheck(user, body, pass);
     if (pre.error) return pre.error;
     const { userId, key, b } = pre;
+    const samePack = (j) => (j.kind || 'pack') === 'pack';
     if (locks.has(userId)) {
       const same = await repo.findByKey(userId, key).catch(() => null);
-      return same ? reply(200, { replay: true, job: jobView(same) }) : reply(409, { inProgress: true, message: MESSAGES.inProgress });
+      return same ? replayFor(same, samePack) : reply(409, { inProgress: true, message: MESSAGES.inProgress });
     }
     locks.add(userId);
     try {
       const now = deps.now();
       const existing = await repo.findByKey(userId, key);
-      if (existing) return reply(200, { replay: true, job: jobView(existing) });
+      if (existing) return replayFor(existing, samePack);
       await resumeLost().catch(() => null);
       if (await repo.anyInFlight(userId)) return reply(409, { inProgress: true, message: MESSAGES.inProgress });
       const input = await resolveInput(userId, b);
@@ -380,15 +425,16 @@ function createPhotoshoot(given = {}) {
     const { userId, key } = pre;
     const i = Number(index);
     if (!isObjectId(jobId) || !Number.isInteger(i) || i < 0) return reply(400, { message: MESSAGES.input });
+    const sameRedo = (j) => j.kind === 'redo' && String(j.parent) === String(jobId) && j.parentIndex === i;
     if (locks.has(userId)) {
       const same = await repo.findByKey(userId, key).catch(() => null);
-      return same ? reply(200, { replay: true, job: jobView(same) }) : reply(409, { inProgress: true, message: MESSAGES.inProgress });
+      return same ? replayFor(same, sameRedo) : reply(409, { inProgress: true, message: MESSAGES.inProgress });
     }
     locks.add(userId);
     try {
       const now = deps.now();
       const existing = await repo.findByKey(userId, key);
-      if (existing) return reply(200, { replay: true, job: jobView(existing) });
+      if (existing) return replayFor(existing, sameRedo);
       const parent = await repo.findOwn(userId, jobId);
       if (!parent || parent.kind !== 'pack') return reply(404, { message: MESSAGES.notFound });
       if (!['done', 'partial', 'failed'].includes(parent.status)) return reply(409, { message: MESSAGES.redoNotReady });
@@ -536,9 +582,9 @@ function createPhotoshoot(given = {}) {
     let closed = 0;
     for (const j of stuck) {
       try {
-        const led = (await deps.ledgerFor(String(j._id))) || {};
+        const led = (await deps.ledgerFor(String(j._id), String(j.user))) || {};
         const refund = led.spend && !led.refunded ? Math.max(0, led.spend.quarks) : 0;
-        const row = await repo.closeStale(j._id, { refundedQuarks: refund, now: deps.now() });
+        const row = await repo.closeStale(j._id, { refundedQuarks: refund, payerId: refund > 0 ? led.spend.payer : undefined, now: deps.now() });
         if (!row) continue;
         closed += 1;
         if (refund <= 0) continue;
@@ -553,9 +599,44 @@ function createPhotoshoot(given = {}) {
     return closed;
   }
 
+  /**
+   * Tries the refunds that did not land again (refundFailed). Each row is claimed first (one conditional update moves its
+   * retry time forward and counts the attempt), so two processes never both try it. Before paying, the proof is read: a
+   * refund that landed but reported a failure is only marked, never paid twice. A failed try waits twice as long as the
+   * last one; after REFUND_RETRY_MAX tries the row is left for a person and an alert is sent.
+   */
+  async function retryRefunds(limit = caps.REFUND_RETRY_BATCH) {
+    const now = deps.now();
+    const due = (await repo.refundsDue(now, limit).catch(() => [])) || [];
+    let retried = 0;
+    for (const d of due) {
+      try {
+        const job = await repo.claimRefundRetry(d._id, now, new Date(now.getTime() + caps.REFUND_RETRY_HOLD_MS)).catch(() => null);
+        if (!job) continue;
+        const amount = Number(job.refundedQuarks) || 0;
+        let led;
+        try { led = (await deps.ledgerFor(String(job._id), String(job.user))) || {}; } catch (_) { continue; } // unknown: tried after the hold
+        if (led.refunded || !(amount > 0)) { await repo.refundRetried(job._id); continue; }
+        let back = null;
+        try { back = await deps.refundTo(String(job.user), amount, { action: `${ACTION}_refund`, ref: String(job._id), payerId: job.payerId || (led.spend && led.spend.payer) || '' }); } catch (_) { back = null; }
+        if (back && back.ok) { await repo.refundRetried(job._id); retried += 1; continue; }
+        const tries = Number(job.refundAttempts) || 1;
+        if (tries >= caps.REFUND_RETRY_MAX) {
+          await repo.refundGaveUp(job._id).catch(() => null);
+          console.error(`[photoshoot] gave up refunding ${amount} Quarks for job ${String(job._id)} after ${tries} tries`);
+          deps.alertNow('photoshoot_refund_gave_up', `Photoshoot ${String(job._id)}: the refund of ${amount} Quarks to ${job.payerId || String(job.user)} did not land after ${tries} tries. Return it by hand.`);
+        } else {
+          await repo.refundRetryLater(job._id, new Date(now.getTime() + caps.REFUND_RETRY_BASE_MS * 2 ** (tries - 1))).catch(() => null);
+        }
+      } catch (e) { console.error('[photoshoot] refund retry failed:', e && e.message); }
+    }
+    return retried;
+  }
+
   /** Takes over jobs whose runner was lost (a restart): run by the loop, at start, and before a new job. */
   async function resumeLost() {
     await sweepStale().catch(() => null);
+    await retryRefunds().catch(() => null);
     const lost = (await repo.lostJobs(deps.now(), 10)) || [];
     for (const j of lost) {
       if (running.has(String(j._id))) continue;
@@ -617,6 +698,10 @@ function createPhotoshoot(given = {}) {
     const userId = idOf(user);
     if (!userId || !isObjectId(userId)) return reply(401, { message: 'Please sign in to continue.' });
     if ((user.staffRole || user.isCsm) && !pass) return reply(403, { message: MESSAGES.staff });
+    // The same gates as Create: a free plan cannot store photos here, and nothing is stored while the studio is off.
+    const ent = entitlement(user);
+    if (!ent.ok) return reply(403, { locked: ent.reason, upgradeRequired: true, message: MESSAGES.upgrade });
+    if (!switchOn(deps.env)) return reply(503, { disabled: true, message: MESSAGES.off });
     const b = body && typeof body === 'object' ? body : {};
     const name = String(b.name || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!name || Array.from(name).length > caps.NAME_MAX || !cleanName(name)) return reply(400, { message: MESSAGES.uploadName });
@@ -637,7 +722,7 @@ function createPhotoshoot(given = {}) {
     return rows.map((r) => ({ kind: r._id.kind, outcome: r._id.outcome || 'running', jobs: r.n, photos: r.photos }));
   }
 
-  return { packs, options, create, redo, get, list, library, setInLibrary, upload, runJob, resumeLost, finalize, sweepStale, dailyCounts, _locks: locks, _running: running };
+  return { packs, options, create, redo, get, list, library, setInLibrary, upload, runJob, resumeLost, finalize, sweepStale, retryRefunds, dailyCounts, _locks: locks, _running: running };
 }
 
 module.exports = { createPhotoshoot, catalogue, packView, planPhotos, jobView, minutesFor, istDay, MESSAGES, ACTION, ACTION_USD_PER_PHOTO: () => ACTION_USD[ACTION] };
