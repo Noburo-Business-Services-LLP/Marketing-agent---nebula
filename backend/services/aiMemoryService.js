@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { metricsFromRaw } = require('./performance/metrics');
 
 const AIBrandMemory = require('../models/AIBrandMemory');
 const AICampaignHistory = require('../models/AICampaignHistory');
@@ -346,7 +347,12 @@ function extractMetric(source = {}, keys = []) {
   return 0;
 }
 
-function normalizeAnalyticsMetrics(raw = {}) {
+function normalizeAnalyticsMetrics(raw = {}, platform = '') {
+  // The publishing service answers per platform ({ instagram: { analytics: { likeCount, ... } } }); read it with the same
+  // field names the Performance view uses. Older flat answers fall through to the flat reader below.
+  const perPlatform = metricsFromRaw(raw || {}, platform);
+  if (perPlatform) return { ...perPlatform, conversions: 0, spend: 0 };
+  raw = raw || {};
   const flat = raw.analytics || raw.data || raw;
   const firstPlatform = Array.isArray(flat?.posts) ? flat.posts[0] : null;
   const source = firstPlatform || flat;
@@ -356,6 +362,7 @@ function normalizeAnalyticsMetrics(raw = {}) {
   const views = extractMetric(source, ['views', 'videoViews', 'viewCount']);
   const clicks = extractMetric(source, ['clicks', 'clickCount']);
   const impressions = extractMetric(source, ['impressions', 'impressionCount']);
+  const saves = extractMetric(source, ['saves', 'saveCount', 'savedCount']);
   const reach = extractMetric(source, ['reach']);
   const ctr = extractMetric(source, ['ctr']);
   const engagement = extractMetric(source, ['engagement']) || likes + comments + shares + clicks;
@@ -367,6 +374,7 @@ function normalizeAnalyticsMetrics(raw = {}) {
     views,
     comments,
     shares,
+    saves,
     clicks,
     impressions,
     reach,
@@ -383,8 +391,10 @@ function scorePerformance(metrics = {}) {
     (metrics.engagementRate || 0) * 5 +
     (metrics.ctr || 0) * 4 +
     Math.log10((metrics.views || 0) + 1) * 8 +
-    Math.log10((metrics.impressions || 0) + 1) * 4 +
+    // Instagram reports reach but not impressions: reach stands in for them.
+    Math.log10((metrics.impressions || metrics.reach || 0) + 1) * 4 +
     (metrics.shares || 0) * 0.5 +
+    (metrics.saves || 0) * 0.5 +
     (metrics.comments || 0) * 0.35 +
     (metrics.likes || 0) * 0.08;
   return Number(Math.max(0, Math.min(100, score)).toFixed(2));
@@ -402,7 +412,7 @@ async function trackPerformance(payload = {}) {
     const userId = resolveUserId(payload.userId || payload.user);
     if (!userId) return null;
     const organizationId = resolveOrganizationId({ ...payload, userId });
-    const metrics = payload.metrics || normalizeAnalyticsMetrics(payload.rawAnalytics || {});
+    const metrics = payload.metrics || normalizeAnalyticsMetrics(payload.rawAnalytics || {}, payload.platform);
     const score = scorePerformance(metrics);
     const tier = tierFromScore(score);
     const hashtags = uniqueStrings(payload.hashtags || []);

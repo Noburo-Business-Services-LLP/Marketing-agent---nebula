@@ -135,6 +135,38 @@ function postMetricsOf(row) {
   return { values, reported, engagement, engagementReported: engagement !== null };
 }
 
+/** The platform a stored answer is about when the caller did not say: the only known platform key in it, else ''. */
+function platformOfAnswer(raw) {
+  if (!raw || typeof raw !== 'object') return '';
+  const found = Object.keys(raw).filter((k) => raw[k] && typeof raw[k] === 'object' && !Array.isArray(raw[k]) && isKnownPlatform(k));
+  return found.length === 1 ? normPlatform(found[0]) : '';
+}
+
+/**
+ * Figures for the `metrics` object of an `ai_content_performance` row, read from the publishing service's per-platform
+ * answer with the same field names the Performance view uses (one source of truth). Returns null when the answer holds no
+ * platform node at all (the caller then tries the old flat shapes). A figure the platform did not give is 0 (the model has
+ * no "missing"); a real 0 is 0 too. `engagementRate` is a percent worked out over impressions (else reach), 2 decimals.
+ */
+function metricsFromRaw(raw, platform) {
+  const p = platform ? normPlatform(platform) : platformOfAnswer(raw);
+  const node = platformNode(raw, p);
+  if (!node) return null;
+  const { values, engagement } = postMetricsOf({ platform: p, rawAnalytics: raw, metrics: {} });
+  const v = (k) => (isNum(values[k]) ? values[k] : 0);
+  const eng = engagement === null ? 0 : engagement;
+  const base = v('impressions') || v('reach');
+  const own = pick(node, ['engagementRate']);
+  const ctr = pick(node, ['ctr']);
+  return {
+    likes: v('likes'), views: v('views'), comments: v('comments'), shares: v('shares'), saves: v('saves'), clicks: v('clicks'),
+    impressions: v('impressions'), reach: v('reach'),
+    ctr: ctr !== undefined ? ctr : (v('impressions') > 0 && v('clicks') > 0 ? Number(((v('clicks') / v('impressions')) * 100).toFixed(2)) : 0),
+    engagement: eng,
+    engagementRate: own !== undefined && own > 0 ? own : (base > 0 ? Number(((eng / base) * 100).toFixed(2)) : 0)
+  };
+}
+
 /** The post's link on the platform, when one was stored (https only). */
 function postUrlOf(row, campaign) {
   const node = row && row.rawAnalytics && row.rawAnalytics[normPlatform(row.platform)];
@@ -194,5 +226,5 @@ function platformsOfSnapshot(s) {
 module.exports = {
   DAY_MS, RANGES, RANGE_WORDS, PLATFORM_LABEL, CORE_PLATFORMS, PLATFORM_ORDER, SNAPSHOT_GAPS, POST_METRICS, FORMAT_WORD, FORMAT_ONE,
   isNum, nonNeg, normPlatform, labelOf, isKnownPlatform, rangeKey, rangeWindow, istWeekdayHour, istDate,
-  postMetricsOf, postUrlOf, formatOf, titleOf, captionOf, thumbOf, platformsOfSnapshot
+  postMetricsOf, metricsFromRaw, platformOfAnswer, postUrlOf, formatOf, titleOf, captionOf, thumbOf, platformsOfSnapshot
 };
