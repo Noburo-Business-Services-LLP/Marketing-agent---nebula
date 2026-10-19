@@ -438,6 +438,58 @@
   var CLIENT_LIMIT = (ASTATE === 'cap' ? 25 : ASTATE === 'slots2' || ASTATE === 'usage-paging' ? 7 : 5) + BOUGHT;
   var ok = function (extra) { var o = { success: true }; for (var k in extra) o[k] = extra[k]; return o; };
 
+  // The sample answer of GET /ai-memory/learned for ?memorystate=. Shapes follow backend services/brandMemory/runner.js.
+  var memoryLearnedView = function (cooling) {
+    var p = new URLSearchParams(location.search).get('memorystate');
+    if (p) sessionStorage.setItem('audit-memory-state', p);
+    var st = sessionStorage.getItem('audit-memory-state') || 'empty';
+    var full = st === 'filled' || st === 'sources';
+    var it = function (id, text, ev, conf, days, edited) { return { id: id, type: 'item', text: text, evidenceText: ev, confidence: conf, learnedAt: iso(-days), updatedAt: iso(-days), userEdited: !!edited }; };
+    var src = function (key, title, state, reason, n, unit, items) { return { key: key, label: 'your ' + key, title: title, state: items.length ? 'learned' : state, reason: items.length ? '' : reason, evidenceCount: n, evidenceUnit: unit, checkedAt: iso(0), items: items }; };
+    var plan = (full || st === 'tracking' || st === 'partial') ? [
+      it('plan-themes', 'Your plan has 3 themes: Fresh bakes, Behind the counter and Weekend treats.', 'from your plan of 12 October', 'strong', 8),
+      it('plan-position', 'Your plan gives you this position: The neighbourhood bakery that remembers you. Your line: "Baked this morning, a street away"', 'from your plan of 12 October', 'strong', 8),
+      it('plan-channels', 'Your plan puts Instagram first, then WhatsApp and Google Business Profile.', 'from your plan of 12 October', 'strong', 8),
+      it('plan-format-mix', 'Your plan’s calendar leans on reels (12 of 30 days), then carousels (9).', 'from the 30 planned days of your plan', 'strong', 8)
+    ] : [];
+    var bp = full ? [
+      it('blueprint-themes', 'Your Blueprint has 4 themes: Fresh bakes, Festive boxes, Meet the bakers and Weekend treats.', 'from your Blueprint of 2 October', 'strong', 18),
+      it('blueprint-shared-themes', '2 themes are in both your Blueprint and your plan: Fresh bakes and Weekend treats.', 'from your Blueprint and your plan', 'strong', 8)
+    ] : [];
+    var cust = (full || st === 'partial') ? [
+      it('customers-who', 'Who buys from you: families and office workers within two kilometres who want fresh bread before work.', 'from your business profile', 'strong', 20),
+      it('customers-market', 'Your market (Bakery): you sell to individual customers, your customers are in the neighbourhood, your prices are mid-range.', 'from 3 answers in your business profile', 'strong', 20),
+      it('customers-pains', 'What worries them: Not knowing what is fresh today; Cakes that look better than they taste.', 'from your plan of 12 October (2 points)', 'good', 8),
+      it('customers-triggers', 'What makes them buy: A birthday this week; A rainy morning.', 'from your plan of 12 October (2 points)', 'good', 8)
+    ] : [];
+    var prod = (full || st === 'tracking' || st === 'partial') ? [
+      it('products-catalogue', 'You have 9 products and 1 service on file, 7 with a photo.', 'from 10 items in your catalogue', 'strong', 15),
+      it('products-prices', 'Your prices run from Rs 40 to Rs 1,450.', 'from 9 priced items', 'strong', 15),
+      it('products-category', 'Most of what you sell is Breads (6 of 10).', 'from 10 items in your catalogue', 'strong', 15)
+    ].concat(full ? [it('products-photos', '3 items have no photo yet, so posts about them cannot show the real thing.', 'from 10 items in your catalogue', 'strong', 15)] : []) : [];
+    var res = full ? [
+      it('results-format-video-image', 'Videos got 2.1 times the likes of image posts in the last 90 days.', 'from 14 posts', 'good', 4),
+      it('results-day-5', 'Posts published on a Saturday got 40 percent more engagement than your average in the last 90 days (4 posts on Saturdays, from 14 posts).', 'from 14 posts', 'good', 4),
+      it('results-caption-short', 'Mostly short captions, please: they did better for you.', 'from 12 posts', 'good', 4, true),
+      { id: 'mem-n1', type: 'note', kind: 'copy', text: 'Warm, first-person captions that name the neighbourhood do better than plain product lines.', evidenceText: 'from 6 published posts', confidence: 'good', learnedAt: iso(-12), updatedAt: iso(-12) }
+    ] : [];
+    var comp = full ? [
+      it('competitors-format-video-image', 'Across the 3 competitors you track, reels got 1.8 times the likes of photo posts in the last eight weeks.', 'from 46 competitor posts', 'strong', 6),
+      it('competitors-day-weekend', 'Across the 3 competitors you track, weekend posts got 35 percent more likes than weekday posts.', 'from 46 competitor posts', 'strong', 6),
+      it('competitors-rhythm', 'The 3 competitors you track post about 4 times a week on Instagram.', 'from 18 weekly readings', 'strong', 6)
+    ] : [];
+    var sources = [
+      src('plan', 'Learned from your plan', 'none', 'You have no plan yet. Nebulaa makes it from your business profile, then learns from it.', plan.length ? 4 : 0, 'parts', plan),
+      src('blueprint', 'Learned from your Blueprint', 'none', 'You have not made a Growth Blueprint yet. When you do, Nebulaa learns from it too.', bp.length ? 3 : 0, 'parts', bp),
+      src('customers', 'Learned about your customers', st === 'tracking' ? 'error' : 'none', st === 'tracking' ? 'We could not read this just now. Nebulaa will try again soon.' : 'Tell Nebulaa who your customers are in Settings, under your business profile, or wait for your plan.', cust.length ? 5 : 0, 'answers', cust),
+      src('products', 'Learned from your products', 'none', 'No products or services added yet. Add them under Brand assets, then Products, and Nebulaa learns from them.', prod.length ? 10 : 0, 'items', prod),
+      src('results', 'Learned from your results', st === 'empty' ? 'none' : 'not_enough', st === 'empty' ? 'None of your posts has been measured yet. Each post is measured a day, three days and a week after it goes out, then Nebulaa learns from it.' : 'Nebulaa has numbers for 3 posts from the last 90 days. It needs at least 5 to find a pattern. 5 posts were measured, but the platforms sent no numbers for 2 of them.', full ? 14 : 3, 'posts', res),
+      src('competitors', 'Learned from your competitors', st === 'partial' ? 'not_on_plan' : st === 'empty' ? 'none' : 'not_enough', st === 'partial' ? 'Learning from competitors comes with the competitor add-on.' : st === 'empty' ? 'Add the competitors you watch, and Nebulaa learns from their best posts each week.' : 'Nebulaa has read 7 posts with likes from 1 competitor. It needs at least 10, from two or more competitors, to find a pattern.', full ? 46 : st === 'partial' || st === 'empty' ? 0 : 7, 'posts', comp)
+    ];
+    var n = sources.reduce(function (a, b) { return a + b.items.length; }, 0);
+    return { sources: sources, refreshedAt: st === 'empty' ? iso(0) : iso(-1), itemCount: n, cooldown: cooling ? { until: iso(0), seconds: 600 } : null, cooldownMinutes: 10, tracked: full ? 18 : st === 'empty' ? 0 : 5 };
+  };
+
   // One competitor in each state the card and the list can show. insight() builds the GET /competitors/insights row.
   var COMP_ROWS = [
     ['cmp-1', 'Sweet Co Bakery', 'sweetco', 'verified', 'current'],
@@ -1275,6 +1327,17 @@
     ['GET', /^\/settings/, ok({ settings: {} })],
     ['GET', /^\/auto-reply/, ok({ settings: { enabled: false } })],
     ['GET', /^\/prompts/, ok({ prompts: [] })],
+    // ---- What Nebulaa learned by source (GET /ai-memory/learned, backend services/brandMemory/runner.js buildView).
+    // ?memorystate= empty (nothing anywhere) | tracking (a plan and products, results not enough yet) | partial (some
+    // sources learned, competitors not on the plan, one source could not be checked) | filled and sources (all six). ----
+    ['GET', /^\/ai-memory\/learned/, function () { return ok(memoryLearnedView(false)); }],
+    ['POST', /^\/ai-memory\/learned\/refresh/, function () {
+      var v = memoryLearnedView(true);
+      v.changed = false; v.message = 'Nothing new since the last look.';
+      return ok(v);
+    }],
+    ['PATCH', /^\/ai-memory\/learned\/[^/]+$/, ok({ item: { id: 'x', text: 'Saved', userEdited: true } })],
+    ['DELETE', /^\/ai-memory\/learned\/[^/]+$/, ok({})],
     // ---- Brand memory (/ai-memory) summary. ?memorystate= empty (default: nothing tracked) | tracking (posts tracked,
     // nothing learned yet) | filled (learned notes in five categories). Kept for the tab. ----
     ['GET', /^\/ai-memory\/summary/, function () {

@@ -4424,7 +4424,16 @@ export const aiMemoryAPI = {
 
   distillNow: async (): Promise<any> => {
     return apiCall<any>('/ai-memory/distill', { method: 'POST' }, true);
-  }
+  },
+
+  // What Nebulaa learned, by source (code only, no model call): backend routes/aiMemoryLearned.js
+  getLearned: async (): Promise<any> => apiCall<any>('/ai-memory/learned', { method: 'GET' }, true),
+  refreshLearned: async (): Promise<any> => apiCall<any>('/ai-memory/learned/refresh', { method: 'POST' }, true),
+  updateLearned: async (key: string, text: string): Promise<any> => apiCall<any>(`/ai-memory/learned/${encodeURIComponent(key)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ text })
+  }, true),
+  deleteLearned: async (key: string): Promise<any> => apiCall<any>(`/ai-memory/learned/${encodeURIComponent(key)}`, { method: 'DELETE' }, true)
 };
 
 // ================================

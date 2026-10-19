@@ -9,7 +9,7 @@ import { insightsTabs } from '../utils/navMenu';
 export const INSIGHTS_HEADERS: Record<string, React.ReactNode> = {
   performance: <PageHeader eyebrow="Insights" title="How your posts are" emphasis="doing" description="Reach, engagement, followers and posts published, from your connected accounts." />,
   competitors: <PageHeader eyebrow="Insights" title={<>Who else is in the <PageEmphasis>room</PageEmphasis>?</>} description="Their public posts, checked once a week: what is working for them and what you can make from it." />,
-  learned: <PageHeader eyebrow="Insights" title="What Nebulaa has" emphasis="learned" description="Nebulaa keeps a short list of patterns it has learned from how your published posts performed, and uses it when it plans your next posts." />,
+  learned: <PageHeader eyebrow="Insights" title="What Nebulaa has" emphasis="learned" description="Nebulaa keeps learning from your plan, your Blueprint, your customers, your products, your results and your competitors, and uses it when it makes your next posts." />,
 };
 
 /**
