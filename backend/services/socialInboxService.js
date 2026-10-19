@@ -864,11 +864,21 @@ function syncPlatform(platform) {
   return { success: true, mode: 'webhook', platform: normalized, message: 'New comments and messages arrive on their own as soon as they are posted.' };
 }
 
+// The Inbox filter bar's "Important" chip asks for both high and urgent conversations. Only known words are used.
+const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
+const STATUSES = ['unread', 'read', 'replied', 'closed'];
+function priorityFilter(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'important') return { $in: ['high', 'urgent'] };
+  return PRIORITIES.includes(v) ? v : undefined;
+}
+
 async function listConversations(userId, filters = {}) {
   const query = { userId };
-  if (filters.status) query.status = filters.status;
+  if (filters.status && STATUSES.includes(String(filters.status))) query.status = String(filters.status);
   if (filters.platform) query.platform = normalizePlatform(filters.platform);
-  if (filters.priority) query.priority = filters.priority;
+  const priority = priorityFilter(filters.priority);
+  if (priority) query.priority = priority;
   if (filters.assignedUserId && mongoose.Types.ObjectId.isValid(String(filters.assignedUserId))) {
     query.assignedUserId = filters.assignedUserId;
   }
@@ -1051,6 +1061,7 @@ function toMessageDTO(message, conversation) {
 }
 
 module.exports = {
+  priorityFilter,
   normalizePlatform,
   normalizeMessageType,
   analyzeEngagement,
