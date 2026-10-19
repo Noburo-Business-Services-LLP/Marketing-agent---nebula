@@ -58,7 +58,7 @@ test('Create content shows the mode tiles and keeps the modes and their behaviou
   assert.ok(page.includes('CREATE_TILES.map'), 'tiles are built from the list');
   assert.ok(page.includes('onClick={() => setMode(t.key)}'), 'a tile sets the mode like the old tabs did');
   assert.ok(page.includes('selected={mode === t.key}'), 'the current mode is marked');
-  assert.ok(page.includes('<ModeExplainer mode={mode} />'), 'the explainer stays');
+  assert.ok(!page.includes('ModeExplainer'), 'the explainer line under the tiles is gone; the tile text is the only description');
   for (const label of ['Create campaign', 'Create carousel', 'Create post', 'Building your campaign', 'Building your carousel']) {
     assert.ok(page.includes(label), label + ' unchanged');
   }

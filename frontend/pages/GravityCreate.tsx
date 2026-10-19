@@ -12,7 +12,6 @@ import type { LogoGridPosition } from '../constants/logoPositions';
 import { DEFAULT_LOGO_POSITION, logoPositionFor } from '../utils/logoChoice';
 import { OptionGroup, TileRadioRow, ShapeArt, LogoPostArt, LogoPositionTile, LanguageTile, PlatformTiles, LOOK_ART, tileClass } from '../components/CreateOptions';
 import PostDesignPanel from '../components/PostDesignPanel';
-import ModeExplainer from '../components/ModeExplainer';
 import CoverTile, { type CoverPalette } from '../components/CoverTile';
 import TileGrid from '../components/TileGrid';
 import { SinglePostArt, CampaignArt, CarouselArt, LinkedInArt, VideoArt, PhotoshootArt } from '../components/art';
@@ -1097,8 +1096,8 @@ const GravityCreate: React.FC = () => {
     <div className="max-w-[960px] mx-auto pb-24">
       {/* What to make: six cover tiles in one even row, Video first and Photoshoot second (two columns on a phone), each a
           small poster with the art filling it. The four modes only set the mode; Video and Photoshoot are made on their own
-          pages, so their tiles open those pages. */}
-      <div className="mt-1 mb-3">
+          pages, so their tiles open those pages. The tile text is the only description of each kind. */}
+      <div className="mt-1 mb-8">
         <TileGrid columns={6} size="small" label="What do you want to create?">
           <CoverTile
             title={VIDEO_ENTRY.title}
@@ -1130,8 +1129,6 @@ const GravityCreate: React.FC = () => {
           ))}
         </TileGrid>
       </div>
-
-      <ModeExplainer mode={mode} />
 
       {/* The brief: a small heading with the optional shortcuts beside it, then the idea box. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-2.5">
