@@ -94,6 +94,9 @@ const competitorSchema = new mongoose.Schema({
   avatarUrl: String,
   avatarUpdatedAt: Date,
   avatarSourceKey: String, // which picture it was made from (a hash of the link's path), so an unchanged picture is not fetched again
+  // Our own 360 x 450 copies of their top public posts (services/competitors/postThumbs.js), at most six, only while tracked
+  // and only when ENABLE_COMPETITOR_THUMBS is on. postKey is 'p-<shortcode>'; Instagram's picture link is never stored.
+  postThumbs: [{ _id: false, postKey: String, thumbUrl: String, sourceKey: String, at: Date }],
   // Weekly tracking state (see services/competitors/tracker.js)
   tracking: {
     failures: { type: Number, default: 0 },

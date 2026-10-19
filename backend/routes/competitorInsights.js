@@ -46,6 +46,18 @@ function statusOf({ competitor, attempt, snapshots, week }) {
   return 'tracking';
 }
 
+// Followers from the newest good snapshot ({ value, change } or null; 0 is unknown). The change only when the snapshot
+// before it is exactly the week before, the same rule as the best-posts tiles.
+function followersOf(snapshots) {
+  const [latest, prior] = Array.isArray(snapshots) ? snapshots : [];
+  const n = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+  const f = latest ? n(latest.followers) : null;
+  if (f === null) return null;
+  const a = prior ? Date.parse(`${prior.weekStart}T00:00:00Z`) : NaN; const b = Date.parse(`${latest.weekStart}T00:00:00Z`);
+  const pf = prior && b - a === 7 * 864e5 ? n(prior.followers) : null;
+  return { value: f, change: pf === null ? null : f - pf };
+}
+
 // The body for one account: the customer's own look, and the same thing for a client when staff look.
 async function viewFor(user, { deps, now = new Date() } = {}) {
   const d = withDefaults(deps);
@@ -65,7 +77,7 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
     const status = statusOf({ competitor, attempt, snapshots, week });
     items.push({ competitor: { _id: competitor._id, name: competitor.name }, snapshots });
     const checked = (competitor.tracking && competitor.tracking.lastCheckedAt) || (attempt && attempt.takenAt) || null;
-    rows.push({ competitor, status, lastCheckedAt: checked ? new Date(checked).toISOString() : null });
+    rows.push({ competitor, status, lastCheckedAt: checked ? new Date(checked).toISOString() : null, followers: followersOf(snapshots) });
   }
 
   const made = insights({ items, now });
@@ -74,12 +86,12 @@ async function viewFor(user, { deps, now = new Date() } = {}) {
     success: true,
     weekStart: week,
     highlights: made.highlights.map((h) => ({ competitorId: String(h.competitorId), name: h.name, text: h.text, weight: h.weight })),
-    competitors: rows.map(({ competitor, status, lastCheckedAt }) => {
+    competitors: rows.map(({ competitor, status, lastCheckedAt, followers }) => {
       const m = madeOf.get(String(competitor._id)) || {};
       return {
         id: String(competitor._id), name: competitor.name, handle: handleOf(competitor), handleStatus: handleStatusOf(competitor), status,
         avatarUrl: isStoredAvatarUrl(competitor.avatarUrl) ? competitor.avatarUrl : null,
-        trend: m.trend || [], lastCheckedAt,
+        trend: m.trend || [], lastCheckedAt, followers,
         // Which week the numbers are from: when isCurrentWeek is false say "last checked on <lastCheckedOn>", not "this week".
         weekOf: m.weekOf || null, isCurrentWeek: !!m.isCurrentWeek, previousWeekOf: m.previousWeekOf || null, lastCheckedOn: m.lastCheckedOn || null
       };

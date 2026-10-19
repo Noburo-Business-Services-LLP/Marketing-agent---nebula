@@ -50,6 +50,10 @@ function createHandleRouter(impl = {}) {
       if (competitor.avatarUrl && before.toLowerCase() !== handle.toLowerCase()) {
         await (impl.dropAvatar || require('../services/competitors/avatar').dropAvatar)(competitor, { Competitor: Competitor() });
       }
+      // The same for the stored post pictures: they belong to the old page.
+      if (Array.isArray(competitor.postThumbs) && competitor.postThumbs.length && before.toLowerCase() !== handle.toLowerCase()) {
+        await (impl.dropThumbs || require('../services/competitors/postThumbs').dropThumbs)(competitor, { Competitor: Competitor() });
+      }
       return res.json({ success: true, competitor: { id, name: competitor.name, handle, handleStatus: 'confirmed' } });
     } catch (err) {
       console.error('[competitor-handle] route error:', err && err.message);

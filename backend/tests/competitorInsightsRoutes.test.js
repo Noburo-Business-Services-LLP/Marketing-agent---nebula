@@ -118,7 +118,11 @@ test('the body has one row per competitor with the right status, and never raw s
   assert.ok(res.body.highlights.some((h) => /Rival ok posted 5 times this week, up from 2\./.test(h.text)));
   for (const h of res.body.highlights) assert.deepStrictEqual(Object.keys(h).sort(), ['competitorId', 'name', 'text', 'weight']);
   const text = JSON.stringify(res.body);
-  for (const leak of ['followers', 'formats', 'topPost', 'hashtags', 'private', 'takenAt', 'userId']) assert.ok(!text.includes(leak), leak);
+  for (const leak of ['formats', 'topPost', 'hashtags', 'private', 'takenAt', 'userId']) assert.ok(!text.includes(leak), leak);
+  // Followers only as { value, change } from the newest good reading (the tiles on the competitors card), or null.
+  for (const c of res.body.competitors) {
+    assert.ok(c.followers === null || (Object.keys(c.followers).sort().join() === 'change,value' && c.followers.value > 0), `${c.name} followers shape`);
+  }
 });
 
 test('a failed latest check with a good snapshot this week is still tracking; a failed week after an older good one is failed', async () => {

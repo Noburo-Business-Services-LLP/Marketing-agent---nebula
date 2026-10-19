@@ -11,12 +11,17 @@
  * and the better group's average likes are at least MIN_RATIO times the other's (and the other averages at least 1 like).
  * The strongest pattern wins (format, then weekend, then evening on a tie). Nothing is said otherwise.
  *
+ * "Trending for you" sources, in order: a competitor's pattern, the account's own best post, the next India day
+ * (config/festivals.js), up to two dated public events for the account's industry ("From the news calendar",
+ * config/trendingEvents.js) and the plan's first theme. No live trend source exists yet (services/trends/provider.js).
+ *
  * Briefs for "Make a post like this" are written here from the customer's own words (plan themes, own captions) and the
  * pattern; a competitor's name, handle or caption never enters a brief.
  * Rules and examples: docs/superpowers/ops/competitors-home.md
  */
 const { weekStartOf } = require('../week/weekMath');
 const { isStoredAvatarUrl } = require('./avatar');
+const { isStoredThumbUrl } = require('./postThumbs');
 
 const DAY = 864e5;
 const MONTH_DAYS = 30;
@@ -26,7 +31,10 @@ const MIN_GROUP = 2;
 const MIN_RATIO = 1.5;
 const EVENING_HOUR = 17;
 const MAX_WORKING = 3;
-const MAX_TRENDING = 4;
+const MAX_TRENDING = 6;
+const MAX_NEWS = 2;
+const MAX_GALLERY_BEST = 3;
+const MAX_GALLERY_LATEST = 3;
 const FESTIVAL_WINDOW_DAYS = 30;
 const MAX_BRIEF = 200;
 const MAKE_LABEL = 'Make a post like this';
@@ -163,13 +171,26 @@ function whatWorked(posts, now) {
   return { kind: w.kind, best: w.best, ratio: Math.round(w.ratio * 10) / 10, text: w.text };
 }
 
+/**
+ * The posts a competitor's gallery row shows: the best 3 of the last 30 days by score ('best'), then the newest ones not
+ * already in it ('latest', up to 3). Only posts with their own Instagram link (they open the original).
+ */
+function galleryOf(posts, now) {
+  const at = toDate(now) || new Date();
+  const linked = asArray(posts).filter((p) => p && p.at instanceof Date && p.at <= at && p.url);
+  const best = linked.filter((p) => inMonth(p, at)).map((p) => ({ p, s: scoreOf(p) })).filter((x) => x.s !== null && x.s > 0)
+    .sort((a, b) => b.s - a.s || b.p.at - a.p.at).slice(0, MAX_GALLERY_BEST).map((x) => ({ p: x.p, pick: 'best' }));
+  const latest = [...linked].sort((a, b) => b.at - a.at).filter((p) => !best.some((b) => b.p.url === p.url)).slice(0, MAX_GALLERY_LATEST).map((p) => ({ p, pick: 'latest' }));
+  return [...best, ...latest];
+}
+
 const consecutive = (prev, next) => {
   const a = Date.parse(`${prev}T00:00:00Z`); const b = Date.parse(`${next}T00:00:00Z`);
   return Number.isFinite(a) && Number.isFinite(b) && b - a === 7 * DAY;
 };
 
 /** What one competitor tile shows. `snapshots`: this competitor's good snapshots, newest first. */
-function competitorCard({ competitor, status, snapshots, now, lastCheckedAt = null } = {}) {
+function competitorCard({ competitor, status, snapshots, now, lastCheckedAt = null, thumbs = null } = {}) {
   const at = toDate(now) || new Date();
   const snaps = asArray(snapshots).filter((s) => s && s.ok !== false);
   const latest = snaps[0] || null;
@@ -182,7 +203,7 @@ function competitorCard({ competitor, status, snapshots, now, lastCheckedAt = nu
     status: status || 'waiting', profileUrl: linked ? `https://www.instagram.com/${handle}/` : null,
     // Our own stored copy of their profile picture (never Instagram's link), or null: the page shows initials then.
     avatarUrl: isStoredAvatarUrl(competitor && competitor.avatarUrl) ? competitor.avatarUrl : null,
-    followers: null, postsThisWeek: null, bestPost: null, worked: null,
+    followers: null, postsThisWeek: null, bestPost: null, worked: null, gallery: [],
     weekOf: latest ? latest.weekStart || null : null, isCurrentWeek: !!(latest && latest.weekStart === thisWeek), lastCheckedOn: null
   };
   const taken = toDate((latest && latest.takenAt) || lastCheckedAt);
@@ -201,8 +222,13 @@ function competitorCard({ competitor, status, snapshots, now, lastCheckedAt = nu
   const week = bestOf(posts, { now: at, period: 'week' });
   const month = week ? null : bestOf(posts, { now: at, period: 'month' });
   const best = week || month;
+  // Our own stored copy of a post's picture (postThumbs.js), only when the switch is on and the link is ours; else null.
+  const thumbOf = (p) => { const u = thumbs && typeof thumbs.get === 'function' ? thumbs.get(postKeyOf(p)) : null; return isStoredThumbUrl(u) ? u : null; };
+  card.gallery = galleryOf(posts, at).map((g) => ({
+    ref: postRefOf(card.id, g.p), pick: g.pick, type: g.p.type, likes: g.p.likes, comments: g.p.comments, at: g.p.at.toISOString(), url: g.p.url, thumbUrl: thumbOf(g.p)
+  }));
   if (best) {
-    card.bestPost = { period: week ? 'week' : 'month', type: best.type, likes: best.likes, comments: best.comments, at: best.at.toISOString(), url: best.url, score: best.score, ref: postRefOf(card.id, best) };
+    card.bestPost = { period: week ? 'week' : 'month', type: best.type, likes: best.likes, comments: best.comments, at: best.at.toISOString(), url: best.url, score: best.score, ref: postRefOf(card.id, best), thumbUrl: thumbOf(best) };
   } else if (!asArray(latest.posts).length && latest.topPost) {
     // An older snapshot (before the post list was stored): its own best post, if it is recent and has likes.
     const t = latest.topPost; const tAt = toDate(latest.topPostAt);
@@ -210,7 +236,7 @@ function competitorCard({ competitor, status, snapshots, now, lastCheckedAt = nu
       const url = POST_LINK.test(String(t.url || '')) ? t.url : '';
       card.bestPost = {
         period: weekStartOf(tAt) === thisWeek ? 'week' : 'month', type: typeOf(t.type), likes: t.likes, comments: isCount(t.comments) ? t.comments : null,
-        at: tAt.toISOString(), url, score: scoreOf({ likes: t.likes, comments: t.comments }), ref: postRefOf(card.id, { url, at: tAt })
+        at: tAt.toISOString(), url, score: scoreOf({ likes: t.likes, comments: t.comments }), ref: postRefOf(card.id, { url, at: tAt }), thumbUrl: null
       };
     }
   }
@@ -275,6 +301,7 @@ function workingPosts(cards, { pillars = [], max = MAX_WORKING } = {}) {
       const { type, brief } = competitorBrief(c, topic);
       return {
         competitorId: c.id, name: c.name, handle: c.handle, period: b.period, type: b.type, likes: b.likes, comments: b.comments, at: b.at, url: b.url, ref: b.ref || '',
+        thumbUrl: isStoredThumbUrl(b.thumbUrl) ? b.thumbUrl : null,
         reason: `A ${NOUN[b.type]} on ${dayLabel(new Date(b.at))} with ${counts}, their best ${b.period === 'week' ? 'this week' : 'this month'}.`,
         worked: c.worked ? c.worked.text : null,
         action: actionFor(type, brief)
@@ -283,7 +310,7 @@ function workingPosts(cards, { pillars = [], max = MAX_WORKING } = {}) {
 }
 
 /** "Trending for you": one item per honest source, at most four. */
-function trendItems({ cards = [], own = [], pillars = [], festivals = [], entitled = false, now } = {}) {
+function trendItems({ cards = [], own = [], pillars = [], festivals = [], news = [], entitled = false, now } = {}) {
   const at = toDate(now) || new Date();
   const banned = bannedOf(cards);
   const themes = asArray(pillars).map((x) => safeTopic(x, banned)).filter(Boolean);
@@ -328,6 +355,22 @@ function trendItems({ cards = [], own = [], pillars = [], festivals = [], entitl
     });
   }
 
+  // "From the news calendar" (config/trendingEvents.js): dated public events for this industry, at most MAX_NEWS.
+  for (const e of asArray(news).filter((x) => x && x.id && isCount(x.daysAway) && x.daysAway <= FESTIVAL_WINDOW_DAYS).slice(0, MAX_NEWS)) {
+    const range = e.start !== e.end;
+    const when = e.running
+      ? `On now, until ${longDay(e.end)}.`
+      : range
+        ? `From ${longDay(e.start)} to ${longDay(e.end)}, starting ${e.daysAway === 1 ? 'tomorrow' : `in ${e.daysAway} days`}.`
+        : `${longDay(e.start)}, ${e.daysAway === 0 ? 'today' : e.daysAway === 1 ? 'tomorrow' : `in ${e.daysAway} days`}.`;
+    const base = `A post for ${e.name}${range ? '' : ` on ${shortDay(e.start)}`}, about ${topic}.`;
+    const idea = String(e.idea || '').trim();
+    items.push({
+      id: `news:${e.id}`, source: 'news', label: 'From the news calendar', title: e.name, reason: when, idea: idea || null,
+      action: actionFor('image', base.length + 1 + idea.length <= MAX_BRIEF && idea ? `${base} ${idea}` : base)
+    });
+  }
+
   if (themes.length) {
     items.push({
       id: 'plan:0', source: 'plan', label: 'From your plan', title: themes[0], reason: 'One of the themes in your plan.',
@@ -335,7 +378,7 @@ function trendItems({ cards = [], own = [], pillars = [], festivals = [], entitl
     });
   }
   // Defensive: an item whose words do not pass the wording rule is left out rather than shown.
-  return items.filter((i) => [i.title, i.reason, i.action.brief].every(isPlainText)).slice(0, MAX_TRENDING);
+  return items.filter((i) => [i.title, i.reason, i.idea || '', i.action.brief].every(isPlainText)).slice(0, MAX_TRENDING);
 }
 
 // ---- wording guard --------------------------------------------------------------------------------------------------
@@ -348,5 +391,5 @@ function isPlainText(s) {
 
 module.exports = {
   scoreOf, postKeyOf, postRefOf, mergePosts, bestOf, whatWorked, competitorCard, workingPosts, trendItems, cleanTopic, safeTopic, isPlainText,
-  SCORE_COMMENT_WEIGHT, MIN_POSTS_FOR_PATTERN, MIN_GROUP, MIN_RATIO, MONTH_DAYS, FESTIVAL_WINDOW_DAYS, MAX_WORKING, MAX_TRENDING
+  galleryOf, SCORE_COMMENT_WEIGHT, MIN_POSTS_FOR_PATTERN, MIN_GROUP, MIN_RATIO, MONTH_DAYS, FESTIVAL_WINDOW_DAYS, MAX_WORKING, MAX_TRENDING, MAX_NEWS
 };

@@ -72,7 +72,8 @@ test('without the add-on no competitor data is even read; Trending still shows t
   assert.deepStrictEqual(b.working, []);
   assert.strictEqual(w.calls.competitors, 0);
   assert.strictEqual(w.calls.snapshots, 0);
-  assert.deepStrictEqual(b.trending.map((t) => t.source), ['own', 'festival', 'plan']);
+  // 'news' is the dated public calendar (config/trendingEvents.js); it is there whenever an event falls in the window.
+  assert.deepStrictEqual(b.trending.map((t) => t.source).filter((s) => s !== 'news'), ['own', 'festival', 'plan']);
   assert.strictEqual(res.headers['Cache-Control'], 'private, no-store');
 });
 

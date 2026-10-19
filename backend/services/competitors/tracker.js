@@ -72,6 +72,8 @@ function defaultDeps() {
     scrapeProfile: (handle) => require('../socialMediaAPI').scrapeInstagramProfile(handle),
     // The competitor's picture, from the profile just read (no extra read). Best effort: see avatar.js.
     refreshAvatar: (args) => require('./avatar').refreshAvatar(args),
+    // Small copies of their top posts, from the same read (no extra read). Off unless ENABLE_COMPETITOR_THUMBS=on: postThumbs.js.
+    refreshPostThumbs: (args) => require('./postThumbs').refreshPostThumbs(args),
     sleep: (ms) => new Promise((r) => setTimeout(r, ms))
   };
 }
@@ -148,6 +150,12 @@ async function trackOne({ competitor, user, now, deps } = {}) {
     // After the read is saved: keep our own small copy of their profile picture. Never fails the read.
     if (snapshotFields && profileRead && typeof d.refreshAvatar === 'function') {
       try { await d.refreshAvatar({ competitor, profile: profileRead, now: at }); } catch (_) { /* the old picture stays */ }
+    }
+    if (snapshotFields && profileRead && typeof d.refreshPostThumbs === 'function') {
+      try {
+        const snapshots = await Promise.resolve(d.store.latest(competitor._id, 4)).catch(() => []);
+        await d.refreshPostThumbs({ competitor, profile: profileRead, snapshots: snapshots || [], now: at, deps: { env: d.env } });
+      } catch (_) { /* the stored post pictures stay as they were */ }
     }
     return snapshotFields ? { ok: true, read: true } : { ok: false, read: true, reason: error };
   } catch (e) {

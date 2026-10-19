@@ -10,6 +10,8 @@ const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const caps = require('../config/competitors');
 const { upcoming } = require('../config/festivals');
+const { upcomingEvents } = require('../config/trendingEvents');
+const { thumbMap, thumbsEnabled } = require('../services/competitors/postThumbs');
 const { weekStartOf } = require('../services/week/weekMath');
 const { trackedCompetitors, competitorsQuery } = require('../services/competitors/tracked');
 const { competitorCard, workingPosts, trendItems, MONTH_DAYS } = require('../services/competitors/bestPosts');
@@ -50,6 +52,8 @@ function defaultDeps() {
       return list.map((p) => String((p && p.name) || '').trim()).filter(Boolean).slice(0, 5);
     },
     trackerOn: () => require('../services/competitors/readGuard').trackerEnabled(process.env),
+    // Post pictures (our stored copies) are shown only while ENABLE_COMPETITOR_THUMBS is on; otherwise every thumbUrl is null.
+    thumbsOn: () => thumbsEnabled(process.env),
     canUse: (user, feature) => require('../config/entitlements').canUse(user, feature)
   };
 }
@@ -69,6 +73,7 @@ async function build({ user, deps: given, now = new Date(), pass = false } = {})
     try { return await fn(); } catch (e) { console.error(`[best-posts] ${name} failed:`, e && e.message); degraded.push(name); return fallback; }
   };
   const trackerOn = deps.trackerOn() === true;
+  const thumbsOn = typeof deps.thumbsOn === 'function' && deps.thumbsOn() === true;
   let entitled = false;
   try { entitled = !!(deps.canUse(user, 'competitors') || {}).allowed; } catch (_) { entitled = false; }
 
@@ -99,7 +104,7 @@ async function build({ user, deps: given, now = new Date(), pass = false } = {})
       const attempt = list.slice().sort((a, b) => new Date(b.takenAt || 0) - new Date(a.takenAt || 0))[0] || null;
       let status = statusOf({ competitor, attempt, snapshots: good, week });
       if (status === 'failed' && attempt && String(attempt.error || '').startsWith(PRIVATE_ERROR)) status = 'private';
-      return competitorCard({ competitor, status, snapshots: good, now, lastCheckedAt: (competitor.tracking && competitor.tracking.lastCheckedAt) || (attempt && attempt.takenAt) || null });
+      return competitorCard({ competitor, status, snapshots: good, now, lastCheckedAt: (competitor.tracking && competitor.tracking.lastCheckedAt) || (attempt && attempt.takenAt) || null, thumbs: thumbMap(competitor, { on: thumbsOn }) });
     });
     const failed = degraded.includes('competitors') || degraded.includes('snapshots');
     if (failed) state = 'error';
@@ -109,9 +114,11 @@ async function build({ user, deps: given, now = new Date(), pass = false } = {})
   }
 
   const working = entitled ? workingPosts(cards, { pillars }) : [];
-  const trending = trendItems({ cards, own, pillars, festivals: upcoming(now, 60), entitled, now });
+  const industry = String((user && user.businessProfile && user.businessProfile.industry) || '');
+  const news = upcomingEvents({ now, withinDays: 30, industry });
+  const trending = trendItems({ cards, own, pillars, festivals: upcoming(now, 60), news, entitled, now });
   return {
-    ...base, entitled, trackerOn, state,
+    ...base, entitled, trackerOn, thumbsOn, state,
     competitors: cards.map(({ bestPost, ...c }) => ({ ...c, bestPost: bestPost ? (({ score, ...b }) => b)(bestPost) : null })),
     working, trending, degraded
   };
