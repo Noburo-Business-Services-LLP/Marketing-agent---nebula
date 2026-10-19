@@ -6,6 +6,7 @@ const { CREDIT_COSTS, ACTION_UNITS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
 const quarkBuckets = require('../services/quarkBuckets');
 const agencyRules = require('../services/agency');
+const { pricingExtras } = require('../services/costList');
 
 // Inside a client, only the shared pool's balance is shown: never the agency's history, buckets or other clients' spend.
 // A frozen client (over the agency's limit) is refused outright.
@@ -39,7 +40,8 @@ router.get('/', protect, async (req, res) => {
         },
         trial: { startDate: user.trial?.startDate || user.createdAt, isExpired: false },
         costs: CREDIT_COSTS,
-        units: ACTION_UNITS
+        units: ACTION_UNITS,
+        pricing: pricingExtras()
       });
     }
     const fresh = settled.changed ? await User.findById(user._id) : user;
@@ -68,7 +70,9 @@ router.get('/', protect, async (req, res) => {
       // per scene, per post). Shipping the units alongside the numbers is
       // what stops the UI rendering "Carousel 4.5" as if that were the
       // price of a whole carousel.
-      units: ACTION_UNITS
+      units: ACTION_UNITS,
+      // Video part length and packs for the price list in Settings > Billing (no prices: see services/costList.js).
+      pricing: pricingExtras()
     });
   } catch (error) {
     console.error('Get credits error:', error);
