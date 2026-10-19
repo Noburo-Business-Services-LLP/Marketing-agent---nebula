@@ -8,7 +8,7 @@ const AIVideoMemory = require('../models/AIVideoMemory');
 const AIContentPerformance = require('../models/AIContentPerformance');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { resolveOrganizationId } = require('../services/aiMemoryService');
-const { distillMemoryForUser } = require('../services/memoryDistillation');
+const { distillMemoryDetailed } = require('../services/memoryDistillation');
 
 function userIdFromReq(req) {
   return req.user.userId || req.user.id || req.user._id;
@@ -211,13 +211,14 @@ router.post('/distill', protect, async (req, res) => {
   try {
     const userId = userIdFromReq(req);
     const organizationId = resolveOrganizationId({ user: req.user, userId });
-    const notes = await distillMemoryForUser(userId, organizationId);
+    const { notes, blocked, message: blockedMessage } = await distillMemoryDetailed(userId, organizationId);
     if (notes === null) {
       const existing = await AIBrandMemory.findOne({ organizationId, userId }).select('learnedNotes learnedNotesUpdatedAt').lean();
       return res.json({
         success: true,
         skipped: true,
-        message: 'No new performance data since the last update.',
+        ...(blocked ? { paused: true } : {}),
+        message: blocked ? blockedMessage : 'No new performance data since the last update.',
         learnedNotes: existing?.learnedNotes || [],
         learnedNotesUpdatedAt: existing?.learnedNotesUpdatedAt || null
       });

@@ -71,16 +71,32 @@ function formatEvidenceForPrompt(performanceRecords) {
     .join('\n');
 }
 
-async function distillMemoryForUser(userId, organizationId) {
+const BLOCKED_MESSAGE = 'Memory refresh is paused for a little while. Nothing was lost and nothing was charged. It will catch up on its own.';
+
+const realDeps = () => ({
+  Performance: AIContentPerformance,
+  Memory: AIBrandMemory,
+  callLLM: callTextLLM,
+  guard: require('./spendGuard')
+});
+
+/**
+ * Same work as distillMemoryForUser, but says why nothing was written.
+ * Returns { notes } on success, { notes: null } when there is nothing new,
+ * and { notes: null, blocked: true, message } when the spend guard said no.
+ * The customer is never charged: this is an internal cost, counted toward the daily ceiling only.
+ */
+async function distillMemoryDetailed(userId, organizationId, deps = {}) {
+  const { Performance, Memory, callLLM, guard } = { ...realDeps(), ...deps };
   const [winners, losers, brandMemory] = await Promise.all([
-    AIContentPerformance.find({ organizationId, userId, 'learning.tier': { $in: ['high', 'winner'] } })
+    Performance.find({ organizationId, userId, 'learning.tier': { $in: ['high', 'winner'] } })
       .sort({ measuredAt: -1 }).limit(WINNER_LIMIT).lean(),
-    AIContentPerformance.find({ organizationId, userId, 'learning.tier': 'low' })
+    Performance.find({ organizationId, userId, 'learning.tier': 'low' })
       .sort({ measuredAt: -1 }).limit(LOSER_LIMIT).lean(),
-    AIBrandMemory.findOne({ organizationId, userId }).lean()
+    Memory.findOne({ organizationId, userId }).lean()
   ]);
 
-  if (!winners.length && !losers.length) return null; // nothing to learn from yet
+  if (!winners.length && !losers.length) return { notes: null }; // nothing to learn from yet
 
   // Skip if nothing new has been measured since the last successful run —
   // bounds LLM cost instead of re-summarizing unchanged evidence weekly.
@@ -88,7 +104,7 @@ async function distillMemoryForUser(userId, organizationId) {
     .map((p) => new Date(p.measuredAt).getTime())
     .reduce((max, t) => Math.max(max, t), 0);
   const lastRun = brandMemory?.learnedNotesUpdatedAt ? new Date(brandMemory.learnedNotesUpdatedAt).getTime() : 0;
-  if (newestEvidence <= lastRun) return null;
+  if (newestEvidence <= lastRun) return { notes: null };
 
   const existingNotesText = (brandMemory?.learnedNotes || [])
     .map((n) => `- [${n.category}] ${n.text}`)
@@ -99,7 +115,11 @@ async function distillMemoryForUser(userId, organizationId) {
     .replace('{{LOSERS}}', formatEvidenceForPrompt(losers) || '(none)')
     .replace('{{EXISTING_NOTES}}', existingNotesText);
 
-  const response = await callTextLLM(prompt, { jsonMode: true, temperature: 0.4, maxTokens: 2000, skipCache: true });
+  const allowed = await guard.check('campaign_text');
+  if (!allowed || allowed.ok === false) return { notes: null, blocked: true, message: BLOCKED_MESSAGE };
+
+  const response = await callLLM(prompt, { jsonMode: true, temperature: 0.4, maxTokens: 2000, skipCache: true });
+  await guard.record('campaign_text', 1);
   const parsed = parseGeminiJSON(response);
   const rawNotes = Array.isArray(parsed?.notes) ? parsed.notes : [];
 
@@ -138,18 +158,23 @@ async function distillMemoryForUser(userId, organizationId) {
   // blocking retries until fresh evidence arrives (see the skip-check
   // above). Bail out without writing so existing notes are untouched and
   // the next scheduled run can retry freely.
-  if (!notes.length) return null;
+  if (!notes.length) return { notes: null };
 
-  await AIBrandMemory.findOneAndUpdate(
+  await Memory.findOneAndUpdate(
     { organizationId, userId },
     { $set: { learnedNotes: notes, learnedNotesUpdatedAt: new Date() } },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  return notes;
+  return { notes };
 }
 
-async function runDistillationOnce({ limit = 50 } = {}) {
+async function distillMemoryForUser(userId, organizationId, deps = {}) {
+  const r = await distillMemoryDetailed(userId, organizationId, deps);
+  return r.notes;
+}
+
+async function runDistillationOnce({ limit = 50, deps = {} } = {}) {
   // Any account with an AIBrandMemory doc is a candidate — distillMemoryForUser
   // itself no-ops when there's no new evidence, so this doesn't need its own
   // "has this account been active" filter.
@@ -159,24 +184,29 @@ async function runDistillationOnce({ limit = 50 } = {}) {
   // run once the account base exceeds `limit`, and every account past that
   // is never distilled. Ascending order means the whole account base cycles
   // through over successive runs as learnedNotesUpdatedAt advances.
-  const accounts = await AIBrandMemory.find({}).select('userId organizationId').sort({ learnedNotesUpdatedAt: 1 }).limit(limit).lean();
+  const accounts = await (deps.Memory || AIBrandMemory).find({}).select('userId organizationId').sort({ learnedNotesUpdatedAt: 1 }).limit(limit).lean();
   let distilled = 0;
+  let skipped = 0;
   for (const acct of accounts) {
     try {
-      const result = await distillMemoryForUser(acct.userId, acct.organizationId);
-      if (result) distilled += 1;
+      const result = await distillMemoryDetailed(acct.userId, acct.organizationId, deps);
+      if (result.blocked) {
+        // Quiet skip: one warning for the whole run, not one per account.
+        if (skipped === 0) console.warn('[MemoryDistillation] Spend guard is blocking model calls; skipping accounts this run');
+        skipped += 1;
+      } else if (result.notes) distilled += 1;
     } catch (err) {
       console.warn(`[MemoryDistillation] Failed for user ${acct.userId}:`, err.message);
     }
   }
-  return { accountsChecked: accounts.length, distilled };
+  return { accountsChecked: accounts.length, distilled, skipped };
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function startMemoryDistillationScheduler({ intervalMs = WEEK_MS, logger = console } = {}) {
-  if (String(process.env.ENABLE_MEMORY_DISTILLATION || 'true').toLowerCase() === 'false') {
-    logger.log('[MemoryDistillation] Scheduler disabled via ENABLE_MEMORY_DISTILLATION=false');
+  if (['false', 'off'].includes(String(process.env.ENABLE_MEMORY_DISTILLATION || 'true').toLowerCase())) {
+    logger.log('[MemoryDistillation] Scheduler disabled via ENABLE_MEMORY_DISTILLATION');
     return () => {};
   }
   logger.log(`[MemoryDistillation] Scheduler started (interval ${intervalMs}ms)`);
@@ -191,6 +221,8 @@ function startMemoryDistillationScheduler({ intervalMs = WEEK_MS, logger = conso
 
 module.exports = {
   distillMemoryForUser,
+  distillMemoryDetailed,
+  BLOCKED_MESSAGE,
   runDistillationOnce,
   startMemoryDistillationScheduler
 };
