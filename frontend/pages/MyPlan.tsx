@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
-import { apiService } from '../services/api';
+import { apiService, inventoryAPI } from '../services/api';
 import CompetitorInsights from '../components/CompetitorInsights';
 import ListeningCard from '../components/ListeningCard';
+import StrategyFunnel from '../components/StrategyFunnel';
 import type { PlanView } from '../types';
 import { BANNER_TEXT, PHASE_TITLES, dayMonth, effortRows, planBanner, refreshLabel, sectionsOf, shouldPoll, stoppedMessage, tagLabel } from '../utils/plan';
+import { levelsOf } from '../utils/strategyLevels';
 
 const CARD = 'rounded-xl border border-[var(--gv-border-default)] bg-[var(--gv-panel)] p-4 sm:p-5';
 const BTN_MAIN = 'inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--gv-accent)] px-4 min-h-[40px] text-[13px] font-semibold text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)] disabled:opacity-50';
@@ -183,6 +185,8 @@ const MyPlan: React.FC = () => {
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [looked, setLooked] = useState(0);
+  // The products level of the funnel comes from the owner's own list; null means it could not be loaded.
+  const [products, setProducts] = useState<unknown[] | null | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -192,6 +196,14 @@ const MyPlan: React.FC = () => {
   }, []);
 
   useEffect(() => { load(); return () => { if (timer.current) clearTimeout(timer.current); }; }, [load]);
+  // Asked for at the same time as the plan, so the funnel does not wait for one call after the other.
+  useEffect(() => {
+    let live = true;
+    inventoryAPI.getProducts()
+      .then((r: any) => { if (live) setProducts(Array.isArray(r?.products) ? r.products : Array.isArray(r?.data) ? r.data : []); })
+      .catch(() => { if (live) setProducts(null); });
+    return () => { live = false; };
+  }, []);
   // While the plan is being built, look again every few seconds. A failed look still counts as one, so polling goes on
   // until the plan is ready, it fails for good, or the page is left.
   useEffect(() => {
@@ -302,7 +314,15 @@ const MyPlan: React.FC = () => {
         </div>
       )}
 
-      {view.plan && <PlanBody view={view} showCompetitors={state === 'ready'} showListening={state === 'ready'} />}
+      {view.plan && (
+        <>
+          {products === undefined
+            ? <div className={`${CARD} min-h-[520px]`} role="status" aria-label="Loading your strategy"><Loader2 className="mx-auto mt-24 w-5 h-5 animate-spin text-[var(--gv-accent)]" aria-hidden /></div>
+            : <StrategyFunnel levels={levelsOf(view.plan, { products })} />}
+          <h2 className="pt-3 text-[12px] font-semibold uppercase tracking-[0.08em]" style={QUIET}>Your plan in detail</h2>
+          <PlanBody view={view} showCompetitors={state === 'ready'} showListening={state === 'ready'} />
+        </>
+      )}
     </div>
   );
 };
