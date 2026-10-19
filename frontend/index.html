@@ -74,15 +74,8 @@
         background-color: var(--gv-bg) !important;
         color: var(--gv-text-primary) !important;
       }
-      /* Ambient gold radial glow for the Gravity shell — subtle, top-right */
-      body.gravity-shell::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 0;
-        background: radial-gradient(60% 45% at 78% 12%, rgba(245,166,35,0.10) 0%, rgba(245,166,35,0) 60%);
-      }
+      /* Plain page background (owner, 2026-10-19): the ambient gold glow behind every page is gone; every page uses
+         the same plain cream. Colour lives on cards, tiles and chips. Guarded by tests/pageFrame.test.mjs. */
       /* Serif display utility */
       .font-serif-display { font-family: 'Playfair Display', Georgia, serif; }
 
