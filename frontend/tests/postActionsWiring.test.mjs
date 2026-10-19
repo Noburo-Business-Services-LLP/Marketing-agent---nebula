@@ -18,12 +18,8 @@ function walk(dir, out = []) {
   return out;
 }
 
-// Approve handlers that still call publish. Each one is a screen the second phase 2 change moves onto PostActions
-// (Create results). Remove the entry when it is fixed; never add one.
-const KNOWN_PUBLISH_TO_APPROVE = new Set([
-  'pages/GravityCreate.tsx:approveNow',
-  'pages/GravityCreate.tsx:sendAllToApproval',
-]);
+// Approve handlers that still call publish. Empty since the Create results moved onto PostActions; never add one.
+const KNOWN_PUBLISH_TO_APPROVE = new Set([]);
 
 test('no screen approves by calling publish', () => {
   const found = [];
@@ -90,10 +86,64 @@ test('the Library has the views, the counts and the Bin note', () => {
 });
 
 test('customer wording on the new files stays plain', () => {
-  for (const f of ['utils/postActions.ts', 'components/PostActions.tsx', 'components/DraftPreviewModal.tsx', 'pages/Library.tsx', 'pages/GravityApprove.tsx']) {
+  for (const f of ['utils/postActions.ts', 'components/PostActions.tsx', 'components/DraftPreviewModal.tsx', 'pages/Library.tsx', 'pages/GravityApprove.tsx',
+    'components/ItemActions.tsx', 'utils/itemActions.ts', 'utils/scheduleAll.ts', 'utils/calendarPosts.ts', 'pages/GravityCreate.tsx',
+    'pages/Photoshoot.tsx', 'pages/GravityCalendar.tsx', 'utils/homeLayout.ts']) {
     // Comments and the plans page address (/trial-expired) are not customer words.
     const src = read(f).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '').replace(/\/trial-expired/g, '');
     const hit = src.match(/\bcredits?\b(?!\.)|\btrial\b|7 days|Ayrshare|Cloudinary|OpenAI|Gemini/i);
     assert.equal(hit, null, `${f}: ${hit && hit[0]}`);
   }
+});
+
+test('Create results: the shared post actions, no publish anywhere, and Schedule all instead of "Send all to approval"', () => {
+  const src = read('pages/GravityCreate.tsx');
+  assert.doesNotMatch(src, /publishDraft/, 'Create never posts by itself; Post now lives in PostActions and asks first');
+  assert.doesNotMatch(src, /Send all to approval|sendAllToApproval|approveNow/);
+  assert.match(src, /<PostActions[\s\S]{0,120}variant="row"/);
+  assert.match(src, /makeAgainQuarks=\{regenerateCostFor\(d\)\}/, 'Make again shows its price');
+  // Schedule all schedules (never posts), only what can be scheduled, after a confirm that says what will happen.
+  assert.match(src, /const scheduleAll = async[\s\S]{0,900}draftsAPI\.scheduleDraft\(/);
+  assert.match(src, /schedulable\(results/);
+  assert.match(src, /scheduleSummary\(count, platforms, first, gap\)/);
+  assert.match(src, /Schedule all \{scheduleList\.length\}/);
+  assert.doesNotMatch(src, /navigate\('\/drafts'\)/);
+});
+
+test('the calendar opens a post in its post sheet and refreshes after a change, never the old review list', () => {
+  const src = read('pages/GravityCalendar.tsx');
+  assert.doesNotMatch(src, /navigate\('\/drafts'\)/);
+  assert.match(src, /<DraftPreviewModal[\s\S]{0,300}onChanged=\{\(\) => load\(true\)\}/);
+  assert.match(src, /draftByCampaign\(drafts\)/);
+  assert.match(src, /onClick=\{\(\) => openPost\(p\.id/);
+  // The plan view of the calendar opens a day's post in the same sheet.
+  assert.doesNotMatch(read('components/calendar/PlanDayList.tsx'), /\/drafts\?draftId/);
+  assert.match(read('pages/ContentCalendar.tsx'), /<DraftPreviewModal[\s\S]{0,300}onChanged=\{\(\) => loadCalendar\(true\)\}/);
+});
+
+test('Review and approve never makes a picture again by itself (it charges); Make again is a priced button', () => {
+  const src = read('pages/GravityApprove.tsx');
+  assert.doesNotMatch(src, /autoRetried/);
+  assert.equal((src.match(/retryImageGeneration\(/g) || []).length, 1, 'only the asked-for Make again');
+  assert.match(src, /const redoDraft = async[\s\S]{0,700}await confirm\([\s\S]{0,200}retryImageGeneration\(/);
+});
+
+test('Videos and Photoshoot results use the post button style, with no Schedule or Post now', () => {
+  const video = read('pages/CreateVideo.tsx');
+  assert.match(video, /<ItemActions items=\{videoActions\(current\)\} variant="row"/);
+  assert.match(video, /<ItemActions items=\{videoActions\(v\)\} variant="compact"/);
+  const noComments = (t) => t.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
+  assert.doesNotMatch(noComments(video), /Post now|scheduleDraft|publishDraft|>Schedule</);
+  const photo = read('pages/Photoshoot.tsx');
+  assert.match(photo, /<ItemActions items=\{items\} variant="compact"/);
+  assert.match(photo, /confirm: photoMakeAgainConfirm\(perPhoto\)/, 'a photo is made again only after a question with its price');
+  assert.doesNotMatch(noComments(photo), /Post now|scheduleDraft|publishDraft/);
+  const lib = read('pages/Library.tsx');
+  assert.match(lib, /studioVideosAPI\.list\(\)/, 'videos from the Videos page are in the Library');
+  assert.match(lib, /studioVideosAPI\.remove\(i\.id\)/);
+});
+
+test('Home: the approval number and Do this next lead to the Library approval view', () => {
+  assert.match(read('utils/homeLayout.ts'), /title: 'Needs approval', to: '\/library\?view=approve'/);
+  assert.match(read('components/ThisWeekCard.tsx'), /to="\/library\?view=approve"/);
 });

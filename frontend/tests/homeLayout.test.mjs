@@ -214,3 +214,12 @@ test('the Home page keeps the tour anchors, uses the summary only and has no out
   assert.doesNotMatch(src, /src="http/);
   assert.doesNotMatch(src, /unsplash/i);
 });
+
+test('the approval tile is "Needs approval" and opens the Library approval view (navigation phase 2)', () => {
+  const tile = numberTiles(base()).find((t) => t.key === 'drafts');
+  assert.equal(tile.title, 'Needs approval');
+  assert.equal(tile.to, '/library?view=approve');
+  assert.equal(tile.value, '4');
+  const src = fs.readFileSync(new URL('../scripts/visual-audit/mock-session.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /to: '\/drafts'/, 'the preview data links to the Library too');
+});

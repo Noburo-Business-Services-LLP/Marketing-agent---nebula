@@ -99,5 +99,8 @@
   "utils/postActions.ts",
   "components/PostActions.tsx",
   "components/DraftPreviewModal.tsx",
-  "hooks/usePostAccess.ts"
+  "hooks/usePostAccess.ts",
+  "components/ItemActions.tsx",
+  "utils/itemActions.ts",
+  "utils/scheduleAll.ts"
 ]
