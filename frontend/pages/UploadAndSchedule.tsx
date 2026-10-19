@@ -120,7 +120,7 @@ const UploadAndSchedule: React.FC = () => {
     setPlatforms((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
 
   return (
-    <div className="max-w-[900px] mx-auto pb-24">
+    <div className="w-full pb-24">
       {/* The page header (shared PageHeader) is drawn above the tab bar by the Create content route in App.tsx. */}
 
       {!file ? (

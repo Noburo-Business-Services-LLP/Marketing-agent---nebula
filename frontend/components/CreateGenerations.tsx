@@ -58,7 +58,7 @@ const CreateGenerations: React.FC<{ category: CreateCategory; refreshKey: number
 
   // Square thumbnails keep the gallery even and short; opening a card shows the whole picture.
   return (
-    <section className="max-w-5xl mx-auto mt-10" aria-label={TITLE[category]}>
+    <section className="w-full mt-10" aria-label={TITLE[category]}>
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <h2 className="text-[16px] font-semibold text-[var(--gv-text-primary)]">{TITLE[category]}</h2>
         {anyMaking && <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Some are still being made. This list updates by itself.</span>}

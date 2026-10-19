@@ -203,7 +203,7 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
   };
 
   return (
-    <div className="max-w-[1100px] w-full mx-auto px-4 sm:px-6 pb-8 space-y-6">
+    <div className="w-full pb-8 space-y-6">
       <PageHeader
         eyebrow="Library"
         title="Everything you have"

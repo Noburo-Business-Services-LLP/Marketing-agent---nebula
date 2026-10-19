@@ -207,7 +207,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ insideClient }) => {
   const showAddons = !isManaged && !isAgencyPlan;
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-10 pb-10">
+    <div className="w-full space-y-10 pb-10">
       <PageHeader eyebrow="Billing" title="Plans" description={PLANS_INTRO}>
         <p className="mt-3 text-[14px] font-medium leading-relaxed" style={INK} data-testid="current-plan-line">{planLine}</p>
       </PageHeader>

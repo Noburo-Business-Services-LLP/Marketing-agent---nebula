@@ -52,7 +52,7 @@ const CsmClients: React.FC = () => {
   if (clients === null) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-[#F5A623]" /></div>;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className="w-full space-y-4">
       <PageHeader eyebrow="Customer success" title="My" emphasis="clients" description="Open a client to work in their account. You can return to this list at any time from the banner at the top." />
       {error && <p className="text-sm text-red-600">{error}</p>}
       {clients.length === 0 ? (

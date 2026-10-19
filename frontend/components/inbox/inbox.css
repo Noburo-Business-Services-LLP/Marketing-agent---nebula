@@ -5,14 +5,10 @@
 .nb-ix {
   --ix-ink: var(--gv-text-primary); --ix-ink-2: var(--gv-text-secondary); --ix-line: var(--gv-border-subtle);
   --ix-lift: 0 1px 2px rgb(43 29 14 / 0.04), 0 8px 24px rgb(43 29 14 / 0.05);
-  position: relative; max-width: 1120px; margin: 0 auto; padding-bottom: 32px;
+  position: relative; width: 100%; padding-bottom: 32px;
   display: flex; flex-direction: column; gap: 16px; color: var(--ix-ink); container-type: inline-size;
 }
-.nb-ix::before {
-  content: ""; position: absolute; z-index: 0; pointer-events: none; left: -24px; right: -24px; top: -32px; height: 300px;
-  background: radial-gradient(34% 60% at 10% 14%, var(--gv-glow-gold), transparent 70%), radial-gradient(30% 50% at 90% 6%, var(--gv-glow-amber), transparent 70%);
-  opacity: 0.6;
-}
+/* Plain page (owner, 2026-10-19): no glow behind the page; colour stays on the cards. */
 .nb-ix > * { position: relative; z-index: 1; min-width: 0; }
 .nb-ix h1, .nb-ix h2, .nb-ix h3, .nb-ix p, .nb-ix ol { margin: 0; }
 .nb-ix ol { list-style: none; padding: 0; }

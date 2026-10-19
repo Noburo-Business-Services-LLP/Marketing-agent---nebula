@@ -14,3 +14,6 @@
   font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; background: #F5A623; color: #1A1208;
 }
 @media (pointer: coarse) { .nb-nav-subitem { min-height: 44px; } }
+
+/* The one page frame (components/Layout.tsx): every page fills the content area up to 1600 px, centred beyond that. */
+.nb-page-frame { width: 100%; max-width: 1600px; margin: 0 auto; min-width: 0; }

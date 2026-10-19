@@ -117,7 +117,12 @@ const BlueprintStart: React.FC<{ user: User }> = ({ user }) => {
   };
 
   return (
-    <form onSubmit={submit} noValidate className="max-w-[720px] w-full mx-auto px-4 sm:px-6 pb-8 space-y-6">
+    <form
+      onSubmit={submit}
+      noValidate
+      // Inside the app the page frame sets the width (same as every page); on the bare page before onboarding it keeps its own column.
+      className={`${user.onboardingCompleted ? 'w-full' : 'max-w-[720px] w-full mx-auto px-4 sm:px-6'} pb-8 space-y-6`}
+    >
       <PageHeader eyebrow="Brand Growth Blueprint" title={C.title} description={C.intro} />
 
       <BlueprintFormTiles form={form} onGo={goTo} />

@@ -580,7 +580,9 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
           </header>
 
           <main className="flex-1 overflow-y-auto overscroll-contain p-4 md:p-8">
-            {children}
+            {/* One page frame for every page (owner, 2026-10-19): the same full content width and padding everywhere;
+                pages add no narrowing wrapper of their own. Rule: docs/superpowers/ops/tile-system.md, "Page width". */}
+            <div className="nb-page-frame">{children}</div>
           </main>
         </div>
       </div>

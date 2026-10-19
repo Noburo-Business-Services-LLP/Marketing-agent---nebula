@@ -5,17 +5,10 @@
 
 .nb-ps {
   --gv-text-primary: #2B1D0E; --gv-text-secondary: #4F3F2B;
-  position: relative; max-width: 1180px; margin: 0 auto; padding: 0 16px 56px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box;
+  position: relative; width: 100%; padding: 0 0 56px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box;
 }
 @media (min-width: 640px) { .nb-ps { padding: 0 24px 64px; } }
-.nb-ps::before {
-  content: ""; position: absolute; z-index: 0; pointer-events: none; left: 0; right: 0; top: -20px; height: 320px;
-  background:
-    radial-gradient(40% 70% at 12% 20%, var(--gv-glow-gold), transparent 70%),
-    radial-gradient(35% 60% at 88% 0%, rgb(166 62 187 / 0.10), transparent 70%),
-    radial-gradient(30% 50% at 60% 40%, var(--gv-glow-cool), transparent 75%);
-  opacity: 0.8;
-}
+/* Plain page (owner, 2026-10-19): no glow behind the page; colour stays on the cards. */
 .nb-ps > * { position: relative; z-index: 1; }
 .nb-ps h1, .nb-ps h2, .nb-ps h3, .nb-ps p { margin: 0; }
 .nb-ps a:focus-visible, .nb-ps button:focus-visible, .nb-ps input:focus-visible, .nb-ps label:focus-within { outline: 3px solid #7A4A00; outline-offset: 2px; }

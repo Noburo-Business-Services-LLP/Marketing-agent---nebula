@@ -298,7 +298,7 @@ const App: React.FC = () => {
                     <Route path="/content-calendar-grid" element={<GravityCalendar />} />
                     <Route path="/content-calendar-classic" element={<ContentCalendar />} />
                     <Route path="/idea-inbox" element={<OldAddress from="/idea-inbox" />} />
-                    <Route path="/campaigns" element={<PageTabs tabs={[{ key: 'create', label: 'Create with Nebulaa', element: <GravityCreate />, header: PAGE_HEADERS.create, frame: 'max-w-[960px] mx-auto' }, { key: 'upload', label: 'Upload and schedule', element: <UploadAndSchedule />, header: PAGE_HEADERS.upload, frame: 'max-w-[900px] mx-auto' }]} />} />
+                    <Route path="/campaigns" element={<PageTabs tabs={[{ key: 'create', label: 'Create with Nebulaa', element: <GravityCreate />, header: PAGE_HEADERS.create }, { key: 'upload', label: 'Upload and schedule', element: <UploadAndSchedule />, header: PAGE_HEADERS.upload }]} />} />
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<OldAddress from="/drafts" />} />
                     <Route path="/library" element={<Library user={user} />} />

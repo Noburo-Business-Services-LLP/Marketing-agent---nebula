@@ -316,7 +316,7 @@ const Competitors: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="w-full">
       {/* Location Modal */}
       {showLocationModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">

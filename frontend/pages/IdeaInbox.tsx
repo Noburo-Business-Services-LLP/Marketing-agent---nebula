@@ -224,7 +224,7 @@ const IdeaInbox: React.FC = () => {
   };
 
   return (
-    <div className="max-w-[1100px] mx-auto pb-16">
+    <div className="w-full pb-16">
       {/* The page header (shared PageHeader) is drawn above the tab bar by the Calendar route in App.tsx. */}
 
       {error && (

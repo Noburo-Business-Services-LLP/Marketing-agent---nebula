@@ -7,14 +7,10 @@
   --ink: var(--gv-text-primary); --ink-2: var(--gv-text-secondary); --ink-3: var(--gv-text-tertiary);
   --line: var(--gv-border-subtle);
   --lift: 0 1px 2px rgb(20 32 58 / 0.04), 0 8px 24px rgb(20 32 58 / 0.05);
-  position: relative; max-width: 1120px; margin: 0 auto; padding-bottom: 40px;
+  position: relative; width: 100%; padding-bottom: 40px;
   display: flex; flex-direction: column; gap: 18px; color: var(--ink);
 }
-.nb-mem::before {
-  content: ""; position: absolute; z-index: 0; pointer-events: none; left: -24px; right: -24px; top: -32px; height: 380px;
-  background: radial-gradient(36% 60% at 12% 18%, var(--gv-glow-gold), transparent 70%), radial-gradient(30% 50% at 88% 8%, var(--gv-glow-amber), transparent 70%);
-  opacity: 0.7;
-}
+/* Plain page (owner, 2026-10-19): no glow behind the page; colour stays on the cards. */
 .nb-mem > * { position: relative; z-index: 1; min-width: 0; }
 .nb-mem h1, .nb-mem h2, .nb-mem h3, .nb-mem p, .nb-mem ul, .nb-mem ol { margin: 0; }
 .nb-mem ul, .nb-mem ol { list-style: none; padding: 0; }
@@ -38,7 +34,7 @@
 /* ---- hero ---- */
 .nb-mem-hero {
   display: flex; align-items: center; gap: 20px; border-radius: 22px; padding: 22px 24px; overflow: hidden; border: 1px solid #F0DDB4;
-  background: radial-gradient(60% 90% at 100% 0%, rgb(255 203 46 / 0.30), transparent 65%), radial-gradient(50% 80% at 0% 100%, rgb(123 92 196 / 0.10), transparent 70%), linear-gradient(135deg, #FFFDF8, #FFF6E2);
+  background: #FFFDF8; /* plain card (owner, 2026-10-19): no glow on hero blocks */
   box-shadow: var(--lift);
 }
 .nb-mem-hero-id { flex: 1 1 auto; min-width: 0; }

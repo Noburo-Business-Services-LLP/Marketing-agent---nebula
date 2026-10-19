@@ -372,7 +372,7 @@ const CreateVideo: React.FC = () => {
   const processing = current?.status === 'processing';
 
   return (
-    <div className="max-w-[820px] mx-auto pb-24">
+    <div className="w-full pb-24">
       <PageHeader
         eyebrow="Videos"
         title="Describe your"
@@ -708,11 +708,11 @@ const CreateVideo: React.FC = () => {
       {history.length > 0 && (
         <section className="mt-12" aria-label="Your videos">
           <div className="gravity-label mb-3">Your videos</div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
             {history.slice(0, 8).map((v) => (
               <div key={v.id} className="group relative overflow-hidden rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-1)]">
                 <button type="button" onClick={() => { setCurrent(v); setStep('result'); setError(''); }} className="block w-full text-left">
-                  <div className={`${v.aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[9/16]'} w-full bg-[var(--gv-surface-2)]`}>
+                  <div className={`${v.aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[4/5]'} w-full bg-[var(--gv-surface-2)]`}>
                     {v.status === 'completed' && v.videoUrl
                       ? <video src={`${v.videoUrl}#t=0.5`} className="h-full w-full object-cover" muted playsInline preload="metadata" />
                       : <div className="flex h-full items-center justify-center p-3 text-center text-[12px] text-[var(--gv-text-secondary)]">{v.status === 'processing' ? 'Being made…' : 'Not made'}</div>}

@@ -114,7 +114,7 @@ const AgencyClients: React.FC<{ user: User | null }> = ({ user }) => {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="w-full space-y-4">
       <PageHeader
         eyebrow="Agency"
         title="Your"

@@ -543,7 +543,7 @@ const ConnectSocials: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto relative">
+    <div className="w-full relative">
       {upgrade && <UpgradePrompt className="mb-6" reason={upgrade.reason} feature={upgrade.feature} />}
       {/* Notification Toast */}
       {notification && (

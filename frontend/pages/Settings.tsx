@@ -295,7 +295,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="w-full">
       <PageHeader
         eyebrow="Settings"
         title="Manage your"

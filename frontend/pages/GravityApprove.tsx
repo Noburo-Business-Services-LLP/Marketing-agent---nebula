@@ -388,10 +388,10 @@ const GravityApprove: React.FC<{ user?: User | null; embedded?: boolean; onBack?
 
   if (total === 0) {
     return (
-      <div className={embedded ? 'pb-12' : 'max-w-[1100px] mx-auto pb-24'}>
+      <div className={embedded ? 'pb-12' : 'w-full pb-24'}>
         <Header />
         <TabBar />
-        <div className="max-w-[720px] mx-auto text-center py-16">
+        <div className="max-w-[560px] mx-auto text-center py-16">
         <div className="gravity-label mb-4">Nothing to approve</div>
         <h2 className="font-serif-display text-[24px] leading-[1.2] tracking-[-0.01em] text-[var(--gv-text-primary)] mb-3">
           No posts are waiting for <PageEmphasis>your approval</PageEmphasis>.
@@ -412,7 +412,7 @@ const GravityApprove: React.FC<{ user?: User | null; embedded?: boolean; onBack?
   }
 
   return (
-    <div className={embedded ? 'pb-12' : 'max-w-[1180px] mx-auto pb-16'}>
+    <div className={embedded ? 'pb-12' : 'w-full pb-16'}>
       <Header />
       <TabBar />
       {/* Header row */}

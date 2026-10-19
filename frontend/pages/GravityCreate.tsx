@@ -1140,7 +1140,7 @@ const GravityCreate: React.FC = () => {
   })();
 
   return (
-    <div className="max-w-[960px] mx-auto pb-24">
+    <div className="w-full pb-24">
       {/* What to make: six cover tiles in two rows of three (three rows of two on a phone), all the same height, Video
           first and Photoshoot second, each a small poster with a sample photo (the drawn art until the photo has loaded,
           or if its file is missing). The four modes only set the mode; Video and Photoshoot are made on their own pages,
@@ -1475,7 +1475,7 @@ const GravityCreate: React.FC = () => {
       {/* In-flight placeholders — the card appears immediately with the
           animation in it, then becomes the real draft when it lands. */}
       {pendingCards.length > 0 && (
-        <div className="max-w-5xl mx-auto mt-10">
+        <div className="w-full mt-10">
           <div className="text-center mb-6">
             <div className="gravity-label text-[var(--gv-accent-text)] mb-3">
               {mode === 'campaign' ? 'Building your campaign' : mode === 'carousel' ? 'Building your carousel' : 'Creating your post'}
@@ -1503,7 +1503,7 @@ const GravityCreate: React.FC = () => {
 
       {/* Results — everything happens here now. No hop to /drafts. */}
       {results.length > 0 && (
-        <div className="max-w-5xl mx-auto mt-10">
+        <div className="w-full mt-10">
           <div className="relative text-center mb-6">
             <button
               onClick={() => { setResults([]); setNotice(null); setScheduleAllOpen(false); }}

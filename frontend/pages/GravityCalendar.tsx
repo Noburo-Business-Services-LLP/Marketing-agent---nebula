@@ -144,7 +144,7 @@ const GravityCalendar: React.FC = () => {
   const today = new Date();
 
   return (
-    <div className="max-w-[1440px] mx-auto pb-16">
+    <div className="w-full pb-16">
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-6">
         {/* A section heading: the page title is the shared page header of the Calendar page. */}

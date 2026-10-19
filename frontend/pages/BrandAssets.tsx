@@ -661,7 +661,7 @@ const BrandAssets: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="w-full space-y-6">
         <PageHeader
           eyebrow="Brand assets"
           title="Set up your"
