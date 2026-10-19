@@ -41,7 +41,7 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 ## Area: VIDEOS
 - [DONE, NOT RELEASED] 22-style photo grid on the new Videos screen (the owner saw only 4 old styles because production is on the old build). Release fixes it. (diagnosis 2026-10-18)
 - [DECISION NEEDED] Bring Hero Studio's richer style rules (4 group rule sets) into the new Videos styles, one style at a time, and add Hero Studio to the menu. (2026-10-18)
-- [DONE, NOT PROVEN WITH REAL AUDIO] Subtitles timed from the real audio (Whisper); needs ONE real proof (about one cent) then a real 30 s Tamil test (about USD 3) with the owner's OK. (handover 14)
+- [DONE, TIMING PROVEN ON ONE REAL CLIP (2026-10-19): one real Whisper call (about USD 0.001) on the new 10 s Tamil test clip: speech window 0.00 to 5.54 s, similarity to the intended line 0.78 (kept; the app skips below 0.3); the line was said ONCE. NOT yet seen: captions burned on a real 30 s multi-clip Tamil video; that test (about USD 3) needs the owner's OK] Subtitles timed from the real audio (Whisper). (handover 14)
 - [NOT STARTED] Telugu, Kannada, Malayalam speech and captions never seen; a real 3-clip fade join never seen. (handover 14)
 - [NOT STARTED] Video styles shown as visual tiles everywhere videos are chosen. (2026-10-18)
 
