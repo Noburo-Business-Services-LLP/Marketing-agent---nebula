@@ -1,7 +1,7 @@
 // The Photoshoot page: the shapes the server sends and the small rules the page follows. Pure functions only, tested in
 // tests/photoshoot.test.mjs. Prices are never typed here: they come from the server (config/apiCosts.js) and are written
 // with the shared Quark wording (utils/plans.ts).
-import { priceWithWorth, worthText } from './plans.ts';
+import { worthText } from './plans.ts';
 
 export interface PhotoshootChoice { key: string; label: string }
 export interface PhotoshootPack {
@@ -54,16 +54,25 @@ export function minutesFor(photos: number): number {
   return Math.max(1, Math.ceil(Math.ceil(Math.max(1, photos) / 2) * 60 / 60));
 }
 
-/** A price as the customer reads it: Quarks with posts' worth beside it, or posts' worth only (agency accounts). */
+/** "60 Quarks": the price as the customer reads it on the Photoshoot page (owner, 2026-10-19: no "posts' worth" here, it was
+ * not understood). Agency accounts never see Quarks (the agency rule), so for them it stays the posts' worth only. */
 export function priceLine(quarks: number, costs: Record<string, number> | null | undefined, postsOnly = false): string {
   if (!(quarks > 0)) return '';
   if (postsOnly) { const w = worthText(quarks, costs); return w ? w.charAt(0).toUpperCase() + w.slice(1) : ''; }
-  return priceWithWorth(quarks, costs);
+  return noun(quarks, 'Quark', 'Quarks');
 }
 
-/** The pack tile's price chip and its one line ("6 photos, about 3 minutes"). */
+/** "4 photos" for a pack with one fixed count, "Up to 8 photos" when the customer may choose fewer. Real counts only. */
+export function packPhotosText(p: Pick<PhotoshootPack, 'counts' | 'defaultCount'>): string {
+  const counts = (Array.isArray(p.counts) ? p.counts : []).filter((n) => Number.isFinite(n) && n > 0);
+  const most = counts.length ? Math.max(...counts) : p.defaultCount;
+  const varies = counts.length > 1 && Math.min(...counts) !== most;
+  return varies ? `Up to ${noun(most, 'photo', 'photos')}` : noun(most, 'photo', 'photos');
+}
+
+/** The pack tile's price chip and its one line ("Up to 6 photos, about 3 minutes"). */
 export function packTileLines(p: PhotoshootPack, costs: Record<string, number> | null | undefined, postsOnly = false): { price: string; subtitle: string } {
-  return { price: priceLine(p.quarks, costs, postsOnly), subtitle: `${photosLine(p.defaultCount)}, ${minutesText(p.minutes).toLowerCase()}` };
+  return { price: priceLine(p.quarks, costs, postsOnly), subtitle: `${packPhotosText(p)}, ${minutesText(p.minutes).toLowerCase()}` };
 }
 
 /** The choices to start from when a pack is picked. */
