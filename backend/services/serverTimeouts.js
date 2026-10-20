@@ -44,7 +44,7 @@ const LONG_ROUTE_PREFIXES = Object.freeze([
   '/api/ai-memory', '/api/home', '/api/google-calendar', '/api/payment', '/api/ideas', '/api/staff', '/api/csm',
   '/api/admin', '/api/generateVideoStylePrompts', '/api/generateSceneDescriptions', '/api/account/export',
   '/api/agency/usage.csv', '/api/auth/complete-onboarding', '/api/auth/update-profile', '/api/auth/signup-brand-colors',
-  '/api/influencers', '/api/collaborations', '/api/submissions'
+  '/api/influencers', '/api/collaborations', '/api/submissions', '/api/accounts', '/api/support', '/api/auth/verify-gst'
 ]);
 
 function isLongRoute(p) {
