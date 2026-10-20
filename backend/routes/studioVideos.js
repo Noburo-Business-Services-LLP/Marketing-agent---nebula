@@ -220,7 +220,7 @@ async function keepClip(doc, ctl, io, urls, buffer, k) {
 }
 
 /** Deletes stored clips once the video is closed (best effort, never throws, not awaited by callers that must not wait). */
-async function dropClips(urls, io = {}) {
+async function dropClips(urls, io = testIo) {
   for (const u of Array.isArray(urls) ? urls : []) if (u) await discardFile(u, io);
 }
 

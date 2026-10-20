@@ -775,3 +775,47 @@ test('a claim in flight when shutdown() runs is handed back (attempt not counted
     assert.strictEqual(w.gen.length, 1);
   } finally { w.restore(); }
 });
+
+// ---- missing tests the money review listed: hand-back paths ----
+test('_overCap: over the per-account cap after a claim, the row goes back to queued with the attempt not counted; at the cap it stays', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, { concept: 'one' }, 'oc1'); await create(w, { concept: 'two' }, 'oc1');
+    const b = consumer(w, 'B', { perUserRunning: 1 });
+    await b._claim('v1'); // another worker already runs one of this account's videos
+    const a = consumer(w, 'A', { perUserRunning: 1 });
+    const claimed = await a._claim('v2');
+    assert.strictEqual(w.docs.v2.status, 'processing');
+    assert.strictEqual(await a._overCap(claimed), true);
+    assert.deepStrictEqual({ s: w.docs.v2.status, a: w.docs.v2.attempts, wid: w.docs.v2.workerId }, { s: 'queued', a: 0, wid: null });
+    assert.strictEqual(a.stats.capHandBacks, 1);
+    const roomy = consumer(w, 'C', { perUserRunning: 2 });
+    const again = await roomy._claim('v2');
+    assert.strictEqual(await roomy._overCap(again), false);
+    assert.strictEqual(w.docs.v2.status, 'processing');
+    // A claim that is no longer ours is not touched by the hand-back.
+    Object.assign(w.docs.v2, { workerId: 'w:Z', attempts: 5 });
+    assert.strictEqual(await a._handBack(again), false);
+    assert.strictEqual(w.docs.v2.workerId, 'w:Z');
+  } finally { w.restore(); }
+});
+
+test('MAX_RELEASES: a video handed back at SIGTERM three times is failed and fully refunded once on the next shutdown', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, parts3, 'mr1');
+    w.hang = (x) => /Two\./.test(x.prompt) && !w.hungOnce && (w.hungOnce = true);
+    const a = consumer(w, 'A'); await a._drain(); await settle();
+    assert.strictEqual(w.docs.v1.clipUrls.length, 1);
+    w.docs.v1.releases = 3; // three hand-backs already
+    const r = await a.shutdown({ graceMs: 0 });
+    assert.deepStrictEqual({ released: r.released, failed: r.failed }, { released: 0, failed: 1 });
+    assert.strictEqual(w.docs.v1.status, 'failed');
+    assert.strictEqual(w.refunds.length, 1);
+    assert.strictEqual(w.refunds[0].amount, 3 * COST1);
+    assert.ok(w.discarded.some((u) => /clip/.test(u)), 'the stored clips were deleted');
+    assert.strictEqual(a.stats.shutdownFailed, 1);
+    w.release(); await settle();
+    assert.strictEqual(w.refunds.length, 1, 'never twice');
+  } finally { w.restore(); }
+});
