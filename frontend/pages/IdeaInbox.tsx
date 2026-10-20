@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ideasAPI, draftsAPI } from '../services/api';
 import { useConfirm } from '../context/ConfirmContext';
+import { safeHref } from '../utils/safeHref';
 
 interface Idea {
   _id: string;
@@ -356,8 +357,8 @@ const IdeaInbox: React.FC = () => {
                   {idea.targetDate && (
                     <span>Around {new Date(idea.targetDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                   )}
-                  {idea.sourceUrl && (
-                    <a href={idea.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#F5A623]/80 hover:text-[#F5A623]">
+                  {safeHref(idea.sourceUrl) && (
+                    <a href={safeHref(idea.sourceUrl)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[#F5A623]/80 hover:text-[#F5A623]">
                       <Link2 className="w-3 h-3" /> Link
                     </a>
                   )}

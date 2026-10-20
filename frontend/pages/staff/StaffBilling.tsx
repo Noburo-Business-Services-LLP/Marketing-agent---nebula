@@ -4,6 +4,7 @@ import { apiService } from '../../services/api';
 import { customerMessage } from '../../utils/errors';
 import { useConfirm } from '../../context/ConfirmContext';
 import { formatInr, previewLine, STATUS_LABEL, today } from '../../utils/staffBilling';
+import { safeHref } from '../../utils/safeHref';
 
 type Payment = { amountPaise: number; paidDate: string; modeLabel: string; reference: string };
 type Row = {
@@ -242,7 +243,7 @@ const StaffBilling: React.FC<{ id: string }> = ({ id }) => {
                   <td className="px-3 py-2 text-right tabular-nums">{formatInr(r.gstPaise)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">{formatInr(r.totalPaise)}</td>
                   <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${CHIP[r.status]}`}>{STATUS_LABEL[r.status]}</span>{r.late && <div className="text-xs font-semibold text-red-700 mt-1">balance late</div>}</td>
-                  <td className="px-3 py-2">{r.invoiceNumber ? (r.invoiceUrl || (r.zohoInvoiceId && data.zohoOrgId) ? <a href={r.invoiceUrl || `https://books.zoho.in/app/${data.zohoOrgId}#/invoices/${r.zohoInvoiceId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#B45309] underline">{r.invoiceNumber}<ExternalLink className="w-3 h-3" /></a> : r.invoiceNumber) : <span className="text-slate-400">—</span>}</td>
+                  <td className="px-3 py-2">{r.invoiceNumber ? (safeHref(r.invoiceUrl) || (r.zohoInvoiceId && data.zohoOrgId) ? <a href={safeHref(r.invoiceUrl) || `https://books.zoho.in/app/${data.zohoOrgId}#/invoices/${r.zohoInvoiceId}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[#B45309] underline">{r.invoiceNumber}<ExternalLink className="w-3 h-3" /></a> : r.invoiceNumber) : <span className="text-slate-400">—</span>}</td>
                   <td className="px-3 py-2 text-slate-700">
                     {r.payments.length === 0 ? <span className="text-slate-400">—</span> : (
                       <div className="space-y-0.5 text-xs">

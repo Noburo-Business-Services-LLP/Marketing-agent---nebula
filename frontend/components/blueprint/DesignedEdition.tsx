@@ -4,6 +4,7 @@ import { Download, FileText, Loader2 } from 'lucide-react';
 import { GravityPanel, GravityLabel, GravityButton } from '../gravity';
 import { apiService } from '../../services/api';
 import { BlueprintView, designedActive, quarksNote } from '../../utils/blueprint';
+import { safeHref, safeSrc } from '../../utils/safeHref';
 
 /**
  * The designed PDF: one designed page for each part of the Blueprint, made as pictures, checked against your own
@@ -38,8 +39,8 @@ const DesignedEdition: React.FC<{ view: BlueprintView; onStarted: () => void }> 
     <ul className="grid grid-cols-4 sm:grid-cols-6 gap-2" aria-label="Pages of the designed PDF">
       {d.pages.map((p) => (
         <li key={p.n} className="rounded-lg overflow-hidden border border-[var(--gv-border-subtle)] bg-[var(--gv-surface-2)] aspect-[3/4] flex items-center justify-center">
-          {p.imageUrl
-            ? <a href={p.imageUrl} target="_blank" rel="noreferrer" aria-label={`Page ${p.n}: ${p.title}`}><img src={p.imageUrl} alt="" loading="lazy" className="w-full h-full object-cover" /></a>
+          {safeSrc(p.imageUrl)
+            ? <a href={safeSrc(p.imageUrl)} target="_blank" rel="noopener noreferrer" aria-label={`Page ${p.n}: ${p.title}`}><img src={safeSrc(p.imageUrl)} alt="" loading="lazy" className="w-full h-full object-cover" /></a>
             : <span className="text-[11px] text-[var(--gv-text-tertiary)]">{String(p.n).padStart(2, '0')}</span>}
         </li>
       ))}
@@ -79,7 +80,7 @@ const DesignedEdition: React.FC<{ view: BlueprintView; onStarted: () => void }> 
 
       {d && d.status === 'completed' && (
         <div className="space-y-3">
-          <a href={d.pdfUrl} target="_blank" rel="noreferrer" download className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)]">
+          <a href={safeHref(d.pdfUrl)} target="_blank" rel="noopener noreferrer" download className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-semibold bg-[var(--gv-accent)] text-[var(--gv-accent-ink)] hover:bg-[var(--gv-accent-hover)]">
             <Download className="w-4 h-4" /> Download the designed PDF
           </a>
           {d.pages.some((p) => p.status === 'fallback') && (

@@ -12,6 +12,7 @@ import { inventoryAPI } from '../services/api';
 import { Product } from '../types';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import { useConfirm } from '../context/ConfirmContext';
+import { openSafe } from '../utils/safeHref';
 
 const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const confirm = useConfirm();
@@ -274,7 +275,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error('Download error:', err);
-      window.open(url, '_blank');
+      openSafe(url);
     }
   };
 
@@ -1268,7 +1269,7 @@ const Inventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
                       DOWNLOAD AD
                     </button>
                     <button
-                      onClick={() => window.open(generatedAdUrl, '_blank')}
+                      onClick={() => openSafe(generatedAdUrl)}
                       className={`flex-1 h-16 rounded-[20px] font-black text-sm transition-all flex items-center justify-center gap-3 border shadow-lg ${
                         isDarkMode ? 'bg-slate-800 border-white/5 hover:bg-slate-700 text-white' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
                       }`}

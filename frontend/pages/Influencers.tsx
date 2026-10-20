@@ -7,6 +7,7 @@ import {
   Zap, Target, BarChart3, Award, Check
 } from 'lucide-react';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { safeHref } from '../utils/safeHref';
 
 const platformIcons: Record<string, React.ReactNode> = {
   instagram: <Instagram className="w-4 h-4 text-pink-500" />,
@@ -402,7 +403,7 @@ const Influencers: React.FC = () => {
                 case 'youtube': return `https://youtube.com/@${handle}`;
                 case 'linkedin': return `https://linkedin.com/in/${handle}`;
                 case 'facebook': return `https://facebook.com/${handle}`;
-                default: return '#';
+                default: return '';
               }
             };
             const profileUrl = getProfileUrl();
@@ -410,7 +411,7 @@ const Influencers: React.FC = () => {
             return (
             <a 
               key={inf._id}
-              href={profileUrl}
+              href={safeHref(profileUrl)}
               target="_blank"
               rel="noopener noreferrer"
               className={`rounded-xl shadow-sm border overflow-hidden flex flex-col transition-all hover:scale-[1.02] hover:shadow-lg cursor-pointer ${theme.bgCard} ${

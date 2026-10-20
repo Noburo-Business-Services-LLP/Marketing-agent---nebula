@@ -13,6 +13,7 @@ import { draftsAvailable, isDraftOptions, type DraftKind, type DraftOptions, typ
 import { DraftActions, DraftSheet } from './home/DraftSheet';
 import CompetitorAvatar from './CompetitorAvatar';
 import './CompetitorTiles.css';
+import { safeHref } from '../utils/safeHref';
 
 // Competitor tiles, "What's working for your competitors" and "Trending for you", from GET /api/competitors/best-posts
 // (stored data only: no read of anyone's page happens here, and no model is called). Used on Home (three tiles) and on
@@ -106,8 +107,8 @@ export const CompetitorTile: React.FC<{ card: CompetitorCard; editable?: boolean
         <div className="nb-ct-who">
           <h3 className="nb-ct-name" title={v.name}>{v.name}</h3>
           <div className="nb-ct-meta">
-            {v.handleText && (v.profileUrl
-              ? <a className="nb-ct-handle" href={v.profileUrl} target="_blank" rel="noopener noreferrer" title={`Open ${v.handleText} in a new tab`}>{v.handleText}</a>
+            {v.handleText && (safeHref(v.profileUrl)
+              ? <a className="nb-ct-handle" href={safeHref(v.profileUrl)} target="_blank" rel="noopener noreferrer" title={`Open ${v.handleText} in a new tab`}>{v.handleText}</a>
               : <span className="nb-ct-handle">{v.handleText}</span>)}
             <span className="nb-ct-chip" data-tone={v.chip.tone}>{v.chip.text}</span>
           </div>
@@ -132,7 +133,7 @@ export const CompetitorTile: React.FC<{ card: CompetitorCard; editable?: boolean
             : <BestIcon aria-hidden="true" />}
           <span className="nb-ct-best-text">
             <strong>{v.best.text}</strong>{v.best.counts ? `, ${v.best.counts}` : ''}
-            {v.best.url && <a className="nb-ct-link" href={v.best.url} target="_blank" rel="noopener noreferrer">Open the post<ExternalLink aria-hidden="true" /></a>}
+            {safeHref(v.best.url) && <a className="nb-ct-link" href={safeHref(v.best.url)} target="_blank" rel="noopener noreferrer">Open the post<ExternalLink aria-hidden="true" /></a>}
           </span>
         </p>
       )}
@@ -205,7 +206,7 @@ export const WorkingList: React.FC<{ res: BestPostsResponse; language?: string |
                       <DraftMenu drafts={drafts} postsOnly={postsOnly} onPick={(k) => onDraft!(k, { ref: r.ref, title: draftSourceTitle(r.title, r.kind), url: r.url, name: w?.name || r.title, handle: w?.handle || '', avatarUrl: avatarOf.get(String(w?.competitorId || '')) ?? null })} />
                     )}
                   </div>
-                  {r.url && <a className="nb-ct-link nb-cp-open" href={r.url} target="_blank" rel="noopener noreferrer">Open the post on Instagram<ExternalLink aria-hidden="true" /></a>}
+                  {safeHref(r.url) && <a className="nb-ct-link nb-cp-open" href={safeHref(r.url)} target="_blank" rel="noopener noreferrer">Open the post on Instagram<ExternalLink aria-hidden="true" /></a>}
                 </div>
               </article>
             </li>
@@ -247,8 +248,8 @@ export const CompetitorGalleries: React.FC<{ cards: CompetitorCard[] }> = ({ car
                   );
                   return (
                     <li key={t.key} style={{ ['--span' as any]: g.spans[i] }}>
-                      {t.url
-                        ? <a className="nb-cg-tile" href={t.url} target="_blank" rel="noopener noreferrer" title={`Open on Instagram: ${t.alt}`}>{inner}</a>
+                      {safeHref(t.url)
+                        ? <a className="nb-cg-tile" href={safeHref(t.url)} target="_blank" rel="noopener noreferrer" title={`Open on Instagram: ${t.alt}`}>{inner}</a>
                         : <span className="nb-cg-tile">{inner}</span>}
                     </li>
                   );

@@ -27,6 +27,7 @@ import '../components/library/library.css';
 import PageHeader from '../components/PageHeader';
 import GravityApprove from './GravityApprove';
 import type { User } from '../types';
+import { openSafe } from '../utils/safeHref';
 
 const KINDS: Array<{ key: LibraryFilters['kind']; label: string }> = [
   { key: 'all', label: 'All' }, { key: 'image', label: 'Images' }, { key: 'video', label: 'Videos' },
@@ -213,7 +214,7 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
       });
     }
     return libraryVideoActionKeys(i).map((k): ItemAction => {
-      if (k === 'download') return { key: k, label: MEDIA_LABELS.download, hint: STUDIO_HINTS.download, icon: Download, primary: true, onRun: () => { window.open(i.mediaUrl, '_blank', 'noopener'); } };
+      if (k === 'download') return { key: k, label: MEDIA_LABELS.download, hint: STUDIO_HINTS.download, icon: Download, primary: true, onRun: () => { openSafe(i.mediaUrl); } };
       if (k === 'edit' || k === 'open') return { key: k, label: k === 'edit' ? MEDIA_LABELS.edit : MEDIA_LABELS.open, hint: k === 'edit' ? 'Change the clips, words or music.' : 'Open it where it was made.', icon: k === 'edit' ? Pencil : Eye, onRun: () => goEdit(i) };
       if (k === 'makeAgain') { const q = studioQuarks(i); return { key: k, label: MEDIA_LABELS.makeAgain, hint: STUDIO_HINTS.makeAgain(q), icon: RotateCcw, quarks: q || undefined, primary: i.status === 'failed', onRun: () => makeVideoAgain(i) }; }
       return {

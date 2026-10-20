@@ -12,6 +12,7 @@ import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 import { LOCKED_NOTE, competitorsUpgradeCopy, handleSavedNote, listHandleAction } from '../utils/competitorInsights';
 import { customerMessage } from '../utils/errors';
 import { Link } from 'react-router-dom';
+import { safeHref } from '../utils/safeHref';
 
 const platformIcons: Record<string, React.ReactNode> = {
   instagram: <Instagram className="w-3 h-3" />,
@@ -533,9 +534,9 @@ const Competitors: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => 
                               >
                                 <EyeOff className="w-3 h-3" />
                               </button>
-                              {post.postUrl ? (
+                              {safeHref(post.postUrl) ? (
                                 <a 
-                                  href={post.postUrl} 
+                                  href={safeHref(post.postUrl)} 
                                   target="_blank" 
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-1 text-xs font-medium text-[#F5A623] hover:underline"

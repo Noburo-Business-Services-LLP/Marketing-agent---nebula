@@ -13,6 +13,7 @@ import AdditionalLanguagePicker from '../components/AdditionalLanguagePicker';
 import { cleanSelection } from '../utils/languages';
 import { IndustryQuestion, SellsToQuestion, ReachQuestion, CustomerBranchQuestions, GoalsQuestion, VoiceQuestion, LanguageQuestion } from '../components/questionnaire/Questions';
 import { LANGUAGES, VOICES, GOALS, SELLS_TO, matchChoice } from '../constants/businessQuestions';
+import { safeHref } from '../utils/safeHref';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -388,7 +389,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             
             if (response.success && response.authUrl) {
                 // Redirect to the auth page (either platform OAuth or Ayrshare dashboard)
-                window.location.href = response.authUrl;
+                const target = safeHref(response.authUrl);
+                if (!target) throw new Error('unsafe authorization address');
+                window.location.href = target;
             } else {
                 // Some error occurred
                 setNotification({ 

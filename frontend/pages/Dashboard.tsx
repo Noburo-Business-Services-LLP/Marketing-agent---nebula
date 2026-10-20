@@ -9,6 +9,7 @@ import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import { useConfirm } from '../context/ConfirmContext';
 import PlatformPreview from '../components/PlatformPreview';
 import LogoSelector from '../components/LogoSelector';
+import { safeHref, safeSrc, openSafe } from '../utils/safeHref';
 
 type CampaignObjective = Campaign['objective'];
 
@@ -1264,7 +1265,7 @@ const Dashboard: React.FC = () => {
                     {currentCompetitor && (
                         <div 
                           className={`${isDarkMode ? 'bg-[#0d1117] border-slate-700/50' : 'bg-[#f5f5f5] border-[#ededed]'} border rounded-xl p-5 relative min-h-[280px] flex flex-col w-full ${currentCompetitor.postUrl ? 'cursor-pointer hover:border-[#ffcc29]/30 hover:shadow-md transition-all' : ''}`}
-                          onClick={() => currentCompetitor.postUrl && window.open(currentCompetitor.postUrl, '_blank')}
+                          onClick={() => currentCompetitor.postUrl && openSafe(currentCompetitor.postUrl)}
                         >
                             {currentCompetitor.postUrl && (
                               <div className="absolute top-3 right-3 flex items-center gap-1.5">
@@ -1682,7 +1683,7 @@ const Dashboard: React.FC = () => {
                         <img src={postImageUrl} alt="Post" className="w-full object-contain max-h-[500px]" />
                         {/* Download button */}
                         <a
-                          href={postImageUrl}
+                          href={safeSrc(postImageUrl)}
                           download="strategic-post.png"
                           target="_blank"
                           rel="noopener noreferrer"
@@ -1700,7 +1701,7 @@ const Dashboard: React.FC = () => {
                                 a.click();
                                 URL.revokeObjectURL(url);
                               })
-                              .catch(() => window.open(postImageUrl, '_blank'));
+                              .catch(() => openSafe(postImageUrl));
                             e.preventDefault();
                           }}
                         >
@@ -2044,7 +2045,7 @@ const CalendarWidget: React.FC<{ campaigns: Campaign[]; dashboardData?: Dashboar
         const res = await apiService.initiateGoogleCalendarAuth();
         if (res.authUrl) {
           // Open Google OAuth in a popup
-          const popup = window.open(res.authUrl, 'googleCalAuth', 'width=500,height=600,menubar=no,toolbar=no');
+          const popup = window.open(safeHref(res.authUrl) || 'about:blank', 'googleCalAuth', 'width=500,height=600,menubar=no,toolbar=no');
           // Listen for the popup to close (callback redirects back)
           const checkClosed = setInterval(() => {
             if (popup?.closed) {

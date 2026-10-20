@@ -60,6 +60,7 @@ import IdeaBoxTools from '../components/IdeaBoxTools';
 import { appendText } from '../utils/ideaFiles';
 import { VideoStyleTile, VideoStyleChips } from '../components/video/VideoStyleTile';
 import { StyleFilter, groupOf, groupLabel, safeFilter } from '../utils/videoStyleGroups';
+import { safeSrc } from '../utils/safeHref';
 
 type AudioMode = 'off' | 'auto' | 'upload';
 type VideoStatusFilter = 'all' | 'draft' | 'created' | 'scheduled' | 'posted';
@@ -5168,7 +5169,7 @@ setCharacterAge(nextDraft?.characterAge || '');
 
               <div className="mt-auto pt-4 border-t border-white/[0.06] flex flex-col gap-2">
                 <a
-                  href={previewDraft.__videoUrl}
+                  href={safeSrc(previewDraft.__videoUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full h-11 rounded-lg bg-[#F5A623] hover:bg-[#ffb833] text-[#1A1208] text-[13.5px] font-semibold flex items-center justify-center gap-2"
@@ -5176,7 +5177,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                   Open in new tab
                 </a>
                 <a
-                  href={previewDraft.__videoUrl}
+                  href={safeSrc(previewDraft.__videoUrl)}
                   download={(previewDraft.title || 'gravity-video') + '.mp4'}
                   className="w-full h-11 rounded-lg border border-white/[0.10] hover:border-white/25 hover:bg-white/[0.04] text-[#F5F4F1] text-[13.5px] font-medium flex items-center justify-center gap-2"
                 >

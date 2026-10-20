@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
 import { generateAnalyticsPDF } from '../services/generateAnalyticsPDF';
+import { safeHref } from '../utils/safeHref';
 import {
   BarChart3, TrendingUp, Users, Eye, Heart, MessageSquare,
   Share2, Loader2, RefreshCw, Instagram, Facebook, Twitter, Linkedin,
@@ -1197,8 +1198,8 @@ const PostAnalyticsTab: React.FC<{
               </span>
             )}
           </div>
-          {postUrl && (
-            <a href={postUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#ffcc29] hover:underline flex items-center gap-1 font-medium">
+          {safeHref(postUrl) && (
+            <a href={safeHref(postUrl)} target="_blank" rel="noopener noreferrer" className="text-xs text-[#ffcc29] hover:underline flex items-center gap-1 font-medium">
               View Post <ExternalLink className="w-3 h-3" />
             </a>
           )}
@@ -1523,9 +1524,9 @@ const AdsTab: React.FC<{
             )}
 
             {/* Preview Link */}
-            {ad.previewLink && (
+            {safeHref(ad.previewLink) && (
               <a
-                href={ad.previewLink}
+                href={safeHref(ad.previewLink)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`inline-flex items-center gap-1.5 mt-3 text-xs font-medium ${isDarkMode ? 'text-[#ffcc29] hover:text-yellow-300' : 'text-amber-600 hover:text-amber-700'}`}

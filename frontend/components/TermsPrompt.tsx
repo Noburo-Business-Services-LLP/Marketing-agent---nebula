@@ -21,7 +21,7 @@ const TermsPrompt: React.FC<{ onAccepted: () => void; onLogout: () => void }> = 
         <p className="mt-2 text-[14px] leading-relaxed text-[var(--gv-text-secondary)]">Please read and agree to the updated Terms and Privacy Policy to keep using Nebulaa. It covers how plans renew, refunds, and how you can download or delete your data.</p>
         <label className="mt-4 flex items-start gap-2.5 text-[13px] text-[var(--gv-text-primary)]">
           <input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--gv-accent)]" />
-          <span>I agree to the {LEGAL_PAGES.filter((p) => /terms|privacy/i.test(p.label)).map((p, i) => <React.Fragment key={p.href}>{i > 0 && ' and '}<a href={p.href} target="_blank" rel="noreferrer" className="underline underline-offset-2">{p.label}</a></React.Fragment>)}.</span>
+          <span>I agree to the {LEGAL_PAGES.filter((p) => /terms|privacy/i.test(p.label)).map((p, i) => <React.Fragment key={p.href}>{i > 0 && ' and '}<a href={p.href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{p.label}</a></React.Fragment>)}.</span>
         </label>
         {error && <p className="mt-3 text-[13px] text-red-600">{error}</p>}
         <div className="mt-5 flex flex-wrap justify-end gap-2">

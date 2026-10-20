@@ -17,6 +17,7 @@ import AdditionalLanguagePicker from '../components/AdditionalLanguagePicker';
 import BusinessProfileFields from '../components/BusinessProfileFields';
 import { cleanSelection } from '../utils/languages';
 import { useTheme, getThemeClasses } from '../context/ThemeContext';
+import { safeHref } from '../utils/safeHref';
 import {
 } from '../components/gravity';
 
@@ -787,9 +788,9 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                               </span>
                                             </td>
                                             <td className="px-4 py-3">
-                                              {payment.invoiceUrl ? (
+                                              {safeHref(payment.invoiceUrl) ? (
                                                 <a
-                                                  href={payment.invoiceUrl}
+                                                  href={safeHref(payment.invoiceUrl)}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
                                                   className="text-[#F5A623] hover:text-[#F5A623]/80 flex items-center gap-1 text-xs font-medium"

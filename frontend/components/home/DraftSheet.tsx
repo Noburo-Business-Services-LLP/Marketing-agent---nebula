@@ -11,6 +11,7 @@ import {
 } from '../../utils/homeDrafts';
 import CompetitorAvatar from '../CompetitorAvatar';
 import './draftSheet.css';
+import { safeHref } from '../../utils/safeHref';
 
 // The compact sheet behind "Make a post in response" and "Draft a witty comment" on a competitor's best post. It shows
 // the price before anything is pressed, then the draft once it has passed both checks. Nothing is posted from here:
@@ -164,7 +165,7 @@ export const DraftSheet: React.FC<{
               {kind === 'witty_comment' ? (
                 <>
                   <button type="button" className="nb-hd-btn" data-primary="true" data-autofocus onClick={copy}>{copied ? <><Check aria-hidden="true" />Copied</> : <><Copy aria-hidden="true" />Copy</>}</button>
-                  {source.url && <a className="nb-hd-btn" href={source.url} target="_blank" rel="noopener noreferrer">Open the post<ExternalLink aria-hidden="true" /></a>}
+                  {safeHref(source.url) && <a className="nb-hd-btn" href={safeHref(source.url)} target="_blank" rel="noopener noreferrer">Open the post<ExternalLink aria-hidden="true" /></a>}
                 </>
               ) : (
                 <button type="button" className="nb-hd-btn" data-primary="true" data-autofocus onClick={useInCreate}>Use in Create</button>

@@ -15,6 +15,7 @@ import HeroEdit from '../components/HeroEdit';
 import HeroTweak, { TweakSource } from '../components/HeroTweak';
 import { GravityPanel, GravityLabel, GravityButton } from '../components/gravity';
 import PageHeader from '../components/PageHeader';
+import { safeSrc } from '../utils/safeHref';
 
 // Hero Studio: one premium 15-second clip built from the Reels wizard's story, cast and place,
 // plus the client's brand (loaded server-side). The wizard sends a compact brief via router
@@ -499,11 +500,11 @@ const HeroVideoInner: React.FC = () => {
           />
           {finishError && <p className="text-[12.5px] text-[var(--gv-text-secondary)]">{FINISH_NOTE}</p>}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <a href={videoUrl} download target="_blank" rel="noreferrer" className={linkCls}>
+            <a href={safeSrc(videoUrl)} download target="_blank" rel="noopener noreferrer" className={linkCls}>
               <Download className="w-4 h-4" />Download video
             </a>
             {rawVideoUrl && rawVideoUrl !== videoUrl && (
-              <a href={rawVideoUrl} download target="_blank" rel="noreferrer" className={linkCls}>
+              <a href={safeSrc(rawVideoUrl)} download target="_blank" rel="noopener noreferrer" className={linkCls}>
                 <Download className="w-4 h-4" />Download raw clip
               </a>
             )}

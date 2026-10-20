@@ -13,6 +13,7 @@ import {
 } from '../utils/postActions';
 import { usePostAccess } from '../hooks/usePostAccess';
 import './postActions.css';
+import { openSafe } from '../utils/safeHref';
 
 /**
  * The same post buttons, in the same order, on every screen (rules in utils/postActions.ts).
@@ -139,10 +140,10 @@ const PostActions: React.FC<PostActionsProps> = ({
       const own = String(draft?.imageUrl || '');
       const video = String(draft?.creative?.videoUrl || '') || (isVideo && /\.(mp4|webm|mov|m4v)(\?|$)|\/video\/upload\//i.test(own) ? own : '');
       try {
-        if (isVideo && video) window.open(video, '_blank', 'noopener');
+        if (isVideo && video) openSafe(video);
         else if (pics.length > 1) await downloadAll(pics, name);
         else if (pics[0]) await downloadImage(pics[0], name);
-        else if (video) window.open(video, '_blank', 'noopener');
+        else if (video) openSafe(video);
       } catch { say('The download did not start. Please try again.', 'error'); }
       return;
     }

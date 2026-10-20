@@ -1,3 +1,4 @@
+import { safeSrc, openSafe } from './safeHref.ts';
 /**
  * Saving a finished picture to the computer. Cloudinary links are turned into "download" links so the browser
  * saves the file instead of opening it; other links are fetched and saved from memory.
@@ -15,8 +16,10 @@ export function downloadableUrl(url: string, name: string): string {
 }
 
 function clickLink(href: string, name?: string) {
+  const safe = safeSrc(href);
+  if (!safe) return;
   const a = document.createElement('a');
-  a.href = href;
+  a.href = safe;
   if (name) a.download = name;
   a.rel = 'noopener';
   document.body.appendChild(a);
@@ -37,7 +40,7 @@ export async function downloadImage(url: string, name: string): Promise<void> {
     clickLink(objectUrl, `${fileSafeName(name)}.${ext}`);
     setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
   } catch {
-    window.open(url, '_blank', 'noopener');
+    openSafe(url);
   }
 }
 

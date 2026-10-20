@@ -9,6 +9,7 @@ import {
   compareBars, heatStrip, insightHandoff, markOf, platformTile, postChips, shortDate, RANGES, TOP_TABS,
   type PerformanceView, type PvCompare, type PvInsight, type PvPost, type RangeKey, type TopKey,
 } from '../../utils/performanceInsights';
+import { safeHref } from '../../utils/safeHref';
 
 // Sections of the Performance page below the KPI tiles: the range switch, one tile per platform, the top posts gallery
 // and "What works". Everything is drawn from the one server answer (see utils/performanceInsights.ts).
@@ -124,8 +125,8 @@ const PostCard: React.FC<{ post: PvPost; rank: number }> = ({ post, rank }) => {
         <span className="nb-pv-chips">
           {postChips(post).map((c) => <span key={c.key} className="nb-pv-chip" data-lead={c.lead || undefined}>{c.text}</span>)}
         </span>
-        {post.url
-          ? <a className="nb-pv-open" href={post.url} target="_blank" rel="noopener noreferrer">Open post<ExternalLink aria-hidden /><span className="nb-sr"> (opens {post.platformLabel} in a new tab)</span></a>
+        {safeHref(post.url)
+          ? <a className="nb-pv-open" href={safeHref(post.url)} target="_blank" rel="noopener noreferrer">Open post<ExternalLink aria-hidden /><span className="nb-sr"> (opens {post.platformLabel} in a new tab)</span></a>
           : <span className="nb-pv-open nb-pv-open-none">No link was stored for this post</span>}
       </span>
     </li>
