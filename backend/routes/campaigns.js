@@ -534,7 +534,9 @@ const { publishCampaignToSocial } = require('../services/campaignPublisher');
 const { buildGenerationGuidelines } = require('../services/brandIntelligenceService');
 const { buildAIContext } = require('../services/aiContextBuilder');
 const { uploadLogo, uploadImageWithLogoOverlay } = require('../services/imageUploader');
-const { campaignImageQueue } = require('../services/campaignImageQueue');
+// Campaign image jobs (async mode) are stored in MongoDB and run by the worker's runner (services/imageJobQueue.js).
+const { imageJobQueue, QueueFullError, PayloadTooLargeError } = require('../services/imageJobQueue');
+const CAMPAIGN_IMAGE_JOB = 'campaign_regenerate_image';
 const {
   learnCampaignGeneration,
   learnCaptionGeneration,
@@ -4471,16 +4473,15 @@ router.post('/regenerate-post-image', protect, checkTrial, requireCredits('image
     const asyncMode = req.body?.async === true || String(req.query?.async || '').toLowerCase() === 'true';
 
     if (asyncMode) {
-      const queued = campaignImageQueue.enqueue({
-        userId,
-        payload: req.body || {},
-        handler: async ({ update, log }) => executeRegeneratePostImage({
-          userId,
-          payload: req.body || {},
-          progress: (patch) => update(patch),
-          log
-        })
-      });
+      let queued;
+      try {
+        queued = await imageJobQueue().enqueue({ userId: String(userId), type: CAMPAIGN_IMAGE_JOB, payload: req.body || {} });
+      } catch (queueError) {
+        if (queueError instanceof QueueFullError || queueError instanceof PayloadTooLargeError) {
+          return res.status(queueError.status).json({ success: false, message: queueError.message });
+        }
+        throw queueError;
+      }
 
       return res.status(202).json({
         success: true,
@@ -4511,7 +4512,7 @@ router.post('/regenerate-post-image', protect, checkTrial, requireCredits('image
 router.get('/image-jobs/:jobId', protect, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id || req.user._id;
-    const job = campaignImageQueue.getJob(req.params.jobId, userId);
+    const job = await imageJobQueue().getJob(req.params.jobId, String(userId));
     if (!job) {
       return res.status(404).json({
         success: false,
@@ -5663,4 +5664,12 @@ router.post('/template-poster/batch', protect, checkTrial, requireCredits('image
 
 // Used by the background status sync (services/campaignStatusSync.js), which runs the checks this list used to run.
 router.extractFacebookPostIdFromAyrsharePayload = extractFacebookPostIdFromAyrsharePayload;
+// The worker (or the single task) runs stored campaign image jobs with the same code as the direct request.
+imageJobQueue().registerHandler(CAMPAIGN_IMAGE_JOB, ({ userId, payload }, { update, log }) => executeRegeneratePostImage({
+  userId,
+  payload: payload || {},
+  progress: (patch) => update(patch),
+  log
+}));
+
 module.exports = router;

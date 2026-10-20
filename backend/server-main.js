@@ -668,6 +668,14 @@ function startBackgroundJobs() {
     console.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
   }
 
+  // Campaign image jobs stored by any task (async regenerate): claimed and run here, IMAGE_JOB_CONCURRENCY at once
+  // (default 2), per account 2 running and 5 waiting. Off with ENABLE_IMAGE_JOB_RUNNER=off
+  try {
+    require('./services/imageJobQueue').startImageJobRunner();
+  } catch (queueError) {
+    console.warn('Image job runner failed to start:', queueError.message);
+  }
+
   // Start notification scheduler for campaign reminders
   try {
     notificationScheduler.start();

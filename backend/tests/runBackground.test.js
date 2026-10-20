@@ -43,7 +43,8 @@ test('server-main: every starter is inside startBackgroundJobs, none outside', (
     'startCampaignStatusSync()', 'startContentCalendarScheduler()', 'startPhotoshootResume()', 'startStudioVideoSweep()',
     'startHomeDraftsSweep()', 'startBinPurge()', 'startWeekRecovery()', 'startPerformanceTrackerScheduler()', 'startBillingScheduler()',
     'setInterval(run, 60 * 60 * 1000)', 'startAccountPurge()', 'startRenewalReminders()', 'startStaleDraftReaper()', 'reapOnBoot()',
-    'startCompetitorTracker()', 'startListeningScorer()', 'startPlanScheduler()', 'startBrandMemoryJob()', 'startMemoryDistillationScheduler()'
+    'startCompetitorTracker()', 'startListeningScorer()', 'startPlanScheduler()', 'startBrandMemoryJob()', 'startMemoryDistillationScheduler()',
+    'startImageJobRunner()'
   ];
   for (const call of expected) assert.ok(body.includes(call), `inside the gate: ${call}`);
   // Outside the gate: no setInterval, no start...() other than the server itself, no .start() other than the memory
