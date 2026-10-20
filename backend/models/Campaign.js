@@ -157,6 +157,11 @@ const campaignSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // When the background status sync last asked Ayrshare about this scheduled post (services/campaignStatusSync.js)
+  ayrshareCheckedAt: {
+    type: Date,
+    default: null
+  },
   ayrshareStatus: {
     type: String,
     enum: ['pending', 'scheduled', 'success', 'error', null],
