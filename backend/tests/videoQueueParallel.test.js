@@ -490,3 +490,37 @@ test('D74 item 4: a claim above the cap is handed back conditionally (only if st
   assert.deepStrictEqual(started, []);
   w.stop();
 });
+
+test('D74 item 5: a worker re-claiming its own lost job keeps run 2 in its running map when run 1 finally ends', async () => {
+  const w = world({ workers: 2 });
+  const gates = [];
+  w.qs[0].registerHandler('create_video_pipeline', async () => { const g = deferred(); gates.push(g); await g.p; return { videoUrl: 'https://cdn/v.mp4' }; });
+  w.qs[1].registerHandler('create_video_pipeline', async () => { await new Promise(() => {}); });
+  await quiet(async () => {
+    await w.charged(w.qs[0], 'u1');
+    await w.qs[0]._drainQueue();
+    await settle();
+    assert.strictEqual(w.qs[0].running.size, 1);
+    const id = w.model.docs[0].jobId;
+    // its lease runs out (database stall); ANOTHER worker's sweep re-queues it, then worker 1 claims it again (run 2)
+    w.clock.t += 120000;
+    await w.qs[1].recoverStaleJobs();
+    assert.strictEqual(w.model.docs[0].status, 'queued');
+    await w.qs[0]._drainQueue();
+    await settle();
+    assert.strictEqual(gates.length, 2, 'run 2 started');
+    assert.strictEqual(w.model.docs[0].attempts, 2);
+    const run2 = w.qs[0].running.get(id);
+    assert.ok(run2);
+    // run 1 finally ends: its finally must not delete run 2's entry
+    gates[0].resolve();
+    await settle(60);
+    assert.strictEqual(w.qs[0].running.get(id), run2, 'run 2 is still tracked (slot, shutdown and heartbeat see it)');
+    assert.strictEqual(w.model.docs[0].status, 'processing', 'run 1\'s late result was discarded');
+    gates[1].resolve();
+    await settle(60);
+    assert.strictEqual(w.model.docs[0].status, 'completed');
+    assert.strictEqual(w.qs[0].running.size, 0);
+  });
+  w.stop();
+});

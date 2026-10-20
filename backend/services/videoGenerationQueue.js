@@ -615,13 +615,13 @@ class PersistentVideoGenerationQueue {
     }
   }
 
-  async _runJob(jobDoc) {
+  async _runJob(jobDoc, runArg = null) {
     const { jobId, metadata } = jobDoc;
     const jobType = metadata?.jobType;
     const handler = this.handlers.get(jobType);
     const owner = this._owner(jobDoc);
     // Shared with the drain (this.running) so the shutdown and the heartbeat can mark the run lost.
-    const run = this.running.get(jobId) || { pool: jobDoc.pool || poolFor(jobType), attempt: jobDoc.attempts, lost: false };
+    const run = runArg || this.running.get(jobId) || { pool: jobDoc.pool || poolFor(jobType), attempt: jobDoc.attempts, lost: false };
 
     if (!handler) {
       logger.error(`❌ No handler registered for job type [${jobType}]. Job ${jobId} failed.`);
@@ -955,13 +955,16 @@ class PersistentVideoGenerationQueue {
 
   _start(job) {
     const doc = typeof job.toObject === 'function' ? job.toObject() : job;
-    this.running.set(doc.jobId, { pool: doc.pool || poolFor(doc.metadata?.jobType), attempt: doc.attempts, lost: false });
+    const runObj = { pool: doc.pool || poolFor(doc.metadata?.jobType), attempt: doc.attempts, lost: false };
+    this.running.set(doc.jobId, runObj);
     this.stats.claims += 1;
     // Run the job in the background (non-blocking); when it ends, its slot is free for the next claim.
-    this._runJob(doc)
+    this._runJob(doc, runObj)
       .catch((err) => { logger.error(`⚠️ Error launching job ${doc.jobId}:`, err.message); })
       .finally(() => {
-        this.running.delete(doc.jobId);
+        // Only this run's own entry: a worker that re-claimed its own lost job (run 2) replaced the entry, and run 1's
+        // late end must not delete run 2's (D74 item 5).
+        if (this.running.get(doc.jobId) === runObj) this.running.delete(doc.jobId);
         if (!this.stopping) this._drainQueue().catch(() => null);
       });
   }
