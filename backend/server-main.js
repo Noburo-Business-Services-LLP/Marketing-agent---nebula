@@ -11,15 +11,18 @@ const path = require('path');
 const fs = require('fs');
 
 // ============================================
-// Process-level crash logging (prevents silent 502s)
+// Crash policy (A6, utils/crashPolicy.js): an unhandled rejection is logged as one structured line; known-safe ones
+// (a client hung up, a busy hasher) keep running, any other sets exit code 1 and stops the process after a short grace
+// period (UNHANDLED_REJECTION_POLICY=log switches that off). An uncaught exception stops new connections, gives open
+// requests up to 10 s and exits 1. The task supervisor starts a fresh process. SIGTERM keeps its own drain (below).
 // ============================================
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Promise Rejection:', reason);
+const crash = require('./utils/crashPolicy').createCrashHandlers({
+  // Both are declared further down; a crash before they exist simply has no server to drain.
+  getServer: () => { try { return httpServer; } catch (_) { return null; } },
+  onStop: () => { try { health.markShuttingDown(); } catch (_) { /* not created yet */ } }
 });
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
+process.on('unhandledRejection', crash.onUnhandledRejection);
+process.on('uncaughtException', crash.onUncaughtException);
 
 // ============================================
 // Environment Validation (Fail Fast)
