@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { protect, protectCached } = require('../middleware/auth');
 const User = require('../models/User');
 const { CREDIT_COSTS, ACTION_UNITS } = require('../middleware/trialGuard');
 const { ensureCreditCycle } = require('../middleware/creditGuard');
@@ -16,7 +16,8 @@ const FROZEN_MESSAGE = 'This client is paused because the agency is over its cli
  * GET /api/credits
  * Get current credit balance and trial status
  */
-router.get('/', protect, async (req, res) => {
+// protectCached: only the id is read from req.user; the balance is read fresh below (docs/superpowers/ops/auth-cache.md).
+router.get('/', protectCached, async (req, res) => {
   try {
     const userId = req.user?.userId || req.user?.id || req.user?._id;
     const user = await User.findById(userId);
@@ -84,7 +85,7 @@ router.get('/', protect, async (req, res) => {
  * GET /api/credits/history
  * Get full credit usage history
  */
-router.get('/history', protect, async (req, res) => {
+router.get('/history', protectCached, async (req, res) => {
   try {
     const userId = req.user?.userId || req.user?.id || req.user?._id;
     const user = await User.findById(userId);

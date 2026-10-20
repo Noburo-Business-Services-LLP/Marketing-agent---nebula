@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHomeRouter, invalidateOnWrite } = require('../routes/home');
 const { createSummaryCache } = require('../services/homeSummaryCache');
-const { protect } = require('../middleware/auth');
+const { protectCached } = require('../middleware/auth');
 
 const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
 const routesOf = (r) => r.stack.filter((l) => l.route).map((l) => ({ path: l.route.path, method: Object.keys(l.route.methods)[0], handlers: l.route.stack.map((s) => s.handle) }));
@@ -17,7 +17,7 @@ const call = async (impl, req) => { const res = mkRes(); await handlerFor(impl)(
 test('the route is GET /summary behind sign-in and a rate limit', () => {
   const route = routesOf(createHomeRouter({ service: fakeService() })).find((r) => r.path === '/summary');
   assert.ok(route && route.method === 'get');
-  assert.strictEqual(route.handlers[0], protect, 'sign-in comes first');
+  assert.strictEqual(route.handlers[0], protectCached, 'sign-in comes first (the short auth cache; the summary loads a fresh user on a miss)');
   assert.ok(route.handlers.length >= 3, 'a rate limiter sits between sign-in and the handler');
 });
 

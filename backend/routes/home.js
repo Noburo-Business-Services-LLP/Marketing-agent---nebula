@@ -4,7 +4,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
-const { protect } = require('../middleware/auth');
+const { protectCached } = require('../middleware/auth');
 const { sharedCache: sharedSummaryCache } = require('../services/homeSummaryCache');
 
 const toUserId = (user) => (!user ? null : user._id ? String(user._id) : user.id ? String(user.id) : null);
@@ -38,7 +38,9 @@ function createHomeRouter(impl = {}) {
   let service = impl.service || null;
   const getService = () => (service = service || require('../services/homeSummary').createHomeSummary());
 
-  router.get('/summary', protect, readLimiter, async (req, res) => {
+  // protectCached: the auth check comes from the short auth cache; balance and plan are never read from it, because a
+  // summary cache miss builds from a fresh full document (req.loadFullUser). See docs/superpowers/ops/auth-cache.md.
+  router.get('/summary', protectCached, readLimiter, async (req, res) => {
     try {
       const userId = toUserId(req.user);
       if (!userId) return res.status(401).json({ success: false, message: 'Please sign in to continue.' });
@@ -50,7 +52,9 @@ function createHomeRouter(impl = {}) {
         const hit = cache.get(key);
         if (hit) return res.json({ success: true, ...hit, cached: true });
       }
-      const body = await getService().build({ user: req.user, pass });
+      const user = req.loadFullUser ? await req.loadFullUser() : req.user;
+      if (!user) return res.status(401).json({ success: false, message: 'Please sign in to continue.' });
+      const body = await getService().build({ user, pass });
       // Only an answer that loaded completely is kept, so a failed block is tried again on the next visit.
       if (!body.degraded || body.degraded.length === 0) cache.set(key, body);
       return res.json({ success: true, ...body, cached: false });

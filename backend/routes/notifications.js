@@ -6,7 +6,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+// The two hot reads use the short auth cache (only the id is read); every write keeps protect. See auth-cache.md.
+const { protect, protectCached } = require('../middleware/auth');
 const Notification = require('../models/Notification');
 const notificationScheduler = require('../services/notificationScheduler');
 
@@ -30,7 +31,7 @@ function freshOnly(query) {
   };
 }
 
-router.get('/', protect, async (req, res) => {
+router.get('/', protectCached, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const { status, limit = 20, unreadOnly } = req.query;
@@ -73,7 +74,7 @@ router.get('/', protect, async (req, res) => {
  * GET /api/notifications/unread-count
  * Get count of unread notifications
  */
-router.get('/unread-count', protect, async (req, res) => {
+router.get('/unread-count', protectCached, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
 
