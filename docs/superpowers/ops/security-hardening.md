@@ -376,3 +376,158 @@ let anyone lock a named person out). Keyed by the TYPED email, whether or not it
 ### Error text in `routes/auth.js` (A4 remainder, D58)
 - Fixed: the LinkedIn scrape helper's `error` field, the sign-up validation message (was joined from Mongoose messages; now one plain sentence per field from our own list), and the 429 sign-in sentence (chosen by reason from `services/loginGuard.js` MSG; same words). `routes/auth.js` is no longer in `SKIP` (codemod) or `SKIPPED` (`noErrorLeaks.test.js`); the `objectIdParams` test no longer skips it either (it has no `:id` routes).
 
+
+## 12. Outbound downloads (SSRF), container, repo hygiene, advisories (hardening items C4, E6, G6, G8; D59 to D62)
+
+### C4: one SSRF-safe download helper (`backend/services/safeFetch.js`, D59)
+Every link that a person, a stored record or another service gave us is downloaded through this helper. Rules, for
+the first link and every redirect hop:
+- `https:` only; `http:` only with `allowHttp: true` at the call site or `ALLOW_HTTP_FETCH=1`.
+- No user name or password in the link; port 80 or 443 unless the call site lists more (`ports`).
+- The host is resolved with `dns.lookup({ all: true })` and refused when ANY address is not public: loopback,
+  RFC 1918, link-local 169.254.0.0/16 (EC2 metadata 169.254.169.254 and the ECS task metadata endpoint 169.254.170.2),
+  CGNAT 100.64.0.0/10, multicast and reserved, unspecified, documentation and benchmark ranges; IPv6 `::`, `::1`,
+  `fc00::/7`, `fe80::/10`, `fec0::/10`, `ff00::/8`, IPv4-compatible, Teredo, anything outside `2000::/3`; IPv4-mapped
+  `::ffff:a.b.c.d`, NAT64 `64:ff9b::/96` and 6to4 are judged by the IPv4 address inside.
+- The request connects to the address that was checked (the `lookup` of `http(s).request` is pinned); TLS still
+  checks the certificate of the real host name. A second DNS answer (rebinding) cannot change the target.
+- Redirects followed by hand, at most 3; `Authorization` and `Cookie` are dropped when a redirect leaves the origin.
+- One overall time limit (15 s default, per call site for videos) over all hops and the body; the body is counted
+  while it streams and cut off past the cap (25 MB default); a declared `Content-Length` over the cap is refused first.
+- A content-type allowlist per call site (`types: ['image/']`, `['video/', 'application/octet-stream']`).
+- `allowDataUrl: true` (call sites that always accepted a stored `data:` picture) decodes locally, same type list
+  and cap, no network.
+- `allowPrivateForTests: true` (reach a local test server on 127.0.0.0/8 or ::1) is a function argument only; no
+  environment variable turns it on and it is ignored when `NODE_ENV=production`.
+- Helpers: `safeFetchBuffer`, `safeFetchJson`, `safeFetchResponse` (a standard `Response`, drop-in for code written
+  against `fetch`), `safeFetchStream`, `safeFetchDataUrl`; errors are `SafeFetchError` with a `code`.
+- Tests: `tests/safeFetch.test.js` (17, local server on 127.0.0.1 and a random port, DNS answers from a test seam,
+  no real outbound network): normal image, loopback refused without the test argument, test argument ignored in
+  production and not settable by env, metadata and ECS metadata, 10.0.0.1, RFC 1918, CGNAT, IPv6 loopback, IPv4-mapped,
+  NAT64, DNS answer private or mixed, pinned connection, redirect to private / metadata / a private name, redirect
+  loop (exactly 4 requests), cross-origin header drop, oversize streamed body and declared size, slow body and slow
+  headers, content type refused, non-2xx, link rules (scheme, credentials, ports, bad links), data URLs, address table.
+  Also ran on Node 20.20.2 inside the built image.
+
+Call sites migrated (20 calls in 13 files):
+
+| File | Call | Allowlist |
+|---|---|---|
+| `routes/videoGeneration.js` | `verifySceneImageAspect` | images |
+| `routes/videoGeneration.js` | `fetchAsDataUrl` (cast and place references) | images, data: |
+| `routes/videoGeneration.js` | logo overlay route `fetchBuf` (base image and saved logo) | images, data: |
+| `routes/studioVideos.js` | `toRef` (people, place and product photos) | png/jpeg/webp, 6 MB |
+| `routes/studioVideos.js` | the earlier video for a change | video, 200 MB, 120 s |
+| `routes/products.js` | `toDataUriFromImage` (import) | images, 8 s |
+| `routes/campaigns.js` | `validateMediaUrl` HEAD and GET (2) | headers only |
+| `services/geminiAI.js` | `prepareInlineImage`, refinement image, edit image (3) | images |
+| `services/directImage.js` | `fetchReference`, read-back of the made picture (2) | images, data: |
+| `services/postFrames.js` | `fetchBuffer` | images |
+| `services/logoOverlay.js` | `fetchImageBuffer` | images, data: |
+| `services/blueprint/designedService.js` | `fetchLogo` | images, 5 MB |
+| `services/videoDownload.js` | `requestRemoteStream` (content `download-video`, Hero downloads) | 750 MB, streamed |
+| `services/mediaComposer.js` | `downloadToFile` | 750 MB, 10 min |
+| `services/videoGenerationPipeline.js` | `downloadToFile` (retries kept) | its own cap and time |
+| `utils/socialPostValidation.js` | `validateMediaUrl` HEAD then GET | headers only |
+
+Older guards moved onto the same rules: `services/competitors/avatar.js` (`isPrivateAddress` and the connect-time
+`safeLookup` are the helper's; used by the profile pictures, `competitors/tracker.js` and the post thumbnails),
+`services/photoshoot/refs.js`, and `heroVideoService.isPublicIp`, which Hero logos (`heroVideoFinish` pinned fetch),
+Blueprint discovery (`blueprint/safeFetch.js`) and the scraper (`scraper.js` `publicOnlyLookup`) use. Their tests are
+unchanged and green.
+
+Fixed provider endpoints left on plain `fetch` / `https.request`: 86 call lines (31 with a literal `https://` URL,
+55 with a URL held in a constant or built from a fixed host: Gemini / Vertex, OpenAI, Groq, x.ai, Zoho Books, Ayrshare,
+Google OAuth / Calendar / YouTube, Meta, X, LinkedIn, Pinterest, ElevenLabs, translate.google.com TTS, Serper,
+Turnstile, Apify, scrapingdog); 3 call lines have their own reviewed guard (`safeFetch.js` itself, the Hero pinned
+fetch, the scraper); 3 are test seams or not HTTP.
+
+Guard: `tests/safeFetchGuard.test.js` scans routes, services, controllers, utils, middleware, config, models and the
+server files for `fetch(`, the fetch wrappers, `axios`, `http(s).get/request` and `client/protocol/transport.request`.
+A call whose first argument is not a literal `https://host` URL must be in the reviewed allowlist (file, line text,
+reason); stale entries fail too. A new dynamic download therefore fails CI until it uses safeFetch or is reviewed.
+
+Behaviour changes to know: `http://` links (product import, campaign media check, references) are now refused unless
+`ALLOW_HTTP_FETCH=1`; links on other ports are refused; a link to this machine is refused (the video pipeline still
+copies its own `/generated-media` files from disk first, so local development keeps working there).
+
+Found, NOT changed (follow-up): `services/videoGenerationPipeline.js` `materializeSourceToFile` copies a non-URL input
+with `fs.copyFile(path.resolve(raw), ...)`. If any caller passes a value a person controls, that is a local file read.
+Today the inputs come from the pipeline's own records; a follow-up should restrict it to the storage folder.
+
+### E6: container hardening (D60)
+- `Dockerfile.backend` and `Dockerfile` (docker-compose): the app runs as the base image's `node` user (uid 1000).
+  The code is owned by root and read-only for the app; only `storage/` (with `ai-videos`, served at `/generated-media`),
+  `temp/` and `downloads/` are owned by `node`. Uploads (multer), Hero / studio finishing and ffmpeg work files go to
+  `/tmp` (`os.tmpdir()`, world-writable with the sticky bit). `ENV NODE_ENV=production UV_THREADPOOL_SIZE=6 NODE_HEAP_MB=1536`.
+- `HEALTHCHECK` runs `node -e` against `http://127.0.0.1:$PORT/api/ready` (interval 30 s, timeout 5 s, start period
+  60 s, 3 retries). The server listens only after MongoDB connects, so a task is unhealthy until then.
+- `backend/docker-entrypoint.sh`: no argument (or `server`) = `exec node --max-old-space-size=$NODE_HEAP_MB server.js`
+  (node is PID 1 and receives SIGTERM: the drain works); any other command runs as given with the same heap in
+  `NODE_OPTIONS`. A non-number `NODE_HEAP_MB` exits 64 with a message. The ECS task definition's `command` (if any)
+  passes through unchanged.
+- `.dockerignore`: `.git`, every `.env*` except the example, docs, `*.md`, backend and frontend tests, `qa-reports`,
+  `scratch`, `.scannerwork`, `designed-pdf-test-output`, run-time folders, build output.
+- `render.yaml` health check path `/api/ready`.
+- `scripts/verify-dockerfile.js` (static, no Docker): non-root USER before the start, NODE_ENV and UV_THREADPOOL_SIZE,
+  node HEALTHCHECK on /api/ready without curl, the entrypoint (exists, executable, LF, reads NODE_HEAP_MB, execs node),
+  pinned Node base, chown of the run-time folders, `.dockerignore` entries. Test: `tests/verifyDockerfile.test.js`.
+- How it was checked: `docker buildx build --platform linux/amd64 -f Dockerfile.backend` locally (same as
+  `release-prod.sh`), then the exact smoke test from `release-prod.sh` (`docker run --network none ... node -e "canvas,
+  ffmpeg-static, bcrypt, modules"`): ok. In the image: `id` = node, Node 20.20.2, heap limit 1536 MB, UV pool 6,
+  writes to storage / temp / downloads / /tmp work, writing the code fails, PID 1 is
+  `node --max-old-space-size=1536 server.js`, SIGTERM stops it with exit 0. Rebuilt again after the G8 lockfile change:
+  smoke test ok.
+- Not changed: `Dockerfile.frontend` (nginx 1.27-alpine master runs as root and binds port 80; a non-root nginx needs
+  the unprivileged image and port 8080, which changes the ECS port mapping and target group: owner decision).
+- Run-time folders and permissions:
+
+| Folder | Written by | In the image |
+|---|---|---|
+| `backend/storage/ai-videos` | old step-by-step video maker, drafts store | owned by node |
+| `backend/temp` | start-up write check, pipeline | owned by node |
+| `backend/downloads` | `videoDownload.downloadVideoFromUrl` default | owned by node |
+| `/tmp` | multer uploads (`routes/drafts.js`), studio / Hero finishing, chains | world-writable |
+| `generated-media` | URL path only (served from storage/ai-videos) | n/a |
+| `uploads`, `backend/demo-assets` | not on this branch | n/a |
+
+- OWNER: with docker-compose, named volumes created before this change are owned by root: run once
+  `docker compose run --rm --user root app chown -R node:node storage temp` (ECS tasks have no persistent volume, nothing to do).
+
+### G6: repo hygiene (D61)
+Deleted (all unreferenced by package.json scripts, docs or code): `fix_connect.js`, `fix_sso.js`, `fix_sso2.js`,
+`fix_sso_final.js`, `update_urls.js`, `add_logs.js`, `test-ayrshare-jwt.js`, `backend/_tmp_draftcheck.js`,
+`backend/check-audio-campaigns.js`, `backend/check-context.js`, `backend/fetch_render_logs.js` (Render is no longer the
+deploy), `backend/test-fal.js`, `backend/test-style-prompts.js`, `backend/test-token.js`, `scratch/add_generate_content.js`,
+`frontend/test_log.txt`, `.scannerwork/` (2 files). None was worth moving to `backend/scripts/`. `.gitignore` now covers
+`.scannerwork/`, `scratch/`, `coverage/`, `qa-reports/out/`, `backend/temp/`, `backend/downloads/`,
+`backend/designed-pdf-test-output/`, `frontend/test_log.txt`. `README.md` rewritten (it was the AI Studio template);
+`backend/.env.example` lists the scaling and security switches with their defaults, commented.
+Left in the root on purpose (not one-off scripts): `API_COST_MAP.md`, `INSTAGRAM_VIDEO_FIX.md`, `metadata.json`,
+`sonar-project.properties`, the logo PNG.
+
+### Secrets found in the repo (HUMAN: rotate)
+Searched the tracked tree (and the deleted files as of HEAD) for OpenAI `sk-`, Google `AIza`, JWTs, private keys,
+`rzp_live` / `rzp_test`, `key_secret`, Ayrshare `profileKey` literals, long Bearer literals, AWS `AKIA`, Slack, GitHub
+tokens, MongoDB URIs with a password and long api-key/secret/token assignments. Only file:line and kind are listed.
+
+| Where | Kind | Status |
+|---|---|---|
+| `test-ayrshare-jwt.js:7` (deleted in this job) | Ayrshare profile key, hard-coded | REAL: rotate in Ayrshare. It remains in git history (commits `51b2ecd`, `f5e2928`, `39619a7` touch the file); deleting the file does not remove it from history |
+| `backend/tests/razorpayTestCheck.test.js:13, 23, 27, 32, 52, 67`, `backend/tests/helpers/razorpayCheckE2E.js:17` | `rzp_test_` / `rzp_live_` shaped strings | test fixtures for the guard that refuses live keys (made-up values; a Razorpay key id is public anyway). No action |
+| `backend/tests/sampleGeneratePhotos.test.js:12` | `sk-test-...` | made-up fixture. No action |
+| `backend/tests/backfillPerformanceMetrics.test.js:40`, `homeIndexes.test.js:7`, `seedDemoAgency.test.js:8`, `staffIndexes.test.js:10`, `staffPerfCheckGuard.test.js:20` | MongoDB URI with a password | made-up fixtures (`cluster0.abcde`, `cluster.example.net`) used to test that scripts never print them. No action |
+
+No real secret is left in the current source. Recommended (not done here): a gitleaks run over the full history in
+CI (item G3) and, after the rotation, optionally rewriting history to drop the old key.
+
+### G8: dependency advisories (D62)
+- `npm audit --omit=dev` (online): backend and frontend each had 2 moderate (uuid < 11.1.1 through exceljs 4.4.0,
+  GHSA-w5hq-g745-h8pq: missing buffer bounds check in v3/v5/v6 when a buffer is passed; exceljs only calls `v4()`).
+- Fix: `"overrides": { "uuid": "^11.1.1" }` in both `package.json`; the lockfiles change only the uuid entry. Audit
+  after: 0 vulnerabilities in both. No other version changed.
+- exceljs checked: xlsx write and read back with a data-bar rule (the exceljs file that calls uuid) and a csv export,
+  in backend and frontend, and in the rebuilt image on Node 20.20.2.
+- Base image pinned to `node:20.20.2-bookworm-slim` in `Dockerfile.backend`, `Dockerfile.frontend` and `Dockerfile`:
+  20.20.2 is the Node version inside the production backend image released today (read from the image), so the
+  pin changes nothing. No digest pinned (not invented). `nginx:1.27-alpine` left as is.
