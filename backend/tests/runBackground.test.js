@@ -99,3 +99,10 @@ test('video queue: a web-only process stores the job and does not run it; the wo
   await single.enqueue({ userId: 'u1', jobType: 'x' });
   assert.strictEqual(drainedHere, 1, 'single process starts it at once, as before');
 });
+
+test('SIGTERM drain: SHUTDOWN_DRAIN_MS, default 20 s, at most 115 s (below the 120 s Fargate stopTimeout ceiling)', () => {
+  const src = read('server-main.js');
+  assert.match(src, /process\.env\.SHUTDOWN_DRAIN_MS/);
+  assert.match(src, /Math\.max\(1000, Math\.min\(115000, n\)\) : 20000/);
+  assert.match(src, /setTimeout\(\(\) => process\.exit\(0\), drainMs\)\.unref\(\)/);
+});

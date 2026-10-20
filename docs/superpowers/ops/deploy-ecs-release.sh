@@ -7,7 +7,8 @@
 #   ENV=prod TAG=prod-39414bf  DRY_RUN=1 bash deploy-ecs-release.sh  # read-only: shows what it would do
 #   ENV=test TAG=test-39414bf  bash deploy-ecs-release.sh
 #
-# What it does, in order (backend first, the frontend only if the backend rollout completed):
+# What it does, in order (backend first, then the background worker service if it exists, the frontend only if
+# those rollouts completed):
 #   1. checks that both images exist in ECR with that tag;
 #   2. copies the service's current task definition, changes ONLY the container image, registers it
 #      as a new revision, and updates the service to it;
@@ -28,8 +29,10 @@ DRY_RUN="${DRY_RUN:-0}"
 
 if [ "$ENV_NAME" = "prod" ]; then
   BACKEND_SVC="prod-nebulaa-gravity-backend-service"; FRONTEND_SVC="prod-nebulaa-gravity-frontend-svc"
+  WORKER_SVC="${WORKER_SVC:-prod-nebulaa-gravity-worker-svc}"
 else
   BACKEND_SVC="test-nebulaa-gravity-backend-svc"; FRONTEND_SVC="test-nebulaa-gravity-frontend-svc"
+  WORKER_SVC="${WORKER_SVC:-test-nebulaa-gravity-worker-svc}"
 fi
 
 WORK="$(mktemp -d)"; chmod 700 "$WORK"
@@ -92,5 +95,13 @@ PY
 }
 
 deploy_service "$BACKEND_SVC" "$ENV_NAME/nebulaa_gravity_backend"
+# The background worker (same backend image, RUN_BACKGROUND=1, docs/superpowers/ops/ecs-web-worker.md) is switched
+# after the web service, only if it exists: until the owner creates it, the single backend task does everything.
+WORKER_STATUS="$(aws ecs describe-services --cluster "$CLUSTER" --services "$WORKER_SVC" --query 'services[0].status' 2>/dev/null | tr -d '"\n' || true)"
+if [ "$WORKER_STATUS" = "ACTIVE" ]; then
+  deploy_service "$WORKER_SVC" "$ENV_NAME/nebulaa_gravity_backend"
+else
+  echo; echo "=== $WORKER_SVC: not found (single backend task runs the background jobs): skipped"
+fi
 deploy_service "$FRONTEND_SVC" "$ENV_NAME/nebulaa_gravity_frontend"
 echo; echo "Done. Open the site and check it loads, then tell the assistant the result."

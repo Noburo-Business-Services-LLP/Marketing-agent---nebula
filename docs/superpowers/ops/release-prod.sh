@@ -61,6 +61,7 @@ const c=require('canvas'); if(!c.createCanvas(10,10).getContext('2d')) throw new
 if(!require('fs').existsSync(require('ffmpeg-static'))) throw new Error('ffmpeg missing');
 const bc=require('bcrypt'); if(!bc.compareSync('x', bc.hashSync('x', 4))) throw new Error('bcrypt');
 require('./services/heroVideoFinish'); require('./services/blueprint/service'); require('./routes/blueprint'); require('./config/entitlements');
+require('./services/rateLimitStore'); require('./services/imageJobQueue'); require('./services/oauthState'); require('./services/socketAdapter'); require('./services/backgroundRole');
 console.log('backend image smoke test: ok');"
 
 if [ "$DRY_RUN" = "1" ]; then

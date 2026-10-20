@@ -928,13 +928,19 @@ mongoose.connection.on('error', (err) => {
 });
 
 // Graceful shutdown. ECS stops a task with SIGTERM: health and ready answer 503 at once (the load balancer stops sending
-// new requests), the server stops accepting connections, and the process ends when open requests finish (at most 20 s).
+// new requests), the server stops accepting connections, and the process ends when open requests finish, at most
+// SHUTDOWN_DRAIN_MS later (default 20 s; keep it below the task's stopTimeout, see docs/superpowers/ops/ecs-web-worker.md).
 let httpServer = null;
+const shutdownDrainMs = () => {
+  const n = Number.parseInt(String(process.env.SHUTDOWN_DRAIN_MS || ''), 10);
+  return Number.isFinite(n) ? Math.max(1000, Math.min(115000, n)) : 20000;
+};
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received: finishing open requests, then stopping.');
+  const drainMs = shutdownDrainMs();
+  console.log(`SIGTERM received: finishing open requests (at most ${Math.round(drainMs / 1000)} s), then stopping.`);
   health.markShuttingDown();
   const stop = () => mongoose.connection.close().catch(() => {}).finally(() => process.exit(0));
-  setTimeout(() => process.exit(0), 20000).unref();
+  setTimeout(() => process.exit(0), drainMs).unref();
   if (httpServer) httpServer.close(stop); else stop();
 });
 
