@@ -1011,3 +1011,46 @@ test('the consumer claims nothing while the Videos ceiling or switch says stop; 
     assert.strictEqual(w.docs.v2.status, 'completed');
   } finally { w.restore(); }
 });
+
+// ---- money review of B1: the CPU slot only around ffmpeg (finding 6) ----
+test('finishing holds a CPU slot only around ffmpeg and ffprobe: the logo fetch and the Whisper wait hold none', async () => {
+  const fin = require('../services/studioVideoFinish');
+  const fs = require('node:fs');
+  const sem = createSemaphore(1);
+  const seen = {};
+  const at = (k) => { seen[k] = sem.inUse(); };
+  const io = {
+    probe: async () => { at('probe'); return { width: 720, height: 1280, videoDurationSeconds: 10, durationSeconds: 10, hasAudio: true }; },
+    fetchLogo: async () => { at('logo'); return Buffer.from('png'); },
+    ffmpeg: async (args) => { at('ffmpeg'); fs.writeFileSync(args[args.length - 1], 'finished'); },
+    extractAudio: async (src, out) => { at('extract'); fs.writeFileSync(out, 'audio'); },
+    spend: { check: async () => ({ ok: true }), record: async () => ({ totalUsd: 1 }) },
+    transcribe: async () => { at('whisper'); await tick(); return { segments: [{ start: 2.1, end: 8.5, text: 'Order today and get free delivery to your home on everything above one thousand rupees.' }], words: [] }; }
+  };
+  const r = await fin.finishVideo({
+    buffer: Buffer.from('video'), features: { subtitles: true, logo: true, endLine: '' }, language: 'english', logoUrl: 'https://x/logo.png', cpu: (fn) => sem.run(fn),
+    parts: [{ spokenLine: 'Order today and get free delivery to your home on everything above one thousand rupees.' }]
+  }, io);
+  assert.deepStrictEqual(r.applied.sort(), ['logo', 'subtitles']);
+  assert.strictEqual(seen.whisper, 0, 'the Whisper wait holds no slot');
+  assert.strictEqual(seen.logo, 0, 'the logo fetch holds no slot');
+  assert.strictEqual(seen.ffmpeg, 1);
+  assert.strictEqual(seen.extract, 1);
+  assert.strictEqual(seen.probe, 1);
+  assert.strictEqual(sem.inUse(), 0);
+});
+
+test('on the consumer path the finishing step is not wrapped in a CPU slot as a whole (a slow Whisper does not block another video\'s ffmpeg)', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, { subtitles: true }, 'cpu1');
+    const sem = createSemaphore(1);
+    let during = null;
+    route._io.finish = async (args) => { during = sem.inUse(); await tick(); return { buffer: args.buffer }; };
+    const c = new StudioVideoConsumer({ model: StudioVideo, workerId: 'w:cpu', settings: SETTINGS, now: () => w.clock.t, leaseLock: directLease, cpu: sem, alert: () => {}, sleep: async () => { await tick(); } });
+    c.started = true;
+    await c._drain(); await settle(60);
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.strictEqual(during, 0, 'applyFinish itself runs outside the slot; finishVideo takes it around ffmpeg');
+  } finally { w.restore(); }
+});

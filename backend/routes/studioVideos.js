@@ -255,7 +255,7 @@ async function run(doc, work, io = {}, fin = null, ctl = null) {
     }
     if (!out.ok) throw Object.assign(new Error(out.message), { friendly: true });
     if (ctl) ctl.finishing();
-    const done = ctl ? await ctl.cpu(() => applyFinish(out.buffer, fin, io, null)) : await applyFinish(out.buffer, fin, io, null);
+    const done = await applyFinish(out.buffer, fin, io, null, ctl ? ctl.cpu : null);
     if (ctl) await ctl.check();
     const url = await (io.store || store)(done.buffer);
     if (!url) throw Object.assign(new Error('The video could not be saved. Your Quarks were returned. Please try again.'), { friendly: true });
@@ -275,10 +275,10 @@ async function run(doc, work, io = {}, fin = null, ctl = null) {
  * with a plain notice, and the video is never failed or refunded because of it.
  * fin = { features, parts, language, logoUrl } or null for no finishing.
  */
-async function applyFinish(buffer, fin, io, timing) {
+async function applyFinish(buffer, fin, io, timing, cpu = null) {
   if (!fin || !finishing.wantsFinish(fin.features)) return { buffer, notice: '', seconds: null };
   try {
-    const r = await (io.finish || finishing.finishVideo)({ buffer, features: fin.features, parts: fin.parts, language: fin.language, join: timing, logoUrl: fin.logoUrl });
+    const r = await (io.finish || finishing.finishVideo)({ buffer, features: fin.features, parts: fin.parts, language: fin.language, join: timing, logoUrl: fin.logoUrl, ...(cpu ? { cpu } : {}) });
     return { buffer: r.buffer || buffer, notice: r.notice || '', seconds: r.seconds ? Math.round(r.seconds * 10) / 10 : null };
   } catch (e) {
     console.error('[videos] finishing failed:', e.message);
@@ -491,7 +491,7 @@ async function runChain(doc, work, io = {}, ctl = null) {
     }
     if (ctl) ctl.finishing();
     const fin = work.finish ? { ...work.finish, parts: work.finish.parts.slice(0, out.made) } : null;
-    const done = ctl ? await ctl.cpu(() => applyFinish(out.buffer, fin, io, out.timing)) : await applyFinish(out.buffer, fin, io, out.timing);
+    const done = await applyFinish(out.buffer, fin, io, out.timing, ctl ? ctl.cpu : null);
     if (ctl) await ctl.check();
     const url = await (io.store || store)(done.buffer);
     if (!url) throw Object.assign(new Error('The video could not be saved. Your Quarks were returned. Please try again.'), { friendly: true });

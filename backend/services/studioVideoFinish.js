@@ -375,6 +375,11 @@ async function finishOnce({ buffer, features, cues: timedCues = [], language, lo
  */
 async function finishVideo(args, ioIn = {}) {
   const io = { ...defaultIo(), ...ioIn };
+  // args.cpu (the worker's CPU pool, E9 B1): a slot is held only around the ffmpeg and ffprobe steps, never during the logo
+  // fetch or the transcription wait, so a slow provider call does not stop another video's ffmpeg.
+  if (typeof args.cpu === 'function') {
+    for (const k of ['ffmpeg', 'probe', 'extractAudio']) { const f = io[k]; io[k] = (...a) => args.cpu(() => f(...a)); }
+  }
   const { buffer, parts, language, join, logoUrl } = args;
   const f = args.features || {};
   const asked = { subtitles: !!f.subtitles, logo: !!f.logo, endLine: cleanText(f.endLine, END_LINE_MAX) };
