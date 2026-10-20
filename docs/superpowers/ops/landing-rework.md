@@ -1,21 +1,32 @@
-# Landing page rework (frontend/pages/LandingPage.tsx)
+# Landing page rework (public page at `/`)
 
-## What changed
-- The 3-step "How it works" is now a numbered list of seven steps: tell us about your business, get your plan, weekly posts and videos, review and approve, publish and schedule (add-on), reply from one inbox (add-on), competitors and audience comments (add-ons). Steps 5 to 7 carry an "Add-on" tag.
-- Inbox wording: replies are drafted for you to read, change and approve. Automatic sending is mentioned only as something you switch on yourself. Nothing promises automatic replies.
-- New "Who it is for" strip (small business owners, shops, clinics, hotels, restaurants, coaches) and a short "For agencies" block.
-- Pricing: three cards in the order Starter, Growth, Agency (three columns from tablet width, one on a phone). Agency card: 6,999 a month plus GST, up to 545 posts or 37 short videos from one shared pool, 5 client brands included, extra client brand 1,499 a month plus GST, publishing, inbox and competitor insights included, usage report per client. The figures are taken from backend/config/apiCosts.js (PLANS, outputsFor, AGENCY). An add-on price line was added (Publish 1,000, Competitors 500, Inbox 500, all three 1,800).
-- Removed every use of Quark(s), credit, trial, "7 days". The two Quark FAQs became: replies need your approval; running low (top-ups valid 60 days, prices without GST, 18% GST at checkout); several clients on Agency. The WhatsApp/email/SMS mention was removed from the replies card, because the Inbox covers connected social accounts only.
-- Tests: quarks-wording test now also checks the Agency card figures, price, included clients and extra-client price from config. New frontend/tests/landing.test.mjs checks forbidden words, the seven steps, the drafted-for-approval Inbox wording, and plan order.
+## Second rework (2026-10-20): proof first, Higgsfield and Pollo grammar in the brand palette
+Impact map with every section, its copy and its visual: `docs/superpowers/impact-maps/landing.md`.
 
-## Results
-- `node --test tests/*.test.mjs`: 420 passed, 0 failed.
-- `npx tsc --noEmit`: exactly one error, the old one in pages/Influencers.tsx.
-- brand-audit: 0 violations. voice-audit: 0 violations. gen-layer-lists ran (no tracked file changed).
-- Looked at the dev page at 375, 800 and 1280 wide: no sideways scrolling.
+### Files
+- `frontend/pages/LandingPage.tsx`: composes the sections, reads the plans, sets the page title and description while shown.
+- `frontend/components/landing/`: `LandingNav` (sticky glass bar, phone menu sheet), `LandingHero` and `PhoneMock` (CSS phone with a Review and approve screen drawn from tile art, marked Example), `ExamplesSection` (eight showcase posts, each marked Example), `MakeSection` (six app cover tiles with the `create-*` photo slots), `ApprovalAndSteps` (gold "How approval works" band, seven steps plus a start card), `AudienceAndBlueprint` (four Built for cards, the free Blueprint), `PlansAndFaq` (three plan cards, eight questions), `ClosingAndFooter` (closing band, footer with `LegalLinks` and the giant gold wordmark), `LandingBits` (section heading, gold button, in-page links), `landing.css` (all styles, scoped under `.nb-land`).
+- `frontend/constants/landingCopy.ts`: every customer-facing word, in page order (the website copy comes from here).
+- `frontend/utils/landingPlans.ts`: plan figures from `GET /api/payment/plans`, a snapshot shown until it answers (checked against `backend/config/apiCosts.js` and `backend/config/plans.js` by the tests), "Best value" from the lowest price per Quark.
 
-## Uncertain
-- Step 6 and the Inbox FAQ describe what the Inbox is meant to do. It has never been tested with real accounts, and the code has gaps (see docs/superpowers/ops/inbox-live-test.md). Consider hiding step 6 until the live test passes.
-- The existing hero line "Built on real experience with 2,000+ MSMEs and startups" was left as it was; it is a claim only the owner can confirm.
-- "This week" and "My plan" are named as in the app menu; "This week" was not re-checked in the menu code.
-- At 768 to 900 px wide the three plan cards are narrow but readable.
+### Honesty rules built in
+- Inbox: only "drafted for you to approve"; never "automatic". Three entries, each marked `// CONFIRM AFTER INBOX TEST` in the copy file; `INBOX_LINES_VISIBLE = false` hides all of them (the approval point, step 6 and the FAQ sentence); the step grid closes its rows either way.
+- Photoshoot tile says "Coming soon" (the studio is off until the owner's real proof).
+- Languages: English and Tamil (alone or mixed), matching what is offered today.
+- No testimonials, logos, ratings, results or "most popular"; the only number claim is the owner-confirmed "2,000+ MSMEs" line.
+- Removed: "ready in minutes", "Set up in 3 minutes", "3 minutes away" (not measured).
+
+### Results
+- `node --test tests/*.test.mjs`: 887 passed, 0 failed (landing test rewritten: 14 checks).
+- `npx tsc --noEmit` 0 errors; `npm run lint` 0 errors; brand and voice audits 0; art budget OK (no new art files).
+- Contrast audit (repo runner) on the landing: 173 texts at 1280, 166 at 375, 0 failures, 0 unknown.
+- Looked at 1280, 800 and 375: no sideways scroll; every tile row full and of equal height (measured).
+- `vite build`: landing chunk 28.7 KB (9.0 KB gzip) JS plus 23.8 KB (5.7 KB gzip) CSS; before: 28.1 KB (8.2 KB gzip) JS. No raster above the fold (the old hero loaded three 120 to 200 KB posts).
+
+### Open
+- Open Graph tags need `frontend/index.html` (link previews do not run scripts): ready-to-paste tags in the impact map.
+- The eight showcase posts are about 120 KB each (lazy); smaller copies would make the page lighter.
+- Confirm the showcase posts were made with Nebulaa (the page calls them examples in Nebulaa's styles).
+
+## First rework (2026-10-18, handover 13)
+Seven-step workflow, drafted-for-approval Inbox wording, Who it is for, For agencies, three plan cards, add-on line, Quarks and credits wording removed. Superseded by the second rework above.

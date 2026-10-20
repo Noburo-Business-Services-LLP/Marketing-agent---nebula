@@ -73,10 +73,10 @@ Every word below lives in `frontend/constants/landingCopy.ts`. Prices and allowa
 - Cards: Small business owners ("Shops, cafes, salons and studios that need to post often without hiring a designer."; `SinglePostArt`), D2C brands ("Launches, offers and festival posts that look like your brand every time."; `ProductArt`), Local services ("Clinics, coaching centres, hotels and real estate teams that want to stay visible nearby."; `CalendarArt`), Agencies ("Several client brands from one account, with a usage report for each client."; `CampaignArt`).
 
 ### 7. Free Brand Growth Blueprint (`#blueprint`)
-- Kept as it is today, restyled: all words from `BLUEPRINT_COPY.landing` (the Blueprint copy file is shared with the Blueprint pages and not changed). `BlueprintArt` beside the legend.
+- Kept as it is today, restyled: all words from `BLUEPRINT_COPY.landing` (the Blueprint copy file is shared with the Blueprint pages and not changed). `BlueprintArt` beside the legend. Its `note` ("It uses 7 of your Quarks.") is not shown: a typed Quark figure that reads against "free".
 
 ### 8. Plans (`#plans`)
-- Layout: three cards in one row from 768 px, in the order Starter, Growth, Agency (`orderedPlans`), one column on a phone. Growth has a gold ring and the chip "Best value" (true from config: the lowest price per Quark of the three).
+- Layout: three cards in one row from 900 px (one centred column of up to 560 px below that), in the order Starter, Growth, Agency (`orderedPlans`), one column on a phone. Growth has a gold ring and the chip "Best value" (true from config: the lowest price per Quark of the three).
 - Eyebrow: "Plans"; Headline: "Three plans. Start from ₹{999}."
 - Line: "Prices are per month plus GST. Starter and Growth do the same things, and Growth makes over three times as much. Agency is for running several client brands. Publishing, competitor insights and the inbox are add-ons on Starter and Growth, and are included in Agency."
 - Each card: name, price, "/month + GST", the server description, the server feature lines (posts and videos from `outputsFor`, team members, client brands), the Agency extra client price from `agency.slotInr`, button "Choose {name}" to sign-up.
@@ -103,7 +103,7 @@ Every word below lives in `frontend/constants/landingCopy.ts`. Prices and allowa
 - Kept: after the hero, a fixed gold "Start for ₹{999}" bar at the foot on phones.
 
 ## Nav and CTA flow
-Every gold button goes to `/login?mode=signup` (Auth handles invitation code and the bot check; the plan is chosen after sign-up on the plans page). The Blueprint button goes to `BLUEPRINT_SIGNUP_PATH`. Sign in goes to `/login`. In-page links scroll to `#make`, `#how`, `#blueprint`, `#plans`, `#faq` (HashRouter: in-page anchors are handled by a click handler that scrolls to the element, so the router hash is not replaced; the old page used plain `#id` links, which the HashRouter treated as routes: this is fixed).
+Every gold button goes to `/login?mode=signup` (Auth handles invitation code and the bot check; the plan is chosen after sign-up on the plans page). The Blueprint button goes to `BLUEPRINT_SIGNUP_PATH`. Sign in goes to `/login`. In-page links scroll to `#make`, `#how`, `#blueprint`, `#plans`, `#faq` (HashRouter: in-page links are handled by a click handler that scrolls to the section and moves focus to it, so the address stays `#/`; checked in the browser).
 
 ## Performance budget
 - Lazy route: unchanged. No third-party script, no new font. No new raster file: the phone mock, glows and wordmark are CSS and existing inline SVG art. Photos come only through the existing photo slots (lazy, async, fixed size, each at most 36 KB once promoted).

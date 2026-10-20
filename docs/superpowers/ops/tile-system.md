@@ -223,6 +223,10 @@ The full-width rule is for the page structure, not for post cards. A single post
 
 Two rows under the idea box: Language and Platforms, then Aspect ratio, Logo and Look (`.nb-opt-rows > .nb-opt-row[data-row]` in `GravityCreate.tsx`, layout in `createOptions.css`). Each row runs the full width of the idea box; groups share it in proportion to their tiles (`--w`, 64 px a share), tiles of a group are equal columns, every tile is 88 px tall with 12 px names, so "Instagram" and "Your logo" are never cut off. On a phone each group takes its own full line.
 
+## Landing page (public, 2026-10-20)
+
+The public landing (`pages/LandingPage.tsx`, `components/landing/`) follows the brand palette but may use what the logged-in app does not: glow bands (radial gold and amber over cream, scoped to the hero, the gold cards and the closing band), a CSS phone mock, a fine grain and a giant gold gradient wordmark. Rules: all styles in `components/landing/landing.css` under `.nb-land` (a test fails on an unscoped selector, so `tests/pageFrame.test.mjs` and the app's plain cream are untouched); brown ink text (#2B1D0E, #5E4A31, muted #634E35, eyebrow #7E4300, gold italic #A35A00 for large text only), never a dark navy panel; "What you can make" reuses `CoverTile` in `.nb-cover-grid` at 168, 200 or 228 px rows; every row full and of equal height; motion only without reduced motion. Contrast over the worst point of each glow is computed in `tests/landing.test.mjs`.
+
 ## Not done yet (by design)
 
 Post templates, Library, Memory and Calendar tiles, the sample photos themselves (the owner makes them, see above), a Lighthouse-style first paint comparison (the page weight was measured instead: see the build task report).
