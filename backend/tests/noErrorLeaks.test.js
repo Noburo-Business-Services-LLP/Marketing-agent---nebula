@@ -47,7 +47,7 @@ function offenders() {
       let m;
       while ((m = re.exec(src))) {
         const args = callArgs(src, m.index + m[0].length - 1);
-        if (!/\b(?:error|err|e)\s*(?:&&\s*(?:error|err|e)\s*)?\.\s*message\b/.test(args)) continue;
+        if (!/\b(?:error|err|e)\s*(?:&&\s*(?:error|err|e)\s*)?\.\s*message\b/.test(args) && !/\b(?:error|err|e)\.stack\b/.test(args)) continue;
         // include the lines around the call so the allowlist can key on the guard condition
         const line = src.slice(0, m.index).split('\n').length;
         const context = src.split('\n').slice(Math.max(0, line - 3), line + args.split('\n').length).join('\n');

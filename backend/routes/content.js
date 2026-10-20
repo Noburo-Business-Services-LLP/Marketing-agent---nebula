@@ -332,8 +332,7 @@ router.post('/image-audio-to-video', protect, L.heavyAi, async (req, res) => {
     console.error('❌ [VIDEO COMPOSITION ERROR]', error.message);
     return res.status(500).json({
       success: false,
-      message: 'Failed to compose video',
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: 'Failed to compose video'
     });
   }
 });
