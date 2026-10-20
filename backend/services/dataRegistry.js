@@ -66,7 +66,7 @@ const RULES = [
   { model: 'SocialPostAttempt', field: 'userId', action: D },
   { model: 'SocialSnapshot', field: 'userId', action: D },
   { model: 'StaffAction', field: 'client', action: 'anonymise', note: 'Our own audit trail of what staff did; the link to the customer is removed.' },
-  { model: 'StudioVideo', field: 'user', action: D },
+  { model: 'StudioVideo', field: 'user', action: D, note: 'Includes the links to the stored clip files (nebula-studio-clips); the file cleanup finds them in the record, like the finished video.' },
   { model: 'Submission', field: 'userId', action: D },
   { model: 'Trend', field: 'userId', action: D },
   { model: 'VideoDraft', field: 'userId', action: D },

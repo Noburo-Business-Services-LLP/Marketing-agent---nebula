@@ -191,6 +191,12 @@ async function resumeClips(doc, total, io = {}) {
   return out;
 }
 
+/** Stored links of an earlier run that the resume could not use (after the first unreadable clip): their files are deleted. */
+async function dropUnresumed(doc, stored, io = {}) {
+  const kept = new Set(stored.map((x) => x.url));
+  await dropClips((Array.isArray(doc.clipUrls) ? doc.clipUrls : []).filter((u) => u && !kept.has(u)), io);
+}
+
 /**
  * After clip k is made on the consumer path: store it, then write clipsDone and the stored links in ONE write that
  * only matches while this run still holds the claim. No match = the run lost its claim: delete the upload and stop.
@@ -208,8 +214,14 @@ async function keepClip(doc, ctl, io, urls, buffer, k) {
     r = await StudioVideo.updateOne({ _id: doc._id, status: 'processing', ...ctl.owner }, { $set: { clipsDone: k + 1, clipUrls: next, leaseUntil: ctl.leaseEnd() } });
   } catch (e) {
     console.error('[videos] could not record a clip of', String(doc._id), e.message);
-    if (url) await discardFile(url, io);
-    return; // unknown: the heartbeat and the next check decide
+    // Unknown whether the write landed (a lost reply). Look: recorded = keep it as a success; not recorded = delete the
+    // upload; cannot tell = keep the file (a link to a missing file only makes a later run make the clip again).
+    let row = null; let known = true;
+    try { row = await StudioVideo.findOne({ _id: doc._id }).select({ status: 1, workerId: 1, attempts: 1, clipUrls: 1 }).lean(); } catch (_) { known = false; }
+    const landed = !!(url && row && Array.isArray(row.clipUrls) && row.clipUrls.includes(url));
+    if (landed) { urls.length = 0; urls.push(...next); return; }
+    if (url && known) await discardFile(url, io);
+    return; // the heartbeat and the next check decide
   }
   if (!matchedOf(r)) {
     ctl.lose();
@@ -233,6 +245,7 @@ async function run(doc, work, io = {}, fin = null, ctl = null) {
     if (ctl) {
       // Consumer path: a clip an earlier run already made and stored is used again, never made (or paid for) twice.
       const stored = await resumeClips(doc, 1, io);
+      await dropUnresumed(doc, stored, io);
       if (stored.length) { out = { ok: true, buffer: stored[0].buffer }; urls.push(stored[0].url); }
     }
     if (!out) {
@@ -453,6 +466,7 @@ async function runChain(doc, work, io = {}, ctl = null) {
       // Consumer path: resume after the clips an earlier run stored; every clip is stored and recorded under the claim;
       // ffmpeg (last frame, join) runs inside a CPU slot.
       const stored = await resumeClips(doc, total, io);
+      await dropUnresumed(doc, stored, io);
       urls.push(...stored.map((x) => x.url));
       const frame = io.lastFrame || ((b) => chain.lastFrame(b));
       const join = io.concat || ((bufs, ar, tr) => chain.concat(bufs, ar, {}, tr));
@@ -755,7 +769,12 @@ const staleFilter = (v) => (v.status === 'queued'
   ? { status: 'queued' }
   : { startedAt: v.startedAt ?? null, workerId: v.workerId ?? null, attempts: Number(v.attempts) > 0 ? Number(v.attempts) : { $in: [0, null] } });
 /** Closes a lost video (refund only with proof), only the claim that was read. */
-const closeStale = (v) => fail(v, STALE_REASON, staleFilter(v));
+async function closeStale(v) {
+  const closed = await fail(v, STALE_REASON, staleFilter(v));
+  // The video is closed for good: its stored clip files are no longer needed (best effort, never throws).
+  if (closed && Array.isArray(closed.clipUrls) && closed.clipUrls.length) await dropClips(closed.clipUrls);
+  return closed;
+}
 
 router.get('/', protect, async (req, res) => {
   const userId = userIdOf(req);

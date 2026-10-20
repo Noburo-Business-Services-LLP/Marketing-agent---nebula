@@ -819,3 +819,131 @@ test('MAX_RELEASES: a video handed back at SIGTERM three times is failed and ful
     assert.strictEqual(w.refunds.length, 1, 'never twice');
   } finally { w.restore(); }
 });
+
+// ---- money review of B1: orphan clip files (finding 4) ----
+const CLIP = (n) => `https://cdn.test/clip/${n}`;
+
+test('the studio sweep, GET / and GET /:id delete the stored clips of a video they close as stale', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    for (const [u, via] of [['oc1', 'sweep'], ['oc2', 'list'], ['oc3', 'one']]) {
+      await create(w, {}, u);
+      const id = Object.keys(w.docs).pop();
+      Object.assign(w.docs[id], { status: 'processing', workerId: 'w:A', attempts: 1, startedAt: new Date(Date.now() - 16 * 60 * 1000), clipUrls: [CLIP(`${via}1`), CLIP(`${via}2`)] });
+      if (via === 'sweep') await quiet(() => route.sweep());
+      if (via === 'list') await quiet(() => handler('/', 'get')({ user: { userId: u } }, resp()));
+      if (via === 'one') await quiet(() => handler('/:id', 'get')({ user: { userId: u }, params: { id } }, resp()));
+      assert.strictEqual(w.docs[id].status, 'failed', via);
+      assert.deepStrictEqual(w.discarded.filter((x) => x.includes(`${via}`)), [CLIP(`${via}1`), CLIP(`${via}2`)], via);
+    }
+    assert.strictEqual(w.refunds.length, 3);
+  } finally { w.restore(); }
+});
+
+test('the 30-minute queued close of a re-queued row that already has clips deletes those clips', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, parts3, 'qc1');
+    Object.assign(w.docs.v1, { clipUrls: [CLIP('q1')], queuedAt: new Date(Date.now() - 31 * 60 * 1000) });
+    await route.sweep();
+    assert.strictEqual(w.docs.v1.status, 'failed');
+    assert.deepStrictEqual(w.discarded, [CLIP('q1')]);
+    assert.strictEqual(w.refunds.length, 1);
+  } finally { w.restore(); }
+});
+
+test('a resume that stops at an unreadable stored clip deletes the stored links beyond the resumed prefix (chain)', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, parts3, 'rc1');
+    w.stored.set(CLIP('a1'), Buffer.from('clip:A1')); // readable
+    w.stored.set(CLIP('a3'), Buffer.from('clip:A3')); // readable, but after the unreadable one
+    w.docs.v1.clipUrls = [CLIP('a1'), CLIP('a2-missing'), CLIP('a3')];
+    await consumer(w, 'A')._drain(); await settle(80);
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.strictEqual(genFor(w, 'One.'), 0, 'clip 1 resumed');
+    assert.strictEqual(genFor(w, 'Two.'), 1);
+    assert.strictEqual(genFor(w, 'Three.'), 1);
+    assert.ok(w.discarded.includes(CLIP('a2-missing')) && w.discarded.includes(CLIP('a3')));
+    assert.ok(!w.discarded.slice(0, 2).includes(CLIP('a1')), 'the resumed prefix is kept until the video completes');
+  } finally { w.restore(); }
+});
+
+test('a single-clip resume with an unreadable stored clip makes the clip again and deletes the dead link', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, {}, 'rc2');
+    w.docs.v1.clipUrls = [CLIP('gone')];
+    await consumer(w, 'A')._drain(); await settle(60);
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.strictEqual(w.gen.length, 1);
+    assert.ok(w.discarded.includes(CLIP('gone')));
+  } finally { w.restore(); }
+});
+
+test('account deletion finds the stored clip files (the cleanup matches the nebula-studio-clips folder)', () => {
+  const { extractAssets } = require('../services/cloudinaryCleanup');
+  const row = JSON.stringify({ clipUrls: ['https://res.cloudinary.com/demo/video/upload/v17/nebula-studio-clips/abc123.mp4'], videoUrl: 'https://res.cloudinary.com/demo/video/upload/v18/nebula-studio-videos/fin.mp4' });
+  assert.deepStrictEqual(extractAssets(row).map((a) => a.publicId).sort(), ['nebula-studio-clips/abc123', 'nebula-studio-videos/fin']);
+});
+
+// ---- missing tests the review listed: keepClip ----
+test('a failed storeClip leaves a prefix gap: later clips are not stored, the video still completes, nothing is made twice', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, parts3, 'sk1');
+    const real = route._io.storeClip; let calls = 0;
+    route._io.storeClip = async (b) => { calls += 1; if (calls === 2) throw new Error('upload down'); return real(b); };
+    await quiet(async () => { await consumer(w, 'A')._drain(); await settle(80); });
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.strictEqual(w.docs.v1.clipsDone, 3);
+    assert.strictEqual(calls, 2, 'clip 3 was not uploaded after the gap');
+    assert.strictEqual(genFor(w, 'One.') + genFor(w, 'Two.') + genFor(w, 'Three.'), 3);
+    assert.strictEqual(w.refunds.length, 0);
+    assert.strictEqual(w.discarded.length, 1, 'the one stored clip is deleted on completion');
+  } finally { w.restore(); }
+});
+
+test('keepClip where the write lands but the call throws: the clip stays recorded and its file is not deleted', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, parts3, 'kl1');
+    const uo = StudioVideo.updateOne; let thrown = false;
+    StudioVideo.updateOne = async (q, u) => {
+      const r = await uo(q, u);
+      if (!thrown && u.$set && u.$set.clipUrls && u.$set.clipUrls.length === 1) { thrown = true; throw new Error('lost reply'); }
+      return r;
+    };
+    w.hang = (x) => /Two\./.test(x.prompt) && !w.hungOnce && (w.hungOnce = true);
+    const a = consumer(w, 'A');
+    await quiet(async () => { await a._drain(); await settle(60); });
+    StudioVideo.updateOne = uo;
+    assert.strictEqual(thrown, true);
+    assert.strictEqual(w.docs.v1.clipUrls.length, 1);
+    assert.strictEqual(w.docs.v1.clipsDone, 1);
+    assert.ok(w.stored.has(w.docs.v1.clipUrls[0]));
+    assert.deepStrictEqual(w.discarded, [], 'the recorded clip was not deleted');
+    // A resume uses it: clip 1 is not made again.
+    w.clock.t += 81000;
+    const b = consumer(w, 'B'); await b.sweepLeases(); await b._drain(); await settle(80);
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.strictEqual(genFor(w, 'One.'), 1);
+  } finally { w.restore(); }
+});
+
+test('keepClip where the write did NOT land and the call threw: the upload is deleted', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, parts3, 'kl2');
+    const uo = StudioVideo.updateOne; let thrown = false;
+    StudioVideo.updateOne = async (q, u) => {
+      if (!thrown && u.$set && u.$set.clipUrls && u.$set.clipUrls.length === 1) { thrown = true; throw new Error('write failed'); }
+      return uo(q, u);
+    };
+    await quiet(async () => { await consumer(w, 'A')._drain(); await settle(80); });
+    StudioVideo.updateOne = uo;
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.ok(w.discarded.length >= 1);
+    assert.strictEqual(w.refunds.length, 0);
+  } finally { w.restore(); }
+});
