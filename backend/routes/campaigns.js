@@ -920,226 +920,21 @@ router.get('/', protect, async (req, res) => {
       if (endDate) query['scheduling.startDate'].$lte = new Date(endDate);
     }
     
-    const campaigns = await Campaign.find(query)
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit));
-    
-    // For scheduled campaigns whose time has passed, verify with Ayrshare if actually posted
-    const now = new Date();
-    const scheduledPastDue = campaigns.filter(c => 
-      c.status === 'scheduled' && 
-      c.scheduledFor && 
-      new Date(c.scheduledFor) < now &&
-      c.socialPostId  // Must have an Ayrshare post ID to verify
-    );
-    
-    if (scheduledPastDue.length > 0) {
-      console.log(` Verifying ${scheduledPastDue.length} past-due scheduled campaigns with Ayrshare...`);
-      
-      // Get the user's Ayrshare profile key for API calls
-      const user = await User.findById(userId);
-      let profileKey;
-      try { profileKey = requireOwnProfileKey(user) || undefined; } catch (_) { profileKey = null; }
-      
-      // An account with no profile of its own must never query the master profile.
-      for (const campaign of (profileKey === null ? [] : scheduledPastDue)) {
-        try {
-          const statusResult = await getPostStatus(campaign.socialPostId, { profileKey });
-          
-          if (statusResult.success && statusResult.data) {
-            const postData = statusResult.data;
-            const resolvedFbIdFromStatus = extractFacebookPostIdFromAyrsharePayload(postData, {
-              existingFacebookPostId: campaign?.facebookPostId || ''
-            });
-            // Check if Ayrshare confirms the post was actually published
-            // Ayrshare returns status 'success' for posted, 'scheduled' for pending, 'error' for failed
-            const ayrshareStatus = postData.status || 
-              (postData.posts && postData.posts[0]?.status) || 
-              'unknown';
-            
-            console.log(` Campaign ${campaign._id} Ayrshare status: ${ayrshareStatus}`);
-            
-            if (resolvedFbIdFromStatus && campaign.facebookPostId !== resolvedFbIdFromStatus) {
-              const existingSocialPostIds = campaign?.socialPostIds && typeof campaign.socialPostIds === 'object'
-                ? campaign.socialPostIds
-                : {};
-              const nextSocialPostIds = {
-                ...existingSocialPostIds,
-                facebook: resolvedFbIdFromStatus
-              };
-
-              await Campaign.findByIdAndUpdate(campaign._id, {
-                $set: {
-                  facebookPostId: resolvedFbIdFromStatus,
-                  socialPostIds: nextSocialPostIds
-                }
-              });
-
-              campaign.facebookPostId = resolvedFbIdFromStatus;
-              campaign.socialPostIds = nextSocialPostIds;
-            }
-
-            if (ayrshareStatus === 'success' || ayrshareStatus === 'posted') {
-              // Ayrshare confirmed it was actually posted!
-              await Campaign.findByIdAndUpdate(campaign._id, { 
-                $set: { status: 'posted', publishedAt: now, ayrshareStatus: 'success', lastPublishError: null } 
-              });
-              campaign.status = 'posted';
-              campaign.publishedAt = now;
-              console.log(`- Confirmed posted: ${campaign.name}`);
-            } else if (ayrshareStatus === 'error') {
-              const classifiedFailure = classifyInstagramPublishFailure({
-                success: false,
-                data: postData,
-                error: postData?.message || postData?.posts?.[0]?.message || ''
-              });
-              // Ayrshare says it failed
-              const failureMessage =
-                classifiedFailure?.userMessage ||
-                postData?.message ||
-                postData?.posts?.[0]?.message ||
-                postData?.posts?.[0]?.errors?.[0]?.message ||
-                postData?.errors?.[0]?.message ||
-                'Ayrshare reported an error';
-
-              const retryAvailable = !!postData?.retryAvailable;
-              const normalized = Array.isArray(campaign.platforms)
-                ? campaign.platforms.map((p) => String(p || '').toLowerCase()).filter(Boolean)
-                : [];
-              const isInstagramOnly = normalized.length === 1 && normalized[0] === 'instagram';
-
-              const looksTransient = /cannot process your post at this time/i.test(failureMessage) || /please try your post again/i.test(failureMessage);
-              const canRetry = retryAvailable || looksTransient;
-              const retryCount = Number.isFinite(Number(campaign.publishResult?.retryCount))
-                ? Number(campaign.publishResult.retryCount)
-                : (campaign.publishResult?.retryRequestedAt ? 1 : 0);
-              const maxRetries = (() => {
-                const raw = process.env.INSTAGRAM_SCHEDULED_RETRY_MAX || process.env.IG_SCHEDULED_RETRY_MAX;
-                const n = raw ? Number.parseInt(String(raw), 10) : NaN;
-                if (Number.isFinite(n) && n >= 0 && n <= 10) return n;
-                return 3;
-              })();
-
-              // If Instagram reports a transient error and Ayrshare allows retry, try once instead of reverting to Draft.
-              if (canRetry && isInstagramOnly && campaign.socialPostId && retryCount < maxRetries) {
-                try {
-                  const campaignLooksLikeInstagramVideo = Boolean(
-                    campaign?.creative?.instagramAudio?.url ||
-                    campaign?.creative?.videoUrl ||
-                    ['video', 'reel'].includes(String(campaign?.creative?.type || '').toLowerCase()) ||
-                    (Array.isArray(campaign?.creative?.imageUrls) &&
-                      campaign.creative.imageUrls.some((url) => /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(String(url || ''))))
-                  );
-
-                  if (campaignLooksLikeInstagramVideo) {
-                    console.log(`[Instagram Retry] Rebuilding failed scheduled Instagram video payload for campaign ${campaign._id}.`);
-                    const freshRetryRes = await publishCampaignToSocial(campaign);
-                    const pendingId = freshRetryRes?.postId || campaign.socialPostId;
-                    if (freshRetryRes?.success) {
-                      const nextRetryCount = retryCount + 1;
-                      await Campaign.findByIdAndUpdate(campaign._id, {
-                        $set: {
-                          status: 'posted',
-                          publishedAt: now,
-                          socialPostId: pendingId,
-                          socialPostIds: { instagram: pendingId },
-                          ayrshareStatus: 'success',
-                          lastPublishError: null,
-                          instagramAccountKey: freshRetryRes?.instagramFix?.accountKey || campaign.instagramAccountKey || null,
-                          publishResult: {
-                            verifiedError: postData || null,
-                            retry: freshRetryRes?.data || freshRetryRes,
-                            retryRequestedAt: now.toISOString(),
-                            retryCount: nextRetryCount
-                          }
-                        }
-                      });
-
-                      campaign.status = 'posted';
-                      campaign.publishedAt = now;
-                      campaign.socialPostId = pendingId;
-                      campaign.ayrshareStatus = 'success';
-                      campaign.lastPublishError = null;
-                      console.log(` Rebuilt and published Instagram video payload for ${campaign.name} (${pendingId})`);
-                      continue;
-                    }
-                  }
-
-                  const retryRes = await retryAyrsharePost(campaign.socialPostId, { profileKey });
-                  const pendingId = retryRes?.data?.id || campaign.socialPostId;
-                  if (retryRes?.success) {
-                    const nextRetryCount = retryCount + 1;
-                    const delayMinutes = Math.min(60, 5 * Math.pow(2, Math.max(0, nextRetryCount - 1))); // 5, 10, 20...
-                    const nextAttemptAt = new Date(now.getTime() + delayMinutes * 60 * 1000);
-                    await Campaign.findByIdAndUpdate(campaign._id, {
-                      $set: {
-                        status: 'scheduled',
-                        scheduledFor: nextAttemptAt,
-                        socialPostId: pendingId,
-                        socialPostIds: { instagram: pendingId },
-                        ayrshareStatus: 'pending',
-                        lastPublishError: null,
-                        publishResult: {
-                          verifiedError: postData || null,
-                          retry: retryRes?.data || retryRes,
-                          retryRequestedAt: now.toISOString(),
-                          retryCount: nextRetryCount
-                        }
-                      }
-                    });
-
-                    campaign.status = 'scheduled';
-                    campaign.scheduledFor = nextAttemptAt;
-                    campaign.socialPostId = pendingId;
-                    campaign.ayrshareStatus = 'pending';
-                    campaign.lastPublishError = null;
-                    console.log(` Retried failed Instagram post for ${campaign.name} - pending (${pendingId}) (attempt ${nextRetryCount}/${maxRetries}, next check in ~${delayMinutes}m)`);
-                    continue;
-                  }
-                } catch (retryError) {
-                  console.warn(`- Retry failed for campaign ${campaign._id}:`, retryError?.message || retryError);
-                }
-              }
-
-              // If it's transient/ retryable, do NOT revert to draft. Keep scheduled so user can retry later.
-              if (canRetry && isInstagramOnly) {
-                await Campaign.findByIdAndUpdate(campaign._id, {
-                  $set: { status: 'scheduled', ayrshareStatus: 'error', lastPublishError: failureMessage }
-                });
-                campaign.status = 'scheduled';
-                campaign.lastPublishError = failureMessage;
-                console.log(`- Instagram transient error persists; keeping scheduled: ${campaign.name}`);
-              } else {
-                await Campaign.findByIdAndUpdate(campaign._id, { 
-                  $set: { status: 'draft', ayrshareStatus: 'error', lastPublishError: failureMessage } 
-                });
-                campaign.status = 'draft';
-                campaign.lastPublishError = failureMessage;
-                console.log(`- Ayrshare post failed: ${campaign.name}`);
-              }
-            } else {
-              // Still scheduled/pending on Ayrshare side - don't change status
-              console.log(`- Still pending on Ayrshare: ${campaign.name} (status: ${ayrshareStatus})`);
-            }
-          }
-        } catch (verifyError) {
-          console.warn(`- Could not verify campaign ${campaign._id}:`, verifyError.message);
-          // Don't change status if we can't verify
-        }
-      }
-    }
-    
-    // After verification, filter out campaigns whose status changed and no longer matches the query
-    const filteredCampaigns = (status && status !== 'all')
-      ? campaigns.filter(c => c.status === status)
-      : campaigns;
-
-    // Get counts by status (re-fetch after potential updates)
+    // Only reads (load-test week 1). Posts scheduled on Ayrshare whose time has passed are checked with Ayrshare by the
+    // background status sync (services/campaignStatusSync.js), not here: this list used to make one live Ayrshare call
+    // per past-due post every time it was opened. The list and the counts are read at the same time.
     const mongoose = require('mongoose');
-    const statusCounts = await Campaign.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
+    const [campaigns, statusCounts] = await Promise.all([
+      Campaign.find(query)
+        .sort({ createdAt: -1 })
+        .limit(parseInt(limit))
+        .lean(),
+      Campaign.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ])
     ]);
+    const filteredCampaigns = campaigns;
     
     const counts = {
       all: 0,
@@ -5861,10 +5656,6 @@ router.post('/template-poster/batch', protect, checkTrial, requireCredits('image
   }
 });
 
+// Used by the background status sync (services/campaignStatusSync.js), which runs the checks this list used to run.
+router.extractFacebookPostIdFromAyrsharePayload = extractFacebookPostIdFromAyrsharePayload;
 module.exports = router;
-
-
-
-
-
-

@@ -714,6 +714,14 @@ const startServer = async () => {
       console.warn('Campaign scheduler failed to start:', schedulerError.message);
     }
 
+    // Posts scheduled on Ayrshare whose time has passed: ask Ayrshare whether they went out (bounded, single runner,
+    // every 5 minutes; this used to run inside GET /api/campaigns). Off with ENABLE_CAMPAIGN_STATUS_SYNC=off
+    try {
+      require('./services/campaignStatusSync').startCampaignStatusSync();
+    } catch (schedulerError) {
+      console.warn('Campaign status sync failed to start:', schedulerError.message);
+    }
+
     // Start Gravity Smart Calendar scheduler for approved auto mode
     try {
       startContentCalendarScheduler();
