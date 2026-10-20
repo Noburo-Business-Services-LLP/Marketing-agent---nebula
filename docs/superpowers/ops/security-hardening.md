@@ -206,3 +206,49 @@ password; a "sign out everywhere" button would be the same one-line raise.
 - Build Tailwind at build time and remove the esm.sh import map (frontend job): needed before the CSP is enforced.
 - Signed S3 uploads (section 4).
 - `npm audit` in CI and pinned dependencies (ledger).
+
+## 9. Error answers, id parameters, CORS, duplicate index (hardening items A3, A4, D5; D47 to D49)
+
+**No internal text to clients.** `backend/utils/httpError.js` maps errors in one place (`fail(res, err, publicMessage)` for
+handlers, the same mapping in the global handler `middleware/errorHandler.js`): bad id or failed validation 400 (field
+names only), duplicate key 409, too large 413, broken JSON 400 `Invalid JSON`, anything else a plain 500. The answer
+carries `success:false`, `message` and a fixed `errorCode`; never `err.message`, a stack or a path, in any environment
+(the development stack is removed; the log has the real error). 101 response sites in routes and controllers were
+rewritten by `backend/scripts/codemod-error-leaks.js` (re-runnable; it lists what it will not touch), about 20 more by
+hand (SSE streams, `.stack`, provider texts, the internal "CRITICAL" strings in the Instagram video path, the controllers
+that returned a Mongoose message as a 400 now use `fail()`). `tests/noErrorLeaks.test.js` fails on any new
+`error.message`/`err.message`/`e.message`/`.stack` inside `res.json`/`res.send`/`res.write`/an SSE send. Reviewed
+exceptions (each states why): the `NO_PROFILE_KEY` sentence from `ayrshareGuard` (ads, analytics), the eligibility result
+in `account.js` (a result object, not an exception), the bad-cursor sentence of `listPage` (campaigns, drafts), the one
+sentence we throw ourselves in the campaign stream, and the `httpError()` sentences of the social inbox service.
+Left alone on purpose: values stored in the database (`lastPublishError`, `publishResult.error` in campaigns: not sent
+as such, but a screen may show them; worth a look), provider answers passed on as `details` on ad boost failures.
+
+**Id parameters.** `middleware/validateObjectId.js` `applyObjectIdParams(router, names)` (strict 24 hex, otherwise 400
+`Invalid id`, before any query): 23 routers, each with only the names that are ObjectIds there. Not applied (reason in
+`tests/objectIdParams.test.js`): ads (`:adId`), aiMemoryLearned, blueprint (`blueprintId`), competitorHandle,
+createAssist, draftLocalize (they already answer 404/400 themselves), heroVideo and videoGeneration (`:jobId` strings),
+prompts, week (item ids). **Query strings:** `middleware/queryGuard.js` (before `express-mongo-sanitize`) answers 400
+`Invalid query` when a query value holds a `$` key (`?status[$ne]=x`); harmless nested values pass.
+
+**CORS.** `middleware/corsPolicy.js`: no Origin header is allowed; an allowed origin gets its headers; any other origin
+gets `403 { success:false, message:'Origin not allowed' }` on `/api` (preflight too) and no CORS headers elsewhere, never
+a 500. `CORS_ALLOWED_ORIGINS` still adds origins. The plain-HTTP load-balancer origin stays in the baseline list (see
+D49 for why). Local ports are allowed outside production only, as before.
+
+**Duplicate index.** `BrandIntelligenceProfile.userId` was indexed by `unique: true` on the field and by `schema.index()`;
+the second declaration is removed (same index in the database, no index added or dropped). `tests/schemaIndexes.test.js`
+loads every model and fails on a duplicate index or Mongoose's duplicate-index warning.
+
+**For later (not done here, `routes/auth.js` is edited by another change):** run
+`node scripts/codemod-error-leaks.js --write routes/auth.js` after removing its entry from `SKIP` in the script; the
+file has `message` built from `Object.values(error.errors).map(e => e.message)` (sign-up validation, around line 742:
+use `fail()` or the generic validation sentence), a helper returning `error: error.message` (about line 150), and it
+needs `applyObjectIdParams` only if it gains `:id` routes. Then take `routes/auth.js` out of `SKIPPED` in
+`tests/noErrorLeaks.test.js` and `tests/objectIdParams.test.js`.
+
+**Screens that may now show a different message** (the API client reads `data.error || data.message`): wherever a 500 used
+to show the exception text it now shows the route's own words or "Something went wrong. Please try again." (analytics,
+reminders, campaigns, drafts, products, content, dashboard, ads, competitors). Places that read `result.error` after
+the client caught the error (poster generate and edit, refine image, upload audio, boost post) fall back to their own
+default text. No screen depended on the exception text to decide what to do.

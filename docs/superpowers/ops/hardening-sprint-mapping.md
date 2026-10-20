@@ -6,8 +6,8 @@ Source: `/Users/dineshkannaa/Downloads/NEBULAA HARDE.txt` (written for a Windows
 |---|---|---|
 | A1 global sanitiser removed, escape on output | done (emails: in the running security job) | commit `696b65a` |
 | A2 trust proxy hops | done | `TRUST_PROXY_HOPS`, ecs doc |
-| A3 CORS returns 403 | TODO | |
-| A4 central error mapping, no `error.message` leaks, ObjectId param validation | TODO | |
+| A3 CORS returns 403 | done | `middleware/corsPolicy.js`, D49 |
+| A4 central error mapping, no `error.message` leaks, ObjectId param validation | done except `routes/auth.js` (other change: its codemod and id check are listed in security-hardening.md section 9) | `utils/httpError.js`, `validateObjectId.js`, `queryGuard.js`, D47, D48 |
 | A5 `/api/ready` | done | `3b2dbf0` |
 | A6 crash policy / graceful shutdown | SIGTERM drain done; unhandledRejection policy TODO | |
 | A7 pino logging, A8 compression and cache headers | TODO (nginx gzip and immutable assets already set) | |
@@ -21,7 +21,7 @@ Source: `/Users/dineshkannaa/Downloads/NEBULAA HARDE.txt` (written for a Windows
 | C4 `safeFetch` SSRF | TODO | |
 | C5 per-user job caps | partly (image jobs done, rest in the running job) | |
 | D1 to D4 lists, calendar GET, parallel queries | done | week-1 doc |
-| D5 duplicate index warning | TODO (check) | |
+| D5 duplicate index warning | done | `BrandIntelligenceProfile.userId`, `schemaIndexes.test.js` |
 | E1 RUN_BACKGROUND | done | `7d5d115` |
 | E2 lease lock around every scheduler tick | TODO (single-runner leases exist per job) | |
 | E3 OAuth state in Mongo, E4 image jobs persisted | done | |
