@@ -534,3 +534,44 @@ CI (item G3) and, after the rotation, optionally rewriting history to drop the o
 - Base image pinned to `node:20.20.2-bookworm-slim` in `Dockerfile.backend`, `Dockerfile.frontend` and `Dockerfile`:
   20.20.2 is the Node version inside the production backend image released today (read from the image), so the
   pin changes nothing. No digest pinned (not invented). `nginx:1.27-alpine` left as is.
+
+### Double-post claim and local file reads (D107, D108)
+Follow-ups of E2 (the lease stops overlapping ticks but a lease lost mid-tick, or "Post now" racing the scheduler, could
+still send one post twice) and of the `materializeSourceToFile` note above.
+
+Per-campaign publish claim (`services/publishClaim.js`, field `Campaign.publishClaim { by, at, until }`, not a status):
+- Before any send, ONE `findOneAndUpdate` on the Campaign: filter = expected status AND (no claim, or `until` passed);
+  sets the claim with a random token. Callers: the scheduler (expects `scheduled`), "Post now" in `routes/drafts.js`
+  (expects `active`, after its upsert; an early check before the upsert answers 409 without changing the campaign) and the
+  status sync's Instagram video rebuild (`scheduled` plus the same `socialPostId`). `campaigns.js` imports the publisher
+  but never calls it.
+- Winner sends. Loser: scheduler and sync skip (logged); Post now answers 409 "This post is already being sent.".
+- Winner's last write (posted / failure / release) is `updateOne({ _id, 'publishClaim.by': token })` plus `$unset`
+  of the claim. A holder that lost its claim (taken over after `until`) changes nothing and the current holder records.
+  A failure clears the claim and counts the failure as before, so the next tick can claim. A thrown error clears it too.
+- `PUBLISH_CLAIM_MS` (default 600000, minimum 1000). Keep it above the longest send plus the Facebook id polling
+  (up to about 60 seconds).
+- Crash between the provider call and the final write: the claim runs out, the status is unchanged. For posts that
+  already have a provider id (`socialPostId`, scheduled on Ayrshare) `campaignStatusSync` reads the provider and marks them
+  (tested: it never posts for this; its only send is the video rebuild, which takes the claim). KNOWN GAP: a post the scheduler
+  sends itself has no `socialPostId` until the final write, so the sync does not look at it and, after the claim expires,
+  the scheduler would send it again. A narrower window than before (it needs a crash in that moment), not closed; see Open.
+- Tests: `publishClaim.test.js`, `schedulerPublishClaim.test.js`, `draftPublishNowClaim.test.js`,
+  `campaignStatusSyncClaim.test.js` (fakes, `tests/helpers/fakeClaimCampaigns.js`). Real database:
+  `node scripts/publish-claim-check.js` (nebulaa_dev only, throwaway `zz.pubclaim-` users, fake publisher, scheduler query
+  scoped to them, non-zero exit on FAIL or leftovers; `cleanup` argument for an interrupted run).
+
+Local file reads (`utils/safeLocalFile.js`): a local source is copied or read only when its real path is a file inside
+`backend/storage` or `backend/temp` (job directories are inside storage). Applied to `materializeSourceToFile` (https
+stays on `safeFetch`), and to the scene `imagePath` reads in `services/videoService.js` and the thumbnail fallback in
+`videoGenerationPipeline.js` (scene data arrives in request bodies of `routes/videoGeneration.js`). Tests:
+`materializeSourceToFile.test.js` (traversal, `/etc/passwd`, directory and file symlink, valid job file, https and data URL
+through fakes). Grep of `routes/`, `services/`, `controllers/`, `middleware/`, `utils/` for `copyFile`, `readFile`,
+`createReadStream`, `sendFile`: the other hits read the app's own files or paths built from sanitized job ids
+(`videoDraftStore`, templates, prompts) or temp files made by the same request (`routes/drafts.js` upload). Not changed:
+`referenceImage.localPath` and `mergedVideo.path` (set by the pipeline itself).
+
+Open: (1) the scheduler's crash-after-send gap above (option: store the provider id on the claim as soon as the
+publisher returns, before the Facebook polling, so a later takeover or the sync can see it); (2) an exception thrown
+AFTER a successful send but before the final write (for example the profile-key lookup) is still counted as a failure by
+the scheduler's catch, as before.
