@@ -34,9 +34,14 @@ Source: `/Users/dineshkannaa/Downloads/NEBULAA HARDE.txt` (written for a Windows
 | E6 container hardening, E7 ECS docs | done (nginx image stays root: owner decision) | `Dockerfile.backend`, `backend/docker-entrypoint.sh`, `scripts/verify-dockerfile.js`, D60 |
 | F1 safeHref, F2 DOMPurify, F4 code splitting | done | |
 | F3 build-time Tailwind | TODO (risky) | frontend-performance doc |
-| F5/F6 UI, G1 zero failing tests | green on Linux/Mac now | |
-| G2 supertest HTTP suite, G3 CI, G4 ESLint | TODO | |
-| G8 advisories | done (uuid override, audit 0 in both, Node 20.20.2 pinned) | D62 |
+| F5/F6 UI, G1 zero failing tests | green on Linux/Mac now (backend 2,959 and frontend 870 pass; `tsc --noEmit` has 0 errors) | |
+| G2 HTTP suite | done in a smaller form: no supertest or mongodb-memory-server (not installed); the whole app is loaded in process and called over real HTTP with in-memory stand-ins. Probe pack P1 to P20 (18 tests) plus the metrics route | `backend/tests/http/`, `regression-probes.md`, D63, D64 |
+| G3 CI | done, not yet run on GitHub (Node 20 backend, Node 24 frontend tests, gitleaks binary scanning the change) | `.github/workflows/ci.yml`, `.gitleaks.toml`, D65 |
+| G4 ESLint | done: 0 errors both sides; warnings are the baseline (backend 1,934, frontend 1,744, mostly `no-console` and `no-explicit-any`); 34 empty catches log at debug; 8 real bugs fixed | `eslint.config.js` in each package, `regression-probes.md` (Lint baseline), D65 |
+| G8 advisories | done (uuid override, audit 0 in both, Node 20.20.2 pinned); CI now fails on high or critical (`npm audit --omit=dev --audit-level=high`) | D62, D65 |
 | G6 hygiene (stray scripts, hard-coded Ayrshare key: HUMAN rotation) | done (16 files deleted, README, .env.example; key rotation is the owner's) | D61, security-hardening.md section 12 |
 | G7 secret fallbacks | done (`HASH_PEPPER`, old tombstones still match) | `utils/hashPepper.js`, D52 |
-| H1 fake providers, H2 load tools, H3 targets, H4 reports | TODO | |
+| H1 fake providers | TODO (not needed by the local tools: nothing calls a provider; `FAKE_PROVIDERS` not built) | |
+| H2 load tools | done as `backend/scripts/loadtest/` (dependency-free runner, mixed-flow runner, in-process server with stand-ins, staff-only `GET /api/metrics/event-loop`); not `qa-reports/tools/` (that folder is not in this repo) | `loadtest.md`, D66 |
+| H3 targets | the table is in `loadtest.md`; a 5 s smoke meets every row `mixed.js` covers (app layer only, no database); soak, 50 req/s column, upload, write flows and the two-process run are not run | `loadtest.md` |
+| H4 reports | TODO | |

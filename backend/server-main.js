@@ -401,6 +401,7 @@ app.use('/api', homeCacheWatch);
 app.use('/api/admin', limits.credentialAll, adminRoutes);
 app.use('/api/csm', csmRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/metrics', require('./routes/metrics')); // staff only: event-loop lag and memory (load tests)
 
 // Routes - Core (with specific rate limiters on sensitive routes)
 app.use('/api/auth', limits.credential, authRoutes);
