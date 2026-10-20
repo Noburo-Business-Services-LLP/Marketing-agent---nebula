@@ -1,0 +1,17 @@
+# LOCAL DEVELOPMENT ONLY: a temporary public tunnel to the API (for example to receive a provider webhook while
+# testing). Never use it on a server: it bypasses the load balancer, the WAF and the security group.
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up
+services:
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: nebulaa-ngrok
+    restart: "no"
+    ports:
+      - "127.0.0.1:4040:4040"
+    env_file:
+      - ./backend/.env
+    command:
+      - "http"
+      - "app:5000"
+    depends_on:
+      - app

@@ -1,18 +1,9 @@
+# Single-machine run of the API with a local MongoDB (local use and testing; production runs the images on ECS, see
+# docs/superpowers/ops/ecs-web-worker.md). The API port is bound to this machine only (127.0.0.1): it is never
+# public. The ngrok tunnel that used to start with it was removed (it published port 5000 to the internet, around the
+# load balancer and its limits); for a temporary tunnel on a developer machine use docker-compose.tunnel.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up
 services:
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: nebulaa-ngrok
-    restart: unless-stopped
-    ports:
-      - "4040:4040"
-    env_file:
-      - ./backend/.env
-    command:
-      - "http"
-      - "app:5000"
-    depends_on:
-      - app
-
   app:
     build:
       context: .
@@ -26,7 +17,7 @@ services:
       PORT: 5000
       VIDEO_FALLBACK_ALLOWED: "true"
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - nebulaa_storage:/app/backend/storage
       - nebulaa_temp:/app/backend/temp
