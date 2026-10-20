@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 const VideoJob = require('../models/VideoJob');
 const { settleRefund, SWEEP_AFTER_MS } = require('./refundSettle');
 const { QUARK_COSTS } = require('../config/apiCosts');
+const { JobCancelledError } = require('./jobCancelled');
 
 // Per-worker slots (E9 stage A, config/jobSlots.js, docs/superpowers/ops/generation-parallelism.md). Each worker claims
 // jobs for ITS OWN slots (image and video pools), so total capacity = worker tasks x slots. VIDEO_QUEUE_CONCURRENCY
@@ -96,9 +97,6 @@ function estimateRemainingSeconds(job = {}) {
 
 // Thrown to a handler (through controls.update) when its job was cancelled, stopped or failed by someone else: the
 // worker stops at the next step instead of finishing a video nobody is going to be charged for.
-class JobCancelledError extends Error {
-  constructor(jobId) { super(`Job ${jobId} is no longer running.`); this.name = 'JobCancelledError'; this.jobId = jobId; }
-}
 
 class PersistentVideoGenerationQueue {
   constructor({ concurrency, settings, jobTtlMs = DEFAULT_JOB_TTL_MS, model, draftModel, refund, chargeProof, alertOwner, runsJobsHere, workerId, now, leaseLock, sleep } = {}) {

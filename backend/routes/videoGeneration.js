@@ -93,18 +93,19 @@ const { overlayLogoAndUpload } = require('../services/logoOverlay');
 // -----------------------------------------------------------------------------
 // Register persistent background handlers for queue tasks
 // -----------------------------------------------------------------------------
-videoGenerationQueue.registerHandler('create_video_pipeline', async (payload, { update, log }) => {
+videoGenerationQueue.registerHandler('create_video_pipeline', async (payload, { update, log, isCancelled }) => {
   return runCreateVideoPipeline({
     payload: payload.payload,
     user: payload.user,
     baseUrl: payload.baseUrl,
     providedJobId: null,
     onProgress: ({ progress, currentStep, metadata }) => update({ progress, currentStep, metadata }),
-    onLog: (line) => log(line)
+    onLog: (line) => log(line),
+    isCancelled // stop before the next paid step once the job is cancelled, lost or handed back (D74)
   });
 });
 
-videoGenerationQueue.registerHandler('generate_clips', async (payload, { update, log }) => {
+videoGenerationQueue.registerHandler('generate_clips', async (payload, { update, log, isCancelled }) => {
   const { jobId, userId, sourceScenes, baseUrl } = payload;
   await update({ progress: 5, currentStep: 'generate_clips' });
   await log(`Generating clips for draft ${jobId}`);
@@ -113,7 +114,8 @@ videoGenerationQueue.registerHandler('generate_clips', async (payload, { update,
     payload: { jobId, sceneData: sourceScenes },
     baseUrl,
     onLog: (line) => log(line),
-    onProgress: ({ progress, currentStep, metadata } = {}) => update({ progress, currentStep, metadata })
+    onProgress: ({ progress, currentStep, metadata } = {}) => update({ progress, currentStep, metadata }),
+    isCancelled
   });
 
   await update({ progress: 70, currentStep: 'saving_clips' });

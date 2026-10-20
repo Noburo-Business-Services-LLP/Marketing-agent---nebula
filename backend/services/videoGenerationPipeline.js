@@ -17,6 +17,7 @@ const { callOpenAI, callTextLLM } = require('./openAI');
 const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../utils/toneAudio');
 const { generateVideoClip, getKlingDuration, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
+const { createRunGate } = require('./runGate');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
@@ -127,12 +128,20 @@ async function runWithConcurrency(items = [], limit = 2, task = async () => null
   const results = new Array(list.length);
   let cursor = 0;
 
+  // After one task fails the whole run fails (Promise.all), so the other workers take no new item: they used to go on
+  // through the list, paying for scenes whose result was thrown away.
+  let failed = false;
   const worker = async () => {
-    while (true) {
+    while (!failed) {
       const index = cursor;
       cursor += 1;
       if (index >= list.length) return;
-      results[index] = await task(list[index], index);
+      try {
+        results[index] = await task(list[index], index);
+      } catch (err) {
+        failed = true;
+        throw err;
+      }
     }
   };
 
@@ -1557,8 +1566,12 @@ async function generateSceneImages({
   plan,
   user,
   context,
-  logger = null
+  logger = null,
+  guard = null
 }) {
+  // `guard` (D74, services/runGate.js) throws when the job was cancelled, lost or handed back: called before every paid step.
+  const stopIfOver = async () => { if (typeof guard === 'function') await guard(); };
+  await stopIfOver();
   const sceneData = Array.isArray(plan?.scenes) ? plan.scenes : [];
   const referenceImage = await prepareReferenceImage({ input, product, context, logger });
   const profile = user?.businessProfile || {};
@@ -1588,6 +1601,7 @@ async function generateSceneImages({
     }
   }
 
+  await stopIfOver();
   let characterSheet = input.characterSheet || null;
   
   if (input.characterEnabled && input.characterImage && input.characterConsistencyStrength === 'Strict') {
@@ -1619,6 +1633,7 @@ async function generateSceneImages({
   const outputScenes = [];
   let previousSceneImageUrl = null;
   for (let index = 0; index < sceneData.length; index++) {
+    await stopIfOver();
     const scene = sceneData[index];
       const fileName = `scene_${scene.index}.jpg`;
       const localPath = path.join(context.dirs.images, fileName);
@@ -1960,8 +1975,11 @@ async function generateSceneClips({
   scenes,
   context,
   logger = null,
-  onSceneDone = null
+  onSceneDone = null,
+  guard = null
 }) {
+  const stopIfOver = async () => { if (typeof guard === 'function') await guard(); };
+  await stopIfOver();
   // Enrich videoPrompts with the "Video Prompts.docx" specification before
   // sending each scene to Fal.ai. Adds proper motion vocabulary and
   // guards against face morphing / exaggerated AI motion.
@@ -1996,7 +2014,9 @@ async function generateSceneClips({
     return null;
   };
 
+  await stopIfOver();
   return runWithConcurrency(scenes, SCENE_CLIP_CONCURRENCY, async (scene, index) => {
+    await stopIfOver(); // before every scene: a cancelled, lost or handed-back job pays for no further clip
     const clipName = `scene_${scene.index}.mp4`;
     const clipPath = path.join(context.dirs.clips, clipName);
     const rawClipPath = path.join(context.dirs.temp, `fal_${sanitizeSegment(scene.sceneId || scene.index, 'scene')}.mp4`);
@@ -3542,8 +3562,11 @@ async function generateAudioTracks({
   input,
   plan,
   context,
-  logger = null
+  logger = null,
+  guard = null
 }) {
+  const stopIfOver = async () => { if (typeof guard === 'function') await guard(); };
+  await stopIfOver();
   const audioOptions = normalizeAudioOptions(input.audio || {});
   if (!audioOptions.enabled) {
     return {
@@ -3596,6 +3619,7 @@ async function generateAudioTracks({
   }
 
   if (audioOptions.mode === 'auto' && !voice) {
+    await stopIfOver();
     voice = await synthesizeVoiceTrack({
       voiceScript: requestedVoiceScript,
       sourceVoiceScript: requestedSourceVoiceScript,
@@ -3856,8 +3880,10 @@ async function generateThumbnail({
   plan,
   sceneData,
   context,
-  logger = null
+  logger = null,
+  guard = null
 }) {
+  if (typeof guard === 'function') await guard();
   const outputName = 'thumbnail.jpg';
   const outputPath = path.join(context.dirs.final, outputName);
   const outputUrl = buildMediaUrl(context.baseUrl, context.jobId, ['final', outputName]);
@@ -3931,15 +3957,18 @@ async function runCreateVideoPipeline({
   baseUrl,
   providedJobId = null,
   onProgress = null,
-  onLog = null
+  onLog = null,
+  isCancelled = null
 }) {
   const input = normalizeCreateInput(payload);
   const context = createJobContext({ baseUrl: baseUrl || getPublicBaseUrl(), providedJobId, input });
   const product = await resolveProductContext({ user, payload: input });
 
-  const update = (progress, currentStep, metadata = null) => {
-    if (typeof onProgress === 'function') onProgress({ progress, currentStep, metadata });
-  };
+  // The queue's progress call throws once the job is cancelled, lost or handed back: the gate keeps that signal (no
+  // unhandled rejection) and `guard()` stops the run BEFORE each paid step (D74, services/runGate.js).
+  const gate = createRunGate({ onProgress, isCancelled, jobId: context.jobId });
+  const guard = () => gate.check();
+  const update = (progress, currentStep, metadata = null) => gate.notify({ progress, currentStep, metadata });
   const log = (message) => {
     if (typeof onLog === 'function') onLog(message);
   };
@@ -3947,6 +3976,7 @@ async function runCreateVideoPipeline({
   console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 1: Prompt generation completed`);
   log(`STEP 1: Prompt generation completed`);
 
+  await guard();
   update(5, 'generateScenes');
   log('Generating structured scene plan');
   const plan = await measureStep('generateScenes', () => generateScenesPlan({ input, product, user, logger: log }), log);
@@ -3962,25 +3992,31 @@ async function runCreateVideoPipeline({
   context.product = product;
   context.user = user;
 
+  await guard();
   update(20, 'generateImages', { scenes: plan.scenes.length });
   log('Generating scene images with consistency');
   const audioTracksPromise = measureStep(
     'generateAudio',
-    () => generateAudioTracks({ input, plan, context, logger: log }),
+    () => generateAudioTracks({ input, plan, context, logger: log, guard }),
     log
   );
+  // It runs beside the images; if the images fail first its own failure must not become an unhandled rejection
+  // (the later `await audioTracksPromise` still reports it).
+  audioTracksPromise.catch(() => {});
   const scenesWithImages = await measureStep('generateImages', () => generateSceneImages({
     input,
     product,
     plan,
     user,
     context,
-    logger: log
+    logger: log,
+    guard
   }), log);
 
   console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 3: Scene image generation completed`);
   log(`STEP 3: Scene image generation completed`);
 
+  await guard();
   update(45, 'generateVideoClips');
   log('Rendering scene video clips');
   
@@ -3991,6 +4027,7 @@ async function runCreateVideoPipeline({
     scenes: scenesWithImages,
     context,
     logger: log,
+    guard,
     onSceneDone: (sceneIndex, totalScenes) => {
       const stepProgress = 45 + Math.round((sceneProgress(sceneIndex, totalScenes) / 100) * 20);
       update(stepProgress, 'generateVideoClips', { completed: sceneIndex + 1, total: totalScenes });
@@ -4000,6 +4037,7 @@ async function runCreateVideoPipeline({
   console.log(`[${new Date().toISOString()}] [Job ID: ${context.jobId}] STEP 5: Fal.ai render completed`);
   log(`STEP 5: Fal.ai render completed`);
 
+  await guard();
   update(66, 'mergeVideo');
   log('Merging scene clips into final_video.mp4');
   
@@ -4079,6 +4117,7 @@ async function runCreateVideoPipeline({
     console.error('[Cloudinary final video upload failed]', uploadErr);
   }
 
+  await guard();
   update(96, 'thumbnail');
   log('Generating thumbnail');
   const thumbnail = await measureStep('thumbnail', () => generateThumbnail({
@@ -4087,7 +4126,8 @@ async function runCreateVideoPipeline({
     plan,
     sceneData: scenesWithClips,
     context,
-    logger: log
+    logger: log,
+    guard
   }), log);
 
   const responsePayload = {
@@ -4205,9 +4245,14 @@ async function runGenerateVideoClips({
   payload,
   baseUrl,
   onProgress = null,
-  onLog = null
+  onLog = null,
+  isCancelled = null
 }) {
   const context = createJobContext({ baseUrl: baseUrl || getPublicBaseUrl(), providedJobId: payload?.jobId });
+  // D74 (services/runGate.js): progress is reported without awaiting; its stop signal is kept and checked before each clip.
+  const gate = createRunGate({ onProgress, isCancelled, jobId: context.jobId });
+  const guard = () => gate.check();
+  await guard();
   const rawScenes = Array.isArray(payload?.sceneData) ? payload.sceneData : [];
   if (!rawScenes.length) throw new Error('sceneData is required for generateVideoClips');
 
@@ -4253,12 +4298,13 @@ async function runGenerateVideoClips({
     scenes,
     context,
     logger: typeof onLog === 'function' ? onLog : null,
+    guard,
     onSceneDone: typeof onProgress === 'function'
       ? (sceneIndex, totalScenes, enriched) => {
           const base = 5;
           const span = 60;
           const pct = base + Math.round(((sceneIndex + 1) / Math.max(1, totalScenes)) * span);
-          onProgress({
+          gate.notify({
             progress: pct,
             currentStep: 'generate_clips',
             metadata: {
@@ -4729,6 +4775,7 @@ module.exports = {
   runGenerateScenes,
   runGenerateImages,
   runGenerateVideoClips,
+  generateSceneClips, // exported for tests (tests/pipelineCancel.test.js)
   runGenerateAudio,
   runMergeAudio,
   runMergeVideo,
