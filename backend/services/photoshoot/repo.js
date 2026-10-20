@@ -64,6 +64,12 @@ function createPhotoshootRepo({ Job = () => require('../../models/PhotoshootJob'
       { _id: id, status: 'running', refunded: false, photos: { $not: { $elemMatch: { status: { $nin: TERMINAL_PHOTO } } } } },
       { $set: { status, outcome, refunded: true, refundedQuarks, finishedAt: now }, $unset: { inFlight: 1, leaseOwner: 1, leaseUntil: 1 } },
       { new: false })),
+    /** The refund is paid (or was found paid): the job needs no settle sweep. Once only. */
+    markRefundSettled: (id, now) => J().updateOne({ _id: id, refundSettledAt: null }, { $set: { refundSettledAt: now }, $unset: { refundSettlingAt: 1 } }),
+    /** Closed jobs with a recorded refund not yet settled, finished before `older`, not held by a sweep (see service.sweepUnsettled). */
+    unsettledRefunds: (older, now, limit = 10) => lean(J().find(unsettledQuery(older, now)).select('_id').limit(limit)),
+    /** Claims one: holds it until `holdUntil`, only if still unsettled and not held. The row after, or null. */
+    claimSettle: (id, older, now, holdUntil) => lean(J().findOneAndUpdate({ _id: id, ...unsettledQuery(older, now) }, { $set: { refundSettlingAt: holdUntil } }, { new: true })),
     setRefundFailed: (id) => J().updateOne({ _id: id }, { $set: { refundFailed: true } }),
     /** Refunds that did not land and are due for another try (see service.retryRefunds). */
     refundsDue: (now, limit = 10) => lean(J().find(retryDue(now)).select('_id').limit(limit)),
@@ -97,6 +103,14 @@ function createPhotoshootRepo({ Job = () => require('../../models/PhotoshootJob'
       { $set: { 'photos.$.deleted': true, 'photos.$.inLibrary': false }, $unset: { 'photos.$.url': 1 } },
       { new: false })),
     countsByOutcome: (day) => J().aggregate([{ $match: { day } }, { $group: { _id: { kind: '$kind', outcome: '$outcome' }, n: { $sum: 1 }, photos: { $sum: '$photoCount' } } }])
+  };
+}
+
+function unsettledQuery(older, now) {
+  return {
+    status: { $in: ['done', 'partial', 'failed'] }, refundedQuarks: { $gt: 0 }, refundSettledAt: null,
+    refundFailed: { $ne: true }, refundGaveUp: { $ne: true }, finishedAt: { $lt: older },
+    $or: [{ refundSettlingAt: null }, { refundSettlingAt: { $lt: now } }]
   };
 }
 

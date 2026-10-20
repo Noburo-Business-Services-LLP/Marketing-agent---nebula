@@ -693,3 +693,110 @@ test('publicIdOf only ever names one of our stored pictures', () => {
   assert.strictEqual(publicIdOf('https://res.cloudinary.com/x/image/upload/nebula-campaign-posts/p1.png?x=1'), 'nebula-campaign-posts/p1');
   for (const bad of ['', null, 'http://res.cloudinary.com/x/image/upload/a.png', 'https://evil.example/image/upload/a.png', 'https://res.cloudinary.com/x/video/upload/a.mp4', 'https://res.cloudinary.com/x/image/upload/../a.png', 'data:image/png;base64,AAAA']) assert.strictEqual(publicIdOf(bad), '', String(bad));
 });
+
+// ---- settle sweep: a job closed with a recorded refund that was never paid ------------------------------------------
+const MIN = 60 * 1000;
+/** A paid, fully closed job whose refund is recorded but not paid: what a crash between close and refund leaves. */
+async function crashed(w, { ageMin = 10, status = 'partial', refunded = 20, extra = {} } = {}) {
+  const row = await w.repo.insert({ user: U1, key: key(), kind: 'pack', pack: 'marketplace', day: '2026-10-20', status: 'running', inFlight: true, photoCount: 4, quarksPerPhoto: 20, quarks: 80, payerId: U1,
+    photos: [0, 1, 2, 3].map((i) => ({ index: i, status: i === 3 ? 'failed' : 'done' })), ...extra });
+  w.purse.set(U1, w.purse.get(U1) - 80);
+  w.money.push({ type: 'spend', uid: U1, payer: U1, cost: 80, action: 'photoshoot_image', ref: String(row._id) });
+  await w.repo.finalize(row._id, { status, outcome: status, refundedQuarks: refunded, now: new Date(w.clock.t.getTime() - ageMin * MIN) });
+  return row._id;
+}
+const refundsOf = (w, id) => w.money.filter((m) => m.type === 'refund' && m.ref === String(id));
+
+test('settle: a crash between close and refund is paid once, to the payer, then settled', async () => {
+  const w = world({ payers: { [U1]: AGENCY } });
+  const id = await crashed(w, { extra: { payerId: AGENCY } });
+  const before = w.purse.get(AGENCY);
+  assert.strictEqual(await w.svc.sweepUnsettled(), 1);
+  assert.strictEqual(refundsOf(w, id).length, 1); assert.strictEqual(refundsOf(w, id)[0].q, 20); assert.strictEqual(refundsOf(w, id)[0].payer, AGENCY);
+  assert.strictEqual(w.purse.get(AGENCY), before + 20);
+  assert.ok(w.repo.rows[0].refundSettledAt);
+  assert.strictEqual(await w.svc.sweepUnsettled(), 0);
+  assert.strictEqual(refundsOf(w, id).length, 1, 'a second run pays nothing');
+});
+
+test('settle: the refund is never more than was recorded or charged', async () => {
+  const w = world();
+  const id = await crashed(w, { refunded: 500 });
+  await w.svc.sweepUnsettled();
+  assert.strictEqual(refundsOf(w, id)[0].q, 80);
+  const w2 = world();
+  const id2 = await crashed(w2, { refunded: 20 });
+  await w2.svc.sweepUnsettled();
+  assert.strictEqual(refundsOf(w2, id2)[0].q, 20);
+});
+
+test('settle: a refund row already in the ledger only marks the job settled', async () => {
+  const w = world();
+  const id = await crashed(w);
+  w.money.push({ type: 'refund', uid: U1, payer: U1, q: 20, action: 'photoshoot_image_refund', ref: String(id) });
+  const before = w.purse.get(U1);
+  assert.strictEqual(await w.svc.sweepUnsettled(), 1);
+  assert.strictEqual(refundsOf(w, id).length, 1);
+  assert.strictEqual(w.purse.get(U1), before);
+  assert.ok(w.repo.rows[0].refundSettledAt);
+});
+
+test('settle: a refund that fails is flagged for the retry loop and raised like the others', async () => {
+  const w = world({ refundFails: true });
+  const id = await crashed(w);
+  assert.strictEqual(await w.svc.sweepUnsettled(), 0);
+  assert.strictEqual(w.repo.rows[0].refundFailed, true); assert.ok(!w.repo.rows[0].refundSettledAt);
+  assert.strictEqual(w.alerts[0][0], 'photoshoot_refund');
+  assert.strictEqual(refundsOf(w, id).length, 0);
+  assert.strictEqual(await w.svc.sweepUnsettled(), 0, 'left to the retry loop, not tried again here');
+});
+
+test('settle: a ledger that cannot be read pays nothing now and tries again after the hold', async () => {
+  const w = world();
+  const id = await crashed(w);
+  const blind = createPhotoshoot({ ...w.deps, ledgerFor: async () => { throw new Error('db down'); } });
+  await blind.sweepUnsettled();
+  assert.strictEqual(refundsOf(w, id).length, 0);
+  assert.strictEqual(await w.svc.sweepUnsettled(), 0, 'still held');
+  w.clock.t = new Date(w.clock.t.getTime() + 6 * MIN);
+  assert.strictEqual(await w.svc.sweepUnsettled(), 1);
+  assert.strictEqual(refundsOf(w, id).length, 1);
+});
+
+test('settle: young jobs, running and queued jobs, refused jobs and jobs with no refund are left alone', async () => {
+  const w = world();
+  const young = await crashed(w, { ageMin: 1 });
+  const none = await crashed(w, { refunded: 0, status: 'done' });
+  const running = await w.repo.insert({ user: U2, key: key(), kind: 'pack', status: 'running', inFlight: true, quarks: 80, payerId: U2, refundedQuarks: 20, finishedAt: new Date(w.clock.t.getTime() - 10 * MIN), photos: [] });
+  const queued = await w.repo.insert({ user: U1, key: key(), kind: 'pack', status: 'queued', refundedQuarks: 20, finishedAt: new Date(w.clock.t.getTime() - 10 * MIN), photos: [] });
+  assert.strictEqual(await w.svc.sweepUnsettled(), 0);
+  assert.strictEqual(w.money.filter((m) => m.type === 'refund').length, 0);
+  assert.ok([young, none, running._id, queued._id].every((i) => !w.repo.rows.find((r) => String(r._id) === String(i)).refundSettledAt));
+  w.clock.t = new Date(w.clock.t.getTime() + 5 * MIN); // the young one grows up
+  assert.strictEqual(await w.svc.sweepUnsettled(), 1);
+  assert.strictEqual(refundsOf(w, young).length, 1);
+});
+
+test('settle: concurrent sweeps pay once', async () => {
+  const w = world();
+  const id = await crashed(w);
+  const other = createPhotoshoot({ ...w.deps }); // a second process on the same database and wallet
+  await Promise.all([w.svc.sweepUnsettled(), other.sweepUnsettled(), w.svc.sweepUnsettled(), other.sweepUnsettled()]);
+  assert.strictEqual(refundsOf(w, id).length, 1);
+  assert.ok(w.repo.rows[0].refundSettledAt);
+});
+
+test('settle: finalize marks a paid refund settled, so a normal job never needs the sweep; it runs from resumeLost', async () => {
+  const w = world({ gens: Array(8).fill({ ok: false }) });
+  await w.svc.create(userOf(U1), body());
+  await w.drain();
+  const row = w.repo.rows[0];
+  assert.strictEqual(row.status, 'failed'); assert.ok(row.refundedQuarks > 0);
+  assert.ok(row.refundSettledAt, 'settled right after the refund');
+  w.clock.t = new Date(w.clock.t.getTime() + 10 * MIN);
+  await w.svc.sweepUnsettled();
+  assert.strictEqual(w.money.filter((m) => m.type === 'refund').length, 1, 'nothing paid again');
+  const c = await crashed(w);
+  await w.svc.resumeLost();
+  assert.strictEqual(refundsOf(w, c).length, 1, 'resumeLost runs the settle sweep');
+});

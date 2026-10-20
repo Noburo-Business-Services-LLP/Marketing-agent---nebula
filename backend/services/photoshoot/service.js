@@ -547,7 +547,10 @@ function createPhotoshoot(given = {}) {
     if (!back || !back.ok) {
       await repo.setRefundFailed(job._id).catch(() => null);
       deps.alert('photoshoot_refund', `Photoshoot ${String(job._id)}: the refund of ${refund} Quarks did not land.`);
+      return;
     }
+    // Paid: say so on the job, so the settle sweep never has to look at it.
+    await repo.markRefundSettled(job._id, deps.now()).catch(() => null);
   }
 
   /** Runs (or takes over) one job until every photo is finished. Safe to call more than once: the lease decides. */
@@ -615,6 +618,39 @@ function createPhotoshoot(given = {}) {
   }
 
   /**
+   * A job is closed (finalize) BEFORE its refund is paid, so a process that died in between leaves a closed job with a
+   * recorded refund that was never paid. This sweep finds closed jobs with a recorded refund, not settled, older than
+   * SETTLE_AFTER_MS, and lets the Quark ledger decide: a refund row already there only marks the job settled; none, and
+   * the refund is paid once (to the payer, never more than recorded or charged), then settled. Each row is claimed first
+   * (a conditional update holds it), so two sweeps or processes never both pay. A refund that fails goes to refundFailed
+   * (the retry loop takes over) and raises the same alert as the other refund paths.
+   */
+  async function sweepUnsettled(limit = 10) {
+    const now = deps.now();
+    const older = new Date(now.getTime() - caps.SETTLE_AFTER_MS);
+    const due = (await repo.unsettledRefunds(older, now, limit).catch(() => [])) || [];
+    let settled = 0;
+    for (const d of due) {
+      try {
+        const job = await repo.claimSettle(d._id, older, now, new Date(now.getTime() + caps.SETTLE_HOLD_MS)).catch(() => null);
+        if (!job) continue;
+        const recorded = Number(job.refundedQuarks) || 0;
+        let led;
+        try { led = (await deps.ledgerFor(String(job._id), String(job.user))) || {}; } catch (_) { continue; } // unknown: tried after the hold
+        if (led.refunded || !(recorded > 0)) { await repo.markRefundSettled(job._id, deps.now()); settled += 1; continue; }
+        const amount = led.spend ? Math.min(recorded, Math.max(0, Number(led.spend.quarks) || 0)) : recorded;
+        if (!(amount > 0)) { await repo.markRefundSettled(job._id, deps.now()); settled += 1; continue; }
+        let back = null;
+        try { back = await deps.refundTo(String(job.user), amount, { action: `${ACTION}_refund`, ref: String(job._id), payerId: job.payerId || (led.spend && led.spend.payer) || '' }); } catch (_) { back = null; }
+        if (back && back.ok) { await repo.markRefundSettled(job._id, deps.now()); settled += 1; continue; }
+        await repo.setRefundFailed(job._id).catch(() => null);
+        deps.alert('photoshoot_refund', `Photoshoot ${String(job._id)}: the refund of ${amount} Quarks was recorded but did not land.`);
+      } catch (e) { console.error('[photoshoot] settle sweep failed:', e && e.message); }
+    }
+    return settled;
+  }
+
+  /**
    * Tries the refunds that did not land again (refundFailed). Each row is claimed first (one conditional update moves its
    * retry time forward and counts the attempt), so two processes never both try it. Before paying, the proof is read: a
    * refund that landed but reported a failure is only marked, never paid twice. A failed try waits twice as long as the
@@ -651,6 +687,7 @@ function createPhotoshoot(given = {}) {
   /** Takes over jobs whose runner was lost (a restart): run by the loop, at start, and before a new job. */
   async function resumeLost() {
     await sweepStale().catch(() => null);
+    await sweepUnsettled().catch(() => null);
     await retryRefunds().catch(() => null);
     const lost = (await repo.lostJobs(deps.now(), 10)) || [];
     for (const j of lost) {
@@ -758,7 +795,7 @@ function createPhotoshoot(given = {}) {
     return rows.map((r) => ({ kind: r._id.kind, outcome: r._id.outcome || 'running', jobs: r.n, photos: r.photos }));
   }
 
-  return { packs, options, create, redo, get, list, library, setInLibrary, deletePhoto, upload, runJob, resumeLost, finalize, sweepStale, retryRefunds, dailyCounts, _locks: locks, _running: running };
+  return { packs, options, create, redo, get, list, library, setInLibrary, deletePhoto, upload, runJob, resumeLost, finalize, sweepStale, sweepUnsettled, retryRefunds, dailyCounts, _locks: locks, _running: running };
 }
 
 module.exports = { createPhotoshoot, publicIdOf, catalogue, packView, planPhotos, jobView, minutesFor, istDay, MESSAGES, ACTION, ACTION_USD_PER_PHOTO: () => ACTION_USD[ACTION] };

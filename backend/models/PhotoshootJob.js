@@ -55,6 +55,9 @@ const photoshootJobSchema = new mongoose.Schema({
   refunded: { type: Boolean, default: false },
   refundedQuarks: { type: Number, default: 0 },
   refundFailed: { type: Boolean },
+  // Set once the refund is paid (or found paid in the ledger); refundSettlingAt holds a row while a settle sweep checks it.
+  refundSettledAt: { type: Date },
+  refundSettlingAt: { type: Date },
   // The resume loop's retries of a refund that did not land: tries so far, when the next one is due (also the hold
   // while a retry runs), and true once it gave up and a person was alerted.
   refundAttempts: { type: Number },

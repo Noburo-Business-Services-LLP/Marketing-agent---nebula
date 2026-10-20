@@ -176,7 +176,12 @@ async function runChecks() {
   const key = () => `chk-${Date.now().toString(36)}-${++keyN}`;
   const balanceOf = async (id) => Number(((await User.findById(id).select('credits.balance').lean()) || {}).credits?.balance || 0);
   const charged = (photos) => { spent.usd += photos * ACTION_USD.photoshoot_image; };
-  const finished = (id) => eventually(async () => { const j = await Job.findById(id).lean(); return j && ['done', 'partial', 'failed'].includes(j.status) ? j : null; });
+  // The job closes first and the refund is paid right after, so wait (up to 5 s) for the refund row before anyone reads a balance.
+  const finished = async (id) => {
+    const j = await eventually(async () => { const x = await Job.findById(id).lean(); return x && ['done', 'partial', 'failed'].includes(x.status) ? x : null; });
+    if (j && j.refundedQuarks > 0) await eventually(() => QuarkLedger.findOne({ type: 'refund', ref: String(j._id) }).lean(), 5000);
+    return (j && (await Job.findById(id).lean())) || j;
+  };
 
   // ---- seed ----------------------------------------------------------------------------------------------------------------
   const stamp = Date.now();
@@ -475,6 +480,10 @@ async function runChecks() {
     const scopedRepo = {
       ...realRepo,
       staleQueued: async (before, limit = 10) => Job.find({ status: 'queued', createdAt: { $lt: before }, user: { $in: await ours() } }).select('_id user').limit(limit).lean(),
+      unsettledRefunds: async (older, now, limit = 10) => {
+        const rows = (await realRepo.unsettledRefunds(older, now, 500)).map((x) => x._id);
+        return rows.length ? Job.find({ _id: { $in: rows }, user: { $in: await ours() } }).select('_id').limit(limit).lean() : [];
+      },
       refundsDue: async (now, limit = 10) => {
         const due = (await realRepo.refundsDue(now, 200)).map((x) => x._id);
         return due.length ? Job.find({ _id: { $in: due }, user: { $in: await ours() } }).select('_id').limit(limit).lean() : [];
@@ -592,6 +601,28 @@ async function runChecks() {
       const r = await call('POST', `/api/photoshoot/jobs/${first._id}/photos/1/redo`, T(owner), { key: first.key });
       assert.strictEqual(r.status, 409); assert.strictEqual(r.body.keyReused, true);
       assert.strictEqual(await balanceOf(owner._id), before);
+    });
+
+    section = '(11) crash between close and refund (settle sweep):';
+    await check('a job closed with a recorded refund that was never paid is refunded once by the sweep, and a second run changes nothing', async () => {
+      const u = await mkUser('settle-crash');
+      const row = await Job.create(queuedDoc(u, { status: 'running', outcome: undefined, quarks: 4 * PER, payerId: String(u._id), refunded: false, refundedQuarks: 0,
+        photos: [0, 1, 2, 3].map((i) => ({ index: i, productIndex: 0, status: i === 3 ? 'failed' : 'done', attempts: 1, url: i === 3 ? undefined : 'https://res.cloudinary.com/x/y.png' })) }));
+      await qb.spend(u._id, 4 * PER, { action: 'photoshoot_image', ref: String(row._id), units: 4 }); charged(4);
+      const spentBal = await balanceOf(u._id);
+      // The crash: the job is closed with the refund recorded (ten minutes ago) and the process dies before paying it.
+      const closed = await realRepo.finalize(row._id, { status: 'partial', outcome: 'partial', refundedQuarks: PER, now: new Date(Date.now() - 10 * 60000) });
+      assert.ok(closed, 'closed');
+      assert.strictEqual(await balanceOf(u._id), spentBal, 'not paid yet');
+      assert.strictEqual(await refundRows(row._id), 0);
+      assert.ok((await svcWith().sweepUnsettled()) >= 1);
+      assert.strictEqual(await balanceOf(u._id), spentBal + PER, 'refunded');
+      assert.strictEqual(await eventually(() => refundRows(row._id)), 1);
+      const after = await Job.findById(row._id).lean();
+      assert.ok(after.refundSettledAt, 'settled'); assert.strictEqual(after.refundSettlingAt, undefined); assert.strictEqual(after.refundFailed, undefined);
+      await svcWith().sweepUnsettled(); await Promise.all([svcWith().sweepUnsettled(), svcWith().sweepUnsettled()]);
+      assert.strictEqual(await balanceOf(u._id), spentBal + PER, 'once');
+      assert.strictEqual(await refundRows(row._id), 1);
     });
 
     section = '(10) delete one photo:';

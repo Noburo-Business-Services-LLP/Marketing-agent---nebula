@@ -13,6 +13,8 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
   const S = (v) => String(v);
   const find = (id) => rows.find((r) => S(r._id) === S(id));
   const due = (r, now) => r.refundFailed === true && r.refundGaveUp !== true && (!r.refundRetryAt || new Date(r.refundRetryAt) <= now);
+  const unsettled = (r, older, now) => ['done', 'partial', 'failed'].includes(r.status) && r.refundedQuarks > 0 && !r.refundSettledAt && r.refundFailed !== true && r.refundGaveUp !== true
+    && r.finishedAt && new Date(r.finishedAt) < older && (!r.refundSettlingAt || new Date(r.refundSettlingAt) < now);
   const leaseFree = (r, owner, now) => !r.leaseUntil || new Date(r.leaseUntil) < now || r.leaseOwner === owner;
   const repo = {
     rows, fail,
@@ -74,6 +76,9 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
       delete r.inFlight; delete r.leaseOwner; delete r.leaseUntil;
       return before;
     },
+    markRefundSettled: async (id, now) => { const r = find(id); if (r && !r.refundSettledAt) { r.refundSettledAt = now; delete r.refundSettlingAt; } },
+    unsettledRefunds: async (older, now, limit = 10) => rows.filter((r) => unsettled(r, older, now)).slice(0, limit).map((r) => ({ _id: r._id })),
+    claimSettle: async (id, older, now, holdUntil) => { const r = find(id); if (!r || !unsettled(r, older, now)) return null; r.refundSettlingAt = holdUntil; return clone(r); },
     setRefundFailed: async (id) => { const r = find(id); if (r) r.refundFailed = true; },
     refundsDue: async (now, limit = 10) => rows.filter((r) => due(r, now)).slice(0, limit).map((r) => ({ _id: r._id })),
     claimRefundRetry: async (id, now, holdUntil) => {

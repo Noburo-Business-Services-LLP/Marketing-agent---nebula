@@ -31,6 +31,9 @@ module.exports = Object.freeze({
   REFUND_RETRY_MAX: 5,
   REFUND_RETRY_BASE_MS: 2 * 60 * 1000,
   REFUND_RETRY_HOLD_MS: 10 * 60 * 1000,
+  // A closed job whose refund is not marked settled after this long is checked against the Quark ledger (sweepUnsettled); a claim holds the row this long.
+  SETTLE_AFTER_MS: 2 * 60 * 1000,
+  SETTLE_HOLD_MS: 5 * 60 * 1000,
   REFUND_RETRY_BATCH: 10,
   // A job still not finished this long after it was charged is closed: unfinished photos fail and are refunded.
   MAX_AGE_MS: 60 * 60 * 1000,
