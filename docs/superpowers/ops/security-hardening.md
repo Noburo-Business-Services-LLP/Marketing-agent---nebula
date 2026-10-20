@@ -252,3 +252,106 @@ to show the exception text it now shows the route's own words or "Something went
 reminders, campaigns, drafts, products, content, dashboard, ads, competitors). Places that read `result.error` after
 the client caught the error (poster generate and edit, refine image, upload audio, boost post) fall back to their own
 default text. No screen depended on the exception text to decide what to do.
+
+## 10. Sign-in and session hardening (hardening items B3, B4, B6, B7, B10, G7, A6; D50 to D55)
+
+Real-database check: `backend/scripts/auth-hardening-check.js` (nebulaa_dev only, whole app in process, throwaway
+`zz.auth-hardening-check` users, code mailer and owner alert stubbed): 10 PASS, cleanup complete. Token version (B5)
+was already built (D46); the check confirms the token from before a password change is 401.
+
+### Account enumeration (B3, D50)
+- `POST /api/auth/send-otp` and `/forgot-password`: always 200 `If an account exists, we have sent a code.` A code is
+  hashed in every case (a throwaway one when there is no account); it is stored and mailed after the answer, only to
+  a real account (send-otp: unverified accounts only), at most one a minute (a second ask inside the minute gets the
+  same 200 and sends nothing; the 429 with `retryAfter` is gone). A mail failure is logged, never shown.
+- `/verify-otp`, `/verify-reset-otp`, `/reset-password`: one 400 `That code did not work. Check it, or request a new
+  code.` for no account, already verified (verify-otp), no code, expired, five wrong tries or a wrong code; the same
+  bcrypt compare runs in every case (a dummy hash). `attemptsRemaining`, `expired` and `maxAttempts` are gone.
+- `/login`: unknown email compares against a dummy hash (same time), same 401 `Invalid email or password. Please try
+  again.` (no attempts count); "deactivated" is said only after the right password; never 423.
+- KEPT ON PURPOSE: sign-up answers `An account with this email already exists. Please sign in.` (and the alias
+  message). A person signing up again needs to be told to sign in; hiding it would leave them waiting for a code.
+  Residual risk: someone can learn that an email has an account by trying to sign up with it. Bounded by the sign-up
+  limiter (5 a day per address), the bot check (when `TURNSTILE_SECRET_KEY` is set) and the credential limiter.
+
+### Strict bearer (B6, D53)
+`backend/utils/bearer.js` `extractBearer(req)` = `/^Bearer\s+(\S+)$/i`, used by `protect`, `protectCached`,
+`optionalAuth`, the admin bootstrap check, the per-user limiter key, the live inbox stream and the socket hub (which
+now also reads a strict `Authorization` header). `Bearerx <token>`, `Bearer<token>`, two tokens or another scheme are
+no token (401). A `?token=` or handshake token must be one string with no spaces. A guard test fails if any other file
+parses the header by hand.
+
+### Demo sign-in and start-up check (B7, D53)
+- Demo tokens (`demo:<email>`, no password) only when `ALLOW_DEMO_AUTH=1` AND `NODE_ENV` is not production. A missing
+  or placeholder `MONGODB_URI` no longer turns it on. Local development without a database: set `ALLOW_DEMO_AUTH=1`.
+- `backend/utils/bootEnv.js` `validateBootEnv(env)` runs first in `server-main.js`: exit 1 with a clear message when
+  `JWT_SECRET` is missing (any environment), or in production when `JWT_SECRET` is under 32 characters, `MONGODB_URI`
+  is missing (or the example placeholder) or `HASH_PEPPER` is missing. In development these only warn. Loading the app
+  without starting it (`NEBULAA_SERVER_NO_START=1`, scripts and tests) only prints.
+
+### Sign-in lockout (B4, D51)
+`backend/services/loginGuard.js`, replacing "5 wrong passwords lock the account for 30 minutes from anywhere" (which
+let anyone lock a named person out). Keyed by the TYPED email, whether or not it has an account (same answers).
+
+| Rule | Default | Env |
+|---|---|---|
+| Wait after the k-th wrong password in a row from one address | 1, 2, 4, 8 s (cap 30 s) | `LOGIN_DELAY_BASE_MS` (1000; 0 = off) |
+| Lock of that address for that email | after 5, for 15 minutes | `LOGIN_IP_LOCK_AFTER`, `LOGIN_IP_LOCK_MINUTES` |
+| Per-email ceiling (all addresses) | 30 wrong passwords an hour | `LOGIN_ACCOUNT_CEILING` |
+| Addresses remembered after a good sign-in | 90 days | `LOGIN_SEEN_DAYS` |
+| Bot check hook | off | `LOGIN_CHALLENGE=on` + `TURNSTILE_SECRET_KEY`, after `LOGIN_CHALLENGE_AFTER` (3) |
+
+- A try inside the wait or the lock is 429 with `Retry-After` and `retryAfter`, and the password is NOT checked (no free
+  guesses). Another address is not affected, so the owner signs in from home while an attacker is locked out.
+- At the ceiling the account owner gets one email that hour ("Unsuccessful sign-in attempts on your Nebulaa account",
+  via Resend), and until the hour ends only addresses that signed in to that account before may try; the owner is
+  never locked out from a place they used before. An email with no account counts the same way and gets no email.
+- "Seen" means the same address (IP). There is no device id in the app; an owner on a new network during an attack
+  waits for the hour or resets the password (reset is not blocked by the lockout).
+- Counters: MongoDB collection `login_attempts` (TTL index on `expireAt`, shared by every task), in memory when no
+  database is connected. Keys and the `eh` field are HMAC hashes (HASH_PEPPER): no email or address in clear. A store
+  error lets the sign-in through (logged), like the request limiters; the credential limiter still applies.
+- The old fields `failedLoginAttempts` / `lockUntil` are no longer read or written; a good sign-in clears leftovers.
+- LOGIN_CHALLENGE has no screen yet: the API answers 429 `challengeRequired: true`; the sign-in page would need a
+  Turnstile box that sends `challengeToken`. Leave it off until that exists.
+
+### Password policy and admin bootstrap (B10, D54)
+- New passwords (sign-up, change-password, reset-password): at least 10 characters, a letter and a number, not in
+  `backend/data/common-passwords.txt` (about 300 very common passwords written from published lists, compared without
+  case, read once into a Set: a curated short list, NOT an exhaustive 10k list), not the email's name. Friendly
+  messages (`backend/utils/passwordPolicy.js`). Existing accounts keep signing in with their current password.
+- `/api/admin/login` and `/make-owner` (the one-time first-Owner door with `ADMIN_EMAIL` / `ADMIN_PASSWORD`): 404 unless
+  `ALLOW_ADMIN_BOOTSTRAP=1`; the shared login is refused (409) once an Owner exists, so the door closes after use.
+- Staff MFA: not built (P2). Staff sign in like everyone else, with the new lockout and policy.
+
+### Secret fallbacks (G7, D52)
+- `HASH_PEPPER` (`backend/utils/hashPepper.js`) keys the deletion records and tombstones, the free Blueprint
+  visitor-address hash and the lockout keys. Required in production; derived from `JWT_SECRET` in development (logged
+  once); a random per-process key when nothing is set (tests). The literal fallbacks `'nebulaa-account-hash'` and
+  `'blueprint'` are gone; a guard test refuses any new `SECRET|PEPPER|SALT ... || '<literal>'`.
+- Compatibility: tombstones written before were HMAC(JWT_SECRET). New ones use the pepper only; LOOKUPS
+  (`emailLookupHashes`, the free Blueprint "deleted before" check) try both keys, so a person deleted before the change
+  is still recognised. The literal was only used when JWT_SECRET was missing, which never happened where sign-in works,
+  so it is not kept. The Blueprint address count is compared within one day only, so no earlier key is kept (for one
+  day after the release, earlier Blueprints from an address are not counted against it).
+
+### Crash policy (A6, D55)
+`backend/utils/crashPolicy.js`, installed at the top of `server-main.js`:
+- `unhandledRejection`: one structured JSON log line. Known-safe (ECONNRESET, EPIPE, aborted, premature close, a busy
+  password hasher, a cancelled request): keep running. Anything else: exit code 1, then after `CRASH_GRACE_MS` (5 s)
+  the same stop as below. `UNHANDLED_REJECTION_POLICY=log` is the kill switch back to "log only".
+- `uncaughtException`: log, health and ready 503, stop taking connections, close idle keep-alive connections, open
+  requests get up to `CRASH_DRAIN_MS` (10 s), exit 1. ECS starts a fresh task. One shutdown even if more errors follow.
+- SIGTERM keeps its drain (`SHUTDOWN_DRAIN_MS`, 20 s) and exits 0.
+- Watch after release: any `"type":"unhandledRejection","action":"exiting"` line is a bug that now restarts the task
+  (a long generation request on that task is cut). If they are frequent, set `UNHANDLED_REJECTION_POLICY=log` and fix.
+
+### Frontend text that no longer matches (owner or frontend job; not edited here)
+- `frontend/pages/Auth.tsx`: password checklist "At least 8 characters" (lines 572 and 892) and the checks
+  `password.length >= 8` (line 103) and `fpNewPassword.length >= 8` (line 403): change to 10. The checklist also asks
+  for a special character, which the server does not require (fine: stricter on the screen).
+- `frontend/pages/Settings.tsx`: "Password must be at least 8 characters" and `newPassword.length < 8` (lines 239 to 240)
+  and the hint "Must be at least 8 characters" (line 578): change to 10.
+- No screen reads "No account found", `attemptsRemaining`, `expired`, `maxAttempts` or a 423: the flows keep working.
+  The resend button already sets its own 60 s cooldown on success. The sign-in page shows the server's 429 message
+  (`Please wait N seconds ...`) as it shows any error.

@@ -1,6 +1,6 @@
 'use strict';
 /**
- * What the process does after an error nobody caught (A6, docs/superpowers/ops/security-hardening.md section 9).
+ * What the process does after an error nobody caught (A6, docs/superpowers/ops/security-hardening.md section 10).
  *
  *  - unhandledRejection: one structured log line. Known-safe cases (a client hung up or aborted, a busy password
  *    hasher, a stream closed early) keep running. Anything else sets exit code 1 and, after a short grace period

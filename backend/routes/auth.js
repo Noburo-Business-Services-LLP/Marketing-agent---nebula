@@ -18,10 +18,10 @@ const answerBusy = (res, error) => {
   return true;
 };
 
-// Account enumeration (B3, docs/superpowers/ops/security-hardening.md section 9): the code and reset routes answer the
+// Account enumeration (B3, docs/superpowers/ops/security-hardening.md section 10): the code and reset routes answer the
 // same status and body whether or not the email has an account, and do the same hashing work in both branches (a
 // dummy hash when there is no account), so neither the answer nor its time tells them apart. Storing and sending the
-// code happen after the answer. Sign-up keeps "already exists" on purpose (decision D47).
+// code happen after the answer. Sign-up keeps "already exists" on purpose (decision D50).
 const CODE_SENT = 'If an account exists, we have sent a code.';
 const CODE_FAILED = 'That code did not work. Check it, or request a new code.';
 const LOGIN_FAILED = 'Invalid email or password. Please try again.';

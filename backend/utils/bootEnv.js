@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Start-up check (B7, docs/superpowers/ops/security-hardening.md section 9). A pure function of the environment, so it
+ * Start-up check (B7, docs/superpowers/ops/security-hardening.md section 10). A pure function of the environment, so it
  * is tested without starting the server; server-main.js prints the result and exits non-zero on any error.
  *
  *  - JWT_SECRET missing (any environment): error. Every session would be signed with nothing.

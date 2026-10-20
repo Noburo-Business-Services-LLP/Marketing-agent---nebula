@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Sign-in lockout that cannot be used to lock a named person out (B4, docs/superpowers/ops/security-hardening.md
- * section 9). Replaces "5 wrong passwords lock the account for 30 minutes from anywhere".
+ * section 10). Replaces "5 wrong passwords lock the account for 30 minutes from anywhere".
  *
  *  - Per EMAIL + SOURCE ADDRESS: after the k-th wrong password in a row from one address, the next try from that
  *    address waits min(30 s, base x 2^(k-1)) (1, 2, 4, 8 s); at LOGIN_IP_LOCK_AFTER (5) that address is locked out of
