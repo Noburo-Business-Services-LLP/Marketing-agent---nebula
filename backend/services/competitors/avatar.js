@@ -48,48 +48,14 @@ function isAllowedUrl(raw) {
   return ALLOWED_HOST.test(host);
 }
 
-function v4Private(ip) {
-  const p = ip.split('.').map(Number);
-  if (p.length !== 4 || p.some((x) => !Number.isInteger(x) || x < 0 || x > 255)) return true;
-  const [a, b] = p;
-  return a === 0 || a === 10 || a === 127 || a >= 224
-    || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
-    || (a === 192 && b === 168) || (a === 192 && b === 0 && p[2] === 0) || (a === 192 && b === 0 && p[2] === 2)
-    || (a === 198 && (b === 18 || b === 19)) || (a === 198 && b === 51 && p[2] === 100) || (a === 203 && b === 0 && p[2] === 113);
-}
+// The address rules and the connect-time lookup are the shared SSRF helper's (services/safeFetch.js, hardening C4).
+const safeFetch = require('../safeFetch');
 
 /** True for loopback, private, link-local, carrier, multicast, reserved and unparsable addresses. */
-function isPrivateAddress(ip) {
-  const s = String(ip || '').trim().replace(/^\[|\]$/g, '').toLowerCase();
-  const kind = net.isIP(s);
-  if (kind === 4) return v4Private(s);
-  if (kind !== 6) return true;
-  // An IPv4 address carried inside IPv6 (::ffff:10.0.0.1, ::ffff:a00:1, 64:ff9b::...) is judged as that IPv4 address.
-  const dotted = /(\d+\.\d+\.\d+\.\d+)$/.exec(s);
-  if (dotted) return v4Private(dotted[1]);
-  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(s);
-  if (hex) { const a = parseInt(hex[1], 16); const b = parseInt(hex[2], 16); return v4Private(`${a >> 8}.${a & 255}.${b >> 8}.${b & 255}`); }
-  if (s === '::' || s === '::1' || s.startsWith('::ffff:') || s.startsWith('64:ff9b:')) return true;
-  const first = parseInt(s.split(':')[0] || '0', 16);
-  if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
-  if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
-  if ((first & 0xff00) === 0xff00) return true; // multicast
-  if (first === 0x2001 && parseInt(s.split(':')[1] || '0', 16) === 0x0db8) return true; // documentation
-  return false;
-}
+const isPrivateAddress = (ip) => safeFetch.isBlockedAddress(ip);
 
 /** A dns.lookup stand-in that refuses private addresses, so the address actually connected to is checked too. */
-function safeLookup(hostname, options, callback) {
-  const cb = typeof options === 'function' ? options : callback;
-  const opts = typeof options === 'object' && options ? options : {};
-  require('dns').lookup(hostname, { ...opts, all: true }, (err, list) => {
-    if (err) return cb(err);
-    const addrs = Array.isArray(list) ? list : [];
-    if (!addrs.length || addrs.some((a) => isPrivateAddress(a.address))) return cb(new AvatarError('private_address'));
-    if (opts.all) return cb(null, addrs);
-    return cb(null, addrs[0].address, addrs[0].family);
-  });
-}
+const safeLookup = safeFetch.safeLookup;
 
 const resolveAll = (host) => require('dns').promises.lookup(host, { all: true });
 
@@ -237,7 +203,7 @@ async function refreshAvatar({ competitor, profile, now = new Date(), deps = {} 
     c.avatarUrl = url; c.avatarUpdatedAt = at; c.avatarSourceKey = srcKey;
     return { ok: true, url };
   } catch (e) {
-    const reason = e instanceof AvatarError ? e.code : 'error';
+    const reason = (e instanceof AvatarError || e instanceof safeFetch.SafeFetchError) ? e.code : 'error';
     if (reason === 'error') console.warn('[competitors] picture not refreshed:', e && e.message);
     return { ok: false, reason };
   }

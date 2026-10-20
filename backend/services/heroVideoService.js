@@ -42,43 +42,12 @@ function isBlockedIPv4(a, b, c) {
   return false;
 }
 
-// Expands an IPv6 literal into 8 16-bit groups, or null when malformed. Handles :: and a trailing dotted quad.
-function parseIPv6(ip) {
-  let s = String(ip).toLowerCase().split('%')[0];
-  const dq = s.match(/^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (dq) {
-    const o = dq.slice(2).map(Number);
-    if (o.some((n) => n > 255)) return null;
-    s = `${dq[1]}${((o[0] << 8) | o[1]).toString(16)}:${((o[2] << 8) | o[3]).toString(16)}`;
-  }
-  const halves = s.split('::');
-  if (halves.length > 2) return null;
-  const head = halves[0] ? halves[0].split(':') : [];
-  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
-  const fill = 8 - head.length - tail.length;
-  if (halves.length === 2 ? fill < 1 : fill !== 0) return null;
-  const groups = [...head, ...Array(halves.length === 2 ? fill : 0).fill('0'), ...tail];
-  if (groups.length !== 8 || groups.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null;
-  return groups.map((g) => parseInt(g, 16));
-}
-
 // True only for a globally routable unicast address (IPv4 or IPv6). Anything unparsable is not public.
+// The rules are the shared SSRF helper's (services/safeFetch.js, hardening C4), so Hero logos, Blueprint pages
+// and the scraper refuse exactly the same addresses as every other download.
 function isPublicIp(ip) {
   if (typeof ip !== 'string') return false;
-  const kind = net.isIP(ip.split('%')[0]);
-  if (kind === 4) {
-    const [a, b, c] = ip.split('.').map(Number);
-    return !isBlockedIPv4(a, b, c);
-  }
-  if (kind !== 6) return false;
-  const g = parseIPv6(ip);
-  if (!g) return false;
-  const v4 = (hi, lo) => !isBlockedIPv4(hi >> 8, hi & 255, lo >> 8);
-  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) return v4(g[6], g[7]); // IPv4-mapped
-  if (g[0] === 0x2002) return v4(g[1], g[2]); // 6to4 embeds an IPv4 address
-  if ((g[0] & 0xe000) !== 0x2000) return false; // only 2000::/3 is global unicast (drops ::, ::1, fc00::/7, fe80::/10, ff00::/8, NAT64)
-  if (g[0] === 0x2001 && g[1] === 0x0db8) return false; // documentation
-  return true;
+  return !require('./safeFetch').isBlockedAddress(ip);
 }
 
 // True only for a public https: URL (<= 2048 chars). Rejects http, loopback, private,

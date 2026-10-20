@@ -52,7 +52,7 @@ const header = (h, name) => { const v = h && (h[name] !== undefined ? h[name] : 
  * One reference photo as { mimeType, data } (base64) for the image model, or null. Accepts the product's stored data URL
  * or a safe https link. The link comes from the customer's own records, so it is treated as hostile: every host (also
  * after a redirect, at most two) must resolve to public addresses only, checked again when the connection is made
- * (the same helpers as the competitor pictures); only port 443, only image types, and the body is read with a running
+ * (services/safeFetch.js, the same rules as every other download of a link); only port 443, only image types, and the body is read with a running
  * byte cap, so an endless stream is cut off early. Never throws.
  * `request` (url, { timeoutMs, maxBytes }) -> { status, headers, body } and `resolve` (host) are replaceable for tests.
  */
@@ -63,8 +63,11 @@ async function loadRef(src, { request = null, resolve = null, maxBytes = caps.UP
       const r = readDataUrl(s, maxBytes);
       return r.ok ? { mimeType: r.mime, data: r.buffer.toString('base64') } : null;
     }
+    // The address rules and the connect-time lookup are the shared SSRF helper's (services/safeFetch.js);
+    // the capped https GET is the competitor-picture one, which already uses that lookup.
+    const sf = require('../safeFetch');
     const avatar = require('../competitors/avatar');
-    const get = request || ((url, o) => avatar.httpsGet(url, { ...o, lookup: avatar.safeLookup }));
+    const get = request || ((url, o) => avatar.httpsGet(url, { ...o, lookup: sf.safeLookup }));
     const lookupAll = resolve || ((host) => require('dns').promises.lookup(host, { all: true }));
     const started = Date.now();
     let current = s;
@@ -72,7 +75,7 @@ async function loadRef(src, { request = null, resolve = null, maxBytes = caps.UP
       if (!safeUrl(current)) return null;
       const addrs = await lookupAll(new URL(current).hostname);
       const list = (Array.isArray(addrs) ? addrs : [addrs]).map((a) => (a && typeof a === 'object' ? a.address : a)).filter(Boolean);
-      if (!list.length || list.some(avatar.isPrivateAddress)) return null;
+      if (!list.length || list.some(sf.isBlockedAddress)) return null;
       const left = timeoutMs - (Date.now() - started);
       if (left <= 0) return null;
       const res = await get(current, { timeoutMs: left, maxBytes });
