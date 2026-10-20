@@ -610,7 +610,8 @@ async function sweep({ limit = 25, now = Date.now() } = {}) {
 /** Once shortly after start, then every 10 minutes. Off with ENABLE_STUDIO_VIDEO_SWEEP=off. Never throws. */
 function startStudioVideoSweep({ env = process.env } = {}) {
   if (String(env.ENABLE_STUDIO_VIDEO_SWEEP || '').trim().toLowerCase() === 'off') return null;
-  const run = () => Promise.resolve().then(() => sweep()).catch((e) => console.warn('[videos] sweep failed:', e && e.message));
+  // Through a lease (services/leaseLock.js): the sweep returns Quarks.
+  const run = () => Promise.resolve().then(() => require('../services/leaseLock').withLease('scheduler:studio-video-sweep', 10 * 60 * 1000, () => sweep())).catch((e) => console.warn('[videos] sweep failed:', e && e.message));
   setTimeout(run, 60 * 1000).unref();
   return setInterval(run, 10 * 60 * 1000).unref();
 }

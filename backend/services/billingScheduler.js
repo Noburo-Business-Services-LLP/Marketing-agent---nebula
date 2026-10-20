@@ -54,8 +54,11 @@ function startBillingScheduler({ intervalMs = 60 * 60 * 1000, logger = console }
     return () => {};
   }
   logger.log(`[billing] Scheduler started (interval ${intervalMs}ms)`);
-  const timer = setInterval(() => { runBillingOnce().catch((err) => logger.error('[billing] Scheduler error:', err.message)); }, intervalMs);
-  setTimeout(() => { runBillingOnce().catch((err) => logger.error('[billing] Scheduler error:', err.message)); }, 60 * 1000);
+  // Invoices: through a lease (services/leaseLock.js), kept for half the interval after a good run.
+  const tick = require('./leaseLock').leased('scheduler:billing', 30 * 60 * 1000, () => runBillingOnce(), { cooldownMs: intervalMs / 2 });
+  const run = () => tick().catch((err) => logger.error('[billing] Scheduler error:', err.message));
+  const timer = setInterval(run, intervalMs);
+  setTimeout(run, 60 * 1000);
   return () => clearInterval(timer);
 }
 

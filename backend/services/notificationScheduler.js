@@ -44,8 +44,12 @@ class NotificationScheduler {
     console.log('🔔 Starting campaign notification scheduler...');
     this.isRunning = true;
 
+    // Every tick runs through a lease (services/leaseLock.js): a second server running background jobs by mistake
+    // skips the tick instead of sending the same reminder twice.
+    const tick = require('./leaseLock').leased('scheduler:notifications', 2 * 60 * 1000, () => this.checkAndSendNotifications());
+
     // Run immediately on start
-    this.checkAndSendNotifications();
+    tick().catch((e) => console.error('Notification scheduler error:', e && e.message));
 
     // Then run every 30 seconds
     this.intervalId = setInterval(() => {
@@ -56,8 +60,7 @@ class NotificationScheduler {
           this.isProcessing = false;
         }
       }
-      
-      this.checkAndSendNotifications();
+      tick().catch((e) => console.error('Notification scheduler error:', e && e.message));
     }, this.checkInterval);
 
     console.log('✅ Notification scheduler started (checking every 30 seconds)');

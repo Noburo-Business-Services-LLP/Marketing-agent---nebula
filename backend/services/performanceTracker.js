@@ -181,10 +181,12 @@ function startPerformanceTrackerScheduler({ intervalMs = 60 * 60 * 1000, logger 
     return () => {};
   }
   logger.log(`[PerformanceTracker] Scheduler started (interval ${intervalMs}ms)`);
+  // Through a lease (services/leaseLock.js), kept for half the interval after a good run.
+  const tick = require('./leaseLock').leased('scheduler:performance-tracker', 30 * 60 * 1000, () => runPerformanceTrackerOnce(), { cooldownMs: intervalMs / 2 });
   const timer = setInterval(() => {
-    runPerformanceTrackerOnce().catch((err) => logger.error('[PerformanceTracker] Scheduler error:', err));
+    tick().catch((err) => logger.error('[PerformanceTracker] Scheduler error:', err));
   }, intervalMs);
-  runPerformanceTrackerOnce().catch((err) => logger.error('[PerformanceTracker] Scheduler error:', err));
+  tick().catch((err) => logger.error('[PerformanceTracker] Scheduler error:', err));
   return () => clearInterval(timer);
 }
 

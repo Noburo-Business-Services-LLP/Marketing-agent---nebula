@@ -17,7 +17,7 @@ function startRefundRecovery({ env = process.env, intervalMs = EVERY_MS, firstDe
     running = true;
     try {
       for (const [name, run] of list) {
-        try { await run(); } catch (e) { logger.error(`[refunds] ${name} sweep failed:`, e && e.message); }
+        try { await require('./leaseLock').withLease(`scheduler:refund-recovery:${name}`, 10 * 60 * 1000, () => run()); } catch (e) { logger.error(`[refunds] ${name} sweep failed:`, e && e.message); }
       }
     } finally { running = false; }
   };

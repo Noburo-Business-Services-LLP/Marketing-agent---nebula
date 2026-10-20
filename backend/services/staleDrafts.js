@@ -38,7 +38,9 @@ async function reapStaleDrafts({ Draft, refund, now = Date.now(), log = console 
 function startStaleDraftReaper({ intervalMs = 5 * 60 * 1000, logger = console } = {}) {
   const Draft = require('../models/Draft');
   const { refundCredits } = require('../middleware/trialGuard');
-  const tick = () => reapStaleDrafts({ Draft, refund: refundCredits, log: logger }).catch((e) => logger.error('[stale-drafts] run failed:', e.message));
+  // Through a lease (services/leaseLock.js): it returns Quarks, so two servers must not both reap the same draft.
+  const leasedReap = require('./leaseLock').leased('scheduler:stale-drafts', 5 * 60 * 1000, () => reapStaleDrafts({ Draft, refund: refundCredits, log: logger }));
+  const tick = () => leasedReap().catch((e) => logger.error('[stale-drafts] run failed:', e.message));
   setTimeout(tick, 30000);
   const timer = setInterval(tick, intervalMs);
   if (timer.unref) timer.unref();

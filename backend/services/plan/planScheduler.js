@@ -150,7 +150,8 @@ function startPlanScheduler({ intervalMs = DEFAULT_INTERVAL_MS } = {}) {
     if (running) return;
     running = true;
     try {
-      await runSchedulerTick({ now: new Date() });
+      // Through a lease (services/leaseLock.js): a plan run is a real model spend.
+      await require('../leaseLock').withLease('scheduler:plan', 30 * 60 * 1000, () => runSchedulerTick({ now: new Date() }));
     } catch (e) {
       console.warn('[plan] scheduler tick failed:', e && e.message);
     } finally { running = false; }

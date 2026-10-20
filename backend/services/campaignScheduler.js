@@ -387,12 +387,15 @@ function startCampaignScheduler({ intervalMs = 30_000, logger = console } = {}) 
   }
 
   logger.log(`🕒 Campaign scheduler started (interval ${intervalMs}ms)`);
+  // Publishing is the highest-risk tick (a double run posts twice): it runs through a lease (services/leaseLock.js), so
+  // ticks never overlap, in this process or across servers. 10 minutes, renewed while the tick runs.
+  const tick = require('./leaseLock').leased('scheduler:campaign-publish', 10 * 60 * 1000, () => processDueCampaigns());
   const timer = setInterval(() => {
-    processDueCampaigns().catch((e) => logger.error('Campaign scheduler error:', e));
+    tick().catch((e) => logger.error('Campaign scheduler error:', e));
   }, intervalMs);
 
   // Run once immediately
-  processDueCampaigns().catch((e) => logger.error('Campaign scheduler error:', e));
+  tick().catch((e) => logger.error('Campaign scheduler error:', e));
 
   return () => clearInterval(timer);
 }

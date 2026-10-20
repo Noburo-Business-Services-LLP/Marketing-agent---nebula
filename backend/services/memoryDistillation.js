@@ -210,8 +210,10 @@ function startMemoryDistillationScheduler({ intervalMs = WEEK_MS, logger = conso
     return () => {};
   }
   logger.log(`[MemoryDistillation] Scheduler started (interval ${intervalMs}ms)`);
+  // Through a lease (services/leaseLock.js), kept for half the interval after a good run: it costs a model call per account.
+  const tick = require('./leaseLock').leased('scheduler:memory-distillation', 60 * 60 * 1000, () => runDistillationOnce(), { cooldownMs: intervalMs / 2 });
   const timer = setInterval(() => {
-    runDistillationOnce().catch((err) => logger.error('[MemoryDistillation] Scheduler error:', err));
+    tick().catch((err) => logger.error('[MemoryDistillation] Scheduler error:', err));
   }, intervalMs);
   // Deliberately NOT run immediately on startup, unlike the other schedulers
   // — this one costs a real LLM call per account and a week-old server

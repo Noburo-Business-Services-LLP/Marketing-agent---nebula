@@ -131,7 +131,9 @@ function startRenewalReminders({ intervalMs = 6 * 60 * 60 * 1000, logger = conso
     return () => {};
   }
   logger.log(`[reminders] Renewal reminders started (every ${intervalMs}ms)`);
-  const run = () => runRenewalRemindersOnce().then((r) => { if (r.sent) logger.log(`[reminders] sent ${r.sent}`); }).catch((e) => logger.error('[reminders] run failed:', e.message));
+  // Through a lease (services/leaseLock.js), kept for half the interval after a good run, on top of the per-user claim.
+  const leasedRun = require('./leaseLock').leased('scheduler:renewal-reminders', 30 * 60 * 1000, () => runRenewalRemindersOnce().then((r) => { if (r.sent) logger.log(`[reminders] sent ${r.sent}`); }), { cooldownMs: intervalMs / 2 });
+  const run = () => leasedRun().catch((e) => logger.error('[reminders] run failed:', e.message));
   const timer = setInterval(run, intervalMs);
   setTimeout(run, 2 * 60 * 1000);
   return () => clearInterval(timer);

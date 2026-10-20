@@ -11,7 +11,7 @@ function startWeekRecovery({ service, env = process.env, intervalMs = EVERY_MS, 
   const pass = async () => {
     if (running) return;
     running = true;
-    try { await svc.recoverOpenWeeks({}); } catch (e) { logger.error('[week] recovery pass failed:', e && e.message); } finally { running = false; }
+    try { await require('../leaseLock').withLease('scheduler:week-recovery', 10 * 60 * 1000, () => svc.recoverOpenWeeks({})); } catch (e) { logger.error('[week] recovery pass failed:', e && e.message); } finally { running = false; }
   };
   const first = setTimeout(pass, firstDelayMs);
   const timer = setInterval(pass, intervalMs);

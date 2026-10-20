@@ -1100,12 +1100,16 @@ function startContentCalendarScheduler({ intervalMs = 60_000, logger = console }
   // Covers that failed or got stuck are retried here, every 10 minutes, at most 10 calendars a run.
   const HEAL_EVERY = Math.max(1, Math.round((10 * 60_000) / intervalMs));
   let ticks = 0;
+  // Both through a lease each (services/leaseLock.js): generating a calendar costs a real model call.
+  const { leased } = require('./leaseLock');
+  const autoTick = leased('scheduler:content-calendar', 10 * 60_000, () => processAutoGeneration());
+  const healTick = leased('scheduler:content-calendar-heal', 10 * 60_000, () => healStaleCovers());
   const timer = setInterval(() => {
-    processAutoGeneration().catch((error) => logger.error('[ContentCalendar] Scheduler error:', error));
+    autoTick().catch((error) => logger.error('[ContentCalendar] Scheduler error:', error));
     ticks += 1;
-    if (ticks % HEAL_EVERY === 0) healStaleCovers().catch(() => {});
+    if (ticks % HEAL_EVERY === 0) healTick().catch(() => {});
   }, intervalMs);
-  processAutoGeneration().catch((error) => logger.error('[ContentCalendar] Scheduler error:', error));
+  autoTick().catch((error) => logger.error('[ContentCalendar] Scheduler error:', error));
   return () => clearInterval(timer);
 }
 

@@ -796,7 +796,8 @@ function startBackgroundJobs() {
   // Owner is emailed once when social profiles reach the alert level (counted from our own accounts, checked hourly)
   try {
     const watch = require('./services/ayrshareProfileWatch');
-    const run = () => watch.check({ User: require('./models/User'), alert: watch.opsAlert(require('./services/opsAlerts')), store: watch.modelStore(require('./models/OpsState')) })
+    // Through a lease (services/leaseLock.js) so only one server sends the alert email.
+    const run = () => require('./services/leaseLock').withLease('scheduler:profile-watch', 10 * 60 * 1000, () => watch.check({ User: require('./models/User'), alert: watch.opsAlert(require('./services/opsAlerts')), store: watch.modelStore(require('./models/OpsState')) }))
       .catch((e) => console.warn('Profile watch failed:', e.message));
     setTimeout(run, 60 * 1000).unref();
     setInterval(run, 60 * 60 * 1000).unref();

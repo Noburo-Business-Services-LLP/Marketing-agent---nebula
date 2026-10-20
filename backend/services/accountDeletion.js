@@ -290,9 +290,10 @@ const defaultDeps = () => ({
 function startAccountPurge({ intervalMs = 6 * 60 * 60 * 1000, logger = console } = {}) {
   if (String(process.env.ENABLE_ACCOUNT_PURGE || 'true').toLowerCase() === 'false') { logger.log('[account delete] purge disabled via ENABLE_ACCOUNT_PURGE=false'); return () => {}; }
   logger.log(`[account delete] purge job started (every ${intervalMs}ms)`);
-  const run = () => runPurgeOnce({ models: defaultModels(), deps: defaultDeps(), alert: (m) => { try { require('./opsAlerts').recordFailure('billing', m); } catch (_) { /* alerting never stops the run */ } } })
-    .then((r) => { if (r.completed || r.failed) logger.log(`[account delete] completed ${r.completed}, failed ${r.failed}`); })
-    .catch((e) => logger.error('[account delete] run failed:', e.message));
+  // Through a lease (services/leaseLock.js; a long purge keeps it by renewal), kept for half the interval after a good run.
+  const leasedPurge = require('./leaseLock').leased('scheduler:account-purge', 30 * 60 * 1000, () => runPurgeOnce({ models: defaultModels(), deps: defaultDeps(), alert: (m) => { try { require('./opsAlerts').recordFailure('billing', m); } catch (_) { /* alerting never stops the run */ } } })
+    .then((r) => { if (r.completed || r.failed) logger.log(`[account delete] completed ${r.completed}, failed ${r.failed}`); }), { cooldownMs: intervalMs / 2 });
+  const run = () => leasedPurge().catch((e) => logger.error('[account delete] run failed:', e.message));
   const timer = setInterval(run, intervalMs);
   setTimeout(run, 3 * 60 * 1000);
   return () => clearInterval(timer);

@@ -28,11 +28,16 @@ class SnapshotScheduler {
     }
     console.log('📊 Starting analytics snapshot scheduler...');
 
+    // Every run goes through a lease (services/leaseLock.js; kept for half the interval after a good run), so a second
+    // server running background jobs by mistake does not poll Ayrshare for the same accounts.
+    const run = require('./leaseLock').leased('scheduler:snapshots', 60 * 60 * 1000, () => this.collectSnapshots(), { cooldownMs: TWELVE_HOURS / 2 });
+    const safeRun = () => run().catch((e) => console.error('Snapshot scheduler error:', e && e.message));
+
     // Run once on startup (after 60s delay to let other services initialize)
-    setTimeout(() => this.collectSnapshots(), 60000);
+    setTimeout(safeRun, 60000);
 
     // Then every 12 hours
-    this.intervalId = setInterval(() => this.collectSnapshots(), TWELVE_HOURS);
+    this.intervalId = setInterval(safeRun, TWELVE_HOURS);
     console.log('✅ Snapshot scheduler started (every 12 hours)');
   }
 
