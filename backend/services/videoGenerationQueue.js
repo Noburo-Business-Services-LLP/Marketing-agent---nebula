@@ -389,7 +389,11 @@ class PersistentVideoGenerationQueue {
   async recoverStaleJobs({ limit = SWEEP_BATCH } = {}) {
     let expired = [];
     try {
-      expired = (await this.model.find({ status: 'processing', leaseUntil: { $lt: new Date(this.now()) } }).limit(limit).lean()) || [];
+      // A lease counts as expired one heartbeat AFTER its end (D75): workers write lease ends with their own clocks, so a
+      // sweeper whose clock runs ahead by less than a lease does not take over a live job. A dead worker is found one
+      // heartbeat (20 s by default) later than the bare lease end.
+      const margin = Math.max(0, Math.min(Number(this.settings.heartbeatMs) || 0, Math.floor((Number(this.settings.leaseMs) || 0) / 3)));
+      expired = (await this.model.find({ status: 'processing', leaseUntil: { $lt: new Date(this.now() - margin) } }).limit(limit).lean()) || [];
     } catch (err) {
       logger.error('⚠️ Failed to read expired job leases:', err.message);
     }

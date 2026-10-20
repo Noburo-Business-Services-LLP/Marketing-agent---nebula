@@ -185,7 +185,7 @@ test('a lost worker: its lease runs out, two sweeps re-queue the job exactly onc
   // inside the lease nothing happens
   await quiet(() => w.qs[1].recoverStaleJobs());
   assert.strictEqual(job().status, 'processing');
-  w.clock.t += 61000; // w1 stopped renewing (it died)
+  w.clock.t += 61000 + 20000; // lease end + one heartbeat (D75) // w1 stopped renewing (it died)
   await quiet(() => Promise.all([w.qs[1].recoverStaleJobs(), w.qs[2].recoverStaleJobs()]));
   assert.strictEqual(job().status, 'queued');
   assert.strictEqual(job().leaseRequeues, 1, 're-queued once');
@@ -211,7 +211,7 @@ test('a retried job that fails again is refunded exactly once; later sweeps and 
   w.qs[0].registerHandler('create_video_pipeline', async () => { await dead.p; throw new Error('late failure of the lost run'); });
   w.qs[1].registerHandler('create_video_pipeline', async () => { throw new Error('provider said no'); });
   await quiet(async () => { await w.charged(w.qs[0], 'u1'); await w.qs[0]._drainQueue(); });
-  w.clock.t += 61000;
+  w.clock.t += 61000 + 20000; // lease end + one heartbeat (D75)
   await quiet(async () => { await w.qs[1].recoverStaleJobs(); await w.qs[1]._drainQueue(); await settle(); });
   const job = w.model.docs[0];
   assert.strictEqual(job.status, 'failed');
@@ -234,7 +234,7 @@ test('at the attempt cap (and for jobs that charge inside the handler) a lost le
     await w.qs[0]._drainQueue();
   });
   assert.strictEqual(w.qs[0].running.size, 2);
-  w.clock.t += 61000;
+  w.clock.t += 61000 + 20000; // lease end + one heartbeat (D75)
   await quiet(() => Promise.all([w.qs[1].recoverStaleJobs(), w.qs[2].recoverStaleJobs()]));
   const [video, perScene] = w.model.docs;
   assert.strictEqual(video.status, 'failed');
@@ -250,7 +250,7 @@ test('a per-scene job is never re-run automatically even under the attempt cap',
   const w = world({ workers: 2 });
   w.qs[0].registerHandler('render_missing_clips', () => new Promise(() => {}));
   await quiet(async () => { await w.qs[0].enqueue({ userId: 'u2', jobType: 'render_missing_clips', metadata: { perSceneCharging: true } }); await w.qs[0]._drainQueue(); });
-  w.clock.t += 61000;
+  w.clock.t += 61000 + 20000; // lease end + one heartbeat (D75)
   await quiet(() => w.qs[1].recoverStaleJobs());
   assert.strictEqual(w.model.docs[0].status, 'failed');
   w.stop();
@@ -263,7 +263,7 @@ test('a worker that only lost its lease (database stall) stops at its next step 
   w.qs[0].registerHandler('create_video_pipeline', async (p, c) => { await c.update({ progress: 10, currentStep: 'a' }); steps.push('a'); await gate.p; await c.update({ progress: 50, currentStep: 'b' }); steps.push('b'); return {}; });
   w.qs[1].registerHandler('create_video_pipeline', () => new Promise(() => {}));
   await quiet(async () => { await w.charged(w.qs[0], 'u1'); await w.qs[0]._drainQueue(); await settle(); });
-  w.clock.t += 61000;
+  w.clock.t += 61000 + 20000; // lease end + one heartbeat (D75)
   w.qs[0].running.get(w.model.docs[0].jobId).lost = false; // still believes it holds the job
   await quiet(async () => { await w.qs[1].recoverStaleJobs(); await w.qs[1]._drainQueue(); });
   gate.resolve();
@@ -538,4 +538,39 @@ test('D74 item 7: 60 waiting jobs of a capped account do not hide another accoun
   });
   assert.deepStrictEqual(started, ['B'], 'B starts although 60 older rows of capped A come first; A starts nothing (already at its cap)');
   w.stop();
+});
+
+test('D74 item 6 / D75: the lease sweep waits one heartbeat past the lease end, so a server clock running ahead does not steal a live job', async () => {
+  const hb = 20000;
+  const mkWorld = (skewMs) => {
+    const w = world({ workers: 1, settings: { heartbeatMs: hb } });
+    // a second worker whose clock is `skewMs` ahead of the one that holds the job (same database)
+    const sweeper = new PersistentVideoGenerationQueue({
+      model: w.model, draftModel: { updateMany: async () => ({}) }, runsJobsHere: false, workerId: 'w9',
+      settings: { ...SETTINGS, heartbeatMs: hb }, now: () => w.clock.t + skewMs, leaseLock: { withLease: async (n, t, fn) => ({ ran: true, result: await fn({ isLost: () => false }) }) },
+      refund: async () => ({ success: true }), chargeProof: async () => ({ spend: null, refunded: false }), alertOwner: async () => {}
+    });
+    return { w, sweeper };
+  };
+  const heldJob = async (w) => {
+    w.qs[0].registerHandler('create_video_pipeline', () => new Promise(() => {}));
+    await quiet(async () => { await w.charged(w.qs[0], 'u1'); await w.qs[0]._drainQueue(); await settle(); });
+    assert.strictEqual(w.model.docs[0].status, 'processing');
+  };
+  // 1) the sweeper's clock is 70 s ahead (lease is 60 s): without the margin it would see the lease as expired
+  const a = mkWorld(70000);
+  await heldJob(a.w);
+  await quiet(() => a.sweeper.recoverStaleJobs());
+  assert.strictEqual(a.w.model.docs[0].status, 'processing', 'a live job is not taken over by a fast clock');
+  // 2) a genuinely dead worker (no heartbeat, same clocks): not swept at lease end, swept once one heartbeat has passed
+  const b = mkWorld(0);
+  await heldJob(b.w);
+  b.w.clock.t += 60000 + 1000;
+  await quiet(() => b.sweeper.recoverStaleJobs());
+  assert.strictEqual(b.w.model.docs[0].status, 'processing', 'inside lease + one heartbeat');
+  b.w.clock.t += hb;
+  await quiet(() => b.sweeper.recoverStaleJobs());
+  assert.strictEqual(b.w.model.docs[0].status, 'queued', 'after lease + heartbeat it is re-queued (run 2 of 2)');
+  assert.strictEqual(b.w.model.docs[0].workerId, null);
+  a.w.stop(); b.w.stop();
 });
