@@ -459,6 +459,8 @@ app.use('/api/collaborations', collaborationRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/drafts', draftLocalizeRoutes);
 app.use('/api/drafts', draftRoutes);
+// The video prompt builder: login required and capped in the route; the AI limiter in front (it was public and uncapped).
+app.use(['/api/generateVideoStylePrompts', '/api/generateSceneDescriptions'], aiLimiter);
 app.use('/api', videoStylePromptRoutes);
 
 // Health check endpoint (handled before rate limiter above)

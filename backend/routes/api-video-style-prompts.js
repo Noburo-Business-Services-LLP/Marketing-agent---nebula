@@ -15,8 +15,16 @@ const {
   styleDefinitions
 } = require('../services/video-style-prompt-engineering');
 const { getKlingDuration } = require('../services/videoService');
+const { protect } = require('../middleware/auth');
 
 const router = express.Router();
+
+// The builder was public and uncapped (one load-test request got a 221 MB answer). It needs a login, the AI limiter
+// (server-main.js) and these caps; anything outside them is a plain 400.
+const LIMITS = { maxScenes: 20, maxDurationSeconds: 300, maxDescription: 2000, maxName: 120 };
+const bad = (res, message) => res.status(400).json({ success: false, error: message, message });
+const isText = (v, max, { required = true } = {}) => (v === undefined || v === null || v === '' ? !required : typeof v === 'string' && v.length <= max);
+const wholeIn = (v, lo, hi) => { const n = typeof v === 'string' && /^\d+$/.test(v.trim()) ? Number(v) : v; return Number.isInteger(n) && n >= lo && n <= hi ? n : null; };
 
 /**
  * POST /api/generateVideoStylePrompts
@@ -51,32 +59,30 @@ const router = express.Router();
  *   ]
  * }
  */
-router.post('/generateVideoStylePrompts', async (req, res) => {
+router.post('/generateVideoStylePrompts', protect, async (req, res) => {
   try {
-    const {
-      description,
-      videoStyle,
-      characterName,
-      sceneCount = 5,
-      productName = null,
-      duration = 30
-    } = req.body;
+    const body = req.body || {};
+    const { description, videoStyle, characterName } = body;
+    const productName = body.productName || null;
 
     // Validate inputs
-    if (!description || !videoStyle || !characterName || !sceneCount) {
-      return res.status(400).json({
-        error: 'Missing required fields: description, videoStyle, characterName, sceneCount'
-      });
+    if (!description || !videoStyle || !characterName || body.sceneCount === 0) {
+      return bad(res, 'Missing required fields: description, videoStyle, characterName, sceneCount');
     }
-
-    if (!styleDefinitions[videoStyle]) {
-      return res.status(400).json({
-        error: `Video style "${videoStyle}" not supported. Supported styles: ${Object.keys(styleDefinitions).join(', ')}`
-      });
+    const sceneCount = wholeIn(body.sceneCount === undefined ? 5 : body.sceneCount, 1, LIMITS.maxScenes);
+    if (sceneCount === null) return bad(res, `Scene count must be a whole number from 1 to ${LIMITS.maxScenes}.`);
+    const duration = wholeIn(body.duration === undefined ? 30 : body.duration, 1, LIMITS.maxDurationSeconds);
+    if (duration === null) return bad(res, `Duration must be a whole number of seconds from 1 to ${LIMITS.maxDurationSeconds}.`);
+    if (!isText(description, LIMITS.maxDescription)) return bad(res, `The description must be text of at most ${LIMITS.maxDescription} characters.`);
+    if (!isText(characterName, LIMITS.maxName) || !isText(productName, LIMITS.maxName, { required: false })) {
+      return bad(res, `Names must be text of at most ${LIMITS.maxName} characters.`);
+    }
+    if (typeof videoStyle !== 'string' || !Object.prototype.hasOwnProperty.call(styleDefinitions, videoStyle)) {
+      return bad(res, `That video style is not supported. Supported styles: ${Object.keys(styleDefinitions).join(', ')}`);
     }
 
     console.log('\n🎬 ===================== GENERATE VIDEO STYLE PROMPTS =====================');
-    console.log(`📝 Description: ${description}`);
+    console.log(`📝 Description: ${description.length} characters`);
     console.log(`🎨 Video Style: ${videoStyle}`);
     console.log(`👤 Character: ${characterName}`);
     console.log(`🎬 Scene Count: ${sceneCount}`);
@@ -189,10 +195,7 @@ router.post('/generateVideoStylePrompts', async (req, res) => {
     console.error('   Message:', error.message);
     console.error('   Stack:', error.stack);
 
-    return res.status(500).json({
-      error: 'Failed to generate prompts',
-      message: error.message
-    });
+    return res.status(500).json({ success: false, error: 'Failed to generate prompts', message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -225,24 +228,18 @@ router.get('/videoStyles', (req, res) => {
  * Generate detailed descriptions for individual scenes
  * (for manual refinement or detailed planning)
  */
-router.post('/generateSceneDescriptions', async (req, res) => {
+router.post('/generateSceneDescriptions', protect, async (req, res) => {
   try {
-    const {
-      videoStyle,
-      sceneNumber,
-      customDescription = null
-    } = req.body;
+    const { videoStyle } = req.body || {};
 
-    if (!videoStyle || !sceneNumber) {
-      return res.status(400).json({
-        error: 'Missing required fields: videoStyle, sceneNumber'
-      });
+    if (!videoStyle || !(req.body || {}).sceneNumber) {
+      return bad(res, 'Missing required fields: videoStyle, sceneNumber');
     }
+    const sceneNumber = wholeIn(req.body.sceneNumber, 1, LIMITS.maxScenes);
+    if (sceneNumber === null) return bad(res, `Scene number must be a whole number from 1 to ${LIMITS.maxScenes}.`);
 
-    if (!styleDefinitions[videoStyle]) {
-      return res.status(400).json({
-        error: `Video style "${videoStyle}" not found`
-      });
+    if (typeof videoStyle !== 'string' || !Object.prototype.hasOwnProperty.call(styleDefinitions, videoStyle)) {
+      return bad(res, 'That video style was not found.');
     }
 
     const style = styleDefinitions[videoStyle];
@@ -273,11 +270,9 @@ router.post('/generateSceneDescriptions', async (req, res) => {
     console.error('❌ Error generating scene descriptions:');
     console.error('   Message:', error.message);
 
-    return res.status(500).json({
-      error: 'Failed to generate scene descriptions',
-      message: error.message
-    });
+    return res.status(500).json({ success: false, error: 'Failed to generate scene descriptions', message: 'Something went wrong. Please try again.' });
   }
 });
 
+router.LIMITS = LIMITS;
 module.exports = router;
