@@ -30,6 +30,7 @@ function matchCond(v, cond) {
       switch (op) {
         case '$ne': return String(v) !== String(arg) && v !== arg;
         case '$in': return arg.includes(v);
+        case '$nin': return !arg.includes(v);
         case '$gte': return v != null && time(v) >= time(arg);
         case '$lt': return v != null && (v instanceof Date || typeof v === 'string' || typeof v === 'number') && time(v) < time(arg);
         case '$exists': return (v !== undefined) === Boolean(arg);
@@ -99,13 +100,17 @@ function makeJobModel() {
 function makeDeps(over = {}) {
   const JobModel = makeJobModel();
   const calls = { deduct: [], refund: [], submit: [], getStatus: [], copy: [], quota: 0 };
+  const ledger = { spends: new Map(), refunds: new Set() }; const alerts = [];
   return {
     JobModel,
     calls,
+    ledger,
     hasFalKey: () => true,
     quotaFn: async () => { calls.quota++; return { used: 0, limit: 2, resetsOn: 'x' }; },
-    deduct: async (...a) => { calls.deduct.push(a); return { success: true }; },
-    refund: async (...a) => { calls.refund.push(a); return { success: true }; },
+    deduct: async (...a) => { calls.deduct.push(a); if (a[4] && a[4].ref) ledger.spends.set(a[4].ref, { payer: String(a[0]), quarks: require('../config/apiCosts').QUARK_COSTS.hero_video_clip }); return { success: true }; },
+    refund: async (...a) => { calls.refund.push(a); if (a[4] && a[4].ref) ledger.refunds.add(a[4].ref); return { success: true }; },
+    chargeProof: async (ref) => ({ spend: ledger.spends.get(ref) || null, refunded: ledger.refunds.has(ref) }),
+    alerts, alertOwner: async (a) => { alerts.push(a); },
     submit: async (...a) => { calls.submit.push(a); return 'req-1'; },
     getStatus: async (...a) => { calls.getStatus.push(a); return { state: 'processing' }; },
     copyToStorage: async (u) => { calls.copy.push(u); return 'https://cdn.example/' + 'stored.mp4'; },

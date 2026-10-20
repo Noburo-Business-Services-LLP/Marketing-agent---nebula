@@ -17,7 +17,9 @@ function startWeekRecovery({ service, env = process.env, intervalMs = EVERY_MS, 
   const timer = setInterval(pass, intervalMs);
   if (first.unref) first.unref();
   if (timer.unref) timer.unref();
-  return { stop: () => { clearTimeout(first); clearInterval(timer); }, pass };
+  // The money sweeps for Blueprint and Hero ride along with this loop's start (own timer, own off switch).
+  const refunds = service ? null : require('../refundRecovery').startRefundRecovery({ env, logger });
+  return { stop: () => { clearTimeout(first); clearInterval(timer); if (refunds) refunds.stop(); }, pass };
 }
 
 module.exports = { startWeekRecovery };

@@ -3,6 +3,8 @@ const assert = require('node:assert');
 const { startHeroGeneration, pollHeroJob, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS } = require('../services/heroVideoFlow');
 
 const { makeDeps } = require('./heroFakes');
+const { sweepHeroRefunds } = require('../services/heroVideoFlow');
+const { QUARK_COSTS } = require('../config/apiCosts');
 
 const body = (o = {}) => ({ prompt: 'a hero shot', ...o });
 
@@ -208,18 +210,89 @@ test('non-hero job with same id is 404', async () => {
   assert.strictEqual((await pollHeroJob(d, { userId: 'u1', jobId })).status, 404);
 });
 
-test('refund failure releases the guard so a later poll retries', async () => {
+test('refund failure leaves the claim (refunding); a poll inside two minutes does not pay, one after it pays once', async () => {
   const { d, jobId } = await startedJob();
   d.getStatus = async () => ({ state: 'failed', error: 'x' });
   let ok = false;
-  d.refund = async (...a) => { d.calls.refund.push(a); if (!ok) throw new Error('db blip'); return { success: true }; };
+  d.refund = async (...a) => { d.calls.refund.push(a); if (!ok) throw new Error('db blip'); d.ledger.refunds.add(a[4].ref); return { success: true }; };
   await pollHeroJob(d, { userId: 'u1', jobId });
-  assert.notStrictEqual(d.JobModel.docs[0].metadata.refunded, true);
+  const m = d.JobModel.docs[0].metadata;
+  assert.notStrictEqual(m.refunded, true);
+  assert.strictEqual(m.refundState, 'refunding');
+  assert.strictEqual(m.refundQuarks, QUARK_COSTS.hero_video_clip, 'amount recorded in the claim');
   ok = true;
+  await pollHeroJob(d, { userId: 'u1', jobId });
+  assert.strictEqual(d.JobModel.docs[0].metadata.refundState, 'refunding', 'too soon: left for the sweep');
+  d.now = () => new Date('2026-10-03T00:03:00Z');
   await pollHeroJob(d, { userId: 'u1', jobId });
   assert.strictEqual(d.JobModel.docs[0].metadata.refunded, true);
   await pollHeroJob(d, { userId: 'u1', jobId });
   assert.strictEqual(d.calls.refund.length, 2); // one failed attempt + one success, none after
+  assert.strictEqual(d.calls.refund[1][4].ref, jobId);
+});
+
+// ---- claim-then-pay refund: a crash between the claim and the payment ----
+const quietly = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
+
+test('the charge carries the job id as ref (before the job exists)', async () => {
+  const d = makeDeps();
+  const r = await startHeroGeneration(d, { userId: 'u1', body: body() });
+  assert.deepStrictEqual(d.calls.deduct[0][4], { ref: r.json.jobId });
+});
+
+test('crash between claim and pay: the sweep pays once, to the recorded payer, with the ref; a second sweep changes nothing', async () => {
+  const d = makeDeps({ deduct: async (...a) => { d.calls.deduct.push(a); d.ledger.spends.set(a[4].ref, { payer: 'agency9', quarks: QUARK_COSTS.hero_video_clip }); return { success: true, workspaceId: 'ws1', payerId: 'agency9' }; }, submit: async () => { throw new Error('fal down'); } });
+  const real = d.refund;
+  d.refund = async () => { throw new Error('process died'); };
+  await quietly(() => startHeroGeneration(d, { userId: 'u1', body: body() }));
+  const job = d.JobModel.docs[0];
+  assert.strictEqual(job.metadata.refundState, 'refunding');
+  assert.strictEqual(job.metadata.refundPayer, 'agency9');
+  d.refund = real;
+  assert.strictEqual(await sweepHeroRefunds(d), 0, 'inside two minutes nothing is touched');
+  d.now = () => new Date('2026-10-03T00:03:00Z');
+  await sweepHeroRefunds(d);
+  assert.strictEqual(job.metadata.refundState, 'refunded');
+  assert.strictEqual(job.metadata.refunded, true);
+  assert.strictEqual(d.calls.refund.length, 1);
+  assert.deepStrictEqual(d.calls.refund[0][4], { ref: job.jobId, payerId: 'agency9' });
+  await sweepHeroRefunds(d);
+  assert.strictEqual(d.calls.refund.length, 1);
+});
+
+test('a refund that landed but reported failure is only marked by the sweep, never paid twice', async () => {
+  const d = makeDeps({ submit: async () => { throw new Error('fal down'); } });
+  d.refund = async (...a) => { d.calls.refund.push(a); d.ledger.refunds.add(a[4].ref); throw new Error('timeout after the credit'); };
+  await quietly(() => startHeroGeneration(d, { userId: 'u1', body: body() }));
+  d.now = () => new Date('2026-10-03T00:03:00Z');
+  await sweepHeroRefunds(d);
+  assert.strictEqual(d.JobModel.docs[0].metadata.refundState, 'refunded');
+  assert.strictEqual(d.calls.refund.length, 1);
+});
+
+test('no refund without proof of the charge: the sweep pays nothing, flags it unproven and alerts', async () => {
+  const d = makeDeps({ submit: async () => { throw new Error('fal down'); } });
+  d.refund = async () => { throw new Error('process died'); };
+  await quietly(() => startHeroGeneration(d, { userId: 'u1', body: body() }));
+  d.ledger.spends.clear();
+  d.refund = async (...a) => { d.calls.refund.push(a); return { success: true }; };
+  d.now = () => new Date('2026-10-03T00:03:00Z');
+  await quietly(() => sweepHeroRefunds(d));
+  assert.strictEqual(d.calls.refund.length, 0);
+  assert.strictEqual(d.JobModel.docs[0].metadata.refundState, 'unproven');
+  assert.strictEqual(d.alerts.length, 1);
+});
+
+test('never more than the proven spend', async () => {
+  const d = makeDeps({ submit: async () => { throw new Error('fal down'); } });
+  d.refund = async () => { throw new Error('process died'); };
+  await quietly(() => startHeroGeneration(d, { userId: 'u1', body: body() }));
+  d.ledger.spends.set(d.JobModel.docs[0].jobId, { payer: 'u1', quarks: 1 });
+  d.refund = async (...a) => { d.calls.refund.push(a); return { success: true }; };
+  d.now = () => new Date('2026-10-03T00:03:00Z');
+  await quietly(() => sweepHeroRefunds(d));
+  assert.strictEqual(d.calls.refund.length, 0);
+  assert.strictEqual(d.JobModel.docs[0].metadata.refundState, 'unproven');
 });
 
 // ---- stale orphan handling ----

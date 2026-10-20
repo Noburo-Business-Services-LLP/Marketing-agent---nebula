@@ -13,6 +13,8 @@ const os = require('os');
 const path = require('path');
 const { customerFailureMessage, PEOPLE_REFUSAL_MESSAGE } = require('./heroVideoService');
 const { normalizeFinishOptions, finishHeroClip: realFinishHeroClip } = require('./heroVideoFinish');
+const { settleRefund, SWEEP_AFTER_MS } = require('./refundSettle');
+const { QUARK_COSTS } = require('../config/apiCosts');
 
 const MAX_PROMPT_CHARS = 6000;
 const ASPECTS = ['9:16', '16:9', '1:1'];
@@ -41,8 +43,8 @@ const FINISH_FAILED_MESSAGE = 'We could not add the finishing touches, so this i
 const MAX_BEATS = 12;
 const MAX_DIALOGUE_CHARS = 2000;
 const MAX_AGE_MESSAGE = 'This video took too long to finish, so we stopped it.';
-// KNOWN GAP: a crash between deduct() and JobModel.create() leaves a charge with no job
-// record, so there is nothing here to find or refund; that case needs manual reconciliation.
+// A crash between deduct() and JobModel.create() leaves a charge with no job record. The charge carries the job id as
+// its ref, so chargeProof(jobId) can show it; nothing here searches for such a charge yet (needs manual reconciliation).
 
 function defaultDeps() {
   const HeroVideoJob = require('../models/HeroVideoJob');
@@ -53,6 +55,8 @@ function defaultDeps() {
     quotaFn: (userId, now) => hero.getHeroQuota(userId, now, HeroVideoJob, require('../models/User')),
     deduct: deductCredits,
     refund: refundCredits,
+    chargeProof: (...a) => require('./quarkBuckets').chargeProof(...a),
+    alertOwner: (a) => require('./opsAlerts').notify(a),
     submit: hero.submitHeroClip,
     getStatus: hero.getHeroClipStatus,
     copyToStorage: hero.copyClipToStorage,
@@ -213,27 +217,67 @@ function sanitizeReferences(references, validUrls) {
 
 const bad = (message) => ({ status: 400, json: { success: false, message } });
 
-// Refund at most once per job. The flag is claimed atomically BEFORE refunding; if the
-// refund itself fails the claim is released so a later poll can retry.
+// Refund at most once per job, under the one claim-then-pay rule (refundSettle.js). The job is CLAIMED ('refunding') in
+// one conditional update that records the payer, the amount and the time; the refund is PAID with the job id as `ref`
+// (the same ref the charge carried, so chargeProof sees both); then `metadata.refunded` is set. A failed or crashed
+// payment leaves the claim: settleStuckRefund (run by any later poll and by the sweep) pays it once, only when
+// chargeProof says the charge landed and no refund did. It is never released back to unclaimed.
+const hero = (m) => (m || {});
 async function refundOnce(deps, jobId, userId, desc) {
   // Every hero failure path refunds through here, so it is the one place to count failures.
   require('./opsAlerts').recordFailure('hero_video', `job ${jobId}: ${desc}`);
+  const payerOf = (job) => (job && job.metadata && job.metadata.payerId) || '';
+  const before = await deps.JobModel.findOne({ jobId }).catch(() => null);
   const claimed = await deps.JobModel.findOneAndUpdate(
-    { jobId, 'metadata.refunded': { $ne: true } },
-    { $set: { 'metadata.refunded': true } }
+    { jobId, 'metadata.refunded': { $ne: true }, 'metadata.refundState': { $nin: ['refunding', 'refunded', 'unproven'] } },
+    { $set: { 'metadata.refundState': 'refunding', 'metadata.refundAt': deps.now(), 'metadata.refundQuarks': QUARK_COSTS[ACTION], 'metadata.refundPayer': payerOf(before) } }
   );
-  if (!claimed) return false;
+  if (!claimed) {
+    await settleStuckRefund(deps, jobId, userId).catch(() => null); // a claim a crash left behind, once it is old enough
+    return false;
+  }
   try {
     // A client workspace's job recorded who paid at charge time; the refund goes to that same wallet.
     const payerId = claimed.metadata && claimed.metadata.payerId;
-    const res = payerId ? await deps.refund(userId, ACTION, 1, desc, { payerId }) : await deps.refund(userId, ACTION, 1, desc);
+    const res = await deps.refund(userId, ACTION, 1, desc, { ref: jobId, ...(payerId ? { payerId } : {}) });
     if (res && res.success === false) throw new Error(res.error || 'refund returned success:false');
+    await deps.JobModel.updateOne({ jobId }, { $set: { 'metadata.refunded': true, 'metadata.refundState': 'refunded' } });
     return true;
   } catch (err) {
     console.error(`Hero refund failed for job ${jobId}:`, err && err.message);
-    try { await deps.JobModel.findOneAndUpdate({ jobId }, { $set: { 'metadata.refunded': false } }); } catch (_) { /* best effort */ }
-    return false;
+    return false; // stays 'refunding' for the sweep
   }
+}
+
+// A claim stuck for over two minutes: held in one conditional update (so two pollers or sweeps never both pay), then
+// decided from the proof and marked.
+async function settleStuckRefund(deps, jobId, userId) {
+  const older = new Date(deps.now().getTime() - SWEEP_AFTER_MS);
+  const held = await deps.JobModel.findOneAndUpdate(
+    { jobId, 'metadata.refundState': 'refunding', 'metadata.refundAt': { $lt: older } },
+    { $set: { 'metadata.refundAt': deps.now() } }
+  );
+  if (!held) return false;
+  const m = hero(held.metadata);
+  const owner = String(userId || held.userId);
+  const out = await settleRefund({
+    ref: jobId, userId: owner, quarks: Number(m.refundQuarks) || QUARK_COSTS[ACTION], payerId: m.refundPayer || m.payerId || '',
+    chargeProof: deps.chargeProof || (async () => { throw new Error('no proof source'); }), alert: deps.alertOwner, label: 'hero',
+    pay: async ({ payerId }) => { const r = await deps.refund(owner, ACTION, 1, 'Refund: hero clip did not complete', { ref: jobId, ...(payerId ? { payerId } : {}) }); return !(r && r.success === false); }
+  });
+  if (out === 'paid' || out === 'already') { await deps.JobModel.updateOne({ jobId }, { $set: { 'metadata.refunded': true, 'metadata.refundState': 'refunded' } }); return out === 'paid'; }
+  if (out === 'unproven' || out === 'over') await deps.JobModel.updateOne({ jobId }, { $set: { 'metadata.refundState': 'unproven' } });
+  return false;
+}
+
+// A bounded pass over hero refunds a crash or an outage left claimed but unpaid.
+async function sweepHeroRefunds(deps, limit = 10) {
+  const older = new Date(deps.now().getTime() - SWEEP_AFTER_MS);
+  let rows = [];
+  try { rows = (await deps.JobModel.find({ 'metadata.kind': 'hero', 'metadata.refundState': 'refunding', 'metadata.refundAt': { $lt: older } }).limit(limit).lean()) || []; } catch (_) { rows = []; }
+  let looked = 0;
+  for (const r of rows) { try { await settleStuckRefund(deps, r.jobId, r.userId); looked += 1; } catch (e) { console.error('[hero] settle sweep failed:', e && e.message); } }
+  return looked;
 }
 
 async function failJob(deps, jobId, message, status = 'failed') {
@@ -278,9 +322,11 @@ async function startHeroGeneration(deps, { userId, body }) {
     return { status: 403, json: { success: false, quotaExhausted: true, used: q.used, limit: q.limit, resetsOn: q.resetsOn } };
   }
 
+  // The job id exists before the charge and is its ref, so a charge with no job record is found by chargeProof.
+  const jobId = crypto.randomUUID();
   let dres;
   try {
-    dres = await deps.deduct(userId, ACTION, 1, 'Hero video clip');
+    dres = await deps.deduct(userId, ACTION, 1, 'Hero video clip', { ref: jobId });
   } catch (err) {
     console.error('Hero credit deduction threw:', err && err.message);
     return { status: 500, json: { success: false, message: 'Could not charge Quarks' } };
@@ -295,7 +341,6 @@ async function startHeroGeneration(deps, { userId, body }) {
   const dialogue = strCap(b.dialogue, MAX_DIALOGUE_CHARS);
   if (dialogue) payload.dialogue = dialogue;
 
-  const jobId = crypto.randomUUID();
   try {
     await deps.JobModel.create({
       jobId,
@@ -312,7 +357,7 @@ async function startHeroGeneration(deps, { userId, body }) {
   } catch (err) {
     console.error('Hero job create failed:', err && err.message);
     // No job exists to hold the guard; this is the only refund on this path.
-    try { await (dres.workspaceId ? deps.refund(userId, ACTION, 1, 'Refund: hero job not created', { payerId: dres.payerId }) : deps.refund(userId, ACTION, 1, 'Refund: hero job not created')); } catch (e) { console.error('Hero refund failed:', e && e.message); }
+    try { await deps.refund(userId, ACTION, 1, 'Refund: hero job not created', { ref: jobId, ...(dres.workspaceId ? { payerId: dres.payerId } : {}) }); } catch (e) { console.error('Hero refund failed:', e && e.message); }
     return { status: 500, json: { success: false, message: 'Could not start video generation' } };
   }
 
@@ -381,7 +426,7 @@ async function pollHeroJob(deps, { userId, jobId }) {
 
   if (TERMINAL.includes(job.status)) {
     // Self-heal a refund that failed earlier; guarded, so never a double refund.
-    if (job.status !== 'completed' && !(job.metadata && job.metadata.refunded === true)) {
+    if (job.status !== 'completed' && !(job.metadata && job.metadata.refunded === true) && !(job.metadata && job.metadata.refundState === 'unproven')) {
       await refundOnce(deps, jobId, userId, 'Refund: hero clip did not complete');
     }
     return terminalResponse(job);
@@ -512,4 +557,4 @@ async function pollHeroJob(deps, { userId, jobId }) {
   return processing;
 }
 
-module.exports = { startHeroGeneration, pollHeroJob, defaultDeps, finalizeClipDefault, refinishClip, FINISH_CAP_MS, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS };
+module.exports = { startHeroGeneration, pollHeroJob, sweepHeroRefunds, settleStuckRefund, defaultDeps, finalizeClipDefault, refinishClip, FINISH_CAP_MS, HERO_MAX_AGE_MS, HERO_HARD_MAX_AGE_MS, COPY_LEASE_MS };
