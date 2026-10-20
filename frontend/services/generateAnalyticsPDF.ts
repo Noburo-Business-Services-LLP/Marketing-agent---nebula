@@ -12,7 +12,7 @@
  *  - Branded footer on every page
  */
 
-import jsPDF from 'jspdf';
+import type { jsPDF } from 'jspdf';
 
 // ─── Color Palette ────────────────────────────────────────────
 const C = {
@@ -443,6 +443,8 @@ export interface AnalyticsPDFData {
 export async function generateAnalyticsPDF(data: AnalyticsPDFData): Promise<void> {
   const { accountAnalytics, campaigns, postAnalytics, boostedAds, adHistory, brandName } = data;
 
+  // Loaded when the report is made, not with the page.
+  const { jsPDF } = await import('jspdf');
   const doc = new jsPDF('p', 'mm', 'a4');
   const PW = 210, PH = 297, M = 15;
   const CW = PW - 2 * M;

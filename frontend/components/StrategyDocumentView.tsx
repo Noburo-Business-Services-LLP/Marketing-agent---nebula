@@ -2,8 +2,6 @@ import React, { useRef } from 'react';
 import { Download, ArrowLeft, FileSpreadsheet, FileText } from 'lucide-react';
 import { ContentCalendar, ContentCalendarItem } from '../types';
 import { getThemeClasses, useTheme } from '../context/ThemeContext';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { downloadXlsx } from '../utils/spreadsheet';
 
 interface StrategyDocumentViewProps {
@@ -45,6 +43,9 @@ const StrategyDocumentView: React.FC<StrategyDocumentViewProps> = ({ calendar, o
   const handleDownloadPDF = async () => {
     if (!docRef.current) return;
     try {
+      // The PDF libraries are large; they download only when someone presses Download.
+      const [{ jsPDF }, h2c] = await Promise.all([import('jspdf'), import('html2canvas')]);
+      const html2canvas = h2c.default;
       const canvas = await html2canvas(docRef.current, { scale: 2, useCORS: true });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');

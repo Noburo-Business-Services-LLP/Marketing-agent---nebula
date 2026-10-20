@@ -1,71 +1,75 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import Layout from './components/Layout';
-import ChatBot from './components/ChatBot';
 import CampaignReminderPopup from './components/CampaignReminderPopup';
 import BackgroundReelIndicator from './components/BackgroundReelIndicator';
-import UploadAndSchedule from './pages/UploadAndSchedule';
-import LandingPage from './pages/LandingPage';
-import Auth from './pages/Auth';
-import Onboarding from './pages/Onboarding';
-import TrialExpired from './pages/TrialExpired';
-import CreateVideo from './pages/CreateVideo';
-import NeedPlanModal from './components/NeedPlanModal';
-import Dashboard from './pages/Dashboard';
+const NeedPlanModal = lazyWithRetry(() => import('./components/NeedPlanModal'));
 import GravityHome from './pages/GravityHome';
-import PlanHub from './pages/PlanHub';
-import InsightsHub from './pages/InsightsHub';
 import OldAddress from './components/OldAddress';
 import { showsCompetitorsEntry } from './utils/navMenu';
 // Developer page for the tile and illustration set; the condition below is false in a production build.
 const ArtShowcase = import.meta.env.DEV ? React.lazy(() => import('./pages/ArtShowcase')) : null;
-// The Photoshoot studio loads only when it is opened, so the rest of the app does not carry it.
-const Photoshoot = React.lazy(() => import('./pages/Photoshoot'));
-import GravityCreate from './pages/GravityCreate';
-import Library from './pages/Library';
 import PageTabs from './components/PageTabs';
 import PageHeader from './components/PageHeader';
-import GravityCalendar from './pages/GravityCalendar';
-import Campaigns from './pages/Campaigns';
-import ContentCalendar from './pages/ContentCalendar';
-import SocialInbox from './pages/SocialInbox';
-import CsmClients from './pages/CsmClients';
-import AgencyClients from './pages/AgencyClients';
-import StaffLayout from './pages/staff/StaffLayout';
 import { landingPath, returnHashAfterActing } from './utils/staffHome';
 import { isAgencyUser, isInsideClient, isLapsedAgency } from './utils/agency';
 import { afterOnboardingHash } from './utils/agencyPlan';
-import ReelGenerator from './pages/ReelGenerator';
-import HeroVideo from './pages/HeroVideo';
-import AdCampaigns from './pages/AdCampaigns';
-import ConnectSocials from './pages/ConnectSocials';
-import BrandAssets from './pages/BrandAssets';
-import Inventory from './pages/Inventory';
-import Settings from './pages/Settings';
-import Help from './pages/Help';
-import Analytics from './pages/Analytics';
-import SEOAssistant from './pages/SEOAssistant';
-import AIHistory from './pages/AIHistory';
-import AIPerformance from './pages/AIPerformance';
-import InfluencerPortal from './pages/InfluencerPortal';
-import InfluencerList from './pages/InfluencerList';
-import Collaborations from './pages/Collaborations';
-import SubmissionReview from './pages/SubmissionReview';
-import InfluencerAnalytics from './pages/InfluencerAnalytics';
-import InfluencerProfile from './pages/InfluencerProfile';
-import TermsAndConditions from './pages/TermsAndConditions';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import RefundPolicy from './pages/RefundPolicy';
-import DeletionPending from './components/DeletionPending';
-import TermsPrompt from './components/TermsPrompt';
+const DeletionPending = lazyWithRetry(() => import('./components/DeletionPending'));
+const TermsPrompt = lazyWithRetry(() => import('./components/TermsPrompt'));
 import { needsTermsPrompt } from './utils/accountDeletion';
-import BlueprintRoutes from './pages/BlueprintRoutes';
 import { postAuthTarget, BLUEPRINT_SIGNUP_PATH } from './utils/blueprint';
 import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { apiService } from './services/api';
 import { User } from './types';
 import { Loader2 } from 'lucide-react';
+import { lazyWithRetry } from './utils/lazyWithRetry';
+import { PAGE_LOADERS, prefetchForHref, prefetchWhenIdle } from './utils/routeChunks';
+import RouteFallback from './components/RouteFallback';
+import RouteErrorBoundary from './components/RouteErrorBoundary';
+
+// Every page except the shell and the Home page loads when it is opened (utils/routeChunks.ts lists the loaders),
+// so the first load carries only what the first screen needs. lazyWithRetry tries a failed file once more.
+const AIHistory = lazyWithRetry(PAGE_LOADERS.AIHistory);
+const AIPerformance = lazyWithRetry(PAGE_LOADERS.AIPerformance);
+const AdCampaigns = lazyWithRetry(PAGE_LOADERS.AdCampaigns);
+const AgencyClients = lazyWithRetry(PAGE_LOADERS.AgencyClients);
+const Analytics = lazyWithRetry(PAGE_LOADERS.Analytics);
+const Auth = lazyWithRetry(PAGE_LOADERS.Auth);
+const BlueprintRoutes = lazyWithRetry(PAGE_LOADERS.BlueprintRoutes);
+const BrandAssets = lazyWithRetry(PAGE_LOADERS.BrandAssets);
+const Campaigns = lazyWithRetry(PAGE_LOADERS.Campaigns);
+const Collaborations = lazyWithRetry(PAGE_LOADERS.Collaborations);
+const ConnectSocials = lazyWithRetry(PAGE_LOADERS.ConnectSocials);
+const ContentCalendar = lazyWithRetry(PAGE_LOADERS.ContentCalendar);
+const CreateVideo = lazyWithRetry(PAGE_LOADERS.CreateVideo);
+const CsmClients = lazyWithRetry(PAGE_LOADERS.CsmClients);
+const Dashboard = lazyWithRetry(PAGE_LOADERS.Dashboard);
+const GravityCalendar = lazyWithRetry(PAGE_LOADERS.GravityCalendar);
+const GravityCreate = lazyWithRetry(PAGE_LOADERS.GravityCreate);
+const Help = lazyWithRetry(PAGE_LOADERS.Help);
+const HeroVideo = lazyWithRetry(PAGE_LOADERS.HeroVideo);
+const InfluencerAnalytics = lazyWithRetry(PAGE_LOADERS.InfluencerAnalytics);
+const InfluencerList = lazyWithRetry(PAGE_LOADERS.InfluencerList);
+const InfluencerPortal = lazyWithRetry(PAGE_LOADERS.InfluencerPortal);
+const InfluencerProfile = lazyWithRetry(PAGE_LOADERS.InfluencerProfile);
+const InsightsHub = lazyWithRetry(PAGE_LOADERS.InsightsHub);
+const LandingPage = lazyWithRetry(PAGE_LOADERS.LandingPage);
+const Library = lazyWithRetry(PAGE_LOADERS.Library);
+const Onboarding = lazyWithRetry(PAGE_LOADERS.Onboarding);
+const PlanHub = lazyWithRetry(PAGE_LOADERS.PlanHub);
+const PrivacyPolicy = lazyWithRetry(PAGE_LOADERS.PrivacyPolicy);
+const ReelGenerator = lazyWithRetry(PAGE_LOADERS.ReelGenerator);
+const RefundPolicy = lazyWithRetry(PAGE_LOADERS.RefundPolicy);
+const SEOAssistant = lazyWithRetry(PAGE_LOADERS.SEOAssistant);
+const Settings = lazyWithRetry(PAGE_LOADERS.Settings);
+const SocialInbox = lazyWithRetry(PAGE_LOADERS.SocialInbox);
+const StaffLayout = lazyWithRetry(PAGE_LOADERS.StaffLayout);
+const SubmissionReview = lazyWithRetry(PAGE_LOADERS.SubmissionReview);
+const TermsAndConditions = lazyWithRetry(PAGE_LOADERS.TermsAndConditions);
+const TrialExpired = lazyWithRetry(PAGE_LOADERS.TrialExpired);
+const UploadAndSchedule = lazyWithRetry(PAGE_LOADERS.UploadAndSchedule);
+const Photoshoot = lazyWithRetry(PAGE_LOADERS.Photoshoot);
 
 // Calls onChange after every route change (not on first render). Must sit inside the Router.
 const RouteChangeWatcher: React.FC<{ onChange: () => void }> = ({ onChange }) => {
@@ -102,6 +106,35 @@ const VideosEntry: React.FC = () => {
 const HiddenOnPlansPage: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { pathname } = useLocation();
   return pathname.startsWith('/trial-expired') ? null : <>{children}</>;
+};
+
+/** A page that is still loading shows a calm placeholder (after 150 ms); a page file that cannot load shows a reload prompt, never a blank screen. */
+const PageBoundary: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { pathname } = useLocation();
+  return (
+    <RouteErrorBoundary resetKey={pathname}>
+      <React.Suspense fallback={<RouteFallback />}>{children}</React.Suspense>
+    </RouteErrorBoundary>
+  );
+};
+
+/** Fetches the likely next page files: a few after the app is idle, and the target of a menu link when it is hovered or focused. */
+const PagePrefetcher: React.FC = () => {
+  useEffect(() => {
+    const cancel = prefetchWhenIdle();
+    const onHint = (e: Event) => {
+      const a = (e.target as Element | null)?.closest?.('a[href*="#/"]');
+      if (a) prefetchForHref(a.getAttribute('href'));
+    };
+    document.addEventListener('pointerover', onHint, { passive: true });
+    document.addEventListener('focusin', onHint);
+    return () => {
+      cancel();
+      document.removeEventListener('pointerover', onHint);
+      document.removeEventListener('focusin', onHint);
+    };
+  }, []);
+  return null;
 };
 
 const App: React.FC = () => {
@@ -217,7 +250,7 @@ const App: React.FC = () => {
   if (user && user.deletion?.status === 'pending') {
     return (
       <ThemeProvider>
-        <DeletionPending user={user} onRestored={setUser} onLogout={handleLogout} />
+        <React.Suspense fallback={null}><DeletionPending user={user} onRestored={setUser} onLogout={handleLogout} /></React.Suspense>
       </ThemeProvider>
     );
   }
@@ -226,13 +259,17 @@ const App: React.FC = () => {
     <ThemeProvider>
     <ConfirmProvider>
     {needsTermsPrompt(user, Boolean(localStorage.getItem('csmReturnToken'))) && (
-      <TermsPrompt
-        onAccepted={() => setUser((u) => (u ? { ...u, consent: { acceptedAt: new Date().toISOString() } } : u))}
-        onLogout={handleLogout}
-      />
+      <React.Suspense fallback={null}>
+        <TermsPrompt
+          onAccepted={() => setUser((u) => (u ? { ...u, consent: { acceptedAt: new Date().toISOString() } } : u))}
+          onLogout={handleLogout}
+        />
+      </React.Suspense>
     )}
     <Router>
       <RouteChangeWatcher onChange={recheckPaywallOnNavigate} />
+      {user && user.onboardingCompleted && <PagePrefetcher />}
+      <PageBoundary>
       <Routes>
         {/* Landing Page - shown when not logged in */}
         <Route 
@@ -286,10 +323,11 @@ const App: React.FC = () => {
             user ? (
               user.onboardingCompleted ? (
                 <Layout user={user} onLogout={handleLogout} needsPlan={needsPlan} onTourSaved={(tour) => setUser((u) => (u ? { ...u, tour: { ...(u.tour || {}), ...tour } } : u))}>
+                    <PageBoundary>
                     <Routes>
                     <Route path="/dashboard" element={<GravityHome user={user} />} />
                     <Route path="/plan" element={<PlanHub user={user} showsMyPlan={showsMyPlan} />} />
-                    {ArtShowcase && <Route path="/art-showcase" element={<React.Suspense fallback={null}><ArtShowcase /></React.Suspense>} />}
+                    {ArtShowcase && <Route path="/art-showcase" element={<ArtShowcase />} />}
                     {/* The plans page sits inside the app shell like every other page. The route name is kept for old links. */}
                     <Route path="/trial-expired" element={<TrialExpired insideClient={isInsideClient(user)} />} />
                     <Route path="/dashboard-classic" element={<Dashboard />} />
@@ -303,7 +341,7 @@ const App: React.FC = () => {
                     <Route path="/campaigns-classic" element={<Campaigns />} />
                     <Route path="/drafts" element={<OldAddress from="/drafts" />} />
                     <Route path="/library" element={<Library user={user} />} />
-                    <Route path="/photoshoot" element={<React.Suspense fallback={null}><Photoshoot /></React.Suspense>} />
+                    <Route path="/photoshoot" element={<Photoshoot />} />
                     <Route path="/reels" element={<VideosEntry />} />
                     <Route path="/reels/studio" element={<ReelGenerator />} />
                     <Route path="/reels/hero" element={<HeroVideo />} />
@@ -342,17 +380,18 @@ const App: React.FC = () => {
                     <Route path="/help" element={<Help user={user} />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
+                    </PageBoundary>
                     {/* Persists across navigation while a Smart Calendar reel renders. */}
                     <BackgroundReelIndicator />
                     {trialExpired.expired && (
-                      <HiddenOnPlansPage><NeedPlanModal
+                      <HiddenOnPlansPage><React.Suspense fallback={null}><NeedPlanModal
                         hasPlan={!needsPlan}
                         onSeePlans={() => { clearCreditsPaywall(); window.location.hash = '#/trial-expired'; }}
                         onDismiss={clearCreditsPaywall}
                         insideClient={isInsideClient(user)}
                         agency={isAgencyUser(user)}
                         onBackToAgency={() => { clearCreditsPaywall(); const back = returnHashAfterActing(localStorage.getItem('csmReturnTo')); if (apiService.returnToCsmAccount()) { window.location.hash = back; window.location.reload(); } }}
-                      /></HiddenOnPlansPage>
+                      /></React.Suspense></HiddenOnPlansPage>
                     )}
                 </Layout>
               ) : (
@@ -364,6 +403,7 @@ const App: React.FC = () => {
           }
         />
       </Routes>
+      </PageBoundary>
       
       {/* Floating ChatBot - appears on all pages */}
       {/* <ChatBot /> */}

@@ -25,7 +25,8 @@ import NotificationBell from './NotificationBell';
 import AppSwitcher from './AppSwitcher';
 import ClientSwitcher from './ClientSwitcher';
 import AccountMenu from './AccountMenu';
-import GuidedTour from './GuidedTour';
+// The guided tour is a large part and is only needed when it opens, so it loads then.
+const GuidedTour = React.lazy(() => import('./GuidedTour'));
 import HelpMenu, { TOUR_REPLAY_EVENT } from './HelpMenu';
 import { TOUR_STEPS, shouldAutoStart } from '../utils/tour';
 import { needsTermsPrompt } from '../utils/accountDeletion';
@@ -138,7 +139,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
 
   useEffect(() => {
     fetchTrialInfo();
-    const interval = setInterval(fetchTrialInfo, 60000);
+    // A tab nobody is looking at does not ask again (the next tick after it is shown catches up).
+    const interval = setInterval(() => { if (!document.hidden) fetchTrialInfo(); }, 60000);
     const handleCreditUpdate = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail?.creditsRemaining !== undefined) {
@@ -217,7 +219,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
     let live = true;
     const load = () => { draftsAPI.getDraftCounts().then((r) => { if (live) setNeedsApproval(Number(r?.counts?.needsApproval ?? NaN)); }).catch(() => { if (live) setNeedsApproval(null); }); };
     load();
-    const id = setInterval(load, 60000);
+    const id = setInterval(() => { if (!document.hidden) load(); }, 60000);
     window.addEventListener('nebulaa-posts-changed', load);
     return () => { live = false; clearInterval(id); window.removeEventListener('nebulaa-posts-changed', load); };
   }, [location.pathname]);
@@ -578,7 +580,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
           </main>
         </div>
       </div>
-      <GuidedTour open={tourOpen} steps={TOUR_STEPS} onClose={handleTourClose} onNeedsMenu={setSidebarOpen} />
+      {tourOpen && (
+        <React.Suspense fallback={null}>
+          <GuidedTour open={tourOpen} steps={TOUR_STEPS} onClose={handleTourClose} onNeedsMenu={setSidebarOpen} />
+        </React.Suspense>
+      )}
     </>
   );
 };
