@@ -201,7 +201,7 @@ test('a client Blueprint records the agency as payer and a failed run refunds th
   await quiet(() => deps.drain());
   assert.strictEqual(deps.calls.refund.length, 1);
   assert.deepStrictEqual(deps.calls.refund[0].slice(0, 3), ['w1', 'blueprint', 1]);
-  assert.deepStrictEqual(deps.calls.refund[0][4], { payerId: 'o1' });
+  assert.deepStrictEqual(deps.calls.refund[0][4], { ref: 'bp-1', payerId: 'o1' });
 });
 
 test('a Blueprint for an ordinary account records no payer and refunds with the old arguments', async () => {
@@ -211,7 +211,7 @@ test('a Blueprint for an ordinary account records no payer and refunds with the 
   await svc.start({ user: { _id: 'u1', email: 'o@example.com', isVerified: true }, tier: 'free', body: form(), ip: '1.1.1.1' });
   assert.strictEqual(deps.Blueprint.docs[0].charge.payerId, undefined);
   await quiet(() => deps.drain());
-  assert.strictEqual(deps.calls.refund[0].length, 4);
+  assert.deepStrictEqual(deps.calls.refund[0][4], { ref: 'bp-1' }, 'a ref and no payer: it lands on whoever pays for this account');
 });
 
 // ---- credits route: pool lookup for a client ----

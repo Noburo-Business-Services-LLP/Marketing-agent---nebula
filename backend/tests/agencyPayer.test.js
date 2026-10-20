@@ -40,12 +40,12 @@ test('hero: a client job records the agency as payer and its refund goes to that
   assert.strictEqual(d.JobModel.docs[0].metadata.payerId, 'o1');
   assert.strictEqual(d.calls.refund.length, 1);
   assert.deepStrictEqual(d.calls.refund[0].slice(0, 2), ['w1', 'hero_video_clip']);
-  assert.deepStrictEqual(d.calls.refund[0][4], { payerId: 'o1' });
+  assert.deepStrictEqual(d.calls.refund[0][4], { ref: d.JobModel.docs[0].jobId, payerId: 'o1' });
 });
 
 test('hero: for any other account nothing new is stored and the refund call is the same as before', async () => {
   const d = makeDeps({ deduct: async () => ({ success: true, payerId: 'u1', workspaceId: null }), submit: async () => { throw new Error('fal down'); } });
   await startHeroGeneration(d, { userId: 'u1', body: { prompt: 'a hero shot' } });
   assert.ok(!('payerId' in d.JobModel.docs[0].metadata));
-  assert.strictEqual(d.calls.refund[0].length, 4);
+  assert.deepStrictEqual(d.calls.refund[0][4], { ref: d.JobModel.docs[0].jobId }, 'a ref and no payer');
 });
