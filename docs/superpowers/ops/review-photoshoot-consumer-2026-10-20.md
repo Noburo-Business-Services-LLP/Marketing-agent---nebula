@@ -185,3 +185,26 @@ Two equivalences were confirmed by hand: `refunded: false` matches because of th
     drain before rollback (web off, wait until `queueDepth` and `running` are 0, then the worker, then the image) are
     correct. The drain script is a dry run by default, refuses a URI without a database name, and closes only waiting
     rows, through the same proof-first close. The only docs gap is the honesty point in S4.
+
+---
+
+## Fixes (2026-10-20 night, same branch, each test written first and seen failing)
+
+| Finding | Commit | Status |
+|---|---|---|
+| S1 double refund window | `063e575` | FIXED. `consumerClose` stamps `finishedAt` at the write that claims the refund. Test: a proof read that takes 3 minutes plus a settle sweep from another process right after the close write; before the fix two refunds, now one. |
+| S2 paid broken photo | `7b007c1` | FIXED. File deleted only on a definite no-match; an unknown outcome keeps the file and stops the run. Tests: a timed-out write that lands later (nothing deleted, no record points at a deleted file); a definite no-match still deletes. |
+| S3 charge slower than the stale window | `6de3892` (+ `0e403da` real-database check) | FIXED for both paths. `repo.claimLateRefund` records the refund on the closed row in one conditional update; the settle sweep pays it once with proof. Tests: consumer and in-process, two sweeps at once, one refund. Not done (listed, D100): stamping the stale window from the charge attempt; a charge call that THREW and lands later after `settleUnsureCharge` closed the row with a 0 refund (needs a sweep over closed rows). |
+| S4 docs: old image over-refunds | `239735b` | FIXED in D90, impact map (B2 decision c, B2.8), runbook `ecs-web-worker.md` (+ "never release with the switch already on"). The doc test for the mandatory drain stays green. |
+| S5 daily ceiling | `acaf50c` | FIXED by policy D99: the ceiling refuses new starts only; charged jobs are claimed and made. Test: ceiling reached, charged job completes, new start refused, spend (units) recorded, staff switch still closes at once with the full refund. |
+| S6 test gaps | `18d7ab8` | FIXED. Mutation check (temporary edit, restored at once, repo clean): M12, M22, M2, M16, M11, M7, M20 (fake repo and real repo filter), M4, M3, M23 each now fail a test and pass with the guard. M3 and M23 needed a second, sharper test (the first version also passed with the guard removed). |
+| M-a client removal and a refund set aside for a person | `cad3f1e` | FIXED (third clause gets `refundGaveUp: { $ne: true }`; test `44934f5` follows). |
+| M-b `startPhotoOwned` attempts limit | none | NOT DONE. Only matters with an old in-process runner in the mix (drain is mandatory), costs us one extra provider call at worst; needs the cap passed into the repo. |
+| M-c wrong message on a double failure | none | NOT DONE. Customer wording, the owner's copy; money is safe. |
+| M-d claim token | none | NOT DONE. Safe today (reviewer's own judgement); a schema change for no present gain. |
+| M-e queue endpoint | `cad3f1e` | FIXED (the Photoshoot section degrades to `{ unavailable: true }`). |
+| M-f sweeps inside the customer request | none | NOT DONE. Behaviour trade-off (latency vs. promptness), safe as is; needs the owner's call or load evidence. |
+| M-g `ENABLE_PHOTOSHOOT_RESUME=off` | `239735b` | DOCUMENTED in the runbook. |
+
+Verification after the fixes: `photoshoot-consumer-check.js` against nebulaa_dev 10 PASS, 0 FAIL, throwaway collection dropped; backend suite 3116 pass, 0 fail; `npm run lint` 0 errors.
+
