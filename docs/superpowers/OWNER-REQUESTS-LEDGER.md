@@ -107,6 +107,7 @@ Created 2026-10-18 after the owner said: "You are forgetting so many things. Ple
 - [NOT BUILT, DECISION] Team seats (several people on one business) do not exist; owner asked how "individual / agency / team" works. (2026-10-18)
 
 ## Area: STAFF AREA, OPS, RELEASE
+- [DECISION NEEDED, 2026-10-20] Owner pasted a load-test (NFT) summary from his tester (target 10 to 15 requests per second per flow; reports in `qa-reports/` outside this repo): findings and proposed order: (1) native bcrypt with a lower cost factor; (2) lean, cached auth (15 s cache, must clear on plan/password/deletion; audit 132 `req.user.id` uses and 78 places that pass the whole `req.user`); (3) lean, paginated Drafts and Campaigns lists (about 14 times faster) and move the live Ayrshare checks out of `GET /api/campaigns` into a background job; (4) remove the global input sanitiser (corrupts text, stalls on huge uploads), return 400 for validation errors, make the content calendar GET read-only; (5) worker service for generation flows and 2 to 3 web instances; (6) re-run the test on a staging copy. Not yet started: awaiting the owner's go.
 - [DONE, NOT RELEASED] Staff pages speed fix; the owner must run the index script after the next release. (2026-10-18)
 - [OWNER STEPS] Release (everything since `bc514a9` is unreleased); staff indexes; Inbox live test; Razorpay live webhook; switches (`ENABLE_COMPETITOR_TRACKER`, `LISTENING_MODEL`, `ENABLE_LISTENING`); close terminals holding keys; AWS root keys to a limited user; ECR lifecycle policy.
 
