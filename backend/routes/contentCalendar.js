@@ -467,7 +467,7 @@ router.post('/:id/auto-generate-week', protect, L.heavyAi, async (req, res) => {
     res.json({ success: true, message: `Weekly content generation queued for Week ${weekNumber}` });
   } catch (error) {
     console.error('Auto generate week error:', error);
-    res.status(500).json({ success: false, message: 'Failed to queue weekly generation', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to queue weekly generation' });
   }
 });
 
@@ -486,7 +486,7 @@ router.get('/:id/weekly-drafts', protect, async (req, res) => {
     res.json({ success: true, drafts });
   } catch (error) {
     console.error('Fetch weekly drafts error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch weekly drafts', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch weekly drafts' });
   }
 });
 

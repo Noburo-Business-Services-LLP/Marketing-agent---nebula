@@ -719,7 +719,7 @@ router.get('/overview', protect, async (req, res) => {
     res.json(dashboardData);
   } catch (error) {
     console.error('Dashboard overview error:', error);
-    res.status(500).json({ success: false, message: 'Failed to load dashboard', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to load dashboard' });
   }
 });
 
@@ -863,7 +863,7 @@ router.get('/campaign-suggestions', protect, L.lightAi, async (req, res) => {
     });
   } catch (error) {
     console.error('Campaign suggestions error:', error);
-    res.status(500).json({ success: false, message: 'Failed to generate suggestions', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to generate suggestions' });
   }
 });
 
@@ -1195,7 +1195,7 @@ router.post('/refresh-competitor-posts', protect, L.scrape, requireFeature('comp
     }
   } catch (error) {
     console.error('Refresh competitor posts error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -1230,7 +1230,7 @@ router.post('/synopsis', protect, L.lightAi, async (req, res) => {
     });
   } catch (error) {
     console.error('Synopsis generation error:', error);
-    res.status(500).json({ success: false, message: 'Failed to generate synopsis', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to generate synopsis' });
   }
 });
 
@@ -1456,7 +1456,7 @@ router.get('/social-followers', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Social followers error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -1546,7 +1546,7 @@ router.get('/strategic-advisor', protect, L.lightAi, async (req, res) => {
     console.error('Strategic advisor error:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      message: 'Something went wrong. Please try again.',
       suggestions: []
     });
   }
@@ -1597,7 +1597,7 @@ router.post('/strategic-advisor/generate-post', protect, L.heavyAi, async (req, 
     });
   } catch (error) {
     console.error('Generate post error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -1635,7 +1635,7 @@ router.post('/strategic-advisor/refine-image', protect, L.heavyAi, async (req, r
     });
   } catch (error) {
     console.error('Refine image error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -1687,7 +1687,7 @@ router.post('/generate-event-post', protect, L.heavyAi, async (req, res) => {
     });
   } catch (error) {
     console.error('Generate event post error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 

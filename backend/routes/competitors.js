@@ -258,8 +258,7 @@ IMPORTANT: Return EXACTLY 15 competitors (5 local + 5 national + 5 global). Retu
     console.error('- Competitor auto-discovery error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to discover competitors',
-      error: error.message
+      message: 'Failed to discover competitors'
     });
   }
 });
@@ -801,7 +800,7 @@ router.post('/scrape-by-type', protect, L.scrape, requireFeature('competitors'),
     });
   } catch (error) {
     console.error('Scrape by type error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -887,7 +886,7 @@ router.get('/posts', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Get competitor posts error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch posts', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch posts' });
   }
 });
 

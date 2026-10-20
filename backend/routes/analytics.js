@@ -84,7 +84,7 @@ router.post('/post-analytics', protect, async (req, res) => {
   } catch (error) {
     if (noProfileResponse(res, error)) return;
     console.error('Post analytics error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -126,7 +126,7 @@ router.post('/social-analytics', protect, async (req, res) => {
     res.json({ success: true, analytics: result.data });
   } catch (error) {
     console.error('Social analytics error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -260,7 +260,7 @@ router.post('/import/csv', protect, L.upload, async (req, res) => {
     
   } catch (error) {
     console.error('CSV import error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -315,7 +315,8 @@ router.post('/import/manual', protect, L.lightAi, async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('analytics.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -466,7 +467,8 @@ router.get('/snapshots', protect, async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('analytics.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -530,7 +532,8 @@ router.get('/summary', protect, async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('analytics.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -566,7 +569,7 @@ router.get('/history', protect, async (req, res) => {
     res.json({ success: true, history, days });
   } catch (error) {
     console.error('Analytics history error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -604,7 +607,7 @@ router.post('/snapshot-now', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Manual snapshot error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -635,7 +638,8 @@ router.get('/:id', protect, async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('analytics.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -665,7 +669,8 @@ router.post('/:id/regenerate-insights', protect, L.lightAi, async (req, res) => 
     });
     
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('analytics.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -698,7 +703,8 @@ router.put('/:id/actions/:actionIndex', protect, async (req, res) => {
     });
     
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('analytics.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -719,7 +725,8 @@ router.delete('/:id', protect, async (req, res) => {
     res.json({ success: true, message: 'Analytics snapshot deleted' });
     
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('analytics.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 

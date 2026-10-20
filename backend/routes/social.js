@@ -1611,7 +1611,7 @@ router.get('/ayrshare/profiles', protect, async (req, res) => {
     console.error('Ayrshare profiles error:', error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: 'Something went wrong. Please try again.',
       profiles: []
     });
   }
@@ -1674,7 +1674,7 @@ router.get('/connect/:platform', protect, requireFeature('social_connect'), asyn
     console.error('Connect platform error:', error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Something went wrong. Please try again.'
     });
   }
 });
@@ -1721,7 +1721,7 @@ router.post('/connect/:platform', protect, requireFeature('social_connect'), asy
     console.error('Save connection error:', error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Something went wrong. Please try again.'
     });
   }
 });
@@ -1768,7 +1768,7 @@ router.delete('/disconnect/:platform', protect, async (req, res) => {
     console.error('Disconnect error:', error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Something went wrong. Please try again.'
     });
   }
 });
@@ -1875,7 +1875,7 @@ router.get('/ayrshare/connect-url/:platform', protect, requireFeature('social_co
     console.error('Ayrshare connect URL error:', error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Something went wrong. Please try again.'
     });
   }
 });

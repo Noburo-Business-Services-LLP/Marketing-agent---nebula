@@ -67,7 +67,7 @@ router.get('/summary', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('AI memory summary error:', error);
-    res.status(500).json({ success: false, message: 'Failed to load AI memory', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to load AI memory' });
   }
 });
 
@@ -85,7 +85,8 @@ router.get('/campaign-history', protect, async (req, res) => {
       .lean();
     res.json({ success: true, items });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to load campaign history', error: error.message });
+    console.error('aiMemory.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Failed to load campaign history' });
   }
 });
 
@@ -102,7 +103,8 @@ router.get('/video-history', protect, async (req, res) => {
       .lean();
     res.json({ success: true, items });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to load video history', error: error.message });
+    console.error('aiMemory.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Failed to load video history' });
   }
 });
 
@@ -119,7 +121,8 @@ router.get('/performance', protect, async (req, res) => {
       .lean();
     res.json({ success: true, items });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to load performance memory', error: error.message });
+    console.error('aiMemory.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Failed to load performance memory' });
   }
 });
 
@@ -147,7 +150,8 @@ router.post('/reuse/:type/:id', protect, async (req, res) => {
       item
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to reuse memory item', error: error.message });
+    console.error('aiMemory.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Failed to reuse memory item' });
   }
 });
 
@@ -185,7 +189,8 @@ router.patch('/notes/:noteId', protect, async (req, res) => {
     const note = updated.learnedNotes.find((n) => String(n._id) === req.params.noteId);
     res.json({ success: true, note });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to update note', error: error.message });
+    console.error('aiMemory.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Failed to update note' });
   }
 });
 
@@ -203,7 +208,8 @@ router.delete('/notes/:noteId', protect, async (req, res) => {
     }
     res.json({ success: true, learnedNotes: updated.learnedNotes || [] });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to delete note', error: error.message });
+    console.error('aiMemory.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Failed to delete note' });
   }
 });
 
@@ -225,7 +231,8 @@ router.post('/distill', protect, async (req, res) => {
     }
     res.json({ success: true, skipped: false, learnedNotes: notes });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to refresh memory', error: error.message });
+    console.error('aiMemory.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Failed to refresh memory' });
   }
 });
 

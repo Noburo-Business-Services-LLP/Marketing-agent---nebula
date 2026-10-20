@@ -38,7 +38,7 @@ router.get('/', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Get reminders error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch reminders', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch reminders' });
   }
 });
 
@@ -59,7 +59,7 @@ router.get('/pending', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Get pending reminders error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch pending reminders', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch pending reminders' });
   }
 });
 
@@ -145,7 +145,7 @@ router.get('/calendar/:year/:month', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Get calendar events error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch calendar events', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch calendar events' });
   }
 });
 
@@ -203,7 +203,7 @@ router.post('/', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Create reminder error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create reminder', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to create reminder' });
   }
 });
 
@@ -283,7 +283,7 @@ router.post('/from-campaign/:campaignId', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Create campaign reminder error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create reminder', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to create reminder' });
   }
 });
 
@@ -309,7 +309,7 @@ router.put('/:id', protect, async (req, res) => {
     res.json({ success: true, reminder });
   } catch (error) {
     console.error('Update reminder error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update reminder', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to update reminder' });
   }
 });
 
@@ -338,7 +338,7 @@ router.post('/:id/dismiss', protect, async (req, res) => {
     res.json({ success: true, reminder, message: 'Reminder dismissed' });
   } catch (error) {
     console.error('Dismiss reminder error:', error);
-    res.status(500).json({ success: false, message: 'Failed to dismiss reminder', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to dismiss reminder' });
   }
 });
 
@@ -375,7 +375,7 @@ router.post('/:id/snooze', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Snooze reminder error:', error);
-    res.status(500).json({ success: false, message: 'Failed to snooze reminder', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to snooze reminder' });
   }
 });
 
@@ -397,7 +397,7 @@ router.delete('/:id', protect, async (req, res) => {
     res.json({ success: true, message: 'Reminder deleted' });
   } catch (error) {
     console.error('Delete reminder error:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete reminder', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to delete reminder' });
   }
 });
 
