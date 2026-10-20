@@ -7,32 +7,21 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const express = require('express');
-const { rateLimit, MongoRateLimitStore, makeStore, storeKind } = require('../services/rateLimitStore');
+const { rateLimit, MongoRateLimitStore, makeStore, storeKind, hashKey } = require('../services/rateLimitStore');
 
-// A tiny in-memory collection that understands the one update pipeline the store sends.
+// A tiny in-memory collection that understands the one upsert the store sends ($inc with $setOnInsert).
 function fakeCollection() {
   const docs = new Map();
-  const val = (expr, doc) => {
-    if (typeof expr === 'string' && expr.startsWith('$')) return doc[expr.slice(1)];
-    if (expr instanceof Date || typeof expr !== 'object' || expr === null) return expr;
-    if (expr.$cond) return val(expr.$cond[0], doc) ? val(expr.$cond[1], doc) : val(expr.$cond[2], doc);
-    if (expr.$lte) { const a = val(expr.$lte[0], doc); const b = val(expr.$lte[1], doc); return a == null ? true : a <= b; }
-    if (expr.$add) return expr.$add.reduce((s, e) => s + val(e, doc), 0);
-    throw new Error(`unsupported ${JSON.stringify(expr)}`);
-  };
   return {
     docs,
     calls: 0,
-    async findOneAndUpdate(filter, pipeline, opts) {
+    async findOneAndUpdate(filter, upd, opts) {
       this.calls += 1;
       assert.ok(opts.upsert && opts.returnDocument === 'after' && opts.maxTimeMS > 0);
-      let doc = { ...(docs.get(filter._id) || { _id: filter._id }) };
-      for (const stage of pipeline) {
-        const next = { ...doc };
-        for (const [k, e] of Object.entries(stage.$set)) next[k] = val(e, doc);
-        doc = next;
-      }
-      docs.set(filter._id, doc);
+      assert.ok(!Array.isArray(upd), 'a plain update, not a pipeline');
+      let doc = docs.get(filter._id);
+      if (!doc) { doc = { _id: filter._id, ...upd.$setOnInsert }; docs.set(filter._id, doc); }
+      for (const [k, v] of Object.entries(upd.$inc)) doc[k] = (doc[k] || 0) + v;
       return { ...doc };
     },
     async updateOne(filter, upd) { const d = docs.get(filter._id); if (d && d.hits > 0) d.hits += upd.$inc.hits; },
@@ -43,7 +32,7 @@ function fakeCollection() {
 
 test('counts atomically and starts a new window when the old one ends', async () => {
   const coll = fakeCollection();
-  let now = 1_000_000;
+  let now = 1_200_000; // a multiple of the window: windows are aligned, the same in every task
   const store = new MongoRateLimitStore({ prefix: 't1', collection: () => coll, now: () => now, ensureIndex: null });
   store.init({ windowMs: 60_000 });
   const results = await Promise.all(Array.from({ length: 50 }, () => store.increment('k')));
@@ -51,19 +40,19 @@ test('counts atomically and starts a new window when the old one ends', async ()
   assert.strictEqual(coll.docs.size, 1);
   const doc = [...coll.docs.values()][0];
   assert.strictEqual(doc.hits, 50);
-  assert.strictEqual(doc.expireAt.getTime(), now + 60_000, 'TTL field equals the window end');
-  assert.notStrictEqual(doc._id, 'k', 'the key is stored hashed, not as typed');
+  assert.strictEqual(doc.expireAt.getTime(), 1_260_000, 'TTL field equals the window end');
+  assert.strictEqual(doc._id, `${hashKey('t1', 'k')}.${(1_200_000).toString(36)}`, 'the key is stored hashed, with its window');
   now += 30_000;
   assert.strictEqual((await store.increment('k')).totalHits, 51, 'same window');
   now += 30_001;
   const fresh = await store.increment('k');
   assert.strictEqual(fresh.totalHits, 1, 'window over: starts again at 1');
-  assert.strictEqual(fresh.resetTime.getTime(), now + 60_000);
+  assert.strictEqual(fresh.resetTime.getTime(), 1_320_000);
   assert.strictEqual((await store.get('k')).totalHits, 1);
   await store.decrement('k');
-  assert.strictEqual([...coll.docs.values()][0].hits, 0);
+  assert.strictEqual((await store.get('k')).totalHits, 0);
   await store.resetKey('k');
-  assert.strictEqual(coll.docs.size, 0);
+  assert.strictEqual(await store.get('k'), undefined);
 });
 
 test('a duplicate-key race on the first hit is retried once', async () => {
@@ -113,6 +102,12 @@ test('fail-open: a store that cannot answer lets the request through', async () 
   console.warn = (...m) => errors.push(m.join(' ')); console.error = () => {};
   const down = new MongoRateLimitStore({ prefix: 'down', collection: () => null, ensureIndex: null });
   const broken = new MongoRateLimitStore({ prefix: 'broken', collection: () => ({ findOneAndUpdate: async () => { throw new Error('timeout'); } }), ensureIndex: null });
+  const slow = new MongoRateLimitStore({ prefix: 'slow', wait: 50, collection: () => ({ findOneAndUpdate: () => new Promise((r) => setTimeout(() => r({ hits: 1, resetAt: new Date() }), 400)) }), ensureIndex: null });
+  const s3 = await listen(appWith(rateLimit({ name: 'slow', windowMs: 60_000, max: 1, store: slow })));
+  const t = Date.now();
+  assert.strictEqual(await get(s3), 200);
+  assert.ok(Date.now() - t < 300, 'a slow store adds at most the wait (50 ms here), not its own time');
+  s3.close();
   const s1 = await listen(appWith(rateLimit({ name: 'down', windowMs: 60_000, max: 1, store: down })));
   const s2 = await listen(appWith(rateLimit({ name: 'broken', windowMs: 60_000, max: 1, store: broken })));
   try {
@@ -134,6 +129,13 @@ test('store selection: memory by default, mongo on request, redis only with REDI
     const missing = () => { throw new Error("Cannot find module 'rate-limit-redis'"); };
     assert.ok(makeStore('x', { env: { RATE_LIMIT_STORE: 'redis', REDIS_URL: 'redis://127.0.0.1:1' }, load: missing }) instanceof MongoRateLimitStore, 'package missing: Mongo, no crash');
   } finally { console.warn = origWarn; }
+});
+
+test('the general per-address limiter stays per task unless RATE_LIMIT_GENERAL_SHARED=on', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'middleware', 'rateLimits.js'), 'utf8');
+  assert.match(src, /name: 'general',\n\s*perTask: true/);
+  const helper = fs.readFileSync(path.join(__dirname, '..', 'services', 'rateLimitStore.js'), 'utf8');
+  assert.match(helper, /const keepLocal = perTask && String\(process\.env\.RATE_LIMIT_GENERAL_SHARED \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'on';/);
 });
 
 test('every limiter of the app is made through the one helper', () => {

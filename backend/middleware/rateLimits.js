@@ -71,6 +71,7 @@ function createRateLimits({
   const general = rateLimit({
     ...base,
     name: 'general',
+    perTask: true, // every request: per task even with the shared store, unless RATE_LIMIT_GENERAL_SHARED=on (D32)
     max: generalMax,
     message: { error: 'Too many requests, please try again later.' },
     keyGenerator: addressKey,

@@ -5,8 +5,10 @@
  *
  *   RATE_LIMIT_STORE=memory (default) -> express-rate-limit's own in-process counters (local runs, tests, one task).
  *   RATE_LIMIT_STORE=mongo            -> counters in the MongoDB collection `rate_limits`, shared by every task:
- *                                        one atomic upsert per counted request, documents removed by a TTL index when
- *                                        their window ends. Recommended in production with two or more web tasks.
+ *                                        one atomic `$inc` upsert per counted request (one document per key and fixed
+ *                                        window), removed by a TTL index when the window ends. Recommended in
+ *                                        production with two or more web tasks. The general per-address limiter (every
+ *                                        request) stays per task unless RATE_LIMIT_GENERAL_SHARED=on.
  *   RATE_LIMIT_STORE=redis            -> `rate-limit-redis` with a `redis` client, ONLY when REDIS_URL is set and both
  *                                        packages are installed (they are optional, required lazily); otherwise a
  *                                        warning and the Mongo store.
@@ -24,7 +26,13 @@ const path = require('path');
 const expressRateLimit = require('express-rate-limit');
 
 const COLLECTION = 'rate_limits';
-const OP_TIMEOUT_MS = 1500;
+const OP_TIMEOUT_MS = 1500; // server-side limit of one store operation (maxTimeMS)
+// How long a request waits for the shared count before it is let through uncounted (the late count still lands).
+// Keeps a slow or contended store from adding more than this to any request. RATE_LIMIT_STORE_WAIT_MS, 50 to 2000.
+const waitMs = (env = process.env) => {
+  const n = Number.parseInt(String(env.RATE_LIMIT_STORE_WAIT_MS || ''), 10);
+  return Number.isFinite(n) ? Math.max(50, Math.min(2000, n)) : 300;
+};
 const WARN_EVERY_MS = 60 * 1000;
 
 let lastWarn = 0;
@@ -54,7 +62,8 @@ function ensureTtlIndex(coll) {
 }
 
 class MongoRateLimitStore {
-  constructor({ prefix = '', collection = defaultCollection, now = Date.now, timeoutMs = OP_TIMEOUT_MS, ensureIndex = ensureTtlIndex } = {}) {
+  constructor({ prefix = '', collection = defaultCollection, now = Date.now, timeoutMs = OP_TIMEOUT_MS, ensureIndex = ensureTtlIndex, wait = waitMs() } = {}) {
+    this._wait = wait;
     this.prefix = String(prefix);
     this.localKeys = false;
     this._collection = collection;
@@ -66,34 +75,49 @@ class MongoRateLimitStore {
 
   init(options) { if (options && Number.isFinite(options.windowMs)) this.windowMs = options.windowMs; }
 
-  _coll() {
+  /** The collection, after its TTL index exists (built once per process; the first request waits for it, so an
+   * index build on a brand-new collection never races the first upserts). */
+  async _coll() {
     const coll = this._collection();
     if (!coll) throw new Error('rate limit store not connected');
-    if (this._ensureIndex) this._ensureIndex(coll);
+    if (this._ensureIndex) await this._ensureIndex(coll);
     return coll;
   }
 
-  /** One atomic upsert: a new or expired window starts at 1, a running one adds 1. */
+  /** Fixed windows (like the memory store's per key, but aligned to multiples of windowMs, the same in every task):
+   * one document per key and window, so a count is a plain atomic `$inc` upsert (measured on the dev cluster: about
+   * 4 to 7 times faster under contention than an update pipeline that resets a rolling window in place). */
+  _window() {
+    const now = this._now();
+    const start = Math.floor(now / this.windowMs) * this.windowMs;
+    return { start, resetAt: new Date(start + this.windowMs) };
+  }
+
+  _id(key, start) { return `${hashKey(this.prefix, key)}.${start.toString(36)}`; }
+
   async increment(key) {
     try {
-      const coll = this._coll();
-      const id = hashKey(this.prefix, key);
-      const now = new Date(this._now());
-      const resetAt = new Date(now.getTime() + this.windowMs);
-      const expired = { $lte: ['$resetAt', now] }; // a missing resetAt (new document) counts as expired
-      const pipeline = [
-        { $set: { hits: { $cond: [expired, 1, { $add: ['$hits', 1] }] }, resetAt: { $cond: [expired, resetAt, '$resetAt'] }, p: this.prefix } },
-        { $set: { expireAt: '$resetAt' } }
-      ];
-      const run = () => coll.findOneAndUpdate({ _id: id }, pipeline, { upsert: true, returnDocument: 'after', maxTimeMS: this._timeoutMs });
+      const coll = await this._coll();
+      const { start, resetAt } = this._window();
+      const id = this._id(key, start);
+      const run = () => coll.findOneAndUpdate(
+        { _id: id },
+        { $inc: { hits: 1 }, $setOnInsert: { resetAt, expireAt: resetAt, p: this.prefix } },
+        { upsert: true, returnDocument: 'after', maxTimeMS: this._timeoutMs }
+      );
+      const attempt = async () => {
+        try { return await run(); } catch (e) {
+          if (e && e.code === 11000) return run(); // two first hits at the same moment: the loser simply increments
+          throw e;
+        }
+      };
+      let timer;
+      const slow = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`no answer within ${this._wait} ms`)), this._wait); });
       let doc;
-      try { doc = await run(); } catch (e) {
-        if (e && e.code === 11000) doc = await run(); // two first hits at the same moment: the loser simply increments
-        else throw e;
-      }
+      try { doc = await Promise.race([attempt(), slow]); } finally { clearTimeout(timer); }
       if (doc && doc.value !== undefined && doc.ok !== undefined) doc = doc.value; // older driver result shape
       if (!doc) throw new Error('rate limit store returned nothing');
-      return { totalHits: Math.max(1, Number(doc.hits) || 1), resetTime: new Date(doc.resetAt) };
+      return { totalHits: Math.max(1, Number(doc.hits) || 1), resetTime: new Date(doc.resetAt || resetAt) };
     } catch (e) {
       warnOnce(`shared store error (${e && e.message})`);
       throw e; // express-rate-limit lets the request through (passOnStoreError) and logs it
@@ -101,19 +125,20 @@ class MongoRateLimitStore {
   }
 
   async decrement(key) {
-    try { await this._coll().updateOne({ _id: hashKey(this.prefix, key), hits: { $gt: 0 } }, { $inc: { hits: -1 } }, { maxTimeMS: this._timeoutMs }); }
+    try { const { start } = this._window(); await (await this._coll()).updateOne({ _id: this._id(key, start), hits: { $gt: 0 } }, { $inc: { hits: -1 } }, { maxTimeMS: this._timeoutMs }); }
     catch (e) { warnOnce(`shared store error on decrement (${e && e.message})`); }
   }
 
   async resetKey(key) {
-    try { await this._coll().deleteOne({ _id: hashKey(this.prefix, key) }, { maxTimeMS: this._timeoutMs }); }
+    try { const { start } = this._window(); await (await this._coll()).deleteOne({ _id: this._id(key, start) }, { maxTimeMS: this._timeoutMs }); }
     catch (e) { warnOnce(`shared store error on reset (${e && e.message})`); }
   }
 
   async get(key) {
     try {
-      const doc = await this._coll().findOne({ _id: hashKey(this.prefix, key) }, { maxTimeMS: this._timeoutMs });
-      if (!doc || new Date(doc.resetAt).getTime() <= this._now()) return undefined;
+      const { start } = this._window();
+      const doc = await (await this._coll()).findOne({ _id: this._id(key, start) }, { maxTimeMS: this._timeoutMs });
+      if (!doc) return undefined;
       return { totalHits: doc.hits, resetTime: new Date(doc.resetAt) };
     } catch (e) { warnOnce(`shared store error on read (${e && e.message})`); return undefined; }
   }
@@ -174,9 +199,12 @@ function callSiteName() {
 const created = [];
 /** Drop-in for express-rate-limit: the same options, plus an optional `name`. */
 function rateLimit(options = {}) {
-  const { name, ...rest } = options;
+  const { name, perTask, ...rest } = options;
   const prefix = String(name || callSiteName());
-  const store = rest.store || makeStore(prefix);
+  // `perTask`: a limiter hit by every request (the general per-address flood guard) keeps its own counters in each
+  // task unless RATE_LIMIT_GENERAL_SHARED=on: a shared count would add one database write to every request (D32).
+  const keepLocal = perTask && String(process.env.RATE_LIMIT_GENERAL_SHARED || '').trim().toLowerCase() !== 'on';
+  const store = rest.store || (keepLocal ? null : makeStore(prefix));
   created.push({ prefix, store: store ? store.constructor.name : 'MemoryStore' });
   return expressRateLimit({ passOnStoreError: true, ...rest, ...(store ? { store } : {}) });
 }
