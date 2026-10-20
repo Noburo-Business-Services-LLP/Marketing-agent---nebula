@@ -216,10 +216,10 @@ How to turn it on (after the release that contains this code is live and checked
 
 On a single task (no split, `RUN_BACKGROUND` not set) the switch also works: that task queues and claims its own videos (a restart then resumes them instead of refunding).
 
-How to turn it off (rollback):
+How to turn it off (rollback). **The wait in step 2 is MANDATORY before any rollback of the image** (also a rollback to an older release): an older image never claims or refunds a `queued` video and deletes it on DELETE without a refund.
 1. Web service first: revision without the variable (new Videos run in the web task again).
-2. Wait until `studioVideos.queueDepth` and `studioVideos.running` in `GET /api/metrics/queue` are 0 (the worker finishes what was queued), then the worker revision without the variable.
-3. If the worker is switched off with videos still queued, they are failed and refunded after 30 minutes (nothing is lost, the customer sees "Your Quarks were returned").
+2. MANDATORY: wait until `studioVideos.queueDepth` and `studioVideos.running` in `GET /api/metrics/queue` are both 0 (the worker finishes what was queued). Only then the worker revision without the variable, and only then any older image.
+3. Leftovers (the switch went off, or an older image was already released, with videos still `queued`): they are failed and refunded after 30 minutes by the sweep of a current image. To close and refund them at once, from a machine with the current code: `cd backend && MONGODB_URI='<uri that names its database>' node scripts/studio-video-drain-queued.js` is a dry run (counts only); add `CONFIRM_DRAIN=yes` to act. It refuses when the URI has no database name and prints counts only.
 
 Never turn it on in the web service while NO task runs the consumer (worker at 0 tasks): videos would wait 30 minutes and then be refunded.
 
