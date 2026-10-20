@@ -168,6 +168,8 @@ class StudioVideoConsumer {
       let claimed = null;
       try { claimed = await this._claim(c._id); } catch (e) { logger.error('[videos consumer] claim failed:', e && e.message); }
       if (!claimed) continue;
+      // The claim resolved after SIGTERM began: shutdown() did not see this video (it was not running yet), so give it back.
+      if (this.stopping) { await this._handBack(claimed); break; }
       if (await this._overCap(claimed)) { active.set(String(c.user), cap); continue; }
       active.set(String(c.user), (active.get(String(c.user)) || 0) + 1);
       started += 1;
@@ -193,15 +195,25 @@ class StudioVideoConsumer {
     try {
       const n = await this.model.countDocuments({ status: 'processing', user: claimed.user });
       if (n <= cap) return false;
+      if (await this._handBack(claimed)) this.stats.capHandBacks += 1;
+      return true;
+    } catch (e) {
+      logger.error('[videos consumer] per-account re-count failed:', e && e.message);
+      return false;
+    }
+  }
+
+  /** Back to 'queued' with the attempt not counted, only while the row is still this claim. True when it was handed back. */
+  async _handBack(claimed) {
+    try {
       const back = await this.model.findOneAndUpdate(
         { _id: claimed._id, status: 'processing', workerId: this.workerId, attempts: claimed.attempts },
         { $set: { status: 'queued', workerId: null, leaseUntil: null }, $inc: { attempts: -1 } },
         { new: true }
       ).lean();
-      if (back) this.stats.capHandBacks += 1;
-      return true;
+      return !!back;
     } catch (e) {
-      logger.error('[videos consumer] per-account re-count failed:', e && e.message);
+      logger.error('[videos consumer] could not hand a claim back:', e && e.message); // its lease runs out and the sweep re-queues it
       return false;
     }
   }

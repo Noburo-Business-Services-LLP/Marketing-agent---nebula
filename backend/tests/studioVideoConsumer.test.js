@@ -745,3 +745,33 @@ test('a stale in-process row (no worker, attempts 0 or missing) is still closed 
     assert.strictEqual(w.refunds.length, 1);
   } finally { w.restore(); }
 });
+
+// ---- money review of B1: a claim that resolves after SIGTERM (finding 3) ----
+test('a claim in flight when shutdown() runs is handed back (attempt not counted) and the video is not started', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, {}, 'sd1');
+    const a = consumer(w, 'A');
+    let open; const gate = new Promise((r) => { open = r; });
+    const fou = StudioVideo.findOneAndUpdate;
+    StudioVideo.findOneAndUpdate = (q, u, o) => {
+      if (!(u.$set && u.$set.status === 'processing' && u.$set.workerId)) return fou(q, u, o);
+      const held = { lean: () => held, then: (x, y) => gate.then(() => fou(q, u, o)).then(x, y) };
+      return held;
+    };
+    const draining = a._drain();
+    await settle(10);
+    const r = await a.shutdown({ graceMs: 0 });
+    assert.strictEqual(r.finished, true, 'nothing running yet: shutdown does not wait for the claim');
+    open(); await draining; await settle(40);
+    StudioVideo.findOneAndUpdate = fou;
+    assert.deepStrictEqual({ s: w.docs.v1.status, a: w.docs.v1.attempts, wid: w.docs.v1.workerId }, { s: 'queued', a: 0, wid: null });
+    assert.strictEqual(w.gen.length, 0, 'the video was not started');
+    assert.strictEqual(a.running.size, 0);
+    assert.strictEqual(w.refunds.length, 0);
+    // Another consumer takes it normally.
+    await consumer(w, 'B')._drain(); await settle(60);
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.strictEqual(w.gen.length, 1);
+  } finally { w.restore(); }
+});
