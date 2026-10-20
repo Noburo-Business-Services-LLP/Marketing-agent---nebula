@@ -2,6 +2,8 @@ const { priceText } = require('../config/quarkWording');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+// Per-account cap on work in flight: 2 running + 5 waiting, 429 beyond (services/userJobCap.js).
+const { jobCap } = require('../services/userJobCap');
 // Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
 const L = require('../middleware/limits');
 const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
@@ -31,7 +33,7 @@ const { overlayBrandLogoIfPresent } = require('../services/logoOverlay');
  * them land as they finish, and a partial run still leaves a usable draft.
  */
 
-router.post('/generate-stream', protect, L.heavyAi, checkTrial, async (req, res) => {
+router.post('/generate-stream', protect, L.heavyAi, jobCap('carousel'), checkTrial, async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');

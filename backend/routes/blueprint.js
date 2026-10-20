@@ -4,6 +4,8 @@ const express = require('express');
 const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
+// Per-account cap on work in flight: 2 running + 5 waiting, 429 beyond (services/userJobCap.js).
+const { jobCap } = require('../services/userJobCap');
 const { requireFeature } = require('../middleware/requireFeature');
 const { checkTrial, requireCredits } = require('../middleware/trialGuard');
 const { resolveTier } = require('../config/entitlements');
@@ -42,7 +44,7 @@ function createBlueprintRouter(impl = {}) {
     const g = await require('../services/spendGuard').check('blueprint');
     return g.ok ? next() : res.status(503).json({ success: false, serviceBusy: true, message: g.message });
   };
-  router.post('/', protect, requireFeature('blueprint'), spendGate, unlessFree(checkTrial), unlessFree(requireCredits('blueprint', 1)), writeLimiter,
+  router.post('/', protect, requireFeature('blueprint'), spendGate, unlessFree(checkTrial), unlessFree(requireCredits('blueprint', 1)), writeLimiter, jobCap('blueprint'),
     handle((svc, req) => svc.start({ user: req.user, tier: resolveTier(req.user), body: req.body || {}, ip: req.ip })));
   router.get('/', protect, readLimiter, handle((svc, req, userId) => svc.list({ userId })));
   router.get('/:id', protect, readLimiter, handle((svc, req, userId) => svc.get({ userId, id: req.params.id })));

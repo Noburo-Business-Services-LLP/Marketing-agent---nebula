@@ -10,6 +10,8 @@ const crypto = require('crypto');
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
+// Per-account cap on work in flight: 2 running + 5 waiting, 429 beyond (services/userJobCap.js).
+const { jobCap } = require('../services/userJobCap');
 const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const { walletBalance } = require('../services/agency');
 const { getPublicBaseUrl } = require('../utils/toneAudio');
@@ -1453,7 +1455,7 @@ async function generateThumbnailFromDraft({ draft, baseUrl, userId = null }) {
 // -----------------------------------------------------------------------------
 // Existing one-shot pipeline endpoints
 // -----------------------------------------------------------------------------
-router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, jobCap('video'), async (req, res) => {
   const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
   
   if (!userId) {
@@ -3273,7 +3275,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
   }
 });
 
-router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, jobCap('video'), async (req, res) => {
   // Declared out here so the catch block can refund — same pattern as
   // /generate-image-bg in routes/drafts.js. Only covers the synchronous
   // path's failures; the async/queued path (off unless VIDEO_STEP_ASYNC is
@@ -3627,7 +3629,7 @@ router.post('/mixAudio', protect, checkTrial, videoAiWriteLimiter, async (req, r
   }
 });
 
-router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+router.post('/mergeVideo', protect, checkTrial, videoAiWriteLimiter, jobCap('video'), async (req, res) => {
   try {
     const { jobId, clipUrls, finalAudioUrl, subtitles = { enabled: false } } = req.body || {};
     if (!jobId) {
@@ -3951,7 +3953,7 @@ router.post('/mergeAudio', protect, checkTrial, videoAiWriteLimiter, async (req,
 });
 
 // POST /renderMissing { jobId, kind: 'images' | 'clips', castImageUrl?, aspectRatio? }
-router.post('/renderMissing', protect, checkTrial, videoAiWriteLimiter, async (req, res) => {
+router.post('/renderMissing', protect, checkTrial, videoAiWriteLimiter, jobCap('video'), async (req, res) => {
   try {
     const { jobId, kind, castImageUrl = '', aspectRatio } = req.body || {};
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });

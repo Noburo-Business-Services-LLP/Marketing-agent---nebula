@@ -3,6 +3,8 @@ const express = require('express');
 const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
+// Per-account cap on work in flight: 2 running + 5 waiting, 429 beyond (services/userJobCap.js).
+const { jobCap } = require('../services/userJobCap');
 const { checkTrial } = require('../middleware/trialGuard');
 const { normalizeHeroBrief, selectReferences } = require('../services/heroVideoBrief');
 const { thumbnailFor, titleFor, shareHeroVideo, normaliseCaption } = require('../services/heroVideoShare');
@@ -445,7 +447,7 @@ function createHeroVideoRouter(planDepsIn, impl = {}) {
     }
   });
 
-  router.post('/generate', protect, checkTrial, heroWriteLimiter, async (req, res) => {
+  router.post('/generate', protect, checkTrial, heroWriteLimiter, jobCap('hero'), async (req, res) => {
     try {
       const gate = await require('../services/spendGuard').check('hero_video_clip');
       if (!gate.ok) return res.status(503).json({ success: false, serviceBusy: true, message: gate.message });
