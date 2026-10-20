@@ -27,6 +27,19 @@ process.on('uncaughtException', (err) => {
 const requiredEnvVars = ['GEMINI_API_KEY'];
 const optionalEnvVars = ['GROK_API_KEY', 'MONGODB_URI', 'JWT_SECRET', 'SES_AWS_ACCESS_KEY_ID', 'SES_AWS_SECRET_ACCESS_KEY', 'SES_SENDER_EMAIL'];
 
+// Start-up check (B7, utils/bootEnv.js): no JWT_SECRET anywhere, or in production a short JWT_SECRET, no MONGODB_URI
+// or no HASH_PEPPER, stops the server with a clear message. Loading the app without starting it (scripts, tests:
+// NEBULAA_SERVER_NO_START=1) only prints the problems.
+{
+  const boot = require('./utils/bootEnv').validateBootEnv(process.env);
+  for (const w of boot.warnings) console.warn(`⚠️  ${w}`);
+  for (const e of boot.errors) console.error(`❌ ${e}`);
+  if (!boot.ok && process.env.NEBULAA_SERVER_NO_START !== '1') {
+    console.error('❌ The server cannot start with this configuration. Fix the values above and start it again.');
+    process.exit(1);
+  }
+}
+
 console.log('\n🔍 Validating environment...');
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {

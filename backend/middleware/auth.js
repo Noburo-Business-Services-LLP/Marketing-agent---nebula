@@ -2,12 +2,11 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { extractBearer } = require('../utils/bearer');
 
-// Demo mode when MONGODB_URI is missing or clearly a placeholder
-// Read at call time so the live inbox stream and socket hub use the exact same rule (never true in production).
-function demoModeActive() {
-  return process.env.NODE_ENV !== 'production' && (
-    !process.env.MONGODB_URI ||
-    process.env.MONGODB_URI.includes('your_mongodb_connection_string_here'));
+// Demo sign-in ("demo:<email>" tokens, no password, no database) only when asked for with ALLOW_DEMO_AUTH=1, and never
+// in production (B7). A missing MONGODB_URI no longer turns it on. Read at call time so the live inbox stream and the
+// socket hub use the exact same rule.
+function demoModeActive(env = process.env) {
+  return env.ALLOW_DEMO_AUTH === '1' && env.NODE_ENV !== 'production';
 }
 const isDemoMode = demoModeActive();
 

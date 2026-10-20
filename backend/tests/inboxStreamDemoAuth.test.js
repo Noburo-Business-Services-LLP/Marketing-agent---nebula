@@ -6,10 +6,11 @@ const auth = require('../middleware/auth');
 const router = require('../routes/socialInboxRoutes');
 const { socketAuth } = require('../services/socketHub');
 
-const saved = { env: process.env.NODE_ENV, uri: process.env.MONGODB_URI, secret: process.env.JWT_SECRET, find: User.findById };
+const saved = { env: process.env.NODE_ENV, uri: process.env.MONGODB_URI, demo: process.env.ALLOW_DEMO_AUTH, secret: process.env.JWT_SECRET, find: User.findById };
 test.afterEach(() => {
   process.env.NODE_ENV = saved.env;
   if (saved.uri === undefined) delete process.env.MONGODB_URI; else process.env.MONGODB_URI = saved.uri;
+  if (saved.demo === undefined) delete process.env.ALLOW_DEMO_AUTH; else process.env.ALLOW_DEMO_AUTH = saved.demo;
   process.env.JWT_SECRET = saved.secret; User.findById = saved.find;
 });
 
@@ -32,8 +33,8 @@ function jwtUser(id) {
   return jwt.sign({ id }, 'test-secret');
 }
 
-test('production refuses demo tokens on the stream and the socket', async () => {
-  process.env.NODE_ENV = 'production'; delete process.env.MONGODB_URI;
+test('production refuses demo tokens on the stream and the socket, even with ALLOW_DEMO_AUTH=1', async () => {
+  process.env.NODE_ENV = 'production'; delete process.env.MONGODB_URI; process.env.ALLOW_DEMO_AUTH = '1';
   assert.strictEqual(auth.demoModeActive(), false);
   assert.strictEqual((await run('demo:victim')).status, 401);
   const s = await sock('demo:victim');
@@ -47,15 +48,19 @@ test('a valid JWT works on both paths in production', async () => {
   assert.strictEqual((await sock(t)).userId, 'u1');
 });
 
-test('outside production in demo mode, demo tokens work as before', async () => {
-  process.env.NODE_ENV = 'development'; delete process.env.MONGODB_URI;
+test('outside production with ALLOW_DEMO_AUTH=1, demo tokens work as before', async () => {
+  process.env.NODE_ENV = 'development'; delete process.env.MONGODB_URI; process.env.ALLOW_DEMO_AUTH = '1';
   assert.strictEqual(auth.demoModeActive(), true);
   assert.strictEqual((await run('demo:abc')).user.id, 'abc');
   assert.strictEqual((await sock('demo:abc')).userId, 'abc');
 });
 
-test('a real database configured means demo tokens are refused even outside production', async () => {
-  process.env.NODE_ENV = 'development'; process.env.MONGODB_URI = 'mongodb://real/db';
+test('without ALLOW_DEMO_AUTH=1 demo tokens are refused outside production, with or without a database (B7)', async () => {
+  process.env.NODE_ENV = 'development'; delete process.env.ALLOW_DEMO_AUTH; delete process.env.MONGODB_URI;
+  assert.strictEqual(auth.demoModeActive(), false);
+  assert.strictEqual((await run('demo:abc')).status, 401);
+  assert.ok((await sock('demo:abc')).err);
+  process.env.MONGODB_URI = 'mongodb://real/db';
   assert.strictEqual((await run('demo:abc')).status, 401);
   assert.ok((await sock('demo:abc')).err);
 });
