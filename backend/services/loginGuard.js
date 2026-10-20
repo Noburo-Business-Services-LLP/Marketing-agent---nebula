@@ -160,7 +160,7 @@ async function sendAlertEmail(user, fails, env = process.env) {
   return { sent: true };
 }
 
-function createLoginGuard({ store = createDefaultStore(), now = Date.now, config = () => settings(), sendAlert = (user, fails) => sendAlertEmail(user, fails), verifyChallenge = null, log = console } = {}) {
+function createLoginGuard({ store = createDefaultStore(), now = Date.now, config = () => settings(), sendAlert = (user, fails) => module.exports.sendAlertEmail(user, fails) /* looked up at call time: scripts stub it */, verifyChallenge = null, log = console } = {}) {
   const challengeCheck = verifyChallenge || ((token, ip) => require('./signupGuard').verifyBotCheck(token, ip, process.env.TURNSTILE_SECRET_KEY));
 
   /** May this email be tried from this address now? { allowed } or { allowed: false, status, retryAfter, message }. */
