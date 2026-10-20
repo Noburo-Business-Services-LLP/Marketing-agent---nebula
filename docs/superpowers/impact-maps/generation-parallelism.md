@@ -131,3 +131,103 @@ SIGTERM on a consumer: stop claiming at once, wait for running jobs up to the gr
 ## 7. Tests
 Unit (fake model, fake clock, fake providers; no network, no database): two workers never run the same job; concurrency = workers x slots; the old global count is gone (a busy database does not stop a free worker) and the ceiling still applies; lease expiry re-queues exactly once (two sweeps); a retried job charges once and refunds once; non-retry-safe and capped jobs fail and refund once; a lost-lease run cannot complete; per-user cap and fairness (A 5 jobs, B and C start before A's third); shutdown releases leases; slot config validation; metrics shape; role switches; CPU semaphore.
 Real database: `backend/scripts/queue-parallel-check.js` (nebulaa_dev only, `zz.` users, fake providers, at most 40 jobs, cleanup, PASS/FAIL counts): 3 in-process workers, no job runs twice, throughput scales with workers, a killed worker's jobs are re-claimed, refunds exact.
+
+---
+
+# Stage B step 1: Videos (Omni)
+
+Written 2026-10-20 (evening) before any stage B code, at commit `9aad851`. Decision D77 started it; decisions D78 onwards record the calls made here. Line numbers are those of `9aad851`.
+
+## B1.0 The short version
+1. Today a Videos create charges the whole price, writes the `StudioVideo`, answers 202 and runs the clips with `setImmediate` **in the web task that took the request**. A restart, a deploy or a crash loses the work; the only recovery is the stale sweep, which **refunds** (never resumes), 15 minutes per clip after the start.
+2. Behind `ENABLE_STUDIO_VIDEO_CONSUMER` (default **off** = today, unchanged), the `StudioVideo` row becomes the job: after the charge it is `queued`; any consumer (a worker task, or any task with `RUN_JOB_CONSUMERS` on) claims it with the stage A protocol (one atomic conditional update writing `workerId`, `leaseUntil`, `attempts + 1`), renews the lease, runs the chain in its own `omni` provider slots (`PROVIDER_SLOTS_OMNI`, default 2) with ffmpeg inside the shared `CPU_SLOTS`, and writes progress and completion **only while the row is still its claim** (same worker id and attempt).
+3. Each clip is **stored as soon as it is made** (uploaded, its link written into `clipUrls` in the same conditional write as `clipsDone`). A job whose worker died is re-queued once (`JOB_MAX_ATTEMPTS`, 2) and **resumes after the last stored clip**: clips already made are downloaded, not made again, and nothing is charged again.
+4. Every refund still goes through the D19-B machinery (charge proof, the `refundState: 'refunding'` claim in the same write that closes the video, the studio sweep for leftovers), so it is paid at most once, never above the proven charge, to the recorded payer.
+
+## B1.1 Exact current behaviour (file:line, commit `9aad851`)
+
+| What | Where | Behaviour today |
+|---|---|---|
+| Create | `routes/studioVideos.js:358-418` | Per-process limiter (30 an hour, `allowed`), spend guard (`busy`, `:28`), a per-process `creating` Set (`:289`, `:367`) plus `countDocuments({ user, status:'processing', startedAt > now - 15 min x 6 })` (`:369`): at most 2 processing per account. Builds the prompts (`:386`), `StudioVideo.create` with the default `status:'processing'` (`:388`, model default `models/StudioVideo.js:9`), then `charge` (`:395`, `:271`: `settleWallet`, `quarkBuckets.spend(total, { ref: <video id>, units: clips })`, writes `payer`). Not enough Quarks: the row is deleted, 403. Then 202 with `shape(doc)` (`:401`) and `setImmediate` (`:404`): `run` for one clip (`:408`), `runChain` for 2 to 6 (`:410`). A throw before launch: `settleUnstarted` (`:279`: no proof = delete the row; proof = `fail` with a proven refund). |
+| One clip | `run` `:150-164` | `omni.generate` once (no retry), `applyFinish` (`:171`, never throws, never refunds), `store` (`:140`, upload to Cloudinary `nebula-studio-videos`), `completeIfOpen` (`:252`, conditional on `OPEN` `:186`: `processing`, `refunded:false`, not `refunding`; a loser deletes its upload). Any failure: `fail` (`:243`). |
+| Several clips | `runChain` `:299-327`, `services/studioVideoChain.js:103-145` `makeChain` | Clips one after another, each from the last frame of the one before (`lastFrame`, ffmpeg), each tried at most twice (`:122`), a refused idea not retried; `onClip` writes `clipsDone` (UNCONDITIONAL, `:306`, best effort `:129`). **Clips live only in memory** until the joined video is uploaded: nothing is stored between steps. Join (`concat`, ffmpeg, `:63`), finishing, upload, then `completeIfOpen` (all clips) or `finishShort` (`:330`: fewer clips = a shorter video, `quarks` lowered and the refund for the missing clips claimed in ONE update; clip 1 failing = `fail`, full refund). |
+| Change | `POST /:id/change` `:507-544` | Only for a completed 10-second video; new row (`parent`), charge one clip, 202, `setImmediate(run(...))` with `omni.change` on the downloaded earlier video. |
+| Refund | `closeWithRefund` `:223-241`, `payClaimed` `:199`, `fail` `:243` | Reads `chargeProof(<video id>)`; amount = min(wanted, proven spend), 0 when already refunded or no proof. Claim (status, amount, `refundPayer`, `refundState:'refunding'`) is ONE `findOneAndUpdate(OPEN)`; then `refundTo(..., { ref, payerId })`; then `refunded:true, refundState:'done'`. |
+| Lost work | `isStale` `:547`, `GET /` `:550` (closes up to 5 of the caller's own), `GET /:id` `:562`, `sweep` `:584` + `startStudioVideoSweep` `:612` (every 10 min, lease `scheduler:studio-video-sweep`, started with the SCHEDULERS in `server-main.js:776`) | `processing` older than 15 min x clips since `startedAt` = `fail` (refund with proof). Rows stuck in `refunding` for 2 minutes are paid by the sweep (at most 5 tries, then an alert for a person). Never resumed. |
+| Delete | `DELETE /:id` `:574` | Refused (silently, nothing deleted) while `processing` or `refunding`. |
+| Readers of the status | `frontend/pages/CreateVideo.tsx:197`, `:208`, `:218`, `:372`, `:718`, `:723`; `frontend/utils/library.ts:128`; `services/agencyWorkspaces.js:109` (client removal refused while a studio video is `processing`) | Only `processing` means "being made". |
+| Finishing and Whisper | `services/studioVideoFinish.js:287-327` | Subtitle timing: spend guard check, the spend row is written BEFORE the one Whisper call, one attempt, no retry (`studioTranscribe.js`). A finishing problem never fails or refunds the video. |
+| Metrics | none for Videos | `GET /api/metrics/queue` covers the step-by-step queue and campaign image jobs only. |
+
+## B1.2 New state machine (switch on)
+
+```
+create:  [row 'processing', no worker] --charge ok--> 'queued' --claim--> 'processing' (workerId, leaseUntil, attempts)
+                       \--charge refused--> row deleted (403)          |  heartbeat renews leaseUntil (only while mine)
+                                                                       |--all clips--> 'completed'
+                                                                       |--fewer clips--> 'completed' (short) + refund claim
+                                                                       |--clip 1 fails / error--> 'failed' + refund claim
+                                                                       |--lease ran out, attempts < 2--> 'queued' (resume)
+                                                                       |--lease ran out, attempts = 2--> 'failed' + refund claim
+                                                                       |--SIGTERM--> 'queued' (hand back, attempt not counted)
+'queued' longer than 30 min (no consumer anywhere) --> 'failed' + refund claim
+refund claim = refundState 'refunding' in the SAME write --> paid --> 'done'  (the studio sweep pays a crashed one)
+```
+- `refunding` is NOT a new status: it stays the `refundState` field of D19-B (the video's `status` is already `failed` or `completed`).
+- The row is created as `processing` with no worker id (exactly as today) and flipped to `queued` only AFTER the charge landed (`{ _id, status:'processing', workerId:null }` -> `queued`): a consumer can never claim a video that was not paid for. If the flip fails, the existing `settleUnstarted` path refunds the proven charge.
+
+## B1.3 Who claims
+- `services/studioVideoConsumer.js` (new), started in `startBackgroundJobs()` next to the video queue consumers, only when `RUN_JOB_CONSUMERS` is on for the process AND `ENABLE_STUDIO_VIDEO_CONSUMER` is on.
+- Slots per worker: `PROVIDER_SLOTS_OMNI` (default 2, 1 to 32, `PROVIDER_SLOTS` when not set) for jobs making clips; a job in its finishing step (join, subtitles, logo, upload) frees its provider slot and waits for a `CPU_SLOTS` slot (the shared `services/cpuSlots.js` semaphore: `lastFrame`, `concat` and the finishing pass run inside it). At most `omni + cpu` jobs are held in memory per worker. Total = workers x slots.
+- Fair order (same as stage A): accounts at `JOB_PER_USER_RUNNING` are left out of the candidate query, among the 50 oldest waiting rows the account with the fewest running goes first (oldest on a tie), and after a claim the account is re-counted; above the cap the job is handed back (`queued`, attempt not counted). `JOB_GLOBAL_CEILING` counts running Videos rows.
+- A web task with the switch on and consumers off only stores `queued`; a worker drains every 5 s (`STUDIO_VIDEO_DRAIN_INTERVAL_MS`). A task that runs consumers drains at once after its own create.
+
+## B1.4 Retry rules (resume, never re-charge)
+- Clips are NOT durably stored today (B1.1). DECISION (D78): on the consumer path each clip is uploaded as soon as it is made (Cloudinary folder `nebula-studio-clips`, the same uploader as the finished video) and its link is written with `clipsDone` in ONE write conditional on `{ status:'processing', workerId, attempts }`. If that write matches nothing, the run has lost its claim: the clip upload is deleted and the run stops.
+- A re-run (attempt 2) downloads the stored clips in order (`safeFetch`, the same caps as `/change`), takes the last frame of the last one, and continues with the next clip. Clips already stored are never generated again and nothing is charged again (the only charge is the one `create` took). A stored clip that cannot be downloaded ends the stored prefix there: from that clip on, the clips are made again (our provider cost, never the customer's).
+- An upload that fails does not stop the video (the clip stays in memory and the video can still be delivered); later clips are then not stored either (a resume needs an unbroken prefix), so a retry after that point re-makes them (our cost).
+- `JOB_MAX_ATTEMPTS` (default 2) caps the runs; a lost lease at the cap = failed with a FULL refund (customer-favourable; the clips made are discarded). A provider failure is never retried by the consumer (the chain's own one retry per clip is unchanged), so partial delivery stays exactly as today: clip k fails twice -> a shorter video with the missing clips refunded; clip 1 fails -> full refund.
+- One clip and `/change`: the same resume rule (the one clip, once made, is stored before finishing), so a death during finishing or upload does not call Omni again.
+- SIGTERM hand-back: at most 3 per job (`releases`), the attempt is not counted, resumable like a lease loss. A fourth = failed + refund.
+
+## B1.5 Refund rules
+- Unchanged machinery: `closeWithRefund` (proof first, amount = min(wanted, proven spend), 0 when a refund exists, claim in the same write, pay, mark done), `payClaimed`, the studio `sweep` for `refunding` rows older than 2 minutes. On the consumer path every close carries the claim's owner conditions (`workerId`, `attempts`, and for the lease sweep the `leaseUntil` it read), so of a late completion, a lease sweep, a SIGTERM hand-back and the old stale ceiling exactly ONE write wins, and only the winner pays.
+- Payer: the refund goes to `proof.spend.payer` (the wallet the charge came from, the agency for a client workspace), recorded in `refundPayer` as today.
+- A row that is `queued` and older than 30 minutes (`STUDIO_VIDEO_QUEUED_MAX_MS`; nothing claimed it: consumers switched off or down everywhere) is failed and refunded by the studio sweep and by `GET /`, `GET /:id`, like a stale `processing` row.
+
+## B1.6 API and screens
+- `POST /create` and `/:id/change` still answer 202 with the video; `GET /:id` and `GET /` answer the same shape. DECISION (D79): `shape()` shows a `queued` row as `status: 'processing'` with an extra `queued: true`, so every reader (Videos page, Library, staff) keeps working unchanged. The frontend additionally treats a raw `queued` like `processing` (`CreateVideo.tsx`, `library.ts`), because during a rolling deploy an OLD-code web task (which has no such mapping) can answer a poll for a row a new task queued.
+- `DELETE /:id` is also refused while `queued` (it is charged and about to run).
+- The create cap counts `queued` and `processing` (2 per account).
+- Agency client removal (`services/agencyWorkspaces.js:109`) counts `queued` and `processing` studio videos as running work.
+- Staff views: the usage page reads the Quark ledger (`studio_video` action), unchanged. Metrics: `GET /api/metrics/queue` gains `studioVideos` (queued, running, oldest waiting age, running per worker, this worker's slots and counters), and the CloudWatch emitter (when on) a `Queue=omni` dimension.
+
+## B1.7 Finishing and Whisper
+- Unchanged: the finishing pass runs once per attempt, inside a CPU slot; the Whisper spend row is written before its one call. A run that loses its claim during finishing may have paid one transcription the retry pays again (our cost, recorded in the spend guard; bounded by 2 attempts).
+
+## B1.8 Restart, deploy, SIGTERM, rolling deploy
+- SIGTERM: the consumer stops claiming, waits `JOB_SHUTDOWN_GRACE_MS` for running videos, then hands each one back to `queued` (resumable) before the database closes. A kill without SIGTERM: the lease runs out (60 s + one heartbeat margin) and the lease sweep of any consumer re-queues it.
+- Rolling deploy, the switch decides who runs what:
+  - switch off everywhere (default): nothing changes. The consumer is not started, no row is ever `queued`.
+  - new tasks with the switch on, old tasks still running: new creates write `queued`; OLD code never writes, claims or sweeps `queued` rows (its sweep and stale checks read `processing` only). A `processing` row claimed by a new consumer can be closed by an OLD server's stale ceiling (15 min x clips since the claim's `startedAt`), exactly as a new server would; the consumer's later writes are conditional and lose, the result is discarded, and the refund is paid once (OPEN + `refundState` claim). Old code's own in-process creates stay `processing` with no worker id and are never claimed by a consumer (the consumer only claims `queued`, the lease sweep only reads rows with a worker id).
+  - Turn the switch on in the web AND the worker service in the same release (`ecs-web-worker.md`); a web task with the switch on and no consumer anywhere leaves rows `queued`, which are refunded after 30 minutes (the safety net, not the plan).
+- Rollback: switch off (instant); rows already `queued` are still claimed by any new-code consumer only while its switch is on, so switch off AFTER the queue is empty, or let the 30-minute rule refund them. Rolling back the code with rows `queued`: old code ignores them, a new-code server (any) refunds them after 30 minutes.
+
+## B1.9 Failure modes
+
+| Case | What happens |
+|---|---|
+| Consumer dies mid-chain | Lease runs out; a sweep re-queues (attempt 2); a consumer claims, downloads the stored clips, makes the rest. No new charge. |
+| Dies again | Attempt 2 = cap: failed, full refund once. |
+| Alive but lost its lease (database stall) | Its next clip write, heartbeat or close matches nothing: it stops, deletes its upload; the late result is discarded. The other run may repeat one clip (our cost). |
+| Two consumers, one row | Impossible: the claim matches `status:'queued'`. |
+| Lease sweep and late completion race | Both conditional on worker id + attempt (+ lease end for the sweep): one wins. |
+| Provider down | Clip 1 fails twice -> failed + full refund; later clip -> short video + partial refund (today's rule). |
+| Upload of a clip fails | The video goes on from memory; only resumability is lost from that clip. |
+| Database down for the flip after the charge | `settleUnstarted` refunds the proven charge (or the stale rule does). |
+| Account deleted while queued or processing | Rows deleted: the claim finds nothing, a running claim's next write matches nothing and stops. |
+| No consumer anywhere (misconfiguration) | `queued` > 30 min = failed + refund. |
+| Refund crash | `refundState: 'refunding'` stays; the studio sweep pays once with proof. |
+
+## B1.10 Tests
+Unit (fake model with a fake clock, fake Omni, fake ffmpeg and finishing, fake wallet): two consumers never run the same video; concurrency = consumers x slots; a consumer that dies mid-chain is resumed (clips made once, one charge, at most one refund, partial delivery rules kept); lease-expiry races (two sweeps, sweep vs late completion); a late result after lease loss is discarded; delete while queued and processing; per-user cap and fairness; switch off keeps the in-process path; rolling-deploy coexistence (old-style rows are not claimed; old stale ceiling vs consumer); SIGTERM hand-back; metrics shape; the existing studio tests pass unchanged. Real database: `backend/scripts/studio-video-consumer-check.js` (nebulaa_dev only, a throwaway collection, `zz.` accounts, fake Omni and ffmpeg, at most 12 videos, cleanup, PASS/FAIL counts).
