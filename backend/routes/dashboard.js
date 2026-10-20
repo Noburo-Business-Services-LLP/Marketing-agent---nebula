@@ -269,9 +269,12 @@ router.get('/overview', protect, async (req, res) => {
     }
     
     // Run initial queries in parallel for faster loading
-    const [user, allCampaigns, competitors] = await Promise.all([
+    // The totals need only a few small fields of every campaign; the full card fields are read for the newest 10 only
+    // (load-test weeks 2 to 3: a campaign can hold megabytes of images and provider answers).
+    const [user, allCampaigns, recentCampaigns, competitors] = await Promise.all([
       User.findById(userId).lean(),
-      Campaign.find({ userId }).sort({ createdAt: -1 }).lean(),
+      Campaign.find({ userId }).sort({ createdAt: -1 }).select('status budget.spent createdAt performance.impressions performance.clicks performance.engagement').lean(),
+      Campaign.find({ userId }).sort({ createdAt: -1 }).limit(10).select('name objective platforms status scheduling performance creative createdAt').lean(),
       Competitor.find({ userId }).limit(10).lean()
     ]);
     
@@ -283,7 +286,6 @@ router.get('/overview', protect, async (req, res) => {
 
     // Process campaign data
     const activeCampaigns = allCampaigns.filter(c => ['active', 'posted', 'scheduled'].includes(c.status));
-    const recentCampaigns = allCampaigns.slice(0, 10);
     
     // Calculate REAL spend from campaigns
     const totalSpent = allCampaigns.reduce((sum, c) => sum + (c.budget?.spent || 0), 0);
@@ -521,9 +523,6 @@ router.get('/overview', protect, async (req, res) => {
       }
     }
 
-    // Get REAL influencer count (already in parallel, but just count is fast)
-    const influencerCount = await Influencer.countDocuments({ userId });
-    
     // Generate AI-powered insights using Gemini (with real context)
     const metrics = {
       totalCampaigns: allCampaigns.length,
@@ -531,27 +530,10 @@ router.get('/overview', protect, async (req, res) => {
       totalSpent,
       engagementRate: totalImpressions > 0 ? ((totalEngagement / totalImpressions) * 100).toFixed(2) : 0
     };
-    const aiData = user.businessProfile?.name 
-      ? await generateDashboardInsights(user.businessProfile, metrics)
-      : { suggestedActions: [], trendingTopics: [], personalizedTips: [], brandScoreFactors: {} };
-    
-    // Calculate brand score based on REAL data
-    const brandScore = calculateRealBrandScore({
-      campaignCount: allCampaigns.length,
-      activeCampaignCount: activeCampaigns.length,
-      totalSpent,
-      totalImpressions,
-      totalEngagement,
-      avgCTR,
-      competitorCount: competitorList.length,
-      influencerCount
-    });
-    
-    // Build response with REAL data
-    
-    // Fetch Ayrshare connected accounts - FAST (no analytics call to avoid slow loading)
-    let ayrshareProfiles = [];
-    if (user.ayrshare?.profileKey) {
+    // The influencer count, the AI insights and the connected social accounts do not depend on each other: they are
+    // read at the same time (load-test weeks 2 to 3; they used to run one after another).
+    const loadAyrshareProfiles = async () => {
+      if (!user.ayrshare?.profileKey) return [];
       try {
         const userProfile = await getAyrshareUserProfile(user.ayrshare.profileKey);
         if (userProfile.success && userProfile.data?.activeSocialAccounts?.length > 0) {
@@ -568,7 +550,7 @@ router.get('/overview', protect, async (req, res) => {
             'tiktok': 'TikTok'
           };
           
-          ayrshareProfiles = ayrshareAccounts.map(platformKey => {
+          return ayrshareAccounts.map(platformKey => {
             const displayInfo = displayNames.find(d => d.platform === platformKey);
             
             return {
@@ -582,7 +564,31 @@ router.get('/overview', protect, async (req, res) => {
       } catch (e) {
         console.log('Ayrshare profile fetch for dashboard failed:', e.message);
       }
-    }
+      return [];
+    };
+    const [influencerCount, aiData, ayrshareProfiles] = await Promise.all([
+      Influencer.countDocuments({ userId }),
+      user.businessProfile?.name
+        ? generateDashboardInsights(user.businessProfile, metrics)
+        : { suggestedActions: [], trendingTopics: [], personalizedTips: [], brandScoreFactors: {} },
+      loadAyrshareProfiles()
+    ]);
+    
+    // Calculate brand score based on REAL data
+    const brandScore = calculateRealBrandScore({
+      campaignCount: allCampaigns.length,
+      activeCampaignCount: activeCampaigns.length,
+      totalSpent,
+      totalImpressions,
+      totalEngagement,
+      avgCTR,
+      competitorCount: competitorList.length,
+      influencerCount
+    });
+    
+    // Build response with REAL data
+    
+    // Ayrshare connected accounts were read above, at the same time as the insights (no analytics call).
     
     // Combine OAuth-connected accounts (like YouTube) with Ayrshare accounts
     const oauthProfiles = (user.connectedSocials || []).filter(s => s.accessToken).map(social => ({
