@@ -30,7 +30,6 @@ const NotificationBell: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   // Latest values for the 30 second timer, which is set up once and so cannot read state directly.
   const unreadRef = useRef(0);
@@ -48,28 +47,6 @@ const NotificationBell: React.FC = () => {
       setUnreadCount(res.unreadCount);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
-    }
-  };
-
-  // Force check notifications for scheduled campaigns
-  const handleCheckNow = async () => {
-    setChecking(true);
-    try {
-      const res = await apiService.checkNotificationsNow();
-      if (res.notifications && res.notifications.length > 0) {
-        alert(`✅ Created ${res.notifications.length} notification(s)!`);
-      } else if (res.campaigns && res.campaigns.length > 0) {
-        alert(`ℹ️ Found ${res.campaigns.length} scheduled campaign(s) but no notifications were due yet.`);
-      } else {
-        alert('ℹ️ No scheduled campaigns found.');
-      }
-      // Refresh notifications
-      await fetchNotifications();
-    } catch (error: any) {
-      console.error('Check failed:', error);
-      alert('Failed to check notifications: ' + (error.message || 'Unknown error'));
-    } finally {
-      setChecking(false);
     }
   };
 
@@ -248,14 +225,6 @@ const NotificationBell: React.FC = () => {
             }`}>
             <h3 className={`font-bold ${theme.text}`}>Notifications</h3>
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleCheckNow}
-                disabled={checking}
-                className="text-xs text-[#ffcc29] hover:underline flex items-center gap-1"
-                title="Check for scheduled campaign notifications"
-              >
-                {checking ? '🔄' : '🔔'} Check
-              </button>
               {unreadCount > 0 && (
                 <button
                   onClick={handleMarkAllRead}
@@ -280,13 +249,6 @@ const NotificationBell: React.FC = () => {
               <div className={`py-8 text-center ${theme.textMuted}`}>
                 <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No notifications yet</p>
-                <button
-                  onClick={handleCheckNow}
-                  disabled={checking}
-                  className="mt-3 px-3 py-1.5 bg-[#ffcc29] text-black text-xs font-semibold rounded-lg hover:bg-[#e6b825] disabled:opacity-50"
-                >
-                  {checking ? '🔄 Checking...' : '🔔 Check Scheduled Campaigns'}
-                </button>
               </div>
             ) : (
               notifications.map(notification => (

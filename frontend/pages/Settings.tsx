@@ -236,8 +236,8 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
       if (!passwordData.currentPassword) newErrors.currentPassword = 'Current password is required';
       if (!passwordData.newPassword) {
           newErrors.newPassword = 'New password is required';
-      } else if (passwordData.newPassword.length < 8) {
-          newErrors.newPassword = 'Password must be at least 8 characters';
+      } else if (passwordData.newPassword.length < 10) {
+          newErrors.newPassword = 'Password must be at least 10 characters';
       }
       if (passwordData.newPassword !== passwordData.confirmPassword) {
           newErrors.confirmPassword = 'Passwords do not match';
@@ -575,7 +575,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUserUpdate }) => {
                                       </button>
                                   </div>
                                   {passwordErrors.newPassword && <p className="text-red-500 text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {passwordErrors.newPassword}</p>}
-                                  <p className="text-xs text-slate-400 mt-1">Must be at least 8 characters</p>
+                                  <p className="text-xs text-slate-400 mt-1">Must be at least 10 characters</p>
                               </div>
 
                               <div>

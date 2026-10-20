@@ -100,7 +100,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
 
   useEffect(() => {
     setPwdCriteria({
-      length: password.length >= 8,
+      length: password.length >= 10,
       number: /\d/.test(password),
       special: /[!@#$%^&*(),.?":{}|<>]/.test(password),
       letter: /[a-zA-Z]/.test(password)
@@ -400,7 +400,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
   };
 
   const fpPwdCriteria = {
-    length: fpNewPassword.length >= 8,
+    length: fpNewPassword.length >= 10,
     number: /\d/.test(fpNewPassword),
     special: /[!@#$%^&*(),.?":{}|<>]/.test(fpNewPassword),
     letter: /[a-zA-Z]/.test(fpNewPassword),
@@ -569,7 +569,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                 <div className={`p-3 rounded-lg text-xs ${theme === 'dark' ? 'bg-[#070A12] border border-slate-700/50' : 'bg-gray-50 border border-gray-200'}`}>
                   <p className="font-semibold text-[#F5A623] mb-2 flex items-center gap-1"><ShieldCheck className="w-3 h-3" /> Password Requirements:</p>
                   <ul className="space-y-1">
-                    <CriteriaItem met={fpPwdCriteria.length} label="At least 8 characters" theme={theme} />
+                    <CriteriaItem met={fpPwdCriteria.length} label="At least 10 characters" theme={theme} />
                     <CriteriaItem met={fpPwdCriteria.letter} label="Contains a letter" theme={theme} />
                     <CriteriaItem met={fpPwdCriteria.number} label="Contains a number" theme={theme} />
                     <CriteriaItem met={fpPwdCriteria.special} label="Contains a symbol (!@#$)" theme={theme} />
@@ -889,7 +889,7 @@ const Auth: React.FC<AuthProps> = ({ onLoginSuccess }) => {
                   <ShieldCheck className="w-3 h-3" /> Password Requirements:
                 </p>
                 <ul className="space-y-1">
-                  <CriteriaItem met={pwdCriteria.length} label="At least 8 characters" theme={theme} />
+                  <CriteriaItem met={pwdCriteria.length} label="At least 10 characters" theme={theme} />
                   <CriteriaItem met={pwdCriteria.letter} label="Contains a letter" theme={theme} />
                   <CriteriaItem met={pwdCriteria.number} label="Contains a number" theme={theme} />
                   <CriteriaItem met={pwdCriteria.special} label="Contains a symbol (!@#$)" theme={theme} />
