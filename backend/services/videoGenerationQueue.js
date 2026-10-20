@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const VideoJob = require('../models/VideoJob');
+const { settleRefund, SWEEP_AFTER_MS } = require('./refundSettle');
+const { QUARK_COSTS } = require('../config/apiCosts');
 
 const DEFAULT_CONCURRENCY = Math.max(
   1,
@@ -78,8 +80,20 @@ function estimateRemainingSeconds(job = {}) {
   return 30;
 }
 
+// Thrown to a handler (through controls.update) when its job was cancelled, stopped or failed by someone else: the
+// worker stops at the next step instead of finishing a video nobody is going to be charged for.
+class JobCancelledError extends Error {
+  constructor(jobId) { super(`Job ${jobId} is no longer running.`); this.name = 'JobCancelledError'; this.jobId = jobId; }
+}
+
 class PersistentVideoGenerationQueue {
-  constructor({ concurrency = DEFAULT_CONCURRENCY, jobTtlMs = DEFAULT_JOB_TTL_MS } = {}) {
+  constructor({ concurrency = DEFAULT_CONCURRENCY, jobTtlMs = DEFAULT_JOB_TTL_MS, model, draftModel, refund, chargeProof, alertOwner } = {}) {
+    this.draftModel = draftModel || null;
+    // Injectable for tests; the real ones load on first use.
+    this.model = model || VideoJob;
+    this.refund = refund || ((...a) => require('../middleware/trialGuard').refundCredits(...a));
+    this.chargeProof = chargeProof || ((...a) => require('./quarkBuckets').chargeProof(...a));
+    this.alertOwner = alertOwner || ((a) => require('./opsAlerts').notify(a));
     this.concurrency = concurrency;
     this.jobTtlMs = jobTtlMs;
     this.handlers = new Map();
@@ -136,7 +150,7 @@ class PersistentVideoGenerationQueue {
   async recoverInterruptedJobsOnStartup() {
     if (String(process.env.VIDEO_JOB_RECOVER_PROCESSING_ON_STARTUP || 'true').toLowerCase() === 'false') return;
 
-    const processingJobs = await VideoJob.find({ status: 'processing' });
+    const processingJobs = await this.model.find({ status: 'processing' });
     if (!processingJobs.length) return;
 
     // NEVER re-queue on startup. Every restart and every redeploy used to
@@ -144,36 +158,105 @@ class PersistentVideoGenerationQueue {
     // nobody asking for it. Mark them failed instead — the user decides.
     console.log(`Persistent Queue: Marking ${processingJobs.length} interrupted job(s) failed after startup (no auto-retry).`);
     for (const job of processingJobs) {
-      await VideoJob.updateOne(
-        { jobId: job.jobId },
-        {
-          $set: {
-            status: 'failed',
-            currentStep: 'stale_recovery_failed',
-            completedAt: new Date(),
-            updatedAt: new Date(),
-            error: { message: 'The server restarted while this job was running. Press Retry to try again.', stack: null }
-          },
-          $push: {
-            logs: `[${new Date().toISOString()}] App restarted while job was processing. Marked failed — retries are manual only.`
-          }
-        }
-      );
-
-      if (job.userId && !job.metadata?.perSceneCharging) {
-        try {
-          const { refundCredits } = require('../middleware/trialGuard');
-          await refundCredits(
-            job.userId,
-            'campaign_full',
-            1,
-            `Refund: AI video job ${job.jobId} interrupted by server restart`
-          );
-        } catch (refundError) {
-          console.error(`⚠️ Failed to refund credits for interrupted job ${job.jobId}:`, refundError.message);
-        }
-      }
+      const won = await this._failIfProcessing(job, {
+        currentStep: 'stale_recovery_failed',
+        error: { message: 'The server restarted while this job was running. Press Retry to try again.', stack: null },
+        log: 'App restarted while job was processing. Marked failed — retries are manual only.'
+      });
+      if (won) await this._refundJob(won, 'was interrupted by a server restart');
     }
+  }
+
+  /**
+   * Ends a job that is still 'processing' as failed and, in the SAME conditional update, claims its refund
+   * (refundState 'refunding'). Returns the updated job when this call won, null when the job had already left
+   * 'processing' (cancelled, finished, failed by another path): the caller that wins is the only one that refunds.
+   * `extraFilter` adds conditions (the stale scan: not updated since the threshold).
+   */
+  async _failIfProcessing(job, { currentStep, error, log, extraFilter = {} }) {
+    const now = new Date();
+    const owed = this._refundPlan(job).length > 0;
+    try {
+      return await this.model.findOneAndUpdate(
+        { jobId: job.jobId, status: 'processing', ...extraFilter },
+        {
+          $set: { status: 'failed', currentStep, completedAt: now, updatedAt: now, error, ...(owed ? { refundState: 'refunding', refundAt: now } : {}) },
+          $push: { logs: `[${now.toISOString()}] ${log}` }
+        },
+        { new: true }
+      ).lean();
+    } catch (err) {
+      console.error(`⚠️ Failed to mark job ${job.jobId} failed:`, err.message);
+      return null;
+    }
+  }
+
+  /**
+   * What a job was charged, as the refunds to pay: one entry per charge with the ref that charge carried (so the Quark
+   * ledger and chargeProof see both), the wallet that paid when it was recorded, and the amount. A per-scene job
+   * charged each scene itself (and refunds that scene itself), so it has nothing to refund here. A job with no charge
+   * record at all gets the old flat guess (legacy), under its own ref.
+   */
+  _refundPlan(job = {}) {
+    if (!job || !job.userId) return [];
+    const charges = job.metadata?.quarkCharge;
+    if (Array.isArray(charges) && charges.length) {
+      return charges.map((c, i) => ({ action: c.action, count: c.count, ref: String(c.ref || `${job.jobId}:${i}`), payerId: c.payerId ? String(c.payerId) : '' }));
+    }
+    if (job.metadata?.perSceneCharging) return [];
+    return [{ action: 'campaign_full', count: 1, ref: `${job.jobId}:legacy`, payerId: '' }];
+  }
+
+  async _payEntry(job, e, why, payerId = e.payerId) {
+    const r = await this.refund(String(job.userId), e.action, e.count, `Refund: AI video generation job ${job.jobId} ${why}`, { ref: e.ref, ...(payerId ? { payerId } : {}) });
+    return !(r && r.success === false);
+  }
+
+  /**
+   * Pays the refund this job's winner claimed (refundState 'refunding'): every charge, with its ref, to the wallet that
+   * paid; then marks 'refunded'. A payment that fails or a crash leaves the claim: sweepRefunds pays what is still owed
+   * once, only when chargeProof says nobody has.
+   */
+  async _refundJob(job, why) {
+    const plan = this._refundPlan(job);
+    if (!plan.length) return false;
+    let all = true;
+    for (const e of plan) {
+      let ok = false;
+      try { ok = await this._payEntry(job, e, why); } catch (err) { console.error(`⚠️ Failed to refund credits for job ${job.jobId}:`, err.message); }
+      if (!ok) all = false;
+    }
+    if (!all) return false;
+    try { await this.model.updateOne({ jobId: job.jobId, refundState: 'refunding' }, { $set: { refundState: 'refunded' } }); } catch (_) { /* the sweep marks it */ }
+    await this._pushLog(job.jobId, 'Credits automatically refunded.');
+    return true;
+  }
+
+  /** A bounded pass over refunds a crash or an outage left claimed but unpaid. Each job is held first (one conditional update). */
+  async sweepRefunds(limit = 10) {
+    const now = new Date();
+    const older = new Date(now.getTime() - SWEEP_AFTER_MS);
+    let rows = [];
+    try { rows = (await this.model.find({ refundState: 'refunding', refundAt: { $lt: older } }).limit(limit).lean()) || []; } catch (_) { return 0; }
+    let settled = 0;
+    for (const r of rows) {
+      try {
+        const job = await this.model.findOneAndUpdate({ jobId: r.jobId, refundState: 'refunding', refundAt: { $lt: older } }, { $set: { refundAt: new Date() } }, { new: false }).lean();
+        if (!job) continue;
+        const outs = [];
+        for (const e of this._refundPlan(job)) {
+          outs.push(await settleRefund({
+            ref: e.ref, userId: String(job.userId), quarks: (Number(QUARK_COSTS[e.action]) || 0) * (Number(e.count) || 0), payerId: e.payerId,
+            chargeProof: this.chargeProof, alert: this.alertOwner, label: 'video',
+            pay: ({ payerId }) => this._payEntry(job, e, 'was settled', payerId)
+          }));
+        }
+        if (outs.every((o) => o === 'paid' || o === 'already')) { await this.model.updateOne({ jobId: job.jobId, refundState: 'refunding' }, { $set: { refundState: 'refunded' } }); settled += 1; }
+        else if (outs.some((o) => o === 'failed' || o === 'unknown')) { /* held for another two minutes */ }
+        else { await this.model.updateOne({ jobId: job.jobId, refundState: 'refunding' }, { $set: { refundState: 'unproven' } }); }
+      } catch (e) { console.error('⚠️ Video refund sweep failed:', e.message); }
+    }
+    return settled;
   }
 
   _startRecoveryTimer() {
@@ -181,6 +264,7 @@ class PersistentVideoGenerationQueue {
     this.recoveryTimer = setInterval(async () => {
       try {
         await this.recoverStaleJobs();
+        await this.sweepRefunds();
       } catch (err) {
         console.error('⚠️ Persistent Queue stale job recovery loop failed:', err.message);
       }
@@ -197,7 +281,7 @@ class PersistentVideoGenerationQueue {
 
     try {
       // Find all processing jobs that haven't been updated since threshold
-      const staleJobs = await VideoJob.find({
+      const staleJobs = await this.model.find({
         status: 'processing',
         updatedAt: { $lt: threshold }
       });
@@ -211,43 +295,22 @@ class PersistentVideoGenerationQueue {
         // "hung" job is often still running and still being billed —
         // re-queueing started a second paid generation alongside the first.
         // Mark it failed, refund, and let the user press Retry if they want
-        // to spend again.
+        // to spend again. Conditional on still being 'processing' and still stale: a job that moved on meanwhile
+        // (finished, cancelled, updated) is left alone, and only the winner refunds.
+        const won = await this._failIfProcessing(job, {
+          currentStep: 'stale_recovery_failed',
+          error: {
+            message: `Job stopped responding for ${Math.round(STALE_TIMEOUT_MS / 60000)} minutes and was stopped. Press Retry to try again.`,
+            stack: null
+          },
+          log: `Job detected as stale/hung (no updates for ${Math.round(STALE_TIMEOUT_MS / 60000)}m). Marked failed — retries are manual only.`,
+          extraFilter: { updatedAt: { $lt: threshold } }
+        });
+        if (!won) continue;
         console.log(`❌ Stale job ${job.jobId} marked failed (no auto-retry; user can retry manually).`);
         require('./opsAlerts').recordFailure('video', `job ${job.jobId} stalled and was marked failed`);
-        await VideoJob.updateOne(
-          { jobId: job.jobId },
-          {
-            $set: {
-              status: 'failed',
-              currentStep: 'stale_recovery_failed',
-              completedAt: new Date(),
-              updatedAt: new Date(),
-              error: {
-                message: `Job stopped responding for ${Math.round(STALE_TIMEOUT_MS / 60000)} minutes and was stopped. Press Retry to try again.`,
-                stack: null
-              }
-            },
-            $push: {
-              logs: `[${new Date().toISOString()}] Job detected as stale/hung (no updates for ${Math.round(STALE_TIMEOUT_MS / 60000)}m). Marked failed — retries are manual only.`
-            }
-          }
-        );
-
-        // Refund credits to user on stale failure. Per-scene jobs charge each scene as it renders and refund
-        // that scene themselves, so a fixed refund here would hand out free Quarks.
-        if (job.userId && !job.metadata?.perSceneCharging) {
-          try {
-            const { refundCredits } = require('../middleware/trialGuard');
-            await refundCredits(
-              job.userId,
-              'campaign_full',
-              1,
-              `Refund: Stale AI video generation job ${job.jobId} failed`
-            );
-          } catch (refundError) {
-            console.error(`⚠️ Failed to refund credits for stale job ${job.jobId}:`, refundError.message);
-          }
-        }
+        // Per-scene jobs charge each scene as it renders and refund that scene themselves (see _refundPlan).
+        await this._refundJob(won, 'stalled and failed');
       }
     } catch (err) {
       console.error('⚠️ Failed to recover stale jobs:', err.message);
@@ -259,7 +322,7 @@ class PersistentVideoGenerationQueue {
     this.gcTimer = setInterval(async () => {
       try {
         const threshold = new Date(Date.now() - this.jobTtlMs);
-        const res = await VideoJob.deleteMany({ updatedAt: { $lt: threshold } });
+        const res = await this.model.deleteMany({ updatedAt: { $lt: threshold } });
         if (res.deletedCount > 0) {
           console.log(`🧹 Persistent Queue GC: Deleted ${res.deletedCount} stale jobs updated before ${threshold.toISOString()}`);
         }
@@ -283,7 +346,7 @@ class PersistentVideoGenerationQueue {
 
     const jobId = crypto.randomUUID();
 
-    const job = await VideoJob.create({
+    const job = await this.model.create({
       jobId,
       userId: userId ? userId : null,
       status: 'queued',
@@ -314,7 +377,7 @@ class PersistentVideoGenerationQueue {
       if (userId) {
         query.userId = userId;
       }
-      const job = await VideoJob.findOne(query).lean();
+      const job = await this.model.findOne(query).lean();
       if (!job) return null;
       return this._publicView(job);
     } catch (err) {
@@ -323,67 +386,64 @@ class PersistentVideoGenerationQueue {
     }
   }
 
+  /**
+   * Cancels a job. ONE conditional update decides it (status queued or processing -> cancelled) and claims the refund in
+   * the same write; only the call that won it refunds. A job that already finished, failed or was cancelled is returned
+   * as it is, with no refund. The worker stops at its next step (controls.update throws JobCancelledError), and what it
+   * finishes after that is discarded: completion and failure are conditional on the job still being 'processing'.
+   */
   async cancelJob(jobId, userId = null) {
     try {
       const query = { jobId: String(jobId || '') };
       if (userId) {
         query.userId = userId;
       }
-      const job = await VideoJob.findOne(query);
+      const job = await this.model.findOne(query).lean();
 
       if (!job) {
         throw new Error('Job not found');
       }
 
       if (['completed', 'failed', 'cancelled'].includes(job.status)) {
-        return this._publicView(job.toObject());
+        return this._publicView(job);
       }
 
-      const wasProcessing = job.status === 'processing';
-
-      job.status = 'cancelled';
-      job.completedAt = new Date();
-      job.error = { message: 'Job cancelled by user.' };
-      await job.save();
+      const now = new Date();
+      const owed = this._refundPlan(job).length > 0;
+      const won = await this.model.findOneAndUpdate(
+        { ...query, status: { $in: ['queued', 'processing'] } },
+        { $set: { status: 'cancelled', completedAt: now, updatedAt: now, error: { message: 'Job cancelled by user.' }, ...(owed ? { refundState: 'refunding', refundAt: now } : {}) } },
+        { new: false }
+      ).lean();
+      const current = (await this.model.findOne(query).lean()) || job;
+      if (!won) return this._publicView(current); // finished or cancelled meanwhile: nothing to refund here
 
       await this._pushLog(jobId, `Job cancelled by user.`);
-
-      if (job.userId) {
-        const charges = job.metadata?.quarkCharge;
-        try {
-          const { refundCredits } = require('../middleware/trialGuard');
-          if (Array.isArray(charges) && charges.length) {
-            for (const { action, count } of charges) {
-              await refundCredits(job.userId, action, count, `Refund: AI video generation job ${jobId} was cancelled`);
-            }
-            await this._pushLog(jobId, `Credits automatically refunded due to cancellation.`);
-          } else {
-            const refundResult = await refundCredits(job.userId, 'campaign_full', 1, `Refund: AI video generation job ${jobId} was cancelled (legacy, no charge record)`);
-            if (refundResult.success) {
-              await this._pushLog(jobId, `Credits automatically refunded due to cancellation (legacy fallback).`);
-            }
-          }
-        } catch (refundError) {
-          console.error(`⚠️ Failed to refund credits for cancelled job ${jobId}:`, refundError.message);
-        }
+      try {
+        const Draft = this.draftModel || require('../models/Draft');
+        await Draft.updateMany({ 'generationProgress.jobId': jobId, status: 'processing' }, { $set: { status: 'failed', errorMessage: 'Cancelled.' } });
+      } catch (draftErr) {
+        console.error(`⚠️ Failed to update Draft status for cancelled job ${jobId}:`, draftErr.message);
       }
-
-      if (wasProcessing) {
-        // The job will continue to run, but the client will see it as cancelled.
-        // This is a "best-effort" cancellation.
-        await this._pushLog(jobId, `Cancellation requested while job was processing. The current step will finish, but the job will not be retried.`);
+      if (owed) await this._refundJob(won, 'was cancelled');
+      if (won.status === 'processing') {
+        await this._pushLog(jobId, `Cancellation requested while job was processing. The worker stops at its next step and its result is discarded.`);
       }
-
-      return this._publicView(job.toObject());
+      return this._publicView((await this.model.findOne(query).lean()) || current);
     } catch (err) {
       console.error(`⚠️ Failed to cancel job ${jobId}:`, err.message);
       throw err;
     }
   }
 
+  /** Writes `patch` only while the job is still 'processing'. Returns the job, null when it is not, and throws on a database error. */
+  async _updateIfProcessing(jobId, patch = {}) {
+    return this.model.findOneAndUpdate({ jobId, status: 'processing' }, { $set: { ...patch, updatedAt: new Date() } }, { new: true }).lean();
+  }
+
   async _updateJob(jobId, patch = {}) {
     try {
-      const job = await VideoJob.findOneAndUpdate(
+      const job = await this.model.findOneAndUpdate(
         { jobId },
         { $set: { ...patch, updatedAt: new Date() } },
         { new: true }
@@ -400,7 +460,7 @@ class PersistentVideoGenerationQueue {
       const line = `[${new Date().toISOString()}] ${String(message || '').trim()}`;
       
       // Update with an atomic array push, while limiting log length to 200 items in Mongoose
-      await VideoJob.updateOne(
+      await this.model.updateOne(
         { jobId },
         { 
           $push: { 
@@ -424,24 +484,20 @@ class PersistentVideoGenerationQueue {
 
     if (!handler) {
       console.error(`❌ No handler registered for job type [${jobType}]. Job ${jobId} failed.`);
-      await this._updateJob(jobId, {
-        status: 'failed',
+      const won = await this._failIfProcessing(jobDoc, {
         currentStep: 'missing_handler',
-        completedAt: new Date(),
-        error: { message: `No handler registered for job type [${jobType}]` }
+        error: { message: `No handler registered for job type [${jobType}]` },
+        log: `No handler registered for job type [${jobType}]`
       });
+      if (won) await this._refundJob(won, 'could not start');
       return;
     }
 
     try {
       await this._pushLog(jobId, `Starting job execution [${jobType}]`);
       const heartbeatTimer = setInterval(() => {
-        this._updateJob(jobId, {
-          metadata: {
-            ...(jobDoc.metadata || {}),
-            heartbeatAt: new Date().toISOString()
-          }
-        }).catch(() => {});
+        // Only while processing, and only the heartbeat key: never over step metadata or a cancelled job.
+        this._updateIfProcessing(jobId, { 'metadata.heartbeatAt': new Date().toISOString() }).catch(() => {});
       }, 30000);
       heartbeatTimer.unref?.();
       
@@ -454,12 +510,20 @@ class PersistentVideoGenerationQueue {
           if (typeof currentStep === 'string' && currentStep.trim()) {
             patch.currentStep = currentStep.trim();
           }
+          // Between steps: a job that was cancelled (or ended by another path) stops here instead of going on.
+          const current = await this.model.findOne({ jobId }).lean();
+          if (current && current.status !== 'processing') throw new JobCancelledError(jobId);
           if (stepMetadata && typeof stepMetadata === 'object') {
-            // Read current job to merge metadata nested objects
-            const current = await VideoJob.findOne({ jobId }).lean();
+            // Merge nested metadata objects
             patch.metadata = { ...(current?.metadata || {}), ...stepMetadata };
           }
-          await this._updateJob(jobId, patch);
+          let wrote = null;
+          try { wrote = await this._updateIfProcessing(jobId, patch); } catch (err) { console.error(`⚠️ Failed to update job ${jobId}:`, err.message); return; }
+          if (!wrote) throw new JobCancelledError(jobId);
+        },
+        isCancelled: async () => {
+          const current = await this.model.findOne({ jobId }).lean();
+          return Boolean(current && current.status !== 'processing');
         },
         log: async (message) => await this._pushLog(jobId, message)
       };
@@ -471,19 +535,30 @@ class PersistentVideoGenerationQueue {
         clearInterval(heartbeatTimer);
       }
 
-      await this._updateJob(jobId, {
-        status: 'completed',
-        progress: 100,
-        currentStep: 'completed',
-        completedAt: new Date(),
-        result,
-        error: null
-      });
+      // Completion is conditional on the job still being 'processing': a cancelled (refunded) or stopped job never turns
+      // into a delivered video.
+      let completed = null;
+      try {
+        completed = await this._updateIfProcessing(jobId, {
+          status: 'completed',
+          progress: 100,
+          currentStep: 'completed',
+          completedAt: new Date(),
+          result,
+          error: null
+        });
+      } catch (err) {
+        console.error(`⚠️ Failed to complete job ${jobId}:`, err.message);
+      }
+      if (!completed) {
+        await this._pushLog(jobId, `Finished after the job was cancelled or stopped: the result was discarded.`);
+        return;
+      }
       await this._pushLog(jobId, `Successfully completed job execution [${jobType}]`);
 
       if (jobType === 'create_video_pipeline' || jobType === 'merge_video') {
         try {
-          const Draft = require('../models/Draft');
+          const Draft = this.draftModel || require('../models/Draft');
           const finalUrl = result?.videoUrl || result?.url || result?.finalVideoUrl || result?.merge?.finalVideoUrl;
           await Draft.updateMany(
             { 'generationProgress.jobId': jobId },
@@ -534,24 +609,30 @@ class PersistentVideoGenerationQueue {
         }
       }
     } catch (error) {
+      if (error instanceof JobCancelledError) {
+        // Cancelled (and refunded) by the user, or ended by another path: nothing more to do and nothing to refund here.
+        await this._pushLog(jobId, 'Stopped: the job was cancelled.');
+        return;
+      }
       console.error(`❌ Video job ${jobId} failed:`, error);
       require('./opsAlerts').recordFailure('video', `job ${jobId}: ${error?.message || error}`);
       // NO AUTOMATIC RETRY. Every retry re-runs paid fal.ai generation, so a
       // failure must cost exactly one run. The job is left failed (credits are
       // refunded below) and only the user can retry it, via retryJob().
-      await this._updateJob(jobId, {
-        status: 'failed',
+      // Conditional on still being 'processing', with the refund claimed in the same write: a job the user cancelled
+      // (and was refunded) meanwhile is not failed or refunded a second time.
+      const won = await this._failIfProcessing(jobDoc, {
         currentStep: 'failed',
-        completedAt: new Date(),
         error: {
           message: error?.message || 'Video generation job failed',
           stack: process.env.NODE_ENV === 'development' ? (error?.stack || null) : null
-        }
+        },
+        log: `FAILED: ${error?.message || error}`
       });
-      await this._pushLog(jobId, `FAILED: ${error?.message || error}`);
+      if (!won) return;
 
       try {
-        const Draft = require('../models/Draft');
+        const Draft = this.draftModel || require('../models/Draft');
         await Draft.updateMany(
           { 'generationProgress.jobId': jobId },
           { $set: { status: 'failed', errorMessage: error?.message || 'Video generation failed' } }
@@ -560,51 +641,23 @@ class PersistentVideoGenerationQueue {
         console.error(`⚠️ Failed to update Draft status to failed for job ${jobId}:`, err.message);
       }
 
-      // Refund exactly what was charged for this job. jobDoc.metadata.quarkCharge
-      // is set by the caller at enqueue time (see createVideo in
-      // routes/videoGeneration.js) as [{ action, count }, ...]. Without it this
-      // used to refund a hardcoded 'campaign_full' x1 (20 Q) regardless of what
-      // was actually deducted — for a video that charges video_base + N scenes
-      // (75 + N x 90), that silently kept the difference on every failure.
-      if (jobDoc.userId) {
-        const charges = jobDoc.metadata?.quarkCharge;
-        try {
-          const { refundCredits } = require('../middleware/trialGuard');
-          if (Array.isArray(charges) && charges.length) {
-            let total = 0;
-            for (const { action, count } of charges) {
-              const r = await refundCredits(jobDoc.userId, action, count, `Refund: AI video generation job ${jobId} failed`);
-              if (r.success) total += 1;
-            }
-            if (total) await this._pushLog(jobId, `Credits automatically refunded for ${total} charge(s).`);
-          } else {
-            // Legacy jobs enqueued before quarkCharge existed: nothing to key
-            // the refund off, so fall back to the old flat guess rather than
-            // silently refunding nothing.
-            console.warn(`⚠️ Job ${jobId} has no metadata.quarkCharge — falling back to legacy flat refund.`);
-            const refundResult = await refundCredits(jobDoc.userId, 'campaign_full', 1, `Refund: AI video generation job ${jobId} failed (legacy, no charge record)`);
-            if (refundResult.success) {
-              await this._pushLog(jobId, `Credits automatically refunded (legacy fallback, Balance: ${refundResult.creditsRemaining})`);
-            }
-          }
-        } catch (refundError) {
-          console.error(`⚠️ Failed to refund credits for job ${jobId}:`, refundError.message);
-        }
-      }
+      // Refund exactly what was charged for this job (metadata.quarkCharge, set by the caller at enqueue time as
+      // [{ action, count, ref, payerId }, ...]), each charge with its own ref and to the wallet that paid. See _refundPlan.
+      if (jobDoc.userId) await this._refundJob(won, 'failed');
     }
   }
 
   async _drainQueue() {
     try {
       // Find count of currently processing jobs in database
-      const activeCount = await VideoJob.countDocuments({ status: 'processing' });
+      const activeCount = await this.model.countDocuments({ status: 'processing' });
       if (activeCount >= this.concurrency) return;
 
       const capacity = this.concurrency - activeCount;
       
       // Fetch and lock jobs using findOneAndUpdate to ensure thread safety
       for (let i = 0; i < capacity; i++) {
-        const nextJob = await VideoJob.findOneAndUpdate(
+        const nextJob = await this.model.findOneAndUpdate(
           { status: 'queued' },
           { 
             $set: { 
@@ -659,5 +712,6 @@ const videoGenerationQueue = new PersistentVideoGenerationQueue();
 
 module.exports = {
   PersistentVideoGenerationQueue,
+  JobCancelledError,
   videoGenerationQueue
 };

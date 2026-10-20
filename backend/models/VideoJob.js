@@ -24,6 +24,10 @@ const videoJobSchema = new mongoose.Schema(
     },
     logs: { type: [String], default: [] },
     attempts: { type: Number, default: 0 },
+    // The refund claim (services/refundSettle.js): set in the SAME update that cancels or fails the job, so only the call
+    // that ended the job refunds. 'refunding' until paid; 'unproven' when a sweep could not match a charge (left for a person).
+    refundState: { type: String, enum: ['refunding', 'refunded', 'unproven', null], default: null },
+    refundAt: { type: Date, default: null },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
   },
   { collection: 'video_jobs', timestamps: true }

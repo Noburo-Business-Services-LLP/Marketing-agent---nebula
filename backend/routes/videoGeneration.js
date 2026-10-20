@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const Product = require('../models/Product');
 const { protect } = require('../middleware/auth');
@@ -1475,7 +1476,10 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
   // overcharge a 10-scene video and undercharge a 3-scene one.
   const videoTotal = CREDIT_COSTS.video_base + sceneCount * CREDIT_COSTS.video_generated;
 
-  const baseCharge = await deductCredits(userId, 'video_base', 1, 'AI video — character sheet, music, thumbnail, story');
+  // Every charge of this video carries a ref (recorded below with the wallet that paid) so a cancel or a failure refunds
+  // exactly these charges, once, and the refund sweep can check them against the Quark ledger.
+  const chargeRef = `video:${crypto.randomUUID()}`;
+  const baseCharge = await deductCredits(userId, 'video_base', 1, 'AI video — character sheet, music, thumbnail, story', { ref: `${chargeRef}:base` });
   if (!baseCharge.success) {
     return res.status(403).json({
       success: false,
@@ -1484,11 +1488,11 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
     });
   }
 
-  const creditResult = await deductCredits(userId, 'video_generated', sceneCount, 'AI video generation pipeline');
+  const creditResult = await deductCredits(userId, 'video_generated', sceneCount, 'AI video generation pipeline', { ref: `${chargeRef}:scenes` });
   if (!creditResult.success) {
     // The base already landed; give it back rather than keeping payment for
     // a video that never got enqueued.
-    await refundCredits(userId, 'video_base', 1, 'Refund: video scenes could not be charged');
+    await refundCredits(userId, 'video_base', 1, 'Refund: video scenes could not be charged', { ref: `${chargeRef}:base`, ...(baseCharge.payerId ? { payerId: baseCharge.payerId } : {}) });
     return res.status(403).json({
       success: false,
       creditsExhausted: true,
@@ -1516,8 +1520,8 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
       // handler in videoGenerationQueue.js.
       metadata: {
         quarkCharge: [
-          { action: 'video_base', count: 1 },
-          { action: 'video_generated', count: sceneCount }
+          { action: 'video_base', count: 1, ref: `${chargeRef}:base`, payerId: baseCharge.payerId ? String(baseCharge.payerId) : '' },
+          { action: 'video_generated', count: sceneCount, ref: `${chargeRef}:scenes`, payerId: creditResult.payerId ? String(creditResult.payerId) : '' }
         ]
       }
     });
@@ -1554,8 +1558,8 @@ router.post('/createVideo', protect, checkTrial, videoAiWriteLimiter, async (req
   } catch (error) {
     // Refund credits immediately if enqueuing fails
     try {
-      await refundCredits(userId, 'video_generated', sceneCount, 'Refund: AI video enqueuing failed');
-      await refundCredits(userId, 'video_base', 1, 'Refund: AI video enqueuing failed');
+      await refundCredits(userId, 'video_generated', sceneCount, 'Refund: AI video enqueuing failed', { ref: `${chargeRef}:scenes`, ...(creditResult.payerId ? { payerId: creditResult.payerId } : {}) });
+      await refundCredits(userId, 'video_base', 1, 'Refund: AI video enqueuing failed', { ref: `${chargeRef}:base`, ...(baseCharge.payerId ? { payerId: baseCharge.payerId } : {}) });
     } catch (refundErr) {
       console.error('⚠️ Failed to refund credits after enqueuing error:', refundErr.message);
     }
