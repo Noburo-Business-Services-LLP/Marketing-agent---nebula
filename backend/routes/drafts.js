@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const path = require('path');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { requireFeature } = require('../middleware/requireFeature');
 const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
@@ -398,7 +400,7 @@ router.post('/:id/reject', protect, async (req, res) => {
 });
 
 // POST /api/drafts/:id/regenerate
-router.post('/:id/regenerate', protect, async (req, res) => {
+router.post('/:id/regenerate', protect, L.heavyAi, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const draft = await Draft.findOne({ _id: req.params.id, userId });
@@ -477,7 +479,7 @@ const mediaUpload = multer({
   }
 });
 
-router.post('/upload-media', protect, mediaUpload.single('file'), async (req, res) => {
+router.post('/upload-media', protect, L.upload, mediaUpload.single('file'), async (req, res) => {
   const os = require('os');
   const fsp = require('fs').promises;
   let tempPath = '';
@@ -545,7 +547,7 @@ router.post('/upload-media', protect, mediaUpload.single('file'), async (req, re
 // Deliberately a SEPARATE step from generation. Handing a logo to the image
 // model as a reference gets it redrawn and smeared; compositing with Sharp
 // afterwards keeps it pixel-exact. Same reasoning as the reels pipeline.
-router.post('/:id/apply-logo', protect, async (req, res) => {
+router.post('/:id/apply-logo', protect, L.lightAi, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const { logoUrl, position, size } = req.body || {};
@@ -588,7 +590,7 @@ router.post('/:id/apply-logo', protect, async (req, res) => {
 // Text-only LinkedIn post generation — no image call. Mirrors
 // generate-image-bg's credit-deduct/refund-on-failure shape, but meters
 // as campaign_text (caption-only cost) since no image model runs here.
-router.post('/generate-linkedin-post', protect, checkTrial, async (req, res) => {
+router.post('/generate-linkedin-post', protect, L.heavyAi, checkTrial, async (req, res) => {
   let creditsDeducted = false;
   try {
     const userId = req.user.userId || req.user.id;
@@ -646,7 +648,7 @@ router.post('/generate-linkedin-post', protect, checkTrial, async (req, res) => 
 });
 
 // 10. POST /generate-image-bg - Create a draft immediately with status 'processing' and enqueue background image generation
-router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
+router.post('/generate-image-bg', protect, L.heavyAi, checkTrial, async (req, res) => {
   // Declared out here, not inside the try: the catch block below needs to
   // read it to decide whether to refund, and a variable declared inside a
   // try is not visible in its own catch.
@@ -760,7 +762,7 @@ router.post('/generate-image-bg', protect, checkTrial, async (req, res) => {
 });
 
 // 11. POST /:id/retry-image - Reset status to 'processing' and re-enqueue failed draft for image generation
-router.post('/:id/retry-image', protect, async (req, res) => {
+router.post('/:id/retry-image', protect, L.heavyAi, async (req, res) => {
   // Declared out here, not inside the try: the catch block needs to read it
   // to decide whether to refund — same pattern as /generate-image-bg above.
   let creditsDeducted = false;
@@ -828,7 +830,7 @@ router.post('/:id/retry-image', protect, async (req, res) => {
 // 11b. POST /:id/edit-image - Apply a targeted edit to the EXISTING image
 // (keep everything, change only what the instruction asks for), instead of
 // regenerating the whole thing from a prompt.
-router.post('/:id/edit-image', protect, checkTrial, async (req, res) => {
+router.post('/:id/edit-image', protect, L.heavyAi, checkTrial, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const draft = await Draft.findOne({ _id: req.params.id, userId });

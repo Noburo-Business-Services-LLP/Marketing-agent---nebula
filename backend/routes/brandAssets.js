@@ -5,6 +5,8 @@ const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { alignProfileToSettings } = require('../services/brandRefresh');
 const { uploadBase64Image, deleteImage } = require('../services/imageUploader');
 const { deepScrapeWebsite } = require('../services/scraper');
@@ -228,7 +230,7 @@ router.get('/templates', protect, async (req, res) => {
  * @desc    Upload a new brand asset (logo or template)
  * @access  Private
  */
-router.post('/upload', protect, async (req, res) => {
+router.post('/upload', protect, L.upload, async (req, res) => {
   try {
     const userId = getUserId(req);
     const { imageData, type, name, isPrimary, defaultPosition, defaultSize } = req.body;
@@ -476,7 +478,7 @@ router.put('/intelligence-profile', protect, async (req, res) => {
  * @desc    Analyze brand inputs and generate tone/style profile + confidence scores
  * @access  Private
  */
-router.post('/intelligence-profile/analyze', protect, async (req, res) => {
+router.post('/intelligence-profile/analyze', protect, L.heavyAi, async (req, res) => {
   try {
     const userId = getUserId(req);
     const user = await User.findById(userId).select('companyName businessProfile');
@@ -557,7 +559,7 @@ router.post('/intelligence-profile/analyze', protect, async (req, res) => {
  * @desc    Resolve brand primary/secondary colors from website or manual input
  * @access  Private
  */
-router.post('/intelligence-profile/colors', protect, async (req, res) => {
+router.post('/intelligence-profile/colors', protect, L.lightAi, async (req, res) => {
   try {
     const websiteUrl = String(req.body?.website_url || req.body?.websiteUrl || '').trim();
     const primaryColor = String(req.body?.primary_color || req.body?.primaryColor || '').trim();
@@ -603,7 +605,7 @@ router.post('/intelligence-profile/colors', protect, async (req, res) => {
  * @desc    Read colours from the signed-in user's own stored logo. Does not save them.
  * @access  Private
  */
-router.post('/colors-from-logo', protect, async (req, res) => {
+router.post('/colors-from-logo', protect, L.lightAi, async (req, res) => {
   try {
     const logoUrl = await getPrimaryLogoUrlForUser(getUserId(req));
     if (!logoUrl) {
@@ -632,7 +634,7 @@ router.post('/colors-from-logo', protect, async (req, res) => {
  * @desc    Add an example past post (caption/image) for style learning
  * @access  Private
  */
-router.post('/intelligence-profile/past-posts', protect, async (req, res) => {
+router.post('/intelligence-profile/past-posts', protect, L.upload, async (req, res) => {
   try {
     const userId = getUserId(req);
     const { caption, imageData, platform } = req.body || {};
@@ -745,7 +747,7 @@ router.get('/frames', protect, async (req, res) => {
   }
 });
 
-router.post('/frames', protect, async (req, res) => {
+router.post('/frames', protect, L.upload, async (req, res) => {
   try {
     const userId = getUserId(req);
     const { imageData, kind, name, position, makeDefault } = req.body || {};
@@ -960,7 +962,7 @@ router.get('/primary-logo', protect, async (req, res) => {
  * @desc    Re-read the website and bring the saved brand profile in line with Settings. Free; no AI call.
  * @access  Private
  */
-router.post('/refresh', protect, async (req, res) => {
+router.post('/refresh', protect, L.scrape, async (req, res) => {
   try {
     const userId = getUserId(req);
     const user = await User.findById(userId).select('companyName businessProfile');

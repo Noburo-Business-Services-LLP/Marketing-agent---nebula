@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { generateImageFromCustomPrompt, refineImageWithPrompt, localizeCampaignContent } = require('../services/geminiAI');
 const { uploadBase64Image } = require('../services/imageUploader');
 const { deductCredits } = require('../middleware/trialGuard');
@@ -18,7 +20,7 @@ const User = require('../models/User');
  * @desc    Refine/edit an existing image using Nano Banana 2
  * @access  Private
  */
-router.post('/regenerate-image', protect, async (req, res) => {
+router.post('/regenerate-image', protect, L.heavyAi, async (req, res) => {
   try {
     const { prompt, style, campaignId, industry, platform, currentImageUrl } = req.body;
 
@@ -68,7 +70,7 @@ router.post('/regenerate-image', protect, async (req, res) => {
  * @desc    Generate content (caption, hashtags, etc.) for a given topic/platform
  * @access  Private
  */
-router.post('/generate', protect, async (req, res) => {
+router.post('/generate', protect, L.heavyAi, async (req, res) => {
   try {
     const { type, platform, topic, tone, keywords } = req.body;
 
@@ -93,7 +95,7 @@ router.post('/generate', protect, async (req, res) => {
  * @desc    Modify existing content draft
  * @access  Private
  */
-router.post('/modify', protect, async (req, res) => {
+router.post('/modify', protect, L.heavyAi, async (req, res) => {
   try {
     const { draftId, modifications } = req.body;
 
@@ -114,7 +116,7 @@ router.post('/modify', protect, async (req, res) => {
  * @desc    Localize campaign caption for single or multiple regions/languages
  * @access  Private
  */
-router.post('/localize-campaign', protect, async (req, res) => {
+router.post('/localize-campaign', protect, L.heavyAi, async (req, res) => {
   try {
     const brandName = String(req.body?.brandName || req.body?.brand_name || '').trim();
     const tone = String(req.body?.tone || req.body?.brandTone || req.body?.brand_tone || '').trim();
@@ -244,7 +246,7 @@ router.post('/localize-campaign', protect, async (req, res) => {
  * @desc    Convert image + audio into MP4 video for Instagram
  * @access  Private
  */
-router.post('/image-audio-to-video', protect, async (req, res) => {
+router.post('/image-audio-to-video', protect, L.heavyAi, async (req, res) => {
   try {
     const { imageUrl, audioUrl } = req.body;
 
@@ -341,7 +343,7 @@ router.post('/image-audio-to-video', protect, async (req, res) => {
  * @desc    Download a generated Cloudinary MP4 to the backend downloads folder and inspect it
  * @access  Private
  */
-router.post('/download-video', protect, async (req, res) => {
+router.post('/download-video', protect, L.lightAi, async (req, res) => {
   try {
     const { videoUrl, fileName, inspect = true } = req.body;
 
@@ -391,7 +393,7 @@ router.post('/download-video', protect, async (req, res) => {
  * @desc    Proxy a generated Cloudinary MP4 as a browser download
  * @access  Private
  */
-router.get('/download-video', protect, async (req, res) => {
+router.get('/download-video', protect, L.lightAi, async (req, res) => {
   try {
     const { url: videoUrl, fileName } = req.query;
 
@@ -420,7 +422,7 @@ router.get('/download-video', protect, async (req, res) => {
  * @desc    Check content draft for compliance issues
  * @access  Private
  */
-router.post('/:draftId/compliance-check', protect, async (req, res) => {
+router.post('/:draftId/compliance-check', protect, L.lightAi, async (req, res) => {
   try {
     const { draftId } = req.params;
 

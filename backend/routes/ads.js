@@ -6,6 +6,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { requireFeature } = require('../middleware/requireFeature');
 const User = require('../models/User');
 const { requireOwnProfileKey } = require('../services/ayrshareGuard');
@@ -63,7 +65,7 @@ router.get('/accounts', protect, requireFeature('publish'), async (req, res) => 
  *         locations, excludedLocations, minAge, maxAge, gender, interests,
  *         specialAdCategories, tracking, urlTags, dsaBeneficiary, dsaPayor }
  */
-router.post('/boost', protect, requireFeature('publish'), async (req, res) => {
+router.post('/boost', protect, L.spend, requireFeature('publish'), async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
     const {
@@ -173,7 +175,7 @@ router.get('/boosted', protect, requireFeature('publish'), async (req, res) => {
  * Update an ad (pause/resume/update budget)
  * Body: { status, dailyBudget, endDate }
  */
-router.put('/:adId', protect, requireFeature('publish'), async (req, res) => {
+router.put('/:adId', protect, L.spend, requireFeature('publish'), async (req, res) => {
   try {
     const profileKey = await getProfileKey(req.user.userId || req.user.id);
     const { adId } = req.params;

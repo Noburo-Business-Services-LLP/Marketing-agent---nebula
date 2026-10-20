@@ -6,6 +6,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { requireFeature } = require('../middleware/requireFeature');
 const { canUse } = require('../config/entitlements');
 const { deductCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
@@ -726,7 +728,7 @@ router.get('/overview', protect, async (req, res) => {
  * Get AI-powered campaign suggestions using Gemini with CACHING
  * Returns cached campaigns instantly if available, otherwise generates new ones
  */
-router.get('/campaign-suggestions', protect, async (req, res) => {
+router.get('/campaign-suggestions', protect, L.lightAi, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId || req.user.id);
     
@@ -870,7 +872,7 @@ router.get('/campaign-suggestions', protect, async (req, res) => {
  * Stream campaign suggestions using Server-Sent Events for PROGRESSIVE LOADING
  * Campaigns appear one-by-one as they're generated
  */
-router.get('/campaign-suggestions-stream', protect, async (req, res) => {
+router.get('/campaign-suggestions-stream', protect, L.lightAi, async (req, res) => {
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -1114,7 +1116,7 @@ router.get('/campaign-suggestions-stream', protect, async (req, res) => {
  * POST /api/dashboard/refresh-competitor-posts
  * Manually trigger real competitor post scraping using Apify
  */
-router.post('/refresh-competitor-posts', protect, requireFeature('competitors'), async (req, res) => {
+router.post('/refresh-competitor-posts', protect, L.scrape, requireFeature('competitors'), async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const user = await User.findById(userId);
@@ -1201,7 +1203,7 @@ router.post('/refresh-competitor-posts', protect, requireFeature('competitors'),
  * POST /api/dashboard/synopsis
  * Get AI-powered synopsis for a specific dashboard section using Gemini
  */
-router.post('/synopsis', protect, async (req, res) => {
+router.post('/synopsis', protect, L.lightAi, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId || req.user.id);
     
@@ -1238,7 +1240,7 @@ router.post('/synopsis', protect, async (req, res) => {
  * It reads no account, charges nothing and calls no model.
  */
 const RIVAL_POST_RETIRED_MESSAGE = "This feature has been replaced. Use What's working for your competitors on the Competitors page when it is available.";
-router.post('/generate-rival-post', protect, (req, res) => {
+router.post('/generate-rival-post', protect, L.heavyAi, (req, res) => {
   res.status(410).json({ success: false, message: RIVAL_POST_RETIRED_MESSAGE });
 });
 
@@ -1471,7 +1473,7 @@ const {
  * GET /api/dashboard/strategic-advisor
  * Get AI-powered strategic content suggestions based on trends, events, competitors
  */
-router.get('/strategic-advisor', protect, async (req, res) => {
+router.get('/strategic-advisor', protect, L.lightAi, async (req, res) => {
   try {
     const userId = req.user._id;
     const forceRefresh = req.query.refresh === 'true';
@@ -1554,7 +1556,7 @@ router.get('/strategic-advisor', protect, async (req, res) => {
  * POST /api/dashboard/strategic-advisor/generate-post
  * Generate a complete post from a content suggestion
  */
-router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
+router.post('/strategic-advisor/generate-post', protect, L.heavyAi, async (req, res) => {
   try {
     const { suggestion, logoUrl, aspectRatio } = req.body;
     const userId = req.user._id;
@@ -1603,7 +1605,7 @@ router.post('/strategic-advisor/generate-post', protect, async (req, res) => {
  * POST /api/dashboard/strategic-advisor/refine-image
  * Refine/edit an image with a new prompt
  */
-router.post('/strategic-advisor/refine-image', protect, async (req, res) => {
+router.post('/strategic-advisor/refine-image', protect, L.heavyAi, async (req, res) => {
   try {
     const { originalPrompt, refinementPrompt, style, currentImageUrl } = req.body;
     const userId = req.user._id || req.user.userId || req.user.id;
@@ -1642,7 +1644,7 @@ router.post('/strategic-advisor/refine-image', protect, async (req, res) => {
  * Generate a complete post for a holiday/festival/event
  * Combines business context with event details
  */
-router.post('/generate-event-post', protect, async (req, res) => {
+router.post('/generate-event-post', protect, L.heavyAi, async (req, res) => {
   try {
     const { event, logoUrl, aspectRatio } = req.body;
     const userId = req.user._id;
@@ -1689,7 +1691,7 @@ router.post('/generate-event-post', protect, async (req, res) => {
   }
 });
 
-router.get('/content-strategy', protect, async (req, res) => {
+router.get('/content-strategy', protect, L.lightAi, async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await User.findById(userId).lean();

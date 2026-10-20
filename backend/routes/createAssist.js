@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const User = require('../models/User');
 const { callTextLLM } = require('../services/openAI');
 const { parseGeminiJSON } = require('../services/geminiAI');
@@ -47,7 +49,7 @@ Return JSON only:
 }
 
 // POST /api/create-assist/suggest-details { idea, mode, language }
-router.post('/suggest-details', protect, async (req, res) => {
+router.post('/suggest-details', protect, L.lightAi, async (req, res) => {
   try {
     const userId = String(req.user.id || req.user._id || req.user.userId);
     if (!allowed(userId)) return res.status(429).json({ success: false, message: 'That was a lot of suggestions in a short time. Please try again in a little while.' });
@@ -120,7 +122,7 @@ async function keepOriginal(dataUrl, name) {
 const publicUpload = (u) => ({ id: String(u._id), name: u.name, kind: u.kind, url: u.url, summary: u.summary, brief: u.brief, details: u.details || {}, notes: u.notes, mimeType: u.mimeType, createdAt: u.createdAt });
 
 // POST /api/create-assist/read-files { files: [{ name, data }], language }
-router.post('/read-files', protect, async (req, res) => {
+router.post('/read-files', protect, L.lightAi, async (req, res) => {
   try {
     const userId = String(req.user.id || req.user._id || req.user.userId);
     const files = Array.isArray(req.body && req.body.files) ? req.body.files.slice(0, MAX_FILES) : [];
@@ -179,7 +181,7 @@ router.delete('/uploads/:id', protect, async (req, res) => {
 });
 
 // POST /api/create-assist/transcribe { audio: dataUrl, language: 'en' | 'ta' }
-router.post('/transcribe', protect, async (req, res) => {
+router.post('/transcribe', protect, L.lightAi, async (req, res) => {
   try {
     const userId = String(req.user.id || req.user._id || req.user.userId);
     if (!within(voiceHits, userId, 40)) return res.status(429).json({ success: false, message: 'Please wait a little before recording again.' });

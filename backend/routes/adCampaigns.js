@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { requireFeature } = require('../middleware/requireFeature');
 const AdCampaign = require('../models/AdCampaign');
 const Campaign = require('../models/Campaign');
@@ -1957,7 +1959,7 @@ router.get('/meta-readiness', protect, requireFeature('publish'), async (req, re
  * @desc    Create ad campaign from existing campaign context (no standalone creation)
  * @access  Private
  */
-router.post('/', protect, requireFeature('publish'), async (req, res) => {
+router.post('/', protect, L.spend, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const campaignId = toObjectId(req.body?.campaignId);
@@ -2242,7 +2244,7 @@ router.post('/', protect, requireFeature('publish'), async (req, res) => {
  * @desc    Retry failed platforms for an existing ad campaign
  * @access  Private
  */
-router.post('/:id/retry', protect, requireFeature('publish'), async (req, res) => {
+router.post('/:id/retry', protect, L.spend, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const requestedMetaCountries = getRequestedTargetCountries(req.body);
@@ -2464,7 +2466,7 @@ router.delete('/:id', protect, requireFeature('publish'), async (req, res) => {
  * @desc    Pause/resume ad campaign and sync Meta status when possible
  * @access  Private
  */
-router.put('/:id/status', protect, requireFeature('publish'), async (req, res) => {
+router.put('/:id/status', protect, L.lightAi, requireFeature('publish'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const targetStatus = String(req.body?.status || '').trim().toLowerCase();

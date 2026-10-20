@@ -215,6 +215,8 @@ app.use(cors({
 // General (per address), credential routes only (per address and account, plus an address cap), social (per user,
 // plus an address cap) and AI (per address). See middleware/rateLimits.js.
 const limits = createRateLimits();
+// Shared per-user limits for paid AI, scraping, uploads and ad spend; most are applied inside the route files.
+const L = require('./middleware/limits');
 const aiLimiter = limits.ai;
 
 // Health (the load balancer's path, exempt from rate limiting): 200 only when MongoDB is connected and answers a ping
@@ -377,7 +379,9 @@ app.use('/api/staff', staffRoutes);
 
 // Routes - Core (with specific rate limiters on sensitive routes)
 app.use('/api/auth', limits.credential, authRoutes);
-app.use('/api/social/inbox', socialInboxRoutes);
+// The inbox is mounted before /api/social, so it gets the social limiter here (it used to escape it). The provider
+// webhooks are not user calls: they have their own per-address limiter in the route file (middleware/limits.js).
+app.use('/api/social/inbox', L.exceptInboxWebhooks(limits.social), socialInboxRoutes);
 app.use('/api/social', limits.social, socialRoutes);
 app.use('/api/chat', aiLimiter, chatRoutes);
 app.use('/api/support', supportRoutes);

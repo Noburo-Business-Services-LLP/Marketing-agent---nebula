@@ -6,6 +6,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { deepScrapeWebsite } = require('../services/scraper');
 const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
 const { lookupInstagramHandle } = require('../services/serperLookup');
@@ -18,7 +20,7 @@ const { removeCompetitorsWithSnapshots } = require('../services/competitors/clea
  * POST /api/brand/quick-analyze
  * Quick website analysis for onboarding - scrapes and returns company info with competitor discovery
  */
-router.post('/quick-analyze', protect, async (req, res) => {
+router.post('/quick-analyze', protect, L.scrape, async (req, res) => {
   try {
     const { websiteUrl } = req.body;
     

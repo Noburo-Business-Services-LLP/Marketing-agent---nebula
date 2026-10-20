@@ -14,6 +14,8 @@ const Product = require('../models/Product');
 const BrandAsset = require('../models/BrandAsset');
 const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const { readRows, SpreadsheetError } = require('../services/spreadsheetRows');
@@ -267,7 +269,7 @@ router.post('/', protect, validateProduct, async (req, res) => {
 // generation time — but it refetches on every generation and returns null on
 // any failure, so a dead or slow link silently drops the product image from
 // the output. An uploaded image is stored once and always available.
-router.post('/upload-image', protect, async (req, res) => {
+router.post('/upload-image', protect, L.upload, async (req, res) => {
   try {
     const { imageData } = req.body;
     if (!imageData || typeof imageData !== 'string') {
@@ -289,7 +291,7 @@ router.post('/upload-image', protect, async (req, res) => {
   }
 });
 
-router.post('/bulk-import', protect, upload.single('file'), async (req, res) => {
+router.post('/bulk-import', protect, L.upload, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded. Please attach a CSV or Excel file.' });
@@ -434,7 +436,7 @@ router.delete('/:id', protect, async (req, res) => {
 // @route   POST /api/products/:id/generate-ad-image
 // @desc    Generate a premium social-media ad image for a product using AI
 // @access  Private
-router.post('/:id/generate-ad-image', protect, async (req, res) => {
+router.post('/:id/generate-ad-image', protect, L.heavyAi, async (req, res) => {
   try {
     const userId = req.user?._id || req.user?.id;
     const product = await Product.findOne({ _id: req.params.id, user: req.user._id });

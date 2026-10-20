@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
+// Provider webhooks: per address (the providers call without a user token). See middleware/limits.js.
+const L = require('../middleware/limits');
 const controller = require('../controllers/socialInboxController');
 const googleReviews = require('../services/googleReviews');
 const { friendlyMessage } = require('../services/providerErrors');
@@ -49,9 +51,9 @@ const streamAuth = async (req, res, next) => {
 
 // Registered before the :platform routes so 'register' is not read as a platform name.
 router.post('/webhooks/register', protect, requireFeature('inbox'), controller.registerWebhook);
-router.get('/webhooks/:platform', controller.verifyWebhook);
-router.post('/webhooks/:platform', controller.receiveWebhook);
-router.post('/webhooks/comments/:platform', controller.receiveCommentWebhook);
+router.get('/webhooks/:platform', L.webhook, controller.verifyWebhook);
+router.post('/webhooks/:platform', L.webhook, controller.receiveWebhook);
+router.post('/webhooks/comments/:platform', L.webhook, controller.receiveCommentWebhook);
 router.get('/stream', streamAuth, controller.stream);
 
 router.use(protect);

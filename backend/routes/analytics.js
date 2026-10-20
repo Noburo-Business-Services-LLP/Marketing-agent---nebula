@@ -8,6 +8,8 @@ const router = express.Router();
 // GET /performance (the Performance page view) is mounted first so the GET /:id route below never takes it.
 router.use(require('./performanceView'));
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const AnalyticsSnapshot = require('../models/AnalyticsSnapshot');
 const SocialSnapshot = require('../models/SocialSnapshot');
 const User = require('../models/User');
@@ -163,7 +165,7 @@ router.post('/daily-analytics', protect, async (req, res) => {
  * POST /api/analytics/import/csv
  * Import analytics from CSV data
  */
-router.post('/import/csv', protect, async (req, res) => {
+router.post('/import/csv', protect, L.upload, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const { data, dateRange, sourceName = 'CSV Import' } = req.body;
@@ -266,7 +268,7 @@ router.post('/import/csv', protect, async (req, res) => {
  * POST /api/analytics/import/manual
  * Manually input analytics metrics
  */
-router.post('/import/manual', protect, async (req, res) => {
+router.post('/import/manual', protect, L.lightAi, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const { metrics, dateRange } = req.body;
@@ -641,7 +643,7 @@ router.get('/:id', protect, async (req, res) => {
  * POST /api/analytics/:id/regenerate-insights
  * Regenerate insights for a snapshot
  */
-router.post('/:id/regenerate-insights', protect, async (req, res) => {
+router.post('/:id/regenerate-insights', protect, L.lightAi, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const snapshot = await AnalyticsSnapshot.findOne({ _id: req.params.id, userId });

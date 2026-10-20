@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { requireFeatureWhen, wantsPublish } = require('../middleware/requireFeature');
 const User = require('../models/User');
 const ContentCalendar = require('../models/ContentCalendar');
@@ -68,7 +70,7 @@ router.get('/', protect, async (req, res) => {
 
 // Makes this month's calendar in the background (the same generator and the same free-of-Quarks rule the old GET
 // used). Answers at once: 200 with the calendar when it exists, 202 "preparing" otherwise. Two clicks make one.
-router.post('/prepare', protect, async (req, res) => {
+router.post('/prepare', protect, L.heavyAi, async (req, res) => {
   try {
     const userId = String(req.user._id);
     const existing = await readCurrentCalendar(userId);
@@ -113,7 +115,7 @@ router.get('/history', protect, async (req, res) => {
   }
 });
 
-router.post('/generate-next', protect, async (req, res) => {
+router.post('/generate-next', protect, L.heavyAi, async (req, res) => {
   try {
     const latestCalendar = await ContentCalendar.findOne({ userId: req.user._id }).sort({ month: -1 });
     let nextMonthStr = calendarMonth();
@@ -142,7 +144,7 @@ const regenerateCooldown = makeCooldown(10 * 60 * 1000);
 const weekCooldown = makeCooldown(10 * 60 * 1000);
 const COOLDOWN_MESSAGE = 'You just did this. Please wait a few minutes and try again.';
 
-router.post('/regenerate', protect, async (req, res) => {
+router.post('/regenerate', protect, L.heavyAi, async (req, res) => {
   try {
     if (!regenerateCooldown.hit(req.user._id).ok) return res.status(429).json({ success: false, message: COOLDOWN_MESSAGE });
     const user = await User.findById(req.user._id);
@@ -165,7 +167,7 @@ router.post('/regenerate', protect, async (req, res) => {
 const coverCooldown = makeCooldown(60 * 1000);
 router.testDeps = undefined; // tests put fakes here; never set in production
 
-router.post('/cover', protect, async (req, res) => {
+router.post('/cover', protect, L.heavyAi, async (req, res) => {
   try {
     if (!coverCooldown.hit(req.user._id).ok) {
       return res.status(429).json({ success: false, message: 'Please wait a minute before making another cover.' });
@@ -269,7 +271,7 @@ router.patch('/items/:itemId', protect, async (req, res) => {
 // background. Reuses the exact machinery /video-generation/createVideo
 // uses — same queue, same job type, same Draft record — so the wizard can
 // resume from the returned jobId and autofill as each stage lands.
-router.post('/items/:itemId/auto-generate', protect, async (req, res) => {
+router.post('/items/:itemId/auto-generate', protect, L.heavyAi, async (req, res) => {
   const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
   if (!userId) return res.status(401).json({ success: false, message: 'Authentication required' });
 
@@ -441,7 +443,7 @@ const backgroundQueue = require('../services/backgroundQueue');
 const Draft = require('../models/Draft');
 
 // POST /api/content-calendar/:id/auto-generate-week
-router.post('/:id/auto-generate-week', protect, async (req, res) => {
+router.post('/:id/auto-generate-week', protect, L.heavyAi, async (req, res) => {
   try {
     const calendar = await ContentCalendar.findOne({ _id: req.params.id, userId: req.user._id || req.user.id });
     if (!calendar) return res.status(404).json({ success: false, message: 'Content calendar not found' });

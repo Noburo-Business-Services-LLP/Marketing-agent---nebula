@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const ContentIdea = require('../models/ContentIdea');
 const { protect } = require('../middleware/auth');
+// Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
+const L = require('../middleware/limits');
 const { uploadBase64Image } = require('../services/imageUploader');
 
 function getUserId(req) {
@@ -29,7 +31,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // POST /api/ideas — one idea, typed or pasted by hand.
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, L.when((req) => Boolean(req.body && req.body.imageData), L.upload), async (req, res) => {
   try {
     const userId = getUserId(req);
     const { text, imageData, sourceUrl, targetDate } = req.body || {};
