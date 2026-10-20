@@ -12,13 +12,13 @@
  * and puts a server-side `console.error` before the statement when the catch block does not already log the error.
  * Anything it is not sure about (4xx statuses, dynamic statuses, one-line catch blocks, other shapes) is listed as
  * MANUAL and left alone, to be reviewed by hand (those may be deliberate text from our own code).
- * routes/auth.js is skipped on purpose (edited by another change).
+ * routes/auth.js is covered like every other route.
  */
 const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_TEXT = 'Something went wrong. Please try again.';
-const SKIP = new Set(['routes/auth.js']);
+const SKIP = new Set([]);
 const LEAK_VALUE = /^(error|err|e)\.message(?:\s*\|\|\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"))?$/;
 const LEAK_KEYS = new Set(['error', 'details', 'detail', 'reason', 'errorMessage']);
 

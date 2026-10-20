@@ -7,11 +7,11 @@ const path = require('node:path');
  * No route or controller may send a caught exception's text to the client. A call that answers the client
  * (res.json / res.send / res.write / an SSE send) must not contain `error.message`, `err.message` or `e.message`
  * unless it is in the reviewed allowlist below, with the reason it is safe.
- * routes/auth.js is checked by the other hardening change (it is listed in SKIPPED until that lands).
+ * routes/auth.js is checked like every other route (SKIPPED is empty).
  */
 const ROOT = path.join(__dirname, '..');
 const DIRS = ['routes', 'controllers'];
-const SKIPPED = new Set(['routes/auth.js']);
+const SKIPPED = new Set([]);
 
 const ALLOWED = [
   { file: 'routes/ads.js', has: "error.code === 'NO_PROFILE_KEY'", reason: 'our own refusal text thrown by services/ayrshareGuard (connect your own profile first); any other error gets a plain 500' },
@@ -78,4 +78,26 @@ test('the checker itself catches the patterns the audit found', () => {
   let n = 0; let m;
   while ((m = re.exec(sample))) { if (/\b(?:error|err|e)\s*\.\s*message\b/.test(callArgs(sample, m.index + m[0].length - 1))) n++; }
   assert.strictEqual(n, 3);
+});
+
+test('routes/auth.js: no exception text, no database-library validation text, no guard message pass-through', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'routes/auth.js'), 'utf8');
+  assert.ok(!/error:\s*(?:error|err|e)\.message/.test(src), 'no `error: error.message` field');
+  assert.ok(!/Object\.values\([^)]*\.errors\)\s*\.map\([^)]*\.message/.test(src), 'sign-up validation text is not joined from Mongoose messages');
+  assert.ok(!/message:\s*gate\.message/.test(src), 'the lockout sentence comes from our own list, not from gate.message');
+  assert.ok(!/SKIP(PED)?\s*=\s*new Set\(\[[^\]]*auth\.js/.test(fs.readFileSync(path.join(ROOT, 'scripts/codemod-error-leaks.js'), 'utf8')), 'the codemod no longer skips auth.js');
+});
+
+test('routes/auth.js sign-up validation answer: field-level plain text for the fields we know, generic otherwise', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'routes/auth.js'), 'utf8');
+  const m = src.match(/const SIGNUP_FIELD_TEXT = (\{[\s\S]*?\n\});\nfunction signupValidationText\(error\) \{[\s\S]*?\n\}/);
+  assert.ok(m, 'helper present');
+  // eslint-disable-next-line no-new-func
+  const signupValidationText = new Function(`const SIGNUP_FIELD_TEXT = ${m[1]}; ${m[0].slice(m[0].indexOf('function signupValidationText'))}; return signupValidationText;`)();
+  const mongooseText = 'Path `password` (`abc`) is shorter than the minimum allowed length (8).';
+  const out = signupValidationText({ errors: { email: { message: mongooseText }, firstName: { message: mongooseText } } });
+  assert.match(out, /valid email address/);
+  assert.match(out, /first name/);
+  assert.ok(!out.includes('Path `') && !out.includes('minimum allowed'), 'no Mongoose text');
+  assert.match(signupValidationText({ errors: { 'weird.path': {} } }), /^Some of the details are not valid/);
 });

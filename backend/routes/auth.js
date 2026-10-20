@@ -28,6 +28,32 @@ const CODE_FAILED = 'That code did not work. Check it, or request a new code.';
 const LOGIN_FAILED = 'Invalid email or password. Please try again.';
 const { passwordRule } = require('../utils/passwordPolicy');
 const loginGuard = () => require('../services/loginGuard').sharedLoginGuard();
+
+// The sentence for a refused sign-in try, chosen by the guard's reason from our own list (services/loginGuard.js MSG).
+function lockoutText(gate) {
+  const { MSG } = require('../services/loginGuard');
+  const secs = Number(gate && gate.retryAfter) || 0;
+  switch (gate && gate.reason) {
+    case 'locked': return MSG.locked(Math.ceil(secs / 60));
+    case 'delay': return MSG.wait(secs);
+    case 'ceiling': return MSG.ceiling;
+    case 'challenge': return MSG.challenge;
+    default: return 'Too many sign-in attempts. Please try again in a little while.';
+  }
+}
+
+// Sign-up field problems the database layer can still report (the route checks run first): our own plain sentence per field.
+const SIGNUP_FIELD_TEXT = {
+  email: 'Please enter a valid email address.',
+  password: 'Please choose a password that follows the password rules.',
+  firstName: 'Please enter your first name (up to 50 characters).',
+  lastName: 'Your last name can be up to 50 characters.',
+  companyName: 'Your business name can be up to 100 characters.'
+};
+function signupValidationText(error) {
+  const lines = [...new Set(Object.keys((error && error.errors) || {}).map((k) => SIGNUP_FIELD_TEXT[k]).filter(Boolean))];
+  return lines.length ? lines.join(' ') : 'Some of the details are not valid. Please check them and try again.';
+}
 const passwordHashing = require('../services/passwordHash');
 let dummyOtpHash = null;
 let dummyPasswordHash = null;
@@ -148,7 +174,7 @@ async function scrapeLinkedInPosts(linkedinUrl) {
     return { success: false, posts: [] };
   } catch (error) {
     logger.error('LinkedIn scrape error:', error.message);
-    return { success: false, posts: [], error: error.message };
+    return { success: false, posts: [], error: 'LinkedIn scrape failed' };
   }
 }
 
@@ -740,10 +766,11 @@ router.post('/signup', signupLimiter, signupGuard(), [
     
     // Handle validation errors
     if (error.name === 'ValidationError') {
-      const message = Object.values(error.errors).map(err => err.message).join('. ');
+      // Plain words from our own list per field, never the database library's text.
       return res.status(400).json({
         success: false,
-        message
+        message: signupValidationText(error),
+        fields: Object.keys(error.errors || {})
       });
     }
 
@@ -946,7 +973,7 @@ router.post('/login', [
     const gate = await loginGuard().check(attempt);
     if (!gate.allowed) {
       if (gate.retryAfter) res.set('Retry-After', String(gate.retryAfter));
-      return res.status(429).json({ success: false, message: gate.message, retryAfter: gate.retryAfter, ...(gate.challengeRequired ? { challengeRequired: true } : {}) });
+      return res.status(429).json({ success: false, message: lockoutText(gate), retryAfter: gate.retryAfter, ...(gate.challengeRequired ? { challengeRequired: true } : {}) });
     }
 
     // Find user and include password for comparison

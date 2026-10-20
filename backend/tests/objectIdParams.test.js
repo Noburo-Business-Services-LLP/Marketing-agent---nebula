@@ -91,7 +91,6 @@ test('every router with :param routes is validated or reviewed as not an ObjectI
   const dir = path.join(__dirname, '..', 'routes');
   const bad = [];
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
-    if (f === 'auth.js') continue; // edited by another change, listed in the hardening docs for later
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
     const hasIdRoutes = /\.(get|post|put|patch|delete)\(\s*['"`][^'"`]*:(id|campaignId|draftId|itemId|postId|jobId|userId|noteId|adId)\b/.test(src);
     if (!hasIdRoutes) continue;
