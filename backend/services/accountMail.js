@@ -1,10 +1,10 @@
 'use strict';
+const { escapeHtml } = require('../utils/escapeHtml');
 /** The two emails about deleting an account. Plain, short, and never stating anything we cannot keep to. */
 const longDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
 function build(paragraphs) {
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return { text: paragraphs.join('\n\n'), html: paragraphs.map((p) => `<p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;">${esc(p)}</p>`).join('') };
+  return { text: paragraphs.join('\n\n'), html: paragraphs.map((p) => `<p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;">${escapeHtml(p)}</p>`).join('') };
 }
 
 function requestedEmail(user, purgeAfter) {

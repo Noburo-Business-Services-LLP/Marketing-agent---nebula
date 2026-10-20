@@ -1,3 +1,4 @@
+const { escapeHtml } = require('../utils/escapeHtml');
 /**
  * Welcome email for a new paid subscriber (Starter, Growth or Agency).
  * Pure builder plus a sender that takes an injectable transport, so tests never send mail.
@@ -40,9 +41,6 @@ function buildWelcomeEmail({ firstName, tier, quarks }) {
   return { subject, text, html, planName };
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 // Default transport: Resend, the same service the sign-in codes use. Created lazily.
 function defaultTransport(env = process.env) {

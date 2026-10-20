@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+// Stored addresses are http/https only (services/safeUrl.js): a refused one is stored as ''.
+const { urlSetter } = require('../services/safeUrl');
 
 const influencerSchema = new mongoose.Schema({
   userId: {
@@ -26,7 +28,7 @@ const influencerSchema = new mongoose.Schema({
     default: 'instagram'
   },
   profileImage: String,
-  profileUrl: String,
+  profileUrl: { type: String, set: urlSetter() },
   bio: String,
   type: {
     type: String,

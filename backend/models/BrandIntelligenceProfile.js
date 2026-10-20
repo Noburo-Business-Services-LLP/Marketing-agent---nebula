@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+// Stored addresses are http/https only (services/safeUrl.js): a refused one is stored as ''.
+const { urlSetter } = require('../services/safeUrl');
 
 const pastPostSchema = new mongoose.Schema(
   {
@@ -17,7 +19,8 @@ const pastPostSchema = new mongoose.Schema(
     },
     imageUrl: {
       type: String,
-      default: ''
+      default: '',
+      set: urlSetter({ allowDataImage: true })
     },
     cloudinaryPublicId: {
       type: String,
@@ -61,7 +64,7 @@ const brandIntelligenceProfileSchema = new mongoose.Schema(
     },
 
     assets: {
-      primaryLogoUrl: { type: String, default: '' },
+      primaryLogoUrl: { type: String, default: '', set: urlSetter({ allowDataImage: true }) },
       primaryColor: { type: String, default: '' },
       secondaryColor: { type: String, default: '' },
       fontType: { type: String, default: '' }

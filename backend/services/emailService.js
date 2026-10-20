@@ -1,3 +1,4 @@
+const { escapeHtml } = require('../utils/escapeHtml');
 /**
  * Email Service
  * 
@@ -295,7 +296,7 @@ Sent at: ${new Date().toISOString()}`,
   }
 
   _textToHtml(text) {
-    return text
+    return escapeHtml(text)
       .replace(/\n\n/g, '</p><p>')
       .replace(/\n/g, '<br>')
       .replace(/^/, '<p>')

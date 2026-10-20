@@ -85,7 +85,7 @@ class SESEmailService {
     <div class="content">
       <div class="alert-box">
         <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">Your campaign is scheduled to go live in:</p>
-        <div class="time-badge">${minutesBefore} minutes</div>
+        <div class="time-badge">${esc(minutesBefore)} minutes</div>
       </div>
       
       <h2 style="margin: 20px 0 10px 0;">📢 ${esc(campaignName)}</h2>

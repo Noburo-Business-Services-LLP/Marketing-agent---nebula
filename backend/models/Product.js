@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+// Stored addresses are http/https only (services/safeUrl.js): a refused one is stored as ''.
+const { urlSetter } = require('../services/safeUrl');
 
 const productSchema = new mongoose.Schema({
   user: {
@@ -38,7 +40,8 @@ const productSchema = new mongoose.Schema({
   imageUrl: {
     type: String, // URL or base64. Primary image; kept so existing consumers
                   // (Reels product picker, campaign generation) are unaffected.
-    default: ''
+    default: '',
+    set: urlSetter({ allowDataImage: true })
   },
   // Additional images — angles, contexts, lifestyle shots. Generation draws on
   // these for variety; a single reference produces repetitive output.

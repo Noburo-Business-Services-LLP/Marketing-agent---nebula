@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+// Stored addresses are http/https only (services/safeUrl.js): a refused one is stored as ''.
+const { urlSetter } = require('../services/safeUrl');
 const passwordHash = require('../services/passwordHash');
 const { BASE_LANGUAGES, MAX_ADDITIONAL_LANGUAGES } = require('../services/languageSupport');
 
@@ -59,7 +61,7 @@ const userSchema = new mongoose.Schema({
   },
   businessProfile: {
     name: { type: String, default: '' },
-    website: { type: String, default: '' },
+    website: { type: String, default: '', set: urlSetter({ allowBareDomain: true }) },
     gstNumber: { type: String, default: '' },
     industry: { type: String, default: '' }, // Business vertical
     problemSolved: { type: String, default: '' }, // What problem the business solves

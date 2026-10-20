@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+// Stored addresses are http/https only (services/safeUrl.js): a refused one is stored as ''.
+const { urlSetter } = require('../services/safeUrl');
 
 // Social listening keeps a label (no text) per message in ListeningScore. If a path that deletes inbox messages is ever added,
 // it must call require('../services/listening/erase').eraseForInboxItems({ userId, itemIds }); a test checks the route source.
@@ -45,7 +47,7 @@ const socialInboxMessageSchema = new mongoose.Schema({
   authorName: { type: String, default: '' },
   body: { type: String, default: '' },
   mediaUrls: { type: [String], default: [] },
-  permalink: { type: String, default: '' },
+  permalink: { type: String, default: '', set: urlSetter() },
   sentiment: { type: String, enum: ['positive', 'negative', 'neutral'], default: 'neutral' },
   spamScore: { type: Number, default: 0 },
   leadScore: { type: Number, default: 0 },

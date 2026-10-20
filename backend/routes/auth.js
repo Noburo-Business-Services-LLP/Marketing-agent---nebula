@@ -1252,6 +1252,11 @@ router.put('/update-profile', protect, [
       }
     });
 
+    // A website that is a script or data link, markup, or carries a password is refused (services/safeUrl.js); other
+    // text that is not an address is stored as '' by the model.
+    if (require('../services/safeUrl').isDangerousUrl(updates.businessProfile && updates.businessProfile.website)) {
+      return res.status(400).json({ success: false, message: require('../services/safeUrl').WEBSITE_MESSAGE });
+    }
     if (updates.businessProfile && typeof updates.businessProfile === 'object') {
       updates.businessProfile = withCleanLanguages(updates.businessProfile);
     }
@@ -1362,6 +1367,11 @@ router.post('/check-duplicate', protect, async (req, res) => {
 router.put('/complete-onboarding', protect, async (req, res) => {
   try {
     const { businessProfile, connectedSocials, mobileNumber } = req.body;
+    // A website that is a script or data link, markup, or carries a password is refused (services/safeUrl.js); other
+    // text that is not an address is stored as '' by the model.
+    if (require('../services/safeUrl').isDangerousUrl(businessProfile && businessProfile.website)) {
+      return res.status(400).json({ success: false, message: require('../services/safeUrl').WEBSITE_MESSAGE });
+    }
 
     const updateData = {
       onboardingCompleted: true,

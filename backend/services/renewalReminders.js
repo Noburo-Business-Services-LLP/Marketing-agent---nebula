@@ -1,4 +1,5 @@
 'use strict';
+const { escapeHtml } = require('../utils/escapeHtml');
 /**
  * The reminder email, three days before a monthly plan is charged: what will be charged, on which date, and how to stop it.
  * Pure helpers (who is due, the email) plus a runner that takes its database and mailer from the caller so tests send nothing.
@@ -68,11 +69,10 @@ function buildReminderEmail({ user, appUrl = 'https://gravity.nebulaa.ai' }) {
     'If you have any questions, reply to this email and our team will help.',
     'Nebulaa'
   ];
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return {
     subject: `Your Nebulaa ${planName} plan renews on ${when}`,
     text: paragraphs.join('\n\n'),
-    html: paragraphs.map((p) => `<p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;">${esc(p)}</p>`).join(''),
+    html: paragraphs.map((p) => `<p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;">${escapeHtml(p)}</p>`).join(''),
     amountPaise: nextChargePaise(user),
     when
   };

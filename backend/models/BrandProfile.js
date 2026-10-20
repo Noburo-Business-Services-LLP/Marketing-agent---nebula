@@ -4,6 +4,8 @@
  */
 
 const mongoose = require('mongoose');
+// Stored addresses are http/https only (services/safeUrl.js): a refused one is stored as ''.
+const { urlSetter } = require('../services/safeUrl');
 
 const brandProfileSchema = new mongoose.Schema({
   userId: {
@@ -16,7 +18,8 @@ const brandProfileSchema = new mongoose.Schema({
   // Source Information
   websiteUrl: {
     type: String,
-    required: true
+    required: true,
+    set: urlSetter({ allowBareDomain: true }) // a refused address is '', which fails "required": never stored
   },
   
   // Basic Info
@@ -85,7 +88,7 @@ const brandProfileSchema = new mongoose.Schema({
   // Competitors
   competitors: [{
     name: String,
-    url: String,
+    url: { type: String, set: urlSetter({ allowBareDomain: true }) },
     analyzed: { type: Boolean, default: false }
   }],
   
@@ -98,7 +101,7 @@ const brandProfileSchema = new mongoose.Schema({
   
   // Analysis Metadata
   scrapedPages: [{
-    url: String,
+    url: { type: String, set: urlSetter() },
     page: String,
     scrapedAt: Date,
     sourceId: String

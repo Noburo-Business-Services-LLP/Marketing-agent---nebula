@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+// Stored addresses are http/https only (services/safeUrl.js): a refused one is stored as ''.
+const { urlSetter } = require('../services/safeUrl');
 
 const competitorPostSchema = new mongoose.Schema({
   platform: {
@@ -6,9 +8,9 @@ const competitorPostSchema = new mongoose.Schema({
     enum: ['instagram', 'facebook', 'twitter', 'linkedin', 'youtube'],
     required: true
   },
-  postUrl: String,
+  postUrl: { type: String, set: urlSetter() },
   content: String,
-  imageUrl: String,
+  imageUrl: { type: String, set: urlSetter({ allowDataImage: true }) },
   likes: { type: Number, default: 0 },
   comments: { type: Number, default: 0 },
   shares: { type: Number, default: 0 },
@@ -40,7 +42,7 @@ const competitorSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  website: String,
+  website: { type: String, set: urlSetter({ allowBareDomain: true }) },
   industry: String,
   socialHandles: {
     instagram: String,
@@ -49,7 +51,7 @@ const competitorSchema = new mongoose.Schema({
     linkedin: String,
     youtube: String
   },
-  logo: String,
+  logo: { type: String, set: urlSetter({ allowDataImage: true }) },
   description: String,
   location: String,
   posts: [competitorPostSchema],
@@ -91,7 +93,7 @@ const competitorSchema = new mongoose.Schema({
   // verified (our own profile check matched), confirmed (the customer confirmed or typed it). Older records have none.
   handleStatus: { type: String, enum: ['suggested', 'verified', 'confirmed'] },
   // Our own 96 x 96 copy of their public profile picture, kept only while they are tracked (services/competitors/avatar.js).
-  avatarUrl: String,
+  avatarUrl: { type: String, set: urlSetter() },
   avatarUpdatedAt: Date,
   avatarSourceKey: String, // which picture it was made from (a hash of the link's path), so an unchanged picture is not fetched again
   // Our own 360 x 450 copies of their top public posts (services/competitors/postThumbs.js), at most six, only while tracked

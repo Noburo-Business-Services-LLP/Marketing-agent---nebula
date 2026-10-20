@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+// Stored addresses are http/https only (services/safeUrl.js): a refused one is stored as ''.
+const { urlSetter } = require('../services/safeUrl');
 
 const socialInboxMessageSchema = new mongoose.Schema({
   providerMessageId: { type: String, default: '' },
@@ -13,7 +15,7 @@ const socialInboxMessageSchema = new mongoose.Schema({
   authorName: { type: String, default: '' },
   body: { type: String, default: '' },
   mediaUrls: { type: [String], default: [] },
-  permalink: { type: String, default: '' },
+  permalink: { type: String, default: '', set: urlSetter() },
   sentiment: { type: String, default: 'neutral' },
   spamScore: { type: Number, default: 0 },
   rawPayload: { type: mongoose.Schema.Types.Mixed, default: {} },
