@@ -216,5 +216,6 @@ campaignSchema.index({ instagramAccountKey: 1, status: 1, scheduledFor: 1 });
 require('../config/staffIndexes').declareStaffIndexes(campaignSchema, 'Campaign');
 // Indexes for the Home summary. Also script-only: scripts/create-home-indexes.js.
 require('../config/homeIndexes').declareHomeIndexes(campaignSchema, 'Campaign');
+require('../config/perfIndexes').declarePerfIndexes(campaignSchema, 'Campaign');
 
 module.exports = mongoose.model('Campaign', campaignSchema);

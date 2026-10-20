@@ -147,8 +147,8 @@ test('every staff index is declared on its model as script-only, so a normal sta
 });
 
 test('no other index was made script-only by accident', () => {
-  // The Home indexes (config/homeIndexes.js) are script-only too, with their own list and test.
-  const names = new Set([...STAFF_INDEXES, ...require('../config/homeIndexes').HOME_INDEXES].map((d) => d.name));
+  // The Home and perf indexes (config/homeIndexes.js, config/perfIndexes.js) are script-only too, with their own lists and tests.
+  const names = new Set([...STAFF_INDEXES, ...require('../config/homeIndexes').HOME_INDEXES, ...require('../config/perfIndexes').PERF_INDEXES].map((d) => d.name));
   for (const m of ['Draft', 'Campaign', 'VideoJob', 'HeroVideoJob', 'Blueprint', 'SocialInboxMessage']) {
     for (const [, options] of require(`../models/${m}`).schema.indexes()) {
       if (options._autoIndex === false) assert.ok(names.has(options.name), `${m}.${options.name} is script-only but not in the list`);

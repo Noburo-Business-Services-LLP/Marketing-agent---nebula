@@ -900,11 +900,13 @@ ${JSON.stringify(posts)}`;
  */
 router.get('/', protect, async (req, res) => {
   try {
-    const { status, platform, startDate, endDate, limit = 50 } = req.query;
+    const { status, platform, startDate, endDate } = req.query;
     const userId = req.user.userId || req.user.id;
+    const mongoose = require('mongoose');
+    const page = require('../services/listPage');
     
-    // Build query
-    const query = { userId };
+    // Build query (an aggregation does not cast, so the id is made an ObjectId here)
+    const query = { userId: new mongoose.Types.ObjectId(String(userId)) };
     
     if (status && status !== 'all') {
       query.status = status;
@@ -922,19 +924,19 @@ router.get('/', protect, async (req, res) => {
     
     // Only reads (load-test week 1). Posts scheduled on Ayrshare whose time has passed are checked with Ayrshare by the
     // background status sync (services/campaignStatusSync.js), not here: this list used to make one live Ayrshare call
-    // per past-due post every time it was opened. The list and the counts are read at the same time.
-    const mongoose = require('mongoose');
-    const [campaigns, statusCounts] = await Promise.all([
-      Campaign.find(query)
-        .sort({ createdAt: -1 })
-        .limit(parseInt(limit))
-        .lean(),
+    // per past-due post every time it was opened. One page (weeks 2 to 3): newest first, 20 by default, ?limit= up to
+    // 50, ?cursor= for the next page, list fields only (services/listPage.js). The counts are for all campaigns and are
+    // read at the same time as the page.
+    const limit = page.parseLimit(req.query.limit, 20);
+    const q = page.pageQuery(query, { cursor: req.query.cursor, limit });
+    const [rows, statusCounts] = await Promise.all([
+      Campaign.aggregate(page.pagePipeline(q, page.CAMPAIGN_TRIM)),
       Campaign.aggregate([
-        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+        { $match: { userId: query.userId } },
         { $group: { _id: '$status', count: { $sum: 1 } } }
       ])
     ]);
-    const filteredCampaigns = campaigns;
+    const { items, nextCursor, hasMore } = page.finishPage(rows, { limit, cursor: q.cursor });
     
     const counts = {
       all: 0,
@@ -952,10 +954,13 @@ router.get('/', protect, async (req, res) => {
     
     res.json({
       success: true,
-      campaigns: filteredCampaigns,
-      counts
+      campaigns: items,
+      counts,
+      nextCursor,
+      hasMore
     });
   } catch (error) {
+    if (error && error.status === 400) return res.status(400).json({ success: false, message: error.message });
     console.error('Get campaigns error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch campaigns', error: error.message });
   }

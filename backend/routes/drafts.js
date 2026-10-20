@@ -1,5 +1,6 @@
 const { priceText } = require('../config/quarkWording');
 const express = require('express');
+const mongoose = require('mongoose');
 const path = require('path');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -81,9 +82,18 @@ router.get('/', protect, async (req, res) => {
       }
     }
 
-    const drafts = await Draft.find(query).populate('campaignId', 'campaignName').sort({ createdAt: -1 });
-    res.status(200).json({ success: true, drafts });
+    // One page (load-test weeks 2 to 3): newest first, 30 by default, ?limit= up to 50, ?cursor= for the next page;
+    // list fields only (services/listPage.js). `drafts` stays the list, so older screens keep working.
+    const page = require('../services/listPage');
+    const limit = page.parseLimit(req.query.limit, 30);
+    query.userId = new mongoose.Types.ObjectId(String(userId));
+    const q = page.pageQuery(query, { cursor: req.query.cursor, limit });
+    const rows = await Draft.aggregate(page.pagePipeline(q, page.DRAFT_TRIM));
+    await Draft.populate(rows, { path: 'campaignId', select: 'campaignName', options: { lean: true } });
+    const { items, nextCursor, hasMore } = page.finishPage(rows, { limit, cursor: q.cursor });
+    res.status(200).json({ success: true, drafts: items, nextCursor, hasMore });
   } catch (error) {
+    if (error && error.status === 400) return res.status(400).json({ success: false, message: error.message });
     console.error('Get drafts error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch drafts', error: error.message });
   }

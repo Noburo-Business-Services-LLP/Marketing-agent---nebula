@@ -224,11 +224,20 @@ function resolveDraftStatus(draft = {}) {
   return 'draft';
 }
 
+const LIST_LIMIT = 50;
+
 async function listDraftsForUser(userId = null) {
   // 1. Try listing from MongoDB (instant query)
   try {
     const query = userId ? { userId } : {};
-    const dbDrafts = await VideoDraft.find(query).sort({ updatedAt: -1 }).lean();
+    // The 50 most recently changed, and only the fields this list shows (load-test weeks 2 to 3): a video draft holds
+    // every scene, prompt and clip log, and the list read all of them for every draft.
+    const dbDrafts = await VideoDraft.find(query)
+      .sort({ updatedAt: -1 })
+      .limit(LIST_LIMIT)
+      // scenes.sceneData.sceneNumber keeps one (small) entry per scene, which is all the scene count needs.
+      .select('jobId input.description input.durationSeconds input.sceneCount scenes.sceneData.sceneNumber currentStep merge.finalOutputUrl merge.finalVideoUrl content.thumbnailUrl images.sceneData.imageUrl schedule.scheduledAt schedule.status platform.selectedPlatforms createdAt updatedAt')
+      .lean();
     if (dbDrafts && dbDrafts.length > 0) {
       return dbDrafts.map((draft) => ({
         jobId: draft.jobId,

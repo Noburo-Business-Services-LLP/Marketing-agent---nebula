@@ -47,17 +47,21 @@ router.get('/', protectCached, async (req, res) => {
       query.status = { $in: ['sent', 'pending'] }; // Include pending notifications too
     }
 
-    const notifications = await Notification.find(freshOnly(query))
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .select('-emailError');
-
-    // Get unread count - include both sent and pending
-    const unreadCount = await Notification.countDocuments(freshOnly({
-      userId,
-      readAt: null,
-      status: { $in: ['sent', 'pending'] }
-    }));
+    // Lean, at most 50, and the unread count read at the same time as the list (load-test weeks 2 to 3).
+    const max = require('../services/listPage').parseLimit(limit, 20);
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find(freshOnly(query))
+        .sort({ createdAt: -1 })
+        .limit(max)
+        .select('-emailError')
+        .lean(),
+      // Get unread count - include both sent and pending
+      Notification.countDocuments(freshOnly({
+        userId,
+        readAt: null,
+        status: { $in: ['sent', 'pending'] }
+      }))
+    ]);
 
     res.json({
       success: true,
