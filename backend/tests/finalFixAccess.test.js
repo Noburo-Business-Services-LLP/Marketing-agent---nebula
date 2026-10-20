@@ -216,7 +216,7 @@ test('B-M6: the content calendar, snapshot and publishing schedulers all exclude
   User.find = (f) => { if (f && f['ayrshare.profileKey']) { seen.snapshot = f; return { select: async () => [] }; } return fake.find(f); };
   User.distinct = fake.distinct;
   ContentCalendar.find = (f) => { seen.calendar = f; return { limit: async () => [] }; };
-  Campaign.find = (f) => { seen.campaign = f; return { sort: () => ({ limit: async () => [] }) }; };
+  Campaign.find = (f) => { seen.campaign = f; const chain = { select: () => chain, sort: () => ({ limit: async () => [] }) }; return chain; };
   const log = console.log; console.log = () => {};
   try {
     await require('../services/contentCalendarService').processAutoGeneration({});

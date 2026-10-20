@@ -106,7 +106,7 @@ class NotificationScheduler {
         try {
           campaigns = await Campaign.find({
             status: 'scheduled'
-          }).maxTimeMS(10000).lean();
+          }).select('_id name userId scheduling scheduledFor platforms').maxTimeMS(10000).lean();
           // Continue processing - don't return!
         } catch (retryError) {
           this.isProcessing = false;

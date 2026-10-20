@@ -28,7 +28,7 @@ function setup({ campaign = {}, draft } = {}) {
 }
 Campaign.find = () => {
   const p = Promise.resolve(campaigns.filter((c) => c.status === 'scheduled'));
-  p.sort = () => p; p.limit = () => p; return p;
+  p.select = () => p; p.sort = () => p; p.limit = () => p; return p;
 };
 Campaign.findByIdAndUpdate = async (id, u) => { const c = campaigns.find((x) => x._id === id); Object.assign(c, u.$set); return c; };
 Campaign.updateOne = async (q, u) => { const c = campaigns.find((x) => x._id === q._id && x.status === q.status); if (c) Object.assign(c, u.$set); };

@@ -27,6 +27,7 @@ function fakeCampaignModel(rows) {
       let list = [...byId.values()].filter((r) => r.status === q.status && r.scheduledFor < q.scheduledFor.$lt && r.socialPostId
         && !(q.userId && q.userId.$nin.map(String).includes(String(r.userId))));
       return {
+        select(p) { self.lastSelect = p; return this; },
         sort() { list.sort((a, b) => (a.ayrshareCheckedAt || 0) - (b.ayrshareCheckedAt || 0)); return this; },
         limit(n) { self.lastLimit = n; return Promise.resolve(list.slice(0, n).map((r) => ({ ...r }))); }
       };

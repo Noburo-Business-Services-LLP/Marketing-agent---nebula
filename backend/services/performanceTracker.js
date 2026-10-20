@@ -69,6 +69,9 @@ const LAUNCH_AT = process.env.PERFORMANCE_TRACKER_LAUNCH_AT
   ? new Date(process.env.PERFORMANCE_TRACKER_LAUNCH_AT)
   : null;
 
+// Only what the checkpoints read (D104): never the pictures or the stored provider answers.
+const TRACKER_PROJECTION = '_id userId platforms publishedAt performanceChecks socialPostId socialPostIds facebookPostId instagramPostId tone creative.type creative.captions creative.hashtags creative.callToAction';
+
 async function runPerformanceTrackerOnce({ now = new Date(), limit = MAX_CHECKS_PER_RUN } = {}) {
   // Only campaigns that are actually published and haven't exhausted every
   // checkpoint yet are candidates — cheap enough to filter the rest in
@@ -98,7 +101,7 @@ async function runPerformanceTrackerOnce({ now = new Date(), limit = MAX_CHECKS_
       { socialPostId: { $exists: true, $nin: [null, ''] } },
       { socialPostIds: { $type: 'object', $ne: {} } }
     ]
-  }).sort({ publishedAt: -1 }).limit(limit * 3).lean(); // headroom: not every candidate has a checkpoint due right now
+  }).select(TRACKER_PROJECTION).sort({ publishedAt: -1 }).limit(limit * 3).lean(); // headroom: not every candidate has a checkpoint due right now
 
   let checked = 0;
   for (const campaign of candidates) {

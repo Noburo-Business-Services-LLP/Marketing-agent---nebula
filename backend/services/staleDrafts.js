@@ -13,7 +13,8 @@ const MESSAGE = 'This did not finish. You can create it again.';
 
 async function reapStaleDrafts({ Draft, refund, now = Date.now(), log = console }) {
   const cutoff = new Date(now - STALE_MINUTES * 60000);
-  const stale = await Draft.find({ status: 'processing', updatedAt: { $lt: cutoff } }).limit(200);
+  // Only what the refund rule reads (D104).
+  const stale = await Draft.find({ status: 'processing', updatedAt: { $lt: cutoff } }).select('_id userId contentType imageUrl carouselSlides.imageUrl').limit(200);
   let handled = 0;
   for (const d of stale) {
     // Claim it first: only the process that flips the status refunds, so nothing is refunded twice.

@@ -210,6 +210,8 @@ async function markLinkedDraftPosted(campaign, platforms, postedAt = new Date())
   );
 }
 
+const SCHEDULER_PROJECTION = '-publishResult -lastPublishError';
+
 async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
   const MAX_PUBLISH_ATTEMPTS = Number(process.env.CAMPAIGN_MAX_PUBLISH_ATTEMPTS || 3);
   // Nothing goes out for a frozen client, a client whose agency plan ended, or an account waiting to be deleted.
@@ -227,6 +229,8 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
     ],
     publishAutoCancelled: { $ne: true }
   })
+    // The publisher needs the whole post except the stored provider answers (which held whole pictures: D104).
+    .select(SCHEDULER_PROJECTION)
     .sort({ 'scheduling.startDate': 1 })
     .limit(limit);
 

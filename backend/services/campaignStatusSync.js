@@ -35,6 +35,10 @@ function realDeps() {
 }
 
 /** Check one past-due campaign with Ayrshare and apply the answer (the logic GET /api/campaigns used to run). */
+// A re-post needs the whole campaign; only the stored provider answers are left out (they held whole pictures: D104).
+// publishResult.retryCount and publishResult.retryRequestedAt stay (read below).
+const SYNC_PROJECTION = '-lastPublishError -publishResult.error -publishResult.instagramFix -publishResult.initial -publishResult.verified -publishResult.retry -publishResult.data -publishResult.rawError';
+
 async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), deps = {} } = {}) {
   const {
     Campaign, getPostStatus, retryAyrsharePost, publishCampaignToSocial,
@@ -254,7 +258,7 @@ async function runCampaignStatusSyncOnce({
       scheduledFor: { $lt: at },
       socialPostId: { $nin: [null, ''] },
       ...(paused && paused.length ? { userId: { $nin: paused } } : {})
-    }).sort({ ayrshareCheckedAt: 1, scheduledFor: 1 }).limit(Math.max(1, Math.min(200, batch)));
+    }).select(SYNC_PROJECTION).sort({ ayrshareCheckedAt: 1, scheduledFor: 1 }).limit(Math.max(1, Math.min(200, batch)));
 
     const keys = new Map();
     for (const campaign of due || []) {

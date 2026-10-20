@@ -6,7 +6,7 @@ function fakeDraft(rows) {
   const store = rows.map((r) => ({ ...r }));
   return {
     store,
-    find: (q) => ({ limit: async () => store.filter((d) => d.status === q.status && d.updatedAt < q.updatedAt.$lt) }),
+    find: (q) => ({ select() { return this; }, limit: async () => store.filter((d) => d.status === q.status && d.updatedAt < q.updatedAt.$lt) }),
     updateOne: async (cond, upd) => {
       const d = store.find((x) => x._id === cond._id && x.status === cond.status);
       if (!d) return { modifiedCount: 0 };
