@@ -723,6 +723,14 @@ function startBackgroundJobs() {
       logger.warn('Videos consumer failed to start:', queueError.message);
     }
 
+    // Photoshoot on consumers (E9 stage B2): only with ENABLE_PHOTOSHOOT_CONSUMER=on (default off: a Photoshoot runs in the
+    // web task that took the request). Claims charged, waiting photoshoots with a lease, PROVIDER_SLOTS_PHOTOSHOOT jobs at once.
+    try {
+      require('./services/photoshootConsumer').startPhotoshootConsumer();
+    } catch (queueError) {
+      logger.warn('Photoshoot consumer failed to start:', queueError.message);
+    }
+
     // Queue numbers to CloudWatch: OFF unless QUEUE_METRICS_CLOUDWATCH=on
     try {
       require('./services/queueMetricsEmitter').startQueueMetricsEmitter();

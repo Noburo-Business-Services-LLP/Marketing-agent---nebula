@@ -42,7 +42,7 @@ function world({ workers = 1, settings = {}, now } = {}) {
 
 test('slot config: defaults, overrides, legacy names, clamping and validation warnings', () => {
   const d = readJobSlots({}, { cpuCount: 8 });
-  assert.deepStrictEqual(d.slots, { image: 2, video: 2, omni: 2 });
+  assert.deepStrictEqual(d.slots, { image: 2, video: 2, omni: 2, photoshoot: 2 });
   assert.strictEqual(d.cpu, 2, 'min(2, vCPUs)');
   assert.strictEqual(readJobSlots({}, { cpuCount: 1 }).cpu, 1);
   assert.strictEqual(d.globalCeiling, 200);
@@ -52,9 +52,11 @@ test('slot config: defaults, overrides, legacy names, clamping and validation wa
   assert.strictEqual(d.maxAttempts, 2);
   assert.strictEqual(d.shutdownGraceMs, 15000, 'drain 20 s minus 5 s');
   assert.deepStrictEqual(d.warnings, []);
-  assert.deepStrictEqual(readJobSlots({ PROVIDER_SLOTS: '12' }).slots, { image: 12, video: 12, omni: 12 }, 'one value for all three');
-  assert.deepStrictEqual(readJobSlots({ PROVIDER_SLOTS: '12', PROVIDER_SLOTS_VIDEO: '4' }).slots, { image: 12, video: 4, omni: 12 }, 'specific wins');
-  assert.deepStrictEqual(readJobSlots({ VIDEO_QUEUE_CONCURRENCY: '3', IMAGE_JOB_CONCURRENCY: '5' }).slots, { image: 5, video: 3, omni: 2 }, 'older names still work');
+  assert.deepStrictEqual(readJobSlots({ PROVIDER_SLOTS: '12' }).slots, { image: 12, video: 12, omni: 12, photoshoot: 12 }, 'one value for all of them');
+  assert.deepStrictEqual(readJobSlots({ PROVIDER_SLOTS: '12', PROVIDER_SLOTS_VIDEO: '4' }).slots, { image: 12, video: 4, omni: 12, photoshoot: 12 }, 'specific wins');
+  assert.deepStrictEqual(readJobSlots({ VIDEO_QUEUE_CONCURRENCY: '3', IMAGE_JOB_CONCURRENCY: '5' }).slots, { image: 5, video: 3, omni: 2, photoshoot: 2 }, 'older names still work');
+  assert.strictEqual(readJobSlots({ PROVIDER_SLOTS_PHOTOSHOOT: '5', PROVIDER_SLOTS: '12' }).slots.photoshoot, 5, 'Photoshoot has its own setting (E9 B2)');
+  assert.strictEqual(readJobSlots({ PROVIDER_SLOTS_PHOTOSHOOT: '99' }).slots.photoshoot, 32, 'photoshoot clamped like the others');
   assert.strictEqual(readJobSlots({ PROVIDER_SLOTS_OMNI: '6', PROVIDER_SLOTS: '12' }).slots.omni, 6, 'the Videos (Omni) pool has its own setting');
   assert.strictEqual(readJobSlots({ PROVIDER_SLOTS_OMNI: '99' }).slots.omni, 32, 'omni clamped like the others');
   assert.strictEqual(readJobSlots({ PROVIDER_SLOTS_OMNI: 'x' }).slots.omni, 2, 'omni not a number: default');
@@ -439,9 +441,9 @@ test('SIGTERM helper: a process without consumers does nothing; a consumer stops
   assert.deepStrictEqual(await stopJobConsumers({ env: { RUN_BACKGROUND: '0' } }), { skipped: true });
   const seen = [];
   const fake = (name) => ({ shutdown: async ({ graceMs }) => { seen.push([name, graceMs]); return { finished: true }; } });
-  const r = await stopJobConsumers({ env: { RUN_BACKGROUND: '1' }, video: fake('video'), image: fake('image'), studio: fake('studio'), graceMs: 1234 });
-  assert.deepStrictEqual(seen.sort(), [['image', 1234], ['studio', 1234], ['video', 1234]]);
-  assert.deepStrictEqual(r, { video: { finished: true }, image: { finished: true }, studio: { finished: true } });
+  const r = await stopJobConsumers({ env: { RUN_BACKGROUND: '1' }, video: fake('video'), image: fake('image'), studio: fake('studio'), photoshoot: fake('photoshoot'), graceMs: 1234 });
+  assert.deepStrictEqual(seen.sort(), [['image', 1234], ['photoshoot', 1234], ['studio', 1234], ['video', 1234]]);
+  assert.deepStrictEqual(r, { video: { finished: true }, image: { finished: true }, studio: { finished: true }, photoshoot: { finished: true } });
 });
 
 // ---- D74 review fixes (items 4 to 7) ----

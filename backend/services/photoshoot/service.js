@@ -19,6 +19,11 @@
  *  10. when every photo is finished: the failed photos are refunded (all of it when none was made), once, to the payer
  * A lost runner (restart) is found by its expired lease and taken over; a photo it left calling is tried again only if
  * it has a call left. A job older than MAX_AGE_MS is closed and its unfinished photos refunded.
+ *
+ * ENABLE_PHOTOSHOOT_CONSUMER (E9 stage B2, default OFF; impact map docs/superpowers/impact-maps/generation-parallelism.md
+ * "Stage B step 2"): step 9 does not run in the request. The charged row waits ('queued' with chargedAt set, via 'consumer')
+ * and a worker consumer (services/photoshootConsumer.js) claims it and runs runClaimed below: every write conditional on
+ * the claim (leaseOwner = worker id, runs), finished photos never made again, every close proof-first (consumerClose).
  */
 const os = require('os');
 const caps = require('../../config/photoshoot');
@@ -28,6 +33,8 @@ const { priceText, worthText } = require('../../config/quarkWording');
 const { canUse } = require('../../config/entitlements');
 const { buildPhotoPrompt, cleanName } = require('./prompt');
 const { readDataUrl, loadRef } = require('./refs');
+const { createRunGate } = require('../runGate');
+const { settleRefund } = require('../refundSettle');
 
 const ACTION = 'photoshoot_image';
 const STALE_QUEUED_MS = 3 * 60000;
@@ -69,6 +76,13 @@ const reply = (status, body) => ({ status, body: { success: status < 300, ...bod
 const perPhoto = () => QUARK_COSTS[ACTION];
 const minutesFor = (photos) => Math.max(1, Math.ceil((Math.ceil(photos / caps.CONCURRENCY) * caps.PHOTO_SECONDS) / 60));
 const switchOn = (env) => String((env && env[caps.SWITCH_ENV]) || '').trim().toLowerCase() === 'on';
+/** ENABLE_PHOTOSHOOT_CONSUMER: off by default (the request runs the job in this process, as before). */
+function consumerSwitch(env = process.env) {
+  const v = String((env && env[caps.CONSUMER_SWITCH_ENV]) == null ? '' : env[caps.CONSUMER_SWITCH_ENV]).trim().toLowerCase();
+  return v === 'on' || v === '1' || v === 'true' || v === 'yes';
+}
+const queuedMaxMs = (env) => { const n = Number(env && env.PHOTOSHOOT_QUEUED_MAX_MS); return Number.isFinite(n) && n > 0 ? n : caps.QUEUED_MAX_MS; };
+class RunLostError extends Error { constructor(id) { super(`this worker no longer holds photoshoot ${id}`); this.stopRun = true; } }
 
 /** Agency owners and their client workspaces see posts' worth, never Quarks (the same rule as the agency screens). */
 function postsOnlyOf(user) {
@@ -200,6 +214,9 @@ function defaultDeps() {
       } catch (_) { /* best effort */ }
     },
     schedule: (fn) => setImmediate(fn),
+    // Consumer path (E9 B2): the job slots (lease, heartbeat, runs) and the consumer of this process to kick after a create.
+    slots: () => require('../../config/jobSlots').jobSlots(),
+    kick: () => require('../photoshootConsumer').photoshootConsumer.kick(),
     env: process.env,
     now: () => new Date(),
     runnerId: `${os.hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`
@@ -227,12 +244,17 @@ function createPhotoshoot(given = {}) {
     return null;
   }
 
+  const consumerOn = () => consumerSwitch(deps.env);
+
   async function capsProblem(userId, now, photos) {
-    const [minute, today, all] = await Promise.all([
+    const [minute, today, running, waiting] = await Promise.all([
       repo.countStartsSince(userId, new Date(now.getTime() - 60000)),
       repo.photosToday(userId, istDay(now)),
-      repo.runningAll()
+      repo.runningAll(),
+      // Consumer path: charged rows waiting for a worker count too, or the queue could grow without a limit.
+      consumerOn() ? repo.waitingAll() : 0
     ]);
+    const all = running + waiting;
     if (minute >= caps.MAX_STARTS_PER_MINUTE) return reply(429, { limit: 'minute', message: MESSAGES.perMinute });
     if (today + photos > caps.MAX_PHOTOS_PER_DAY) return reply(429, { limit: 'day', left: Math.max(0, caps.MAX_PHOTOS_PER_DAY - today), message: MESSAGES.perDay });
     if (all >= caps.MAX_RUNNING_ALL_ACCOUNTS) return reply(503, { serviceBusy: true, message: BUSY });
@@ -306,7 +328,10 @@ function createPhotoshoot(given = {}) {
   }
 
   /** The common money path for a pack and a redo: row first, one charge, mark charged, start the runner. */
-  async function startJob(user, doc, { userId, cost, description }) {
+  async function startJob(user, docIn, { userId, cost, description }) {
+    const viaConsumer = consumerOn();
+    // The claim marker (E9 B2): only consumers claim this row; the in-process resume loop never takes it.
+    const doc = viaConsumer ? { ...docIn, via: 'consumer' } : docIn;
     let row;
     try {
       row = await repo.insert(doc);
@@ -331,6 +356,7 @@ function createPhotoshoot(given = {}) {
         : reply(403, { creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: noBalanceMessage(user, cost) });
     }
     const payerId = String(paid.payerId || userId);
+    if (viaConsumer) return queueForWorker(row, { userId, cost, payerId, now });
     let marked = false;
     try { marked = await repo.markCharged(row._id, { quarks: cost, payerId, now }); } catch (_) { marked = false; }
     if (!marked) {
@@ -349,6 +375,35 @@ function createPhotoshoot(given = {}) {
     const job = { ...row, status: 'running', quarks: cost, payerId, chargedAt: now };
     deps.schedule(() => runJob(row._id).catch((e) => console.error('[photoshoot] runner failed:', e && e.message)));
     return reply(202, { job: jobView(job) });
+  }
+
+  /**
+   * Consumer path: the charge landed, so the SAME row becomes claimable (still 'queued', its charge recorded with the ref).
+   * A lost reply (the write landed, its answer did not) is read back: a recorded charge means the job was accepted, so the
+   * answer is 202 and nothing is refunded (D83). Not accepted: the Quarks go back once, after this caller won the refund
+   * claim (closeLedger only matches a row with no recorded charge, so it can never refund an accepted job).
+   */
+  async function queueForWorker(row, { userId, cost, payerId, now }) {
+    const quarkCharge = { action: ACTION, ref: String(row._id), quarks: cost, payerId };
+    let queued = null; let threw = false;
+    try { queued = await repo.queueCharged(row._id, { quarks: cost, payerId, now, quarkCharge }); } catch (_) { queued = null; threw = true; }
+    if (!queued && threw) {
+      const again = await repo.findById(row._id).catch(() => null);
+      if (again && again.chargedAt) queued = again;
+    }
+    if (queued) {
+      try { deps.kick(); } catch (_) { /* a consumer finds it within seconds */ }
+      return reply(202, { job: jobView(queued) });
+    }
+    const claimed = await repo.closeLedger(row._id, { refundedQuarks: cost, payerId, now: deps.now() }).catch(() => null);
+    if (!claimed) return reply(503, { message: MESSAGES.chargeUnsure }); // the stale sweep settles it from the proof
+    let back = null;
+    try { back = await deps.refundTo(userId, cost, { action: `${ACTION}_refund`, ref: String(row._id), payerId }); } catch (_) { back = null; }
+    if (!back || !back.ok) {
+      await repo.setRefundFailed(row._id).catch(() => null);
+      deps.alert('photoshoot_refund', `Photoshoot ${String(row._id)}: the job could not be queued and the refund of ${cost} Quarks did not land.`);
+    } else await repo.markRefundSettled(row._id, deps.now()).catch(() => null);
+    return reply(503, { message: MESSAGES.ledger });
   }
 
   /**
@@ -588,6 +643,215 @@ function createPhotoshoot(given = {}) {
     }
   }
 
+  // ---- the consumer path (E9 stage B2) -----------------------------------------------------------------------------
+  // The claim a consumer holds is cond = { status: 'running', leaseOwner: <worker id>, runs: <run number> }. Every write
+  // below carries it, so a run that lost its claim (lease sweep, SIGTERM hand-back, a stale close) can never start a call,
+  // record a photo or close the job; whoever took the row over owns it.
+
+  const holdsClaim = (job, cond) => Boolean(job) && job.status === cond.status && String(job.leaseOwner || '') === String(cond.leaseOwner || '') && Number(job.runs || 0) === Number(cond.runs || 0);
+
+  /**
+   * Closes a consumer job and returns its Quarks, safely (the D19-B rule, as Videos closeWithRefund):
+   *  - `openReason`: every photo not finished yet fails with it first (only while the row is still the claim `cond`);
+   *  - the charge proof is read FIRST (unreadable: left open; the lease sweep or the next run tries again);
+   *  - amount = failed photos x price (everything when none was made), never above the proven charge, 0 when a refund
+   *    already exists or there is no proof;
+   *  - ONE conditional write closes the job and claims the refund (refunded, refundedQuarks, refundPayer), only while it is
+   *    still `cond`, not refunded, and every photo is finished; then the refund is paid with the job id as ref and settled.
+   * A crash after the claim leaves refunded + refundedQuarks without refundSettledAt: the settle sweep pays it once, with
+   * proof. Returns the closed row, or null when this caller did not close it.
+   */
+  async function consumerClose(id, cond, openReason = null) {
+    const now = deps.now();
+    if (openReason) await repo.failOpenWhere(id, cond, openReason, now);
+    const job = await repo.findById(id);
+    if (!job || job.refunded) return null;
+    const photos = job.photos || [];
+    if (!photos.length || photos.some((p) => p.status !== 'done' && p.status !== 'failed')) return null;
+    const done = photos.filter((p) => p.status === 'done').length;
+    const failed = photos.length - done;
+    const status = done === photos.length ? 'done' : done > 0 ? 'partial' : 'failed';
+    const reasons = new Set(photos.filter((p) => p.status === 'failed').map((p) => p.reason));
+    const special = ['switched_off', 'queued_timeout', 'stale', 'stopped', 'lost'].find((r) => reasons.has(r));
+    const outcome = status === 'done' ? 'ok' : special || (status === 'partial' ? 'partial' : 'none');
+    const wanted = done === 0 ? (job.quarks || 0) : Math.min(job.quarks || 0, failed * (job.quarksPerPhoto || 0));
+    let led;
+    try { led = (await deps.ledgerFor(String(id), String(job.user))) || {}; } catch (e) {
+      console.error('[photoshoot] cannot read the charge proof for', String(id), '- left open:', e && e.message);
+      return null;
+    }
+    const proven = led.spend ? Math.max(0, Number(led.spend.quarks) || 0) : 0;
+    const amount = led.spend && !led.refunded ? Math.min(Math.max(0, Math.round(wanted)), proven) : 0;
+    const payer = String((led.spend && led.spend.payer) || job.payerId || '');
+    const closed = await repo.closeWhere(id, cond, { status, outcome, refundedQuarks: amount, refundPayer: payer, finishedAt: now, ...(amount > 0 ? {} : { refundSettledAt: now }) });
+    if (!closed) return null;
+    if (wanted > 0 && !led.spend) deps.alert('photoshoot_refund', `Photoshoot ${String(id)}: ${wanted} Quarks were due back but no charge was found for it, so nothing was paid. Check by hand.`);
+    if (amount > 0) {
+      let back = null;
+      try { back = await deps.refundTo(String(job.user), amount, { action: `${ACTION}_refund`, ref: String(id), payerId: payer }); } catch (_) { back = null; }
+      if (back && back.ok) await repo.markRefundSettled(id, deps.now()).catch(() => null);
+      else {
+        await repo.setRefundFailed(id).catch(() => null);
+        deps.alert('photoshoot_refund', `Photoshoot ${String(id)}: the refund of ${amount} Quarks did not land.`);
+      }
+    }
+    return closed;
+  }
+
+  /** One photo on the consumer path: counted before the call, recorded only under the claim; a result that cannot be recorded is deleted. */
+  async function makePhotoClaimed(job, photo, cond, ctl, gate) {
+    await gate.check(); // a lost, handed-back or stopped run pays for nothing more
+    const started = await repo.startPhotoOwned(job._id, cond, photo.index, deps.now()).catch(() => false);
+    if (!started) return;
+    if ((photo.attempts || 0) >= 1) { try { deps.recordSpend(ACTION, 1); } catch (_) { /* cost tracking is best effort */ } }
+    const callsSoFar = (photo.attempts || 0) + 1;
+    let out = { ok: false, reason: 'provider' };
+    const refs = await referencesFor(job, photo).catch(() => null);
+    if (!refs) out = { ok: false, reason: 'no_reference' };
+    else {
+      try { out = await deps.generate({ prompt: photo.prompt, references: refs, aspectRatio: job.aspectRatio }); } catch (_) { out = { ok: false, reason: 'provider' }; }
+    }
+    const now = deps.now();
+    if (out && out.ok && /^https:\/\//i.test(String(out.url || ''))) {
+      const url = String(out.url).slice(0, 600);
+      let kept = null;
+      try { kept = await repo.finishPhotoOwned(job._id, cond, photo.index, { status: 'done', url, now }); } catch (_) { kept = null; }
+      if (kept === null) {
+        // Unknown whether the write landed (a lost reply): look. Recorded = kept; not recorded = delete; cannot tell = keep the file.
+        let row = null; let known = true;
+        try { row = await repo.findById(job._id); } catch (_) { known = false; }
+        const p = row && (row.photos || []).find((x) => x.index === photo.index);
+        if (p && p.url === url) kept = true;
+        else if (known) kept = false;
+      }
+      if (kept === false) {
+        ctl.lose();
+        ctl.orphan();
+        try { await deps.deleteImage(url); } catch (_) { /* best effort: an orphan file is only storage */ }
+        return;
+      }
+      gate.notify('photo');
+      return;
+    }
+    const reason = String((out && out.reason) || 'provider').slice(0, 40);
+    const again = reason !== 'no_reference' && callsSoFar < caps.MAX_CALLS_PER_PHOTO;
+    const ok = await repo.finishPhotoOwned(job._id, cond, photo.index, { status: again ? 'pending' : 'failed', reason, now }).catch(() => null);
+    if (ok === false) ctl.lose();
+    gate.notify('photo');
+  }
+
+  /**
+   * Runs a job a consumer claimed (services/photoshootConsumer.js). `ctl` = { owner: { leaseOwner, runs }, leaseEnd(),
+   * lose(), isLost(), stopping(), orphan() }. Returns 'closed', 'open' (left for the lease sweep), 'lost' or 'stopped'
+   * (SIGTERM: stopped before its next batch; the consumer hands it back).
+   */
+  async function runClaimed(claimed, ctl) {
+    const id = claimed._id;
+    const cond = { status: 'running', leaseOwner: ctl.owner.leaseOwner, runs: ctl.owner.runs };
+    // Lease renewals reported after each photo are not awaited: a rejection (or a renewal that matches nothing) becomes the
+    // stop signal at the next check (services/runGate.js), never an unhandled rejection.
+    const gate = createRunGate({
+      jobId: String(id),
+      onProgress: () => repo.heartbeat(id, cond, ctl.leaseEnd()).then((ok) => { if (!ok) { ctl.lose(); throw new RunLostError(id); } }),
+      isCancelled: () => ctl.isLost()
+    });
+    try {
+      await repo.releaseCallingOwned(id, cond, caps.MAX_CALLS_PER_PHOTO, deps.now());
+      for (let round = 0; round < caps.MAX_PHOTOS_PER_JOB * caps.MAX_CALLS_PER_PHOTO + 2; round += 1) {
+        if (ctl.stopping()) return 'stopped';
+        const job = await repo.findById(id);
+        if (!holdsClaim(job, cond)) { ctl.lose(); return 'lost'; }
+        const now = deps.now();
+        if (job.chargedAt && now.getTime() - new Date(job.chargedAt).getTime() > caps.MAX_AGE_MS) {
+          return (await consumerClose(id, cond, 'stale')) ? 'closed' : 'open';
+        }
+        const pending = (job.photos || []).filter((p) => p.status === 'pending');
+        if (!pending.length) break;
+        // A staff switch (Photoshoots or Pictures) closes the rest at once, refunded (today's rule).
+        const g = await guardProblem();
+        if (g && g.reason === 'switched_off') return (await consumerClose(id, cond, 'switched_off')) ? 'closed' : 'open';
+        const results = await Promise.allSettled(pending.slice(0, caps.CONCURRENCY).map((p) => makePhotoClaimed(job, p, cond, ctl, gate)));
+        const stop = results.find((r) => r.status === 'rejected');
+        if (stop) throw stop.reason;
+        if (ctl.isLost()) return 'lost';
+      }
+      if (ctl.isLost()) return 'lost';
+      return (await consumerClose(id, cond, null)) ? 'closed' : 'open';
+    } catch (e) {
+      if (e && e.stopRun) { ctl.lose(); return 'lost'; }
+      if (e && e.name === 'JobCancelledError') { ctl.lose(); return 'lost'; }
+      throw e;
+    }
+  }
+
+  /**
+   * Consumer rows whose lease ran out one heartbeat ago (their worker died or lost the database): re-queued to resume
+   * (under JOB_MAX_ATTEMPTS) or, at the cap, closed with the per-photo refund. Also closes a consumer run still open
+   * MAX_AGE_MS after its charge (a worker alive but stuck: its heartbeat keeps the lease fresh). Every write is conditional
+   * on the claim read here, so two sweeps (or a sweep and a late completion) never both act. `skip(row)` leaves a run the
+   * calling worker is still running. Bounded; never throws. Run by every consumer and by the resume loop (a scheduler), so
+   * it also works while the switch is off.
+   */
+  async function sweepConsumerLeases({ skip = () => false, limit = 25 } = {}) {
+    const out = { requeued: 0, failed: 0, ceiling: 0 };
+    let s;
+    try { s = deps.slots(); } catch (_) { return out; }
+    const now = deps.now();
+    const margin = Math.max(0, Math.min(Number(s.heartbeatMs) || 0, Math.floor((Number(s.leaseMs) || 0) / 3)));
+    let rows = [];
+    try { rows = (await repo.expiredConsumerLeases(new Date(now.getTime() - margin), limit)) || []; } catch (e) { console.error('[photoshoot] could not read expired consumer leases:', e && e.message); }
+    for (const row of rows) {
+      if (skip(row)) continue;
+      const cond = { status: 'running', leaseOwner: row.leaseOwner, runs: row.runs, leaseUntil: row.leaseUntil };
+      try {
+        if ((Number(row.runs) || 0) < s.maxAttempts) {
+          if (await repo.requeueLost(row._id, cond, deps.now())) out.requeued += 1;
+        } else if (await consumerClose(row._id, cond, 'lost')) {
+          out.failed += 1;
+          deps.alert('photoshoot_consumer', `Photoshoot ${String(row._id)}: its worker was lost on run ${row.runs}; closed and its unfinished photos refunded`);
+        }
+      } catch (e) { console.error('[photoshoot] consumer lease sweep failed for', String(row._id), e && e.message); }
+    }
+    let stuck = [];
+    try { stuck = (await repo.stuckConsumerRuns(new Date(now.getTime() - caps.MAX_AGE_MS - margin), 10)) || []; } catch (_) { stuck = []; }
+    for (const row of stuck) {
+      try {
+        if (await consumerClose(row._id, { status: 'running', leaseOwner: row.leaseOwner, runs: row.runs }, 'stale')) out.ceiling += 1;
+      } catch (e) { console.error('[photoshoot] consumer ceiling close failed for', String(row._id), e && e.message); }
+    }
+    return out;
+  }
+
+  /** A charged consumer row no worker claimed for PHOTOSHOOT_QUEUED_MAX_MS (30 min): closed and refunded once, only while still waiting. */
+  async function closeWaiting(row) {
+    return consumerClose(row._id, { status: 'queued', via: 'consumer', queuedAt: row.queuedAt ? new Date(row.queuedAt) : null }, 'queued_timeout');
+  }
+  const waitedTooLong = (job, now = deps.now()) => job && job.via === 'consumer' && job.status === 'queued' && job.chargedAt && job.queuedAt
+    && now.getTime() - new Date(job.queuedAt).getTime() > queuedMaxMs(deps.env);
+
+  async function sweepConsumerQueued(limit = 25) {
+    let rows = [];
+    try { rows = (await repo.waitingTooLong(new Date(deps.now().getTime() - queuedMaxMs(deps.env)), limit)) || []; } catch (_) { rows = []; }
+    let closed = 0;
+    for (const row of rows) {
+      try { if (await closeWaiting(row)) closed += 1; } catch (e) { console.error('[photoshoot] queued close failed for', String(row._id), e && e.message); }
+    }
+    return closed;
+  }
+
+  /** The refund of a consumer row, by the one claim-then-pay rule (services/refundSettle.js): only with proof, never above it. */
+  async function settleConsumerRefund(job, amount) {
+    return settleRefund({
+      ref: String(job._id), userId: String(job.user), quarks: amount, payerId: job.refundPayer || job.payerId || '', label: 'photoshoot',
+      chargeProof: (ref) => deps.ledgerFor(ref, String(job.user)),
+      pay: async ({ amount: q, payerId }) => {
+        const back = await deps.refundTo(String(job.user), q, { action: `${ACTION}_refund`, ref: String(job._id), payerId });
+        return Boolean(back && back.ok);
+      },
+      alert: async ({ text }) => deps.alert('photoshoot_refund', text)
+    });
+  }
+
   /**
    * A row still queued after STALE_QUEUED_MS was left behind (the process died between the insert and marking the charge,
    * or a close failed). It would lock the account out (one job in flight) and, if the spend landed, keep the Quarks.
@@ -635,6 +899,14 @@ function createPhotoshoot(given = {}) {
         const job = await repo.claimSettle(d._id, older, now, new Date(now.getTime() + caps.SETTLE_HOLD_MS)).catch(() => null);
         if (!job) continue;
         const recorded = Number(job.refundedQuarks) || 0;
+        if (job.via === 'consumer') {
+          // Consumer rows (E9 B2): the one claim-then-pay rule, proof required, never above it.
+          const outcome = await settleConsumerRefund(job, recorded);
+          if (outcome === 'paid' || outcome === 'already') { await repo.markRefundSettled(job._id, deps.now()); settled += 1; }
+          else if (outcome === 'failed') await repo.setRefundFailed(job._id).catch(() => null);
+          else if (outcome === 'unproven' || outcome === 'over') await repo.refundNeedsPerson(job._id).catch(() => null);
+          continue; // 'unknown': tried again after the hold
+        }
         let led;
         try { led = (await deps.ledgerFor(String(job._id), String(job.user))) || {}; } catch (_) { continue; } // unknown: tried after the hold
         if (led.refunded || !(recorded > 0)) { await repo.markRefundSettled(job._id, deps.now()); settled += 1; continue; }
@@ -665,12 +937,25 @@ function createPhotoshoot(given = {}) {
         const job = await repo.claimRefundRetry(d._id, now, new Date(now.getTime() + caps.REFUND_RETRY_HOLD_MS)).catch(() => null);
         if (!job) continue;
         const amount = Number(job.refundedQuarks) || 0;
-        let led;
-        try { led = (await deps.ledgerFor(String(job._id), String(job.user))) || {}; } catch (_) { continue; } // unknown: tried after the hold
-        if (led.refunded || !(amount > 0)) { await repo.refundRetried(job._id); continue; }
         let back = null;
-        try { back = await deps.refundTo(String(job.user), amount, { action: `${ACTION}_refund`, ref: String(job._id), payerId: job.payerId || (led.spend && led.spend.payer) || '' }); } catch (_) { back = null; }
-        if (back && back.ok) { await repo.refundRetried(job._id); retried += 1; continue; }
+        if (job.via === 'consumer') {
+          // Consumer rows (E9 B2): through the proof (settleRefund); a refund the proof does not support goes to a person.
+          const outcome = amount > 0 ? await settleConsumerRefund(job, amount) : 'already';
+          if (outcome === 'unknown') continue; // tried after the hold
+          if (outcome === 'already') { await repo.refundRetried(job._id); await repo.markRefundSettled(job._id, deps.now()).catch(() => null); continue; }
+          if (outcome === 'unproven' || outcome === 'over') {
+            await repo.refundNeedsPerson(job._id).catch(() => null);
+            deps.alertNow('photoshoot_refund_gave_up', `Photoshoot ${String(job._id)}: the recorded refund of ${amount} Quarks is not backed by the charge proof, so nothing was paid. Check by hand.`);
+            continue;
+          }
+          if (outcome === 'paid') { await repo.refundRetried(job._id); await repo.markRefundSettled(job._id, deps.now()).catch(() => null); retried += 1; continue; }
+        } else {
+          let led;
+          try { led = (await deps.ledgerFor(String(job._id), String(job.user))) || {}; } catch (_) { continue; } // unknown: tried after the hold
+          if (led.refunded || !(amount > 0)) { await repo.refundRetried(job._id); continue; }
+          try { back = await deps.refundTo(String(job.user), amount, { action: `${ACTION}_refund`, ref: String(job._id), payerId: job.payerId || (led.spend && led.spend.payer) || '' }); } catch (_) { back = null; }
+          if (back && back.ok) { await repo.refundRetried(job._id); retried += 1; continue; }
+        }
         const tries = Number(job.refundAttempts) || 1;
         if (tries >= caps.REFUND_RETRY_MAX) {
           await repo.refundGaveUp(job._id).catch(() => null);
@@ -684,11 +969,19 @@ function createPhotoshoot(given = {}) {
     return retried;
   }
 
-  /** Takes over jobs whose runner was lost (a restart): run by the loop, at start, and before a new job. */
-  async function resumeLost() {
+  /**
+   * Takes over jobs whose runner was lost (a restart): run by the loop, at start, and before a new job. The consumer sweeps
+   * (E9 B2: waiting too long, lost leases, stuck runs) run from the loop whether or not this process runs the consumer (so
+   * they also work after the switch was turned off), and before a new job only while the switch is on.
+   */
+  async function resumeLost({ fromLoop = false } = {}) {
     await sweepStale().catch(() => null);
     await sweepUnsettled().catch(() => null);
     await retryRefunds().catch(() => null);
+    if (fromLoop || consumerOn()) {
+      await sweepConsumerQueued().catch(() => null);
+      await sweepConsumerLeases().catch(() => null);
+    }
     const lost = (await repo.lostJobs(deps.now(), 10)) || [];
     for (const j of lost) {
       if (running.has(String(j._id))) continue;
@@ -702,10 +995,16 @@ function createPhotoshoot(given = {}) {
   async function get(user, id) {
     const userId = idOf(user);
     if (!isObjectId(id)) return reply(404, { message: MESSAGES.notFound });
-    const job = await repo.findOwn(userId, id);
+    let job = await repo.findOwn(userId, id);
     if (!job) return reply(404, { message: MESSAGES.notFound });
-    // A job whose runner was lost is picked up again when it is looked at.
-    if (job.status === 'running' && (!job.leaseUntil || new Date(job.leaseUntil) < deps.now()) && !running.has(String(job._id))) {
+    if (job.via === 'consumer') {
+      // Consumer rows are never run here (a worker owns them); a charged one nobody claimed in time is closed and refunded.
+      if (waitedTooLong(job)) {
+        await closeWaiting(job).catch((e) => console.error('[photoshoot] queued close failed:', e && e.message));
+        job = (await repo.findOwn(userId, id)) || job;
+      }
+    } else if (job.status === 'running' && (!job.leaseUntil || new Date(job.leaseUntil) < deps.now()) && !running.has(String(job._id))) {
+      // A job whose runner was lost is picked up again when it is looked at.
       deps.schedule(() => runJob(job._id).catch(() => null));
     }
     const versions = job.kind === 'pack' ? ((await repo.childrenOf(userId, [job._id])) || []).filter((v) => v.status !== 'refused') : [];
@@ -795,7 +1094,12 @@ function createPhotoshoot(given = {}) {
     return rows.map((r) => ({ kind: r._id.kind, outcome: r._id.outcome || 'running', jobs: r.n, photos: r.photos }));
   }
 
-  return { packs, options, create, redo, get, list, library, setInLibrary, deletePhoto, upload, runJob, resumeLost, finalize, sweepStale, sweepUnsettled, retryRefunds, dailyCounts, _locks: locks, _running: running };
+  return {
+    packs, options, create, redo, get, list, library, setInLibrary, deletePhoto, upload, runJob, resumeLost, finalize, sweepStale, sweepUnsettled, retryRefunds, dailyCounts,
+    // consumer path (E9 B2)
+    runClaimed, consumerClose, sweepConsumerLeases, sweepConsumerQueued, closeWaiting, consumerRepo: repo,
+    _locks: locks, _running: running
+  };
 }
 
-module.exports = { createPhotoshoot, publicIdOf, catalogue, packView, planPhotos, jobView, minutesFor, istDay, MESSAGES, ACTION, ACTION_USD_PER_PHOTO: () => ACTION_USD[ACTION] };
+module.exports = { createPhotoshoot, consumerSwitch, RunLostError, publicIdOf, catalogue, packView, planPhotos, jobView, minutesFor, istDay, MESSAGES, ACTION, ACTION_USD_PER_PHOTO: () => ACTION_USD[ACTION] };

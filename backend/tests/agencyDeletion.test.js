@@ -193,7 +193,7 @@ test('removal is refused while the client has running work, nothing is erased, t
 });
 
 test('every kind of running work blocks a removal, and finished work does not', async () => {
-  const kinds = ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt'];
+  const kinds = ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt', 'PhotoshootJob'];
   for (const k of kinds) {
     const { x, models } = world();
     models.SocialPostAttempt = models.SocialPostAttempt || { exists: async () => !!x.running.SocialPostAttempt };
@@ -209,13 +209,15 @@ test('every kind of running work blocks a removal, and finished work does not', 
 test('the running-work check looks at the right states of each collection for this client only', async () => {
   const asked = {};
   const models = {};
-  for (const k of ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt']) models[k] = { exists: async (f) => { asked[k] = f; return false; } };
+  for (const k of ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt', 'PhotoshootJob']) models[k] = { exists: async (f) => { asked[k] = f; return false; } };
   await w.runningWork('w1', models, NOW.getTime());
   // A refund claim still open (being retried) blocks a removal too: the refund has nowhere to go once the client is gone.
   assert.deepStrictEqual(asked.VideoJob, { userId: 'w1', $or: [{ status: { $in: ['queued', 'processing'] } }, { refundState: 'refunding' }] });
   assert.deepStrictEqual(asked.HeroVideoJob, { userId: 'w1', status: { $in: ['queued', 'processing'] } });
   assert.deepStrictEqual(asked.StudioVideo, { user: 'w1', $or: [{ status: { $in: ['queued', 'processing'] } }, { refundState: 'refunding' }] }); // queued = charged, waiting for a consumer (E9 B1); refunding = a refund still being retried
   assert.deepStrictEqual(asked.Draft, { userId: 'w1', status: 'processing' });
+  // A photoshoot in flight (waiting for a worker or being made) or a refund not yet paid or settled (E9 B2).
+  assert.deepStrictEqual(asked.PhotoshootJob, { user: 'w1', $or: [{ inFlight: true }, { refundFailed: true, refundGaveUp: { $ne: true } }, { refundedQuarks: { $gt: 0 }, refundSettledAt: null, status: { $in: ['done', 'partial', 'failed'] } }] });
   assert.deepStrictEqual(asked.Blueprint.$or, [{ status: { $in: ['queued', 'processing'] } }, { 'designed.status': { $in: ['queued', 'processing'] } }]);
   assert.strictEqual(asked.Blueprint.userId, 'w1');
   assert.strictEqual(asked.Campaign.userId, 'w1'); assert.strictEqual(asked.Campaign.status, 'scheduled');
@@ -400,7 +402,7 @@ test('a StudioVideo or VideoJob whose refund is still being retried (refundState
     for (const [state, blocks] of [['refunding', true], ['done', false], ['refunded', false], ['', false]]) {
       const rows = [{ [owner]: 'w1', status: 'failed', refundState: state }];
       const models = {};
-      for (const k of ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt']) models[k] = { exists: async () => false };
+      for (const k of ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt', 'PhotoshootJob']) models[k] = { exists: async () => false };
       models[model] = { exists: async (f) => rows.some((r) => match(r, f)) };
       const busy = await w.runningWork('w1', models, NOW.getTime());
       assert.deepStrictEqual(busy, blocks ? [label] : [], `${model} ${state}`);

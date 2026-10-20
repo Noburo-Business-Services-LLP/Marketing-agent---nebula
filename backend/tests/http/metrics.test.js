@@ -48,7 +48,9 @@ test('GET /api/metrics/queue (E9): 401 without sign-in, 403 for a customer, staf
     video: () => ({ metrics: async () => ({ queueDepth: 3, running: 2, oldestQueuedAgeSeconds: 12, byType: {}, byPool: {}, runningByWorker: { w1: 2 }, thisWorker: { workerId: 'w1', claims: 2 } }) }),
     image: () => ({ metrics: async () => ({ queueDepth: 0, running: 0, oldestQueuedAgeSeconds: 0, thisWorker: { slots: 2 } }) }),
     // Videos (Omni) consumer, E9 stage B1
-    studio: () => ({ metrics: async () => ({ queueDepth: 1, running: 1, oldestQueuedAgeSeconds: 4, runningByWorker: { w1: 1 }, thisWorker: { slots: { omni: 2, cpu: 2 } } }) })
+    studio: () => ({ metrics: async () => ({ queueDepth: 1, running: 1, oldestQueuedAgeSeconds: 4, runningByWorker: { w1: 1 }, thisWorker: { slots: { omni: 2, cpu: 2 } } }) }),
+    // Photoshoot consumer, E9 stage B2
+    photoshoot: () => ({ metrics: async () => ({ queueDepth: 2, running: 0, oldestQueuedAgeSeconds: 7, runningByWorker: {}, thisWorker: { slots: { photoshoot: 2 } } }) })
   };
   try {
     const customer = await t.addUser({ email: 'cust-queue@example.test', password: 'Tr0ub4dor&3-horse' });
@@ -62,6 +64,8 @@ test('GET /api/metrics/queue (E9): 401 without sign-in, 403 for a customer, staf
     assert.equal(r.body.imageJobs.thisWorker.slots, 2);
     assert.equal(r.body.studioVideos.queueDepth, 1);
     assert.deepEqual(r.body.studioVideos.thisWorker.slots, { omni: 2, cpu: 2 });
+    assert.equal(r.body.photoshoot.queueDepth, 2);
+    assert.deepEqual(r.body.photoshoot.thisWorker.slots, { photoshoot: 2 });
     assert.ok(r.body.at);
   } finally { router.queues = saved; }
 });

@@ -63,8 +63,21 @@ const photoshootJobSchema = new mongoose.Schema({
   refundAttempts: { type: Number },
   refundRetryAt: { type: Date },
   refundGaveUp: { type: Boolean },
-  leaseOwner: { type: String, maxlength: 80 },
+  leaseOwner: { type: String, maxlength: 80 }, // the runner (in-process) or the worker id (consumer path) holding the lease
   leaseUntil: { type: Date },
+  // Consumer path (E9 stage B2, ENABLE_PHOTOSHOOT_CONSUMER; docs/superpowers/impact-maps/generation-parallelism.md "Stage B
+  // step 2"): the claim marker (the in-process resume loop never takes these rows), runs started by workers (the attempt
+  // every consumer write is conditional on), SIGTERM hand-backs, lost-lease re-queues, when the row became claimable
+  // (status 'queued' WITH chargedAt set), when the current run started, the charge as recorded with its ref, and the wallet
+  // the refund was claimed for.
+  via: { type: String, enum: ['consumer'] },
+  runs: { type: Number },
+  releases: { type: Number },
+  leaseRequeues: { type: Number },
+  queuedAt: { type: Date },
+  startedAt: { type: Date },
+  quarkCharge: { type: new mongoose.Schema({ action: String, ref: String, quarks: Number, payerId: String }, { _id: false }), default: undefined },
+  refundPayer: { type: String, maxlength: 40 },
   chargedAt: Date,
   finishedAt: Date,
   createdAt: { type: Date, default: Date.now }
@@ -77,6 +90,8 @@ photoshootJobSchema.index({ user: 1, createdAt: -1 });
 photoshootJobSchema.index({ user: 1, day: 1 });
 photoshootJobSchema.index({ status: 1, leaseUntil: 1 });
 photoshootJobSchema.index({ parent: 1 });
+// Consumer rows waiting for a worker, oldest first (E9 B2). Partial: only consumer rows, so it stays tiny.
+photoshootJobSchema.index({ status: 1, queuedAt: 1 }, { partialFilterExpression: { via: 'consumer' }, name: 'consumer_waiting' });
 // Refunds waiting for another try (the resume loop).
 photoshootJobSchema.index({ refundRetryAt: 1 }, { partialFilterExpression: { refundFailed: true }, name: 'refund_retry' });
 

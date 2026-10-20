@@ -578,6 +578,7 @@ test('GET /api/metrics/queue includes the Videos consumer', async () => {
   metrics.queues.video = () => ({ metrics: async () => ({ queueDepth: 0 }) });
   metrics.queues.image = () => ({ metrics: async () => ({ queueDepth: 0 }) });
   metrics.queues.studio = () => ({ metrics: async () => ({ queueDepth: 3, running: 1 }) });
+  metrics.queues.photoshoot = () => ({ metrics: async () => ({ queueDepth: 0 }) });
   try {
     const layer = metrics.stack.find((l) => l.route && l.route.path === '/queue');
     const res = resp(); res.set = () => res;

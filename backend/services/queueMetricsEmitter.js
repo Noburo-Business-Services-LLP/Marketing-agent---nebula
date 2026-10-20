@@ -16,7 +16,7 @@ function enabled(env = process.env) {
 }
 
 /** The CloudWatch metric data for one snapshot ({ video, image } from the two queues' metrics()). */
-function toMetricData({ video, image, studio } = {}) {
+function toMetricData({ video, image, studio, photoshoot } = {}) {
   const out = [];
   const add = (queue, name, value, unit) => {
     if (!Number.isFinite(Number(value))) return;
@@ -46,6 +46,14 @@ function toMetricData({ video, image, studio } = {}) {
     add('omni', 'Running', studio.running, 'Count');
     add('omni', 'SlotsInUse', studio.thisWorker?.slotsInUse?.omni, 'Count');
     add('omni', 'SlotsTotal', studio.thisWorker?.slots?.omni, 'Count');
+  }
+  if (photoshoot) {
+    // Photoshoot consumer, E9 stage B2.
+    add('photoshoot', 'QueueDepth', photoshoot.queueDepth, 'Count');
+    add('photoshoot', 'OldestQueuedAge', photoshoot.oldestQueuedAgeSeconds, 'Seconds');
+    add('photoshoot', 'Running', photoshoot.running, 'Count');
+    add('photoshoot', 'SlotsInUse', photoshoot.thisWorker?.slotsInUse?.photoshoot, 'Count');
+    add('photoshoot', 'SlotsTotal', photoshoot.thisWorker?.slots?.photoshoot, 'Count');
   }
   return out;
 }
@@ -83,7 +91,8 @@ function startQueueMetricsEmitter({ env = process.env, collect, send, log = cons
   const collector = collect || (async () => ({
     video: await require('./videoGenerationQueue').videoGenerationQueue.metrics(),
     image: await require('./imageJobQueue').imageJobQueue().metrics(),
-    studio: await require('./studioVideoConsumer').studioVideoConsumer.metrics()
+    studio: await require('./studioVideoConsumer').studioVideoConsumer.metrics(),
+    photoshoot: await require('./photoshootConsumer').photoshootConsumer.metrics()
   }));
   let busy = false;
   const tick = async () => {

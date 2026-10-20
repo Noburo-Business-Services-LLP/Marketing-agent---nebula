@@ -38,6 +38,11 @@ module.exports = Object.freeze({
   // A job still not finished this long after it was charged is closed: unfinished photos fail and are refunded.
   MAX_AGE_MS: 60 * 60 * 1000,
 
+  // Consumer path (E9 stage B2, ENABLE_PHOTOSHOOT_CONSUMER): a charged job no worker claimed for this long is closed and
+  // refunded (consumers switched off or down everywhere). PHOTOSHOOT_QUEUED_MAX_MS overrides it.
+  CONSUMER_SWITCH_ENV: 'ENABLE_PHOTOSHOOT_CONSUMER',
+  QUEUED_MAX_MS: 30 * 60 * 1000,
+
   // Uploads ("Add a product" on the Photoshoot page).
   UPLOAD_MAX_BYTES: 6 * 1024 * 1024,
   UPLOADS_PER_HOUR: 20,

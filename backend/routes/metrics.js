@@ -38,7 +38,8 @@ router.get('/queue', protect, staffOnly, async (req, res) => {
     const video = await router.queues.video().metrics();
     const image = await router.queues.image().metrics();
     const studio = await router.queues.studio().metrics();
-    res.json({ success: true, at: new Date().toISOString(), videoJobs: video, imageJobs: image, studioVideos: studio });
+    const photoshoot = await router.queues.photoshoot().metrics();
+    res.json({ success: true, at: new Date().toISOString(), videoJobs: video, imageJobs: image, studioVideos: studio, photoshoot });
   } catch (err) {
     require('../utils/httpError').fail(res, err, 'Could not read the queue numbers.');
   }
@@ -47,7 +48,8 @@ router.get('/queue', protect, staffOnly, async (req, res) => {
 router.queues = {
   video: () => require('../services/videoGenerationQueue').videoGenerationQueue,
   image: () => require('../services/imageJobQueue').imageJobQueue(),
-  studio: () => require('../services/studioVideoConsumer').studioVideoConsumer
+  studio: () => require('../services/studioVideoConsumer').studioVideoConsumer,
+  photoshoot: () => require('../services/photoshootConsumer').photoshootConsumer
 };
 
 module.exports = router;

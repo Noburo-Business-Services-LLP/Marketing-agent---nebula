@@ -15,6 +15,14 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
   const due = (r, now) => r.refundFailed === true && r.refundGaveUp !== true && (!r.refundRetryAt || new Date(r.refundRetryAt) <= now);
   const unsettled = (r, older, now) => ['done', 'partial', 'failed'].includes(r.status) && r.refundedQuarks > 0 && !r.refundSettledAt && r.refundFailed !== true && r.refundGaveUp !== true
     && r.finishedAt && new Date(r.finishedAt) < older && (!r.refundSettlingAt || new Date(r.refundSettlingAt) < now);
+  const waiting = (r) => r.status === 'queued' && r.via === 'consumer' && r.chargedAt != null;
+  // Equality on every key of a claim condition (a Date by its time; null also matches a missing field).
+  const holds = (r, cond) => Object.entries(cond || {}).every(([k, c]) => {
+    const v = r[k];
+    if (c === null || c === undefined) return v === null || v === undefined;
+    if (c instanceof Date) return v != null && new Date(v).getTime() === c.getTime();
+    return v != null && String(v) === String(c);
+  });
   const leaseFree = (r, owner, now) => !r.leaseUntil || new Date(r.leaseUntil) < now || r.leaseOwner === owner;
   const repo = {
     rows, fail,
@@ -38,9 +46,10 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
       const r = find(id); if (!r || r.status !== 'queued') return false;
       Object.assign(r, { status: 'running', quarks, payerId, chargedAt: now }); return true;
     },
-    closeRefused: async (id, outcome, now) => { const r = find(id); if (r && r.status === 'queued') { Object.assign(r, { status: 'refused', outcome, finishedAt: now }); delete r.inFlight; } },
+    closeRefused: async (id, outcome, now) => { const r = find(id); if (r && r.status === 'queued' && r.chargedAt == null) { Object.assign(r, { status: 'refused', outcome, finishedAt: now }); delete r.inFlight; } },
     closeLedger: async (id, { refundedQuarks = 0, payerId, now }) => {
-      const r = find(id); if (!r || r.status !== 'queued' || r.refunded) return null;
+      if (fail.closeLedger) throw new Error('db down');
+      const r = find(id); if (!r || r.status !== 'queued' || r.chargedAt != null || r.refunded) return null;
       const before = clone(r);
       Object.assign(r, { status: 'failed', outcome: 'ledger', refunded: true, refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now }); delete r.inFlight;
       return before;
@@ -88,14 +97,15 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
     refundRetried: async (id) => { const r = find(id); if (r && r.refundFailed) { delete r.refundFailed; delete r.refundRetryAt; } },
     refundRetryLater: async (id, at) => { const r = find(id); if (r && r.refundFailed) r.refundRetryAt = at; },
     refundGaveUp: async (id) => { const r = find(id); if (r && r.refundFailed) { r.refundGaveUp = true; delete r.refundRetryAt; } },
-    staleQueued: async (before, limit = 10) => rows.filter((r) => r.status === 'queued' && new Date(r.createdAt) < before).slice(0, limit).map((r) => ({ _id: r._id, user: r.user })),
+    refundNeedsPerson: async (id) => { const r = find(id); if (r) { r.refundFailed = true; r.refundGaveUp = true; delete r.refundRetryAt; delete r.refundSettlingAt; } },
+    staleQueued: async (before, limit = 10) => rows.filter((r) => r.status === 'queued' && r.chargedAt == null && new Date(r.createdAt) < before).slice(0, limit).map((r) => ({ _id: r._id, user: r.user })),
     closeStale: async (id, { refundedQuarks = 0, payerId, outcome = 'stale_queued', now }) => {
-      const r = find(id); if (!r || r.status !== 'queued' || r.refunded) return null;
+      const r = find(id); if (!r || r.status !== 'queued' || r.chargedAt != null || r.refunded) return null;
       const before = clone(r);
       Object.assign(r, { status: 'failed', outcome, refunded: true, refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now }); delete r.inFlight;
       return before;
     },
-    lostJobs: async (now, limit = 10) => rows.filter((r) => r.status === 'running' && (!r.leaseUntil || new Date(r.leaseUntil) < now)).slice(0, limit).map((r) => ({ _id: r._id, user: r.user })),
+    lostJobs: async (now, limit = 10) => rows.filter((r) => r.status === 'running' && r.via !== 'consumer' && (!r.leaseUntil || new Date(r.leaseUntil) < now)).slice(0, limit).map((r) => ({ _id: r._id, user: r.user })),
     listOwn: async (user, limit = 20) => clone(rows.filter((r) => S(r.user) === S(user) && r.kind === 'pack' && r.status !== 'refused').sort((a, b) => b.createdAt - a.createdAt).slice(0, limit)),
     childrenOf: async (user, parents) => clone(rows.filter((r) => S(r.user) === S(user) && r.parent && parents.map(S).includes(S(r.parent)))),
     libraryOwn: async (user, limit = 200) => clone(rows.filter((r) => S(r.user) === S(user) && ['done', 'partial'].includes(r.status) && r.photos.some((p) => p.status === 'done' && p.inLibrary)).slice(0, limit)),
@@ -116,7 +126,81 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
       const m = new Map();
       for (const r of rows.filter((x) => x.day === day)) { const k = `${r.kind}|${r.outcome || ''}`; const e = m.get(k) || { _id: { kind: r.kind, outcome: r.outcome }, n: 0, photos: 0 }; e.n += 1; e.photos += r.photoCount || 0; m.set(k, e); }
       return [...m.values()];
-    }
+    },
+
+    // ---- consumer path (E9 B2): the same conditional rules as services/photoshoot/repo.js ----
+    queueCharged: async (id, { quarks, payerId, now, quarkCharge }) => {
+      if (fail.queueCharged === 'before') throw new Error('db down');
+      const r = find(id); if (!r || r.status !== 'queued' || r.via !== 'consumer' || r.chargedAt != null) return null;
+      Object.assign(r, { quarks, payerId, chargedAt: now, queuedAt: now, quarkCharge: clone(quarkCharge) });
+      if (fail.queueCharged === 'after') throw new Error('reply lost');
+      return clone(r);
+    },
+    waitingAll: async () => rows.filter((r) => waiting(r)).length,
+    consumerCandidates: async ({ excludeUsers = [], limit = 50 } = {}) => rows.filter((r) => waiting(r) && !excludeUsers.map(S).includes(S(r.user)))
+      .sort((a, b) => new Date(a.queuedAt) - new Date(b.queuedAt)).slice(0, limit).map((r) => ({ _id: r._id, user: r.user, queuedAt: r.queuedAt })),
+    runningByUser: async () => { const m = new Map(); for (const r of rows.filter((x) => x.status === 'running')) m.set(S(r.user), (m.get(S(r.user)) || 0) + 1); return [...m].map(([k, n]) => ({ _id: k, n })); },
+    countRunning: async (user) => rows.filter((r) => r.status === 'running' && S(r.user) === S(user)).length,
+    countRunningAll: async () => rows.filter((r) => r.status === 'running').length,
+    claimConsumer: async (id, owner, now, until) => {
+      if (fail.claim) throw new Error('db down');
+      const r = find(id); if (!r || !waiting(r)) return null;
+      Object.assign(r, { status: 'running', leaseOwner: owner, leaseUntil: until, startedAt: now, runs: (r.runs || 0) + 1 });
+      return clone(r);
+    },
+    handBack: async (id, cond, { release = false, now }) => {
+      const r = find(id); if (!r || !holds(r, { ...cond, status: 'running' })) return null;
+      Object.assign(r, { status: 'queued', leaseOwner: null, leaseUntil: null, queuedAt: now, runs: (r.runs || 0) - 1 });
+      if (release) r.releases = (r.releases || 0) + 1;
+      return clone(r);
+    },
+    requeueLost: async (id, cond, now) => {
+      const r = find(id); if (!r || r.via !== 'consumer' || !holds(r, { ...cond, status: 'running' })) return null;
+      Object.assign(r, { status: 'queued', leaseOwner: null, leaseUntil: null, queuedAt: now, leaseRequeues: (r.leaseRequeues || 0) + 1 });
+      return clone(r);
+    },
+    heartbeat: async (id, cond, until) => { const r = find(id); if (!r || !holds(r, { ...cond, status: 'running' })) return false; r.leaseUntil = until; return true; },
+    releaseCallingOwned: async (id, cond, maxCalls, now) => {
+      const r = find(id); if (!r || !holds(r, { ...cond, status: 'running' })) return;
+      for (const p of r.photos) if (p.status === 'calling') { if ((p.attempts || 0) < maxCalls) p.status = 'pending'; else { p.status = 'failed'; p.reason = 'lost'; p.finishedAt = now; } }
+    },
+    startPhotoOwned: async (id, cond, index, now) => {
+      const r = find(id); if (!r || !holds(r, { ...cond, status: 'running' })) return false;
+      const p = r.photos.find((x) => x.index === index && x.status === 'pending'); if (!p) return false;
+      p.status = 'calling'; p.startedAt = now; p.attempts = (p.attempts || 0) + 1; return true;
+    },
+    finishPhotoOwned: async (id, cond, index, { status, url, reason, now }) => {
+      if (fail.finishPhoto) throw new Error('db down');
+      const r = find(id); if (!r || !holds(r, { status: 'running', ...cond })) return false;
+      const p = r.photos.find((x) => x.index === index && x.status === 'calling'); if (!p) return false;
+      p.status = status; p.finishedAt = now; if (url) p.url = url; if (reason) p.reason = reason; return true;
+    },
+    failOpenWhere: async (id, cond, reason, now) => {
+      const r = find(id); if (!r || !holds(r, cond)) return { matchedCount: 0 };
+      for (const p of r.photos) if (!TERMINAL.includes(p.status)) { p.status = 'failed'; p.reason = reason; p.finishedAt = now; }
+      return { matchedCount: 1 };
+    },
+    closeWhere: async (id, cond, set) => {
+      if (fail.closeWhere) throw new Error('db down');
+      const r = find(id);
+      if (!r || !holds(r, cond) || r.refunded || r.photos.some((p) => !TERMINAL.includes(p.status))) return null;
+      Object.assign(r, clone(set), { refunded: true });
+      delete r.inFlight; delete r.leaseOwner; delete r.leaseUntil;
+      return clone(r);
+    },
+    expiredConsumerLeases: async (before, limit = 25) => clone(rows.filter((r) => r.status === 'running' && r.via === 'consumer' && r.leaseOwner != null && r.leaseUntil && new Date(r.leaseUntil) < before).slice(0, limit)),
+    stuckConsumerRuns: async (chargedBefore, limit = 10) => clone(rows.filter((r) => r.status === 'running' && r.via === 'consumer' && r.chargedAt && new Date(r.chargedAt) < chargedBefore).slice(0, limit)),
+    waitingTooLong: async (before, limit = 25) => clone(rows.filter((r) => waiting(r) && r.queuedAt && new Date(r.queuedAt) < before).slice(0, limit)),
+    consumerStatusCounts: async () => {
+      const m = new Map();
+      for (const r of rows.filter((x) => x.via === 'consumer' && x.chargedAt != null && ['queued', 'running'].includes(x.status))) {
+        const e = m.get(r.status) || { _id: r.status, n: 0, oldest: null };
+        e.n += 1; if (r.queuedAt && (!e.oldest || new Date(r.queuedAt) < e.oldest)) e.oldest = new Date(r.queuedAt);
+        m.set(r.status, e);
+      }
+      return [...m.values()];
+    },
+    runningByWorker: async () => { const m = new Map(); for (const r of rows.filter((x) => x.status === 'running')) { const k = r.leaseOwner == null ? null : r.leaseOwner; const e = m.get(String(k)) || { _id: k, via: r.via, n: 0 }; e.n += 1; m.set(String(k), e); } return [...m.values()]; }
   };
   return repo;
 }

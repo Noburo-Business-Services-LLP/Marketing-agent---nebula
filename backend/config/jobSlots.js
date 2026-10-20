@@ -7,7 +7,8 @@
  *   PROVIDER_SLOTS_IMAGE   default 2 (1..32)  image jobs waiting on the image provider at once, per worker
  *   PROVIDER_SLOTS_VIDEO   default 2 (1..32)  video jobs waiting on the video provider at once, per worker
  *   PROVIDER_SLOTS_OMNI    default 2 (1..32)  Videos (Gemini Omni) jobs making clips at once, per worker (stage B1)
- *   PROVIDER_SLOTS         one value for all three when the specific one is not set
+ *   PROVIDER_SLOTS_PHOTOSHOOT default 2 (1..32)  Photoshoot jobs at once per worker (stage B2; each makes 2 photos at once)
+ *   PROVIDER_SLOTS         one value for all of them when the specific one is not set
  *                          (legacy: VIDEO_QUEUE_CONCURRENCY sets the video default, IMAGE_JOB_CONCURRENCY the image default)
  *   CPU_SLOTS              default min(2, vCPUs) (1..16)  ffmpeg processes at once per worker
  *   FFMPEG_THREADS         default 2 (1..8)   -threads given to each ffmpeg of the queue pipeline
@@ -60,6 +61,9 @@ function readJobSlots(env = process.env, { cpuCount = vcpus() } = {}) {
   const image = imageKey ? int(imageKey, 2, 1, LIMITS.providerMax) : 2;
   const omniKey = firstSet(['PROVIDER_SLOTS_OMNI', 'PROVIDER_SLOTS']);
   const omni = omniKey ? int(omniKey, 2, 1, LIMITS.providerMax) : 2;
+  // A guess like D68 (the image provider's concurrency limit is not known): workers x this x 2 photos must stay under it (D91).
+  const photoshootKey = firstSet(['PROVIDER_SLOTS_PHOTOSHOOT', 'PROVIDER_SLOTS']);
+  const photoshoot = photoshootKey ? int(photoshootKey, 2, 1, LIMITS.providerMax) : 2;
   const cpuDefault = Math.max(1, Math.min(2, Number(cpuCount) || 1));
   const cpu = int('CPU_SLOTS', cpuDefault, 1, LIMITS.cpuMax);
   const ffmpegThreads = int('FFMPEG_THREADS', 2, 1, LIMITS.ffmpegThreadsMax);
@@ -77,7 +81,7 @@ function readJobSlots(env = process.env, { cpuCount = vcpus() } = {}) {
   const shutdownGraceMs = int('JOB_SHUTDOWN_GRACE_MS', Math.max(0, drainMs - 5000), 0, LIMITS.graceMax);
 
   return {
-    slots: { image, video, omni },
+    slots: { image, video, omni, photoshoot },
     cpu,
     ffmpegThreads,
     globalCeiling,

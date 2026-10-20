@@ -13,7 +13,7 @@ function shared() {
 function startPhotoshootResume({ env = process.env, service = shared } = {}) {
   if (String(env.ENABLE_PHOTOSHOOT_RESUME || '').trim().toLowerCase() === 'off') return null;
   // Through a lease (services/leaseLock.js): resuming a photoshoot is a real image spend.
-  const run = () => Promise.resolve().then(() => require('../leaseLock').withLease('scheduler:photoshoot-resume', 10 * 60 * 1000, () => service().resumeLost())).catch((e) => console.warn('[photoshoot] resume check failed:', e && e.message));
+  const run = () => Promise.resolve().then(() => require('../leaseLock').withLease('scheduler:photoshoot-resume', 10 * 60 * 1000, () => service().resumeLost({ fromLoop: true }))).catch((e) => console.warn('[photoshoot] resume check failed:', e && e.message));
   setTimeout(run, 30 * 1000).unref();
   return setInterval(run, caps.RESUME_EVERY_MS).unref();
 }

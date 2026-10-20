@@ -109,6 +109,9 @@ async function runningWork(workspaceId, models, now = Date.now()) {
     ['Hero videos', 'HeroVideoJob', { userId: id, status: { $in: RUNNING } }],
     ['Blueprints', 'Blueprint', { userId: id, $or: [{ status: { $in: RUNNING } }, { 'designed.status': { $in: RUNNING } }] }],
     ['studio videos', 'StudioVideo', { user: id, $or: [{ status: { $in: RUNNING } }, { refundState: 'refunding' }] }],
+    // A photoshoot in flight (written, waiting for a worker or being made), or a refund recorded and not yet paid or settled
+    // (E9 B2; this also covers the in-process path, which this check did not look at before).
+    ['photoshoots', 'PhotoshootJob', { user: id, $or: [{ inFlight: true }, { refundFailed: true, refundGaveUp: { $ne: true } }, { refundedQuarks: { $gt: 0 }, refundSettledAt: null, status: { $in: ['done', 'partial', 'failed'] } }] }],
     ['pictures and carousels', 'Draft', { userId: id, status: 'processing' }],
     // The scheduler has no "publishing" state of its own: a scheduled post that is due now, or within two minutes, is being published.
     ['posts going out', 'Campaign', {
