@@ -8,8 +8,21 @@ const adminAuth = require('../middleware/adminAuth');
 // own account). Only the first-Owner bootstrap stays on the server: the shared login (ADMIN_EMAIL and
 // ADMIN_PASSWORD) can make one account the Owner, once. There is no screen for it; see the hand-over note.
 
+// The bootstrap door is shut unless the owner opens it for the one-time setup with ALLOW_ADMIN_BOOTSTRAP=1 (B10); it
+// then closes itself once an Owner exists (the shared login is refused too). Remove the variable after first use.
+const bootstrapOpen = (req, res, next) => (process.env.ALLOW_ADMIN_BOOTSTRAP === '1' ? next() : res.status(404).json({ success: false, message: 'Not found' }));
+const noOwnerYet = async (req, res, next) => {
+  try {
+    const { canBootstrapOwner } = require('../services/staff/roles');
+    if (!canBootstrapOwner(await User.countDocuments({ staffRole: 'owner' }))) return res.status(409).json({ success: false, message: 'An Owner already exists. The Owner can add more people from the Staff area.' });
+    return next();
+  } catch (_) {
+    return res.status(500).json({ success: false, message: 'Login failed' });
+  }
+};
+
 // POST /api/admin/login
-router.post('/login', async (req, res) => {
+router.post('/login', bootstrapOpen, noOwnerYet, async (req, res) => {
   try {
     const { email, password } = req.body;
     const adminEmail = process.env.ADMIN_EMAIL;
@@ -37,7 +50,7 @@ router.post('/login', async (req, res) => {
 });
 
 // One-time door: the shared admin login makes one account the Owner. Refused once an Owner exists.
-router.post('/make-owner', adminAuth, async (req, res) => {
+router.post('/make-owner', bootstrapOpen, adminAuth, async (req, res) => {
   try {
     const { canBootstrapOwner } = require('../services/staff/roles');
     const ownerCount = await User.countDocuments({ staffRole: 'owner' });

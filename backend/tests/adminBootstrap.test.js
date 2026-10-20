@@ -18,6 +18,7 @@ stub('models/User', {
 process.env.JWT_SECRET = 'test-secret-not-real';
 process.env.ADMIN_EMAIL = 'shared@example.test';
 process.env.ADMIN_PASSWORD = 'not-a-real-password';
+process.env.ALLOW_ADMIN_BOOTSTRAP = '1';
 const router = require('../routes/admin');
 
 const routes = () => router.stack.filter((l) => l.route).map((l) => `${Object.keys(l.route.methods)[0]} ${l.route.path}`).sort();
@@ -71,4 +72,23 @@ test('Make Owner needs the shared login token, works while no Owner exists, and 
   const again = await run('post', '/make-owner', { body: { email: 'second@example.test' }, token });
   assert.strictEqual(again.statusCode, 409);
   assert.strictEqual(docs[1].staffRole, null);
+});
+
+test('without ALLOW_ADMIN_BOOTSTRAP=1 both bootstrap routes are closed (404), even with the right shared login (B10)', async () => {
+  docs = [{ email: 'dk@example.test', staffRole: null, save: async () => {} }];
+  const token = jwt.sign({ role: 'admin', email: 'shared@example.test' }, process.env.JWT_SECRET);
+  for (const v of [undefined, '', '0', 'true']) {
+    if (v === undefined) delete process.env.ALLOW_ADMIN_BOOTSTRAP; else process.env.ALLOW_ADMIN_BOOTSTRAP = v;
+    assert.strictEqual((await run('post', '/login', { body: { email: 'shared@example.test', password: 'not-a-real-password' } })).statusCode, 404, String(v));
+    assert.strictEqual((await run('post', '/make-owner', { body: { email: 'dk@example.test' }, token })).statusCode, 404, String(v));
+  }
+  assert.strictEqual(docs[0].staffRole, null);
+  process.env.ALLOW_ADMIN_BOOTSTRAP = '1';
+});
+
+test('the shared login itself is refused once an Owner exists (the door closes after first use)', async () => {
+  docs = [{ email: 'owner@example.test', staffRole: 'owner' }];
+  const r = await run('post', '/login', { body: { email: 'shared@example.test', password: 'not-a-real-password' } });
+  assert.strictEqual(r.statusCode, 409);
+  assert.ok(!r.body.token);
 });

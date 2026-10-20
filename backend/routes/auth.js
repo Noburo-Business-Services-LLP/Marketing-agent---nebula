@@ -25,6 +25,7 @@ const answerBusy = (res, error) => {
 const CODE_SENT = 'If an account exists, we have sent a code.';
 const CODE_FAILED = 'That code did not work. Check it, or request a new code.';
 const LOGIN_FAILED = 'Invalid email or password. Please try again.';
+const { passwordRule } = require('../utils/passwordPolicy');
 const loginGuard = () => require('../services/loginGuard').sharedLoginGuard();
 const passwordHashing = require('../services/passwordHash');
 let dummyOtpHash = null;
@@ -624,13 +625,8 @@ router.post('/signup', signupLimiter, signupGuard(), [
     .isEmail()
     .withMessage('Please enter a valid email address')
     .normalizeEmail(),
-  body('password')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters long')
-    .matches(/\d/)
-    .withMessage('Password must contain at least one number')
-    .matches(/[a-zA-Z]/)
-    .withMessage('Password must contain at least one letter'),
+  // New passwords: at least 10 characters, a letter and a number, not a very common one (utils/passwordPolicy.js, B10).
+  body('password').custom(passwordRule),
   body('firstName')
     .trim()
     .notEmpty()
@@ -892,7 +888,7 @@ router.post('/verify-reset-otp', [
 router.post('/reset-password', [
   body('email').isEmail().normalizeEmail(),
   body('otp').isLength({ min: 6, max: 6 }).isNumeric(),
-  body('newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters').matches(/\d/).withMessage('Password must contain at least one number').matches(/[a-zA-Z]/).withMessage('Password must contain at least one letter'),
+  body('newPassword').custom(passwordRule),
   handleValidationErrors
 ], async (req, res) => {
   try {
@@ -1395,13 +1391,7 @@ router.put('/change-password', protect, [
   body('currentPassword')
     .notEmpty()
     .withMessage('Current password is required'),
-  body('newPassword')
-    .isLength({ min: 8 })
-    .withMessage('New password must be at least 8 characters long')
-    .matches(/\d/)
-    .withMessage('New password must contain at least one number')
-    .matches(/[a-zA-Z]/)
-    .withMessage('New password must contain at least one letter'),
+  body('newPassword').custom(passwordRule),
   handleValidationErrors
 ], async (req, res) => {
   try {
