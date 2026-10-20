@@ -103,8 +103,8 @@ cd backend && CONFIRM_CREATE_INDEXES=yes node scripts/create-perf-indexes.js
 
    (With the production database address in `MONGODB_URI`, the way the staff and Home index scripts are run.)
 3. Optional: set `BCRYPT_ROUNDS=12` if you prefer the old strength over sign-in speed (D25).
-4. Infra items from the tester's list remain: two or more web instances, a worker service for video, image and Blueprint, Redis (or Mongo) for shared limiter counters and job state, CDN for static files; then re-run the tester's suite on a staging copy.
+4. Infra items from the tester's list: the web/worker split, shared limits, OAuth state, persisted image jobs, pool settings and the exact AWS steps are in `ecs-web-worker.md` (Phase 1 code done, Phase 2 owner steps, Phase 3 checks). Still open there: CDN for static files, moving the in-process generation flows (Videos, Photoshoot, Hero, Blueprint) to the worker.
 
 ## Still open (not done here)
 
-- Structured async logging (pino) instead of console calls; `explain()` review of the other top queries; images stored as base64 inside drafts and campaigns (the real weight; they should go to storage with a link: a separate, careful job); the in-process "being prepared" mark for the calendar (move to the database with the scaling work).
+- Structured async logging (pino) instead of console calls; `explain()` review of the other top queries; images stored as base64 inside drafts and campaigns (the real weight; they should go to storage with a link: a separate, careful job); the in-process "being prepared" mark for the calendar (still in-process after the scaling work, see `ecs-web-worker.md`).
