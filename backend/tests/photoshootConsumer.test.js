@@ -805,3 +805,200 @@ test('S3: the late-refund claim does not touch a row that was refunded in full, 
   w.repo.rows.push({ _id: 'cl1', user: U1, status: 'failed', outcome: 'stale_queued', refunded: true, refundedQuarks: 40, chargedAt: null, createdAt: NOW });
   assert.strictEqual(await w.repo.claimLateRefund('cl1', { refundedQuarks: 40, payerId: U1, now: NOW }), null, 'a row that already carries a refund');
 });
+
+// ---- S6: tests that fail when a guard the docs rely on is removed ----------------------------------------------------
+
+test('S6 M12: a lease sweep never re-queues a run whose heartbeat renewed the lease after the sweep read it', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  w.hangIf = () => true;
+  const a = w.consumer('a');
+  await quiet(async () => { await a._drain(); await settle(30); });
+  w.advance(SETTINGS.leaseMs + SETTINGS.heartbeatMs + 1000); // the lease looks expired
+  const realRead = w.repo.expiredConsumerLeases;
+  w.repo.expiredConsumerLeases = async (...args) => {
+    const rows = await realRead(...args);
+    const r = w.row(id);
+    assert.ok(await w.repo.heartbeat(id, { leaseOwner: r.leaseOwner, runs: r.runs }, new Date(w.clock.t.getTime() + MIN))); // the heartbeat lands after the read
+    return rows;
+  };
+  const out = await quiet(() => w.consumer('s').sweepLeases());
+  assert.strictEqual(out.requeued, 0);
+  assert.strictEqual(out.failed, 0);
+  assert.strictEqual(w.row(id).status, 'running');
+  assert.strictEqual(w.row(id).leaseOwner, 'w:a');
+  // and the same at the run cap (a close instead of a re-queue)
+  w.row(id).runs = SETTINGS.maxAttempts;
+  w.repo.expiredConsumerLeases = async (...args) => {
+    const rows = await realRead(...args);
+    const r = w.row(id);
+    await w.repo.heartbeat(id, { leaseOwner: r.leaseOwner, runs: r.runs }, new Date(w.clock.t.getTime() + 3 * MIN));
+    return rows;
+  };
+  w.advance(5 * MIN);
+  const out2 = await quiet(() => w.consumer('s2').sweepLeases());
+  assert.strictEqual(out2.failed, 0);
+  assert.strictEqual(w.refunds(id).length, 0);
+  w.hung.forEach((h) => h.release()); await quiet(() => settle(40));
+});
+
+test('S6 M22: a result write whose reply was lost (it landed) is recognised by the read-back: the photo stays, the run goes on, nothing is deleted', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  const real = w.repo.finishPhotoOwned;
+  w.repo.finishPhotoOwned = async (...a) => { const ok = await real(...a); if (a[3].status === 'done') throw new Error('reply lost'); return ok; };
+  const c = w.consumer('a');
+  await quiet(async () => { await c._drain(); await settle(100); });
+  const r = w.row(id);
+  assert.strictEqual(r.status, 'done');
+  assert.ok(r.photos.every((p) => p.status === 'done' && /^https:/.test(p.url)));
+  assert.deepStrictEqual(w.deleted, []);
+  assert.strictEqual(w.refunds().length, 0);
+  assert.strictEqual(c.stats.lostRuns, 0);
+});
+
+test('S6 M2: a refund that already exists for the job is never paid again by a consumer close', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  w.failIf = () => true;
+  w.money.push({ type: 'refund', uid: U1, payer: U1, q: 4 * PER, action: 'photoshoot_image_refund', ref: String(id) }); // paid by another path
+  const c = w.consumer('a');
+  await quiet(async () => { await c._drain(); await settle(100); });
+  const r = w.row(id);
+  assert.strictEqual(r.status, 'failed');
+  assert.strictEqual(r.refundedQuarks, 0);
+  assert.ok(r.refundSettledAt, 'nothing left to settle');
+  assert.strictEqual(w.refunds(id).length, 1, 'only the existing refund');
+});
+
+test('S6 M16: the retry loop sends a recorded consumer refund the proof does not support to a person, and pays nothing', async () => {
+  for (const [label, proofCost] of [['no charge found', null], ['above the charge', PER]]) {
+    const w = world();
+    const base = { user: U1, kind: 'pack', pack: 'marketplace', day: '2026-10-20', photos: [{ index: 0, status: 'failed' }], photoCount: 1, quarksPerPhoto: PER, quarks: 4 * PER, payerId: U1, refunded: true, refundedQuarks: 4 * PER, refundFailed: true, status: 'failed', via: 'consumer', finishedAt: new Date(NOW.getTime() - 10 * MIN), createdAt: NOW };
+    w.repo.rows.push({ ...base, _id: 'rr1', key: 'rr1' });
+    if (proofCost) w.money.push({ type: 'spend', uid: U1, payer: U1, cost: proofCost, ref: 'rr1' });
+    const n = await quiet(() => w.web.retryRefunds());
+    assert.strictEqual(n, 0, label);
+    assert.strictEqual(w.refunds().length, 0, label);
+    const r = w.row('rr1');
+    assert.strictEqual(r.refundGaveUp, true, label);
+    assert.ok(w.alerts.some(([k]) => k === 'photoshoot_refund_gave_up'), label);
+  }
+});
+
+test('S6 M11: the queued-timeout close only acts on the waiting period it read (a re-queue in between wins)', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  w.advance(31 * MIN);
+  const real = w.repo.waitingTooLong;
+  w.repo.waitingTooLong = async (...a) => {
+    const rows = await real(...a);
+    w.row(id).queuedAt = new Date(w.clock.t.getTime()); // handed back / re-queued after the sweep read it: a new wait began
+    return rows;
+  };
+  assert.strictEqual(await quiet(() => w.web.sweepConsumerQueued()), 0);
+  assert.strictEqual(w.row(id).status, 'queued');
+  assert.strictEqual(w.refunds().length, 0);
+  assert.ok(w.row(id).photos.every((p) => p.status === 'pending'));
+});
+
+test('S6 M7: a claim that resolves after SIGTERM began is handed back WITHOUT counting a release, and no run is started', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  const a = w.consumer('a');
+  const real = w.repo.claimConsumer;
+  w.repo.claimConsumer = async (...args) => { const r = await real(...args); a.stopping = true; return r; };
+  await quiet(async () => { await a._drainOnce(); await settle(20); });
+  const r = w.row(id);
+  assert.strictEqual(r.status, 'queued');
+  assert.ok(!(r.releases > 0), 'a claim handed back before it started is not a SIGTERM release');
+  assert.strictEqual(a.running.size, 0);
+  assert.strictEqual(a.stats.claims, 0);
+});
+
+test('S6 M20: with the switch off, the in-process resume loop never runs a consumer row, even one whose lease ran out', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  w.hangIf = () => true;
+  const a = w.consumer('a');
+  await quiet(async () => { await a._drain(); await settle(30); });
+  w.advance(SETTINGS.leaseMs + SETTINGS.heartbeatMs + 1000);
+  const off = createPhotoshoot({ ...w.deps, env: { ENABLE_PHOTOSHOOT: 'on' }, runnerId: 'off' });
+  const lost = await quiet(() => off.resumeLost()); // no fromLoop: no consumer sweeps either
+  assert.strictEqual(lost, 0, 'not taken over in-process');
+  assert.strictEqual(w.queue.length, 0);
+  assert.strictEqual(w.row(id).status, 'running');
+  w.hung.forEach((h) => h.release()); await quiet(() => settle(40));
+});
+
+test('S6 M20 (real repo): the in-process lostJobs filter leaves consumer rows out; the consumer queries carry their claim fields', () => {
+  const { createPhotoshootRepo } = require('../services/photoshoot/repo');
+  const seen = {};
+  const q = (name) => (...a) => { seen[name] = a; const r = { select: () => r, limit: () => r, sort: () => r, lean: () => r, then: (f) => f([]) }; return r; };
+  const model = { find: q('find'), findOne: q('findOne'), countDocuments: q('count'), updateOne: async (...a) => { seen.updateOne = a; return { modifiedCount: 0, matchedCount: 0 }; }, findOneAndUpdate: q('findOneAndUpdate') };
+  const repo = createPhotoshootRepo({ Job: () => model });
+  repo.lostJobs(NOW, 10);
+  assert.deepStrictEqual(seen.find[0].via, { $ne: 'consumer' });
+  repo.requeueLost('x', { status: 'running', leaseOwner: 'w', runs: 1, leaseUntil: NOW }, NOW);
+  assert.strictEqual(seen.findOneAndUpdate[0].via, 'consumer');
+  assert.deepStrictEqual(seen.findOneAndUpdate[0].leaseUntil, NOW);
+  repo.queueCharged('x', { quarks: 1, payerId: 'p', now: NOW, quarkCharge: {} });
+  assert.strictEqual(seen.findOneAndUpdate[0].chargedAt, null);
+  assert.strictEqual(seen.findOneAndUpdate[0].via, 'consumer');
+  repo.staleQueued(NOW, 10);
+  assert.strictEqual(seen.find[0].chargedAt, null);
+  repo.closeStale('x', { now: NOW });
+  assert.strictEqual(seen.findOneAndUpdate[0].chargedAt, null);
+});
+
+test('S6 M4: a run whose claim moved on before its next round stops as lost, and makes no call', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  const a = w.consumer('a');
+  const claimed = await w.repo.claimConsumer(id, 'w:a', NOW, new Date(NOW.getTime() + MIN));
+  w.row(id).leaseOwner = 'w:b'; // another worker took the row over
+  const ctl = { owner: { leaseOwner: 'w:a', runs: claimed.runs }, leaseEnd: () => new Date(NOW.getTime() + MIN), lose() { this.lostFlag = true; }, isLost() { return !!this.lostFlag; }, stopping: () => false, orphan() {} };
+  const out = await quiet(() => a.service.runClaimed(claimed, ctl));
+  assert.strictEqual(out, 'lost');
+  assert.strictEqual(w.calls.gen, 0);
+  assert.strictEqual(w.row(id).photos.filter((p) => p.status !== 'pending').length, 0);
+});
+
+test('S6 M3: a run already marked lost (the heartbeat said so between rounds) pays for no photo, even if the row still looks like its own', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  const a = w.consumer('a');
+  const claimed = await w.repo.claimConsumer(id, 'w:a', NOW, new Date(NOW.getTime() + MIN));
+  const ctl = { owner: { leaseOwner: 'w:a', runs: claimed.runs }, leaseEnd: () => new Date(NOW.getTime() + MIN), lose() {}, isLost: () => true, stopping: () => false, orphan() {} };
+  const out = await quiet(() => a.service.runClaimed(claimed, ctl));
+  assert.strictEqual(out, 'lost');
+  assert.strictEqual(w.calls.gen, 0, 'no paid call');
+  assert.ok(w.row(id).photos.every((p) => p.status === 'pending' && !p.attempts));
+});
+
+test('S6 M23: the consumer heartbeat marks a run lost when the lease renewal matches nothing, and the run stops after its batch', async () => {
+  const w = world({ settings: { heartbeatMs: 5 } });
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  let failRenewals = true;
+  w.repo.heartbeat = async () => !failRenewals; // fails only while the first batch is out; the run's own renewals later succeed
+  w.hangIf = (args, n) => n <= 2; // both photos of the first batch stay out
+  const c = w.consumer('a');
+  await quiet(async () => { await c._drain(); await settle(5); });
+  await new Promise((r) => setTimeout(r, 40)); // a few heartbeat ticks
+  failRenewals = false;
+  w.hung.forEach((h) => h.release());
+  await quiet(() => settle(100));
+  assert.strictEqual(c.stats.lostRuns, 1);
+  assert.strictEqual(c.stats.finished, 0);
+  assert.strictEqual(w.calls.gen, 2, 'no second batch');
+  assert.notStrictEqual(w.row(id).status, 'done');
+});
