@@ -68,8 +68,46 @@ cd backend && node scripts/queue-parallel-check.js cleanup
 
 Last run (2026-10-20 evening, after the D74 fixes, from the Mac to the dev cluster): 4 PASS, 0 FAIL (twice in a row). 1 worker cleared 12 jobs in 8.3 s, 3 workers in 4.2 s (about 2x; from a laptop the network jitters, 1.5x to 2.7x seen on the same code, so the check's floor is 1.4x; earlier run: 8.9 s and 3.3 s, 2.7x, split 5/3/4); a killed worker's 3 jobs were taken over 3.0 s after the kill (lease 2 s in the check): 2 finished on another worker on their second run, the one that may not be re-run was failed and refunded once by two sweeps at the same moment; a provider failure refunded each of 4 charges once.
 
+## Stage B step 1: Videos (Omni) on consumers (built 2026-10-20, NOT released, switch default OFF)
+Impact map: `impact-maps/generation-parallelism.md` "Stage B step 1". Decisions D78 to D82.
+
+In plain words: with `ENABLE_STUDIO_VIDEO_CONSUMER=on`, a Videos create (and a change) takes the Quarks, then leaves the video waiting in the database. Any worker claims it (same claim, lease and heartbeat as stage A), makes the clips in its own Omni slots and the finishing (join, subtitles, logo) in its CPU slots. Each clip is saved as soon as it is made, so if the worker stops, another one carries on after the last saved clip: nothing is made twice for the customer and nothing is charged twice. Refunds use the same proof-first, claim-then-pay machinery as before (paid at most once, never above the charge, to the wallet that paid).
+
+| Piece | Where | What it does |
+|---|---|---|
+| Queue | `routes/studioVideos.js` `create`, `/:id/change`, `queueAfterCharge` | Row created as before (`processing`, no worker), charged, then flipped to `queued` (with `work`: prompts, finishing choices, or the change). A row is never claimable before its charge landed. |
+| Consumer | `services/studioVideoConsumer.js` | Started with the other consumers (`RUN_JOB_CONSUMERS`) only when the switch is on. Claims `queued` rows (fair order and per-account cap as stage A), `PROVIDER_SLOTS_OMNI` making clips + finishing in `CPU_SLOTS`, heartbeat, lease sweep, SIGTERM hand-back, metrics. |
+| Run | `routes/studioVideos.js` `runClaimed`, `run`/`runChain` with a control object | Every write carries the claim (worker id + attempt); a run that lost it stops and deletes its uploads. Clips stored in `clipUrls` (Cloudinary `nebula-studio-clips`, deleted once the video is closed). |
+| Lost worker | `sweepLeases` | Lease ran out one heartbeat ago: run 1 -> queued again (resumes); run 2 (`JOB_MAX_ATTEMPTS`) -> failed + full refund once. |
+| Unclaimed | `isStale`, studio `sweep`, `GET /`, `GET /:id` | Queued more than 30 minutes (`STUDIO_VIDEO_QUEUED_MAX_MS`) -> failed + refund once. |
+| Screens | `shape()` | A queued video is answered as `processing` with `queued: true`; the web app also treats a raw `queued` as being made (older server during a deploy). |
+| Metrics | `GET /api/metrics/queue` -> `studioVideos` | queueDepth, running, oldestQueuedAgeSeconds, runningByWorker, thisWorker (slots omni/cpu, slotsInUse omni/finishing, claims, finished, lostRuns, leaseRequeues, leaseFailures, released, shutdownFailed, capHandBacks). CloudWatch (when on): `Queue=omni`. |
+
+Switches: `ENABLE_STUDIO_VIDEO_CONSUMER` (off), `PROVIDER_SLOTS_OMNI` (2, 1 to 32; `PROVIDER_SLOTS` when not set), `STUDIO_VIDEO_DRAIN_INTERVAL_MS` (5000), `STUDIO_VIDEO_QUEUED_MAX_MS` (1800000); lease, heartbeat, attempts, per-account cap, CPU slots and shutdown grace are the stage A variables. How to turn it on and off: `ecs-web-worker.md` "Videos on the worker".
+
+Real-database check (nebulaa_dev only, a throwaway collection, fake Omni/ffmpeg/wallet, 10 videos, cleanup):
+
+```
+cd backend && node scripts/studio-video-consumer-check.js
+```
+
+If a run was interrupted:
+
+```
+cd backend && node scripts/studio-video-consumer-check.js cleanup
+```
+
+Last runs (2026-10-20 evening, from the Mac): 7 PASS, 0 FAIL, three runs in a row. 1 consumer made 3 videos in 9.1 to 9.5 s, 3 consumers in 3.4 to 4.4 s (2.1x to 2.7x; fake provider call 2.5 s); a killed consumer's 3-clip video was resumed 8 to 11 s after the kill (lease 6 s in the check) without making clip 1 again, one charge, no refund, the dead run's late result discarded; a failed video refunded its price once, a short video its missing clip once, a video lost twice refunded once by two sweepers at the same moment; every refund to the paying wallet and never above its charge.
+
+Known limits of stage B1 (not removed):
+- A worker that is alive but lost its lease (database stalled longer than the lease) may finish the clip it was making while the re-run makes it again (our provider cost); at the cap the video is failed and refunded although the stalled worker could have finished (customer-favourable). Seen in the check with a 2 s lease and 2 to 4 s write spikes from a laptop; production lease is 60 s.
+- A lost worker at run 2 means a FULL refund, even when some clips were made (no partial delivery from the sweep: it has no ffmpeg).
+- A stored clip that cannot be downloaded again is made again (our cost). Stored clips are deleted when the video is closed; a run that crashed between upload and its database write leaves one orphan clip file.
+- Whisper (subtitle timing) runs once per attempt: a run lost during finishing may have paid one transcription the re-run pays again (recorded in the spend guard).
+- Old-code servers (before this release) would delete a `queued` row on `DELETE /api/videos/:id` without a refund: turn the switch on only after this code is live everywhere (the runbook does this).
+
 ## Stage B (one money flow per session, each with an independent read-only money review before and after)
-1. Videos (Omni) create and finishing onto consumers (keep `chargeProof` and the studio sweep).
+1. Videos (Omni) create and finishing onto consumers (keep `chargeProof` and the studio sweep). BUILT (above), switch off.
 2. Photoshoot: stop scheduling `runJob` in the request on web tasks; the consumer resume loop claims it (already lease based).
 3. Hero: finishing moves out of the status poll into a consumer job.
 4. Blueprint and plan runs: persisted claims instead of in-memory lanes.

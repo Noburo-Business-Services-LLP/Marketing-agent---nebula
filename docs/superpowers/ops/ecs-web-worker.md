@@ -28,7 +28,8 @@ Release scripts: `deploy-ecs-release.sh` now also switches the worker service to
 | Old step-by-step video queue (`videoGenerationQueue`, Mongo `VideoJob`) | Persistent; drained at enqueue and every 15 s; atomic claim queued -> processing with this worker's id and a lease (E9: per-worker slots, fair order, a lost worker's job re-queued or refunded) | Stores the job and does NOT drain (unless `RUN_JOB_CONSUMERS=1`); a consumer claims it (its drain runs every 5 s in a split). Nothing dropped. See the disk caveat below. |
 | Campaign image jobs (async regenerate) | Was in-process memory (lost on restart, 404 from another task) | Stored in Mongo; worker claims; status from any task. (The web app calls this route in its direct, non-queued form today, which runs in the request as before.) |
 | Drafts picture redo, weekly calendar items (`backgroundQueue`, in-process list; state in `Draft` documents) | Runs in the process that received the request, one at a time | Unchanged: runs in that web task; nothing dropped. Lost on a task stop; the worker's stale-draft reaper closes it after 20 minutes and returns the Quarks. Next step if needed: persist-and-claim like image jobs. |
-| Videos (Omni studio chain), Photoshoot runner, Hero, Blueprint and plan runs (`blueprint/runner` lanes), Home drafts, weekly posts | Started by the request in that process (setImmediate / in-process lanes); state and leases in Mongo | Unchanged: run in the web task that accepted them (they still use that task's CPU, including ffmpeg for Videos finishing). Each has a lease or heartbeat, and the worker's sweeps (`startStudioVideoSweep`, `startPhotoshootResume`, `startHomeDraftsSweep`, `startWeekRecovery` + refund recovery, plan scheduler) close or take over only stale work, so a running job on a web task is never ended by the worker. Concurrency caps (Blueprint 2, plan 1, one Video create per account) are per task. Moving these to the worker is the next step (persist-and-claim). |
+| Videos (Omni studio chain) with `ENABLE_STUDIO_VIDEO_CONSUMER=on` (E9 stage B1, default off) | Persistent: the StudioVideo row is `queued` after the charge; a consumer claims it with a lease, resumes after the last stored clip if its worker was lost | Stores the video and does NOT run it (unless `RUN_JOB_CONSUMERS=1`); a worker claims it within about 5 s. See "Videos on the worker" below. |
+| Videos (Omni studio chain) with the switch off, Photoshoot runner, Hero, Blueprint and plan runs (`blueprint/runner` lanes), Home drafts, weekly posts | Started by the request in that process (setImmediate / in-process lanes); state and leases in Mongo | Unchanged: run in the web task that accepted them (they still use that task's CPU, including ffmpeg for Videos finishing). Each has a lease or heartbeat, and the worker's sweeps (`startStudioVideoSweep`, `startPhotoshootResume`, `startHomeDraftsSweep`, `startWeekRecovery` + refund recovery, plan scheduler) close or take over only stale work, so a running job on a web task is never ended by the worker. Concurrency caps (Blueprint 2, plan 1, one Video create per account) are per task. Moving these to the worker is the next step (persist-and-claim). |
 | Schedulers (campaign posting, status sync, calendar, snapshots, notifications, performance, billing, renewals, account purge, Bin purge, competitor tracker, listening, plan refresh, brand memory, memory distillation, profile watch, image runner) | Interval loops in the one task | Not started on web tasks; exactly once on the worker. |
 | Calendar "being prepared" mark (`routes/contentCalendar.js` `preparation` Map) | In-process | Known limit (performance-week1.md): another task answers "not prepared" until the month is saved; the page keeps polling for 2 minutes. |
 | Auth cache (15 s), Home summary cache (60 s), small per-process caps (`createAssist` hits, Videos `hits` and `creating`, campaign `generationLocks`) | In-process | Per task: a cache can be up to its lifetime stale on another task (D26); the small caps become "per task" (at most N times as loose). |
@@ -74,6 +75,10 @@ Run the normal release. With no new variable set the backend behaves exactly as 
 | `CPU_SLOTS` | (unused) | `2` on 2 vCPU | ffmpeg at once per worker |
 | `IMAGE_JOB_CONCURRENCY` | (unused) | not set | older name of `PROVIDER_SLOTS_IMAGE`, still honoured |
 | `VIDEO_QUEUE_DRAIN_INTERVAL_MS` | (unused) | not set (5 s in a split) | |
+| `ENABLE_STUDIO_VIDEO_CONSUMER` | not set (off), later `on` | not set (off), later `on` | Videos (Omni) made on the worker instead of the web task (E9 B1). Turn on in BOTH services, in a release AFTER this code is live: see "Videos on the worker" |
+| `PROVIDER_SLOTS_OMNI` | (unused) | `2` | Videos making clips at once per worker task; (worker tasks) x this must stay under the Gemini Omni concurrency limit |
+| `STUDIO_VIDEO_DRAIN_INTERVAL_MS` | (unused) | not set (5 s) | how often a worker looks for queued Videos |
+| `STUDIO_VIDEO_QUEUED_MAX_MS` | not set (30 min) | same | a queued video nobody claims for this long is failed and refunded (safety net) |
 | `REDIS_URL` | not set | not set | only if you later add ElastiCache AND install the optional packages |
 
 Keep every existing variable and secret (`AWS_SECRET_IDS` etc.) as they are on both. Task-definition variables win over values from Secrets Manager (`bootstrap.js` never overwrites a set variable), so do not put `RUN_BACKGROUND` in the shared secret.
@@ -200,6 +205,23 @@ At peak the cluster sees about (web tasks + 1 worker) x `MONGO_MAX_POOL_SIZE` + 
 - Each web task: `[role] web only (RUN_BACKGROUND=0): background jobs do NOT run in this process` and **no** scheduler start lines.
 - `[live] REDIS_URL not set: live updates are single-process` on every task (expected without Redis; see concern 3).
 - Warnings to act on: `[rate limit] shared store error ... let through` (more than now and then: the database is slow; consider Redis), `[image jobs] ... runner was lost`.
+
+### Videos on the worker (E9 stage B1, switch `ENABLE_STUDIO_VIDEO_CONSUMER`)
+Today (switch off) a Videos create runs in the web task that took the request: a deploy or a crash of that task stops it and the video is refunded about 15 minutes per clip later. With the switch on, the video waits in the database (`queued`) and a worker makes it; if that worker stops, another one carries on after the last clip already made (nothing is charged twice). Details: `generation-parallelism.md` (stage B1).
+
+How to turn it on (after the release that contains this code is live and checked, with the switch still off):
+1. Worker service: new task-definition revision with `ENABLE_STUDIO_VIDEO_CONSUMER=on` (it already has `RUN_JOB_CONSUMERS=1`; leave `PROVIDER_SLOTS_OMNI` at 2 unless the Omni limit is known). Deploy it and wait until it is running. Its log shows `[videos consumer] started (worker ...; omni slots 2, ...)`.
+2. Web service: new revision with `ENABLE_STUDIO_VIDEO_CONSUMER=on`. Deploy. From now on new Videos are made on the worker.
+3. Check: make one short video in the app (one clip, owner's OK for the provider cost), then `GET /api/metrics/queue` as staff: `studioVideos.queueDepth` goes back to 0, `runningByWorker` names the worker.
+
+On a single task (no split, `RUN_BACKGROUND` not set) the switch also works: that task queues and claims its own videos (a restart then resumes them instead of refunding).
+
+How to turn it off (rollback):
+1. Web service first: revision without the variable (new Videos run in the web task again).
+2. Wait until `studioVideos.queueDepth` and `studioVideos.running` in `GET /api/metrics/queue` are 0 (the worker finishes what was queued), then the worker revision without the variable.
+3. If the worker is switched off with videos still queued, they are failed and refunded after 30 minutes (nothing is lost, the customer sees "Your Quarks were returned").
+
+Never turn it on in the web service while NO task runs the consumer (worker at 0 tasks): videos would wait 30 minutes and then be refunded.
 
 ### Rolling back
 - Worker trouble: `aws ecs update-service ... --service prod-nebulaa-gravity-worker-svc --desired-count 0`, then switch the web service back to the revision WITHOUT `RUN_BACKGROUND` (the deploy script printed it, or pick the previous revision) with desired count 1: one task does everything again, as today. Do the worker first, so two task sets never both run the schedulers.
