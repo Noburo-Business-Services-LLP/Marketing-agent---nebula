@@ -131,7 +131,7 @@ const brandIntelligenceProfileSchema = new mongoose.Schema(
   }
 );
 
-brandIntelligenceProfileSchema.index({ userId: 1 }, { unique: true });
+// userId is already indexed unique on the field itself (unique: true); a second schema.index() made Mongoose warn.
 brandIntelligenceProfileSchema.index({ updatedAt: -1 });
 
 module.exports = mongoose.model('BrandIntelligenceProfile', brandIntelligenceProfileSchema);
