@@ -551,7 +551,7 @@ const ReelGenerator: React.FC = () => {
   // voiceover language than the script.
   useEffect(() => {
     setAudioLanguageCode(languageCode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [languageCode]);
 
   const [sceneCount, setSceneCount] = useState<number | ''>('');
@@ -677,7 +677,7 @@ const ReelGenerator: React.FC = () => {
       if (response?.drafts) {
         setReelDraftsList(response.drafts);
       }
-    } catch (_) { }
+    } catch (_) { /* the drafts list stays as it was */ }
   };
 
   useEffect(() => {
@@ -701,13 +701,13 @@ const ReelGenerator: React.FC = () => {
       } else {
         localStorage.removeItem('nebula_ai_video_wizard_jobId');
       }
-    } catch (_) { }
+    } catch (_) { /* storage blocked: the wizard is not restored after a reload */ }
   }, [jobId]);
 
   useEffect(() => {
     try {
       localStorage.setItem('nebula_ai_video_wizard_step', String(step));
-    } catch (_) { }
+    } catch (_) { /* storage blocked: the wizard is not restored after a reload */ }
   }, [step]);
 
   useEffect(() => {
@@ -1334,7 +1334,7 @@ setCharacterAge(nextDraft?.characterAge || '');
     setSelectedVoiceId('');
     setGeneratedTracks(null);
     setFinalAudioUrl('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [audioLanguageCode]);
 
   // When the user picks a different voice, invalidate the last preview.
@@ -1343,7 +1343,7 @@ setCharacterAge(nextDraft?.characterAge || '');
   useEffect(() => {
     setGeneratedTracks(null);
     setFinalAudioUrl('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selectedVoiceId, voiceGender]);
 
   // Auto-fetch ElevenLabs voices when the user reaches Step 6, or when
@@ -3885,7 +3885,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                             navigator.clipboard.writeText(voiceoverText);
                             setVoiceoverCopied(true);
                             setTimeout(() => setVoiceoverCopied(false), 1500);
-                          } catch (_) {}
+                          } catch (_) { /* clipboard not available */ }
                         }}
                         disabled={!voiceoverText}
                         className="text-[11px] font-semibold px-3 py-1.5 rounded-md border border-white/[0.10] hover:border-[#F5A623]/40 hover:text-[#F5A623] text-white/70 disabled:opacity-30"

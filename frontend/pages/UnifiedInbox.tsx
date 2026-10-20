@@ -30,7 +30,6 @@ import { PlatformMark } from '../components/plan/PlanMarks';
 
 // The Simulate tool is for developers only and never shows on a customer screen (owner, 2026-10-19): it needs a
 // development build AND ?devtools=1 in the address. The backend's developer routes answer 404 in production anyway.
-// @ts-ignore import.meta.env is added by the build tool
 const DEV_BUILD: boolean = Boolean(import.meta.env && import.meta.env.DEV);
 const SHOW_SIMULATE: boolean = DEV_BUILD && typeof window !== 'undefined' && /[?&#]devtools=1\b/.test(window.location.href);
 

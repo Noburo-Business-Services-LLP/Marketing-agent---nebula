@@ -6,6 +6,7 @@
 
 const mongoose = require('mongoose');
 
+const logger = require('../utils/logger');
 const INTERVAL_MS = Number(process.env.MEMORY_WATCHDOG_INTERVAL_MS || 5 * 60 * 1000);
 
 function mb(bytes) {
@@ -32,7 +33,7 @@ function snapshot() {
         handlesByType[name] = (handlesByType[name] || 0) + 1;
       }
     }
-  } catch (_) {}
+  } catch (err) { logger.debug('memory watchdog: active handle count unavailable: %s', err && err.message); }
 
   // Mongoose connection pool
   let mongoPool = {};
@@ -43,7 +44,7 @@ function snapshot() {
       // Active sockets in the driver pool
       socketCount: conn.client?.topology?.s?.servers?.size || 'n/a'
     };
-  } catch (_) {}
+  } catch (err) { logger.debug('memory watchdog: connection pool state unavailable: %s', err && err.message); }
 
   const stats = {
     ts: new Date().toISOString(),

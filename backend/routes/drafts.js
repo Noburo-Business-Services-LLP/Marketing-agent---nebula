@@ -1,5 +1,6 @@
 const { priceText } = require('../config/quarkWording');
 const express = require('express');
+const logger = require('../utils/logger');
 const mongoose = require('mongoose');
 const path = require('path');
 const router = express.Router();
@@ -565,7 +566,7 @@ router.post('/upload-media', protect, L.upload, singleMedia, async (req, res) =>
     console.error('Upload media error:', error);
     res.status(500).json({ success: false, message: 'Failed to upload media' });
   } finally {
-    if (tempPath) { try { await require('fs').promises.unlink(tempPath); } catch {} }
+    if (tempPath) { try { await require('fs').promises.unlink(tempPath); } catch (err) { logger.debug('draft upload: temporary file not removed: %s', err && err.message); } }
   }
 });
 

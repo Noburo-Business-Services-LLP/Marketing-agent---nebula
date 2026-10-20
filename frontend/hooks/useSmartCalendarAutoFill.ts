@@ -51,7 +51,7 @@ export const useSmartCalendarAutoFill = (type?: 'post' | 'reel' | 'campaign') =>
             }
 
             // Then, filter out items that have already been generated or rejected
-            let unusedItems = typeFilteredItems.filter(
+            const unusedItems = typeFilteredItems.filter(
               (item: ContentCalendarItem) => !item.generatedCampaignId && !item.generatedDraftId && item.status !== 'rejected'
             );
 

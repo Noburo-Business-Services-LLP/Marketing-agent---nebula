@@ -72,8 +72,8 @@ function useNarrow(): boolean {
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const m = window.matchMedia(q);
     const on = () => setNarrow(m.matches);
-    m.addEventListener ? m.addEventListener('change', on) : m.addListener(on);
-    return () => { m.removeEventListener ? m.removeEventListener('change', on) : m.removeListener(on); };
+    if (m.addEventListener) m.addEventListener('change', on); else m.addListener(on);
+    return () => { if (m.removeEventListener) m.removeEventListener('change', on); else m.removeListener(on); };
   }, []);
   return narrow;
 }

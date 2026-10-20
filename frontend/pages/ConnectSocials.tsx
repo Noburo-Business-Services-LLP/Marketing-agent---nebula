@@ -154,7 +154,7 @@ const ConnectSocials: React.FC = () => {
       note.textContent = 'This window will redirect to the secure authorization page shortly.';
       box.append(head, note);
       doc.body.replaceChildren(box);
-    } catch (_) {}
+    } catch (_) { /* the helper window was closed or is cross-origin */ }
   };
 
   const openAuthPopup = (authUrl: string, platform: string, existingPopup?: Window | null) => {
@@ -220,7 +220,7 @@ const ConnectSocials: React.FC = () => {
               platform,
               account: account ? decodeURIComponent(account) : null
             }, window.location.origin);
-          } catch (_) {}
+          } catch (_) { /* the opener window is gone */ }
 
           // Show a brief success page then close
           document.title = `${displayName} connected`;

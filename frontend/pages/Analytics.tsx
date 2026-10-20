@@ -550,7 +550,7 @@ const HistoricalTrendsChart: React.FC<{
     try {
       const res = await apiService.getAnalyticsHistory(days);
       if (res?.success) setHistory(res.history || []);
-    } catch (e) {}
+    } catch (e) { /* history stays as it was; the screen keeps its last numbers */ }
     setLoading(false);
   };
 
@@ -559,7 +559,7 @@ const HistoricalTrendsChart: React.FC<{
     try {
       await apiService.takeSnapshotNow();
       await loadHistory();
-    } catch (e) {}
+    } catch (e) { /* the snapshot is optional; the screen keeps its last numbers */ }
     setSnapshotting(false);
   };
 

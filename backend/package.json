@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "create:male-voice": "node scripts/create-elevenlabs-male-voice.js"
+    "create:male-voice": "node scripts/create-elevenlabs-male-voice.js",
+    "lint": "eslint .",
+    "test": "node --test tests/*.test.js tests/http/*.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1079.0",
@@ -47,5 +49,10 @@
   },
   "overrides": {
     "uuid": "^11.1.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^15.15.0"
   }
 }

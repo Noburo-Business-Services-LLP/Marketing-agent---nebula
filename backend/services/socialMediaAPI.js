@@ -4,6 +4,7 @@
  */
 
 const jwt = require('jsonwebtoken');
+const logger = require('../utils/logger');
 const https = require('https');
 const http = require('http');
 
@@ -228,7 +229,7 @@ function _trackAyrshareCall(url, method, statusBucket) {
       { $inc: { count: 1 }, $set: { lastCalledAt: new Date() } },
       { upsert: true }
     ).catch(() => {});
-  } catch (_) {}
+  } catch (err) { logger.debug('ayrshare call counter: not recorded: %s', err && err.message); }
 }
 
 async function makeRequest(url, options = {}) {

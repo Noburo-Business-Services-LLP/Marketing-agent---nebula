@@ -11,6 +11,7 @@ const { addFramesToImage } = require('./postFrames');
 const { isProviderLimitError } = require('./providerErrors');
 const { getPlatformRules } = require('./platformContentRules');
 const fs = require('fs/promises');
+const logger = require('../utils/logger');
 const path = require('path');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
@@ -123,8 +124,8 @@ async function fetchWithTimeout(url, options, timeout = API_TIMEOUT) {
     if (error.name === 'AbortError') {
       throw new Error(`Request timed out after ${timeout}ms`);
     }
+    throw error; // any other failure reaches the caller as itself (this used to fall through to an undefined `lastError`)
   }
-  throw lastError;
 }
 
 /**
@@ -1221,13 +1222,6 @@ function getFallbackImage(industry, objective) {
       'traffic': 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&h=600&fit=crop',
       'conversion': 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop'
     },
-    'education': {
-      'awareness': 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&h=600&fit=crop',
-      'engagement': 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&h=600&fit=crop',
-      'sales': 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800&h=600&fit=crop',
-      'traffic': 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&h=600&fit=crop',
-      'conversion': 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop'
-    },
     'ecommerce': {
       'awareness': 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&h=600&fit=crop',
       'engagement': 'https://images.unsplash.com/photo-1556742111-a301076d9d18?w=800&h=600&fit=crop',
@@ -1664,7 +1658,7 @@ function getFallbackSynopsis(section, data, businessProfile) {
   const industry = businessProfile?.industry || 'your industry';
 
   switch (section) {
-    case 'activeCampaigns':
+    case 'activeCampaigns': {
       const count = data?.count || 0;
       if (count === 0) {
         return {
@@ -1678,8 +1672,8 @@ function getFallbackSynopsis(section, data, businessProfile) {
         insights: ['Review campaign performance weekly', 'A/B test different ad creatives', 'Adjust targeting based on engagement data'],
         trend: data?.change > 0 ? 'up' : data?.change < 0 ? 'down' : 'stable'
       };
-
-    case 'budgetSpent':
+    }
+    case 'budgetSpent': {
       const spent = data?.total || 0;
       return {
         synopsis: spent > 0
@@ -1690,8 +1684,8 @@ function getFallbackSynopsis(section, data, businessProfile) {
           : ['Start with a small test budget', 'Focus on high-intent audiences first', 'Use organic content to supplement paid efforts'],
         trend: spent > 0 ? 'stable' : 'stable'
       };
-
-    case 'brandScore':
+    }
+    case 'brandScore': {
       const score = data?.score || 0;
       return {
         synopsis: `${companyName}'s brand score is ${score}/100. ${score >= 70 ? 'Strong performance!' : score >= 50 ? 'Room for improvement.' : 'Focus on consistency and engagement.'} This score reflects your overall marketing health in the ${industry} space.`,
@@ -1700,7 +1694,7 @@ function getFallbackSynopsis(section, data, businessProfile) {
           : ['Increase posting frequency', 'Engage more with your audience', 'Create more valuable content'],
         trend: data?.change > 0 ? 'up' : data?.change < 0 ? 'down' : 'stable'
       };
-
+    }
     case 'competitorRadar':
       return {
         synopsis: `Monitor competitor activity in the ${industry} market to identify opportunities and stay ahead of trends.`,
@@ -4905,7 +4899,7 @@ Only the visual language should carry over, not the specific scene.`);
                 if (uploadResult.success && uploadResult.url) {
                   return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image', promptUsed };
                 }
-              } catch (_) { }
+              } catch (err) { logger.debug('campaign image: upload of the generated picture failed (the data URL is used instead): %s', err && err.message); }
               return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image', promptUsed };
             }
           }

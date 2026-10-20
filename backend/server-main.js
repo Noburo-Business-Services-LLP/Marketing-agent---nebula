@@ -246,11 +246,11 @@ app.get('/api/health/details', (req, res) => {
   try {
     // Optional dependency check (installed in backend/package.json)
     ffmpegPath = require('ffmpeg-static');
-  } catch (_) { }
+  } catch (err) { logger.debug('health details: ffmpeg-static not installed: %s', err && err.message); }
 
   try {
     ffprobePath = require('ffprobe-static')?.path || null;
-  } catch (_) { }
+  } catch (err) { logger.debug('health details: ffprobe-static not installed: %s', err && err.message); }
 
   const safeExists = (p) => {
     if (!p || typeof p !== 'string') return false;
@@ -388,7 +388,7 @@ app.use((req, res, next) => {
           });
         }
       }
-    } catch (_) {}
+    } catch (err) { logger.debug('feature event tracking: %s', err && err.message); }
   });
   next();
 });
@@ -607,7 +607,7 @@ const validateProductionEnvironment = async () => {
         resolvedFfmpeg = String(res.stdout).trim().split(/\r?\n/)[0];
         logger.info(`   ✅ System ffmpeg resolved: ${resolvedFfmpeg}`);
       }
-    } catch (_) {}
+    } catch (err) { logger.debug('start-up: system ffmpeg lookup failed: %s', err && err.message); }
   }
 
   if (resolvedFfmpeg && fs.existsSync(resolvedFfmpeg)) {
@@ -645,7 +645,7 @@ const validateProductionEnvironment = async () => {
         resolvedFfprobe = String(res.stdout).trim().split(/\r?\n/)[0];
         logger.info(`   ✅ System ffprobe resolved: ${resolvedFfprobe}`);
       }
-    } catch (_) {}
+    } catch (err) { logger.debug('start-up: system ffprobe lookup failed: %s', err && err.message); }
   }
 
   if (resolvedFfprobe && fs.existsSync(resolvedFfprobe)) {

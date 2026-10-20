@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const logger = require('../utils/logger');
 const User = require('../models/User');
 
 let io = null;
@@ -79,7 +80,7 @@ function emitToUser(userId, eventName, payload) {
   if (io) {
     io.to(roomForUser(userKey)).emit(eventName, payload);
     if (crossTask) {
-      try { io.serverSideEmit(SSE_EVENT, userKey, eventName, payload); } catch (_) { }
+      try { io.serverSideEmit(SSE_EVENT, userKey, eventName, payload); } catch (err) { logger.debug('socket hub: cross-task emit failed: %s', err && err.message); }
     }
   }
 
@@ -92,7 +93,7 @@ function deliverLocal(userKey, eventName, payload) {
     for (const send of subscribers) {
       try {
         send(eventName, payload);
-      } catch (_) { }
+      } catch (err) { logger.debug('socket hub: send to a closed stream: %s', err && err.message); }
     }
   }
 }

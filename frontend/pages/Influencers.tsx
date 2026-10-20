@@ -160,11 +160,12 @@ const Influencers: React.FC = () => {
         return (b.engagementRate || 0) - (a.engagementRate || 0);
       case 'recent':
         return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      case 'trending':
+      case 'trending': {
         // Trending = high engagement + recent activity
         const trendA = (a.engagementRate || 0) * 10 + (a.avgLikes || 0) / 1000;
         const trendB = (b.engagementRate || 0) * 10 + (b.avgLikes || 0) / 1000;
         return trendB - trendA;
+      }
       default:
         return 0;
     }

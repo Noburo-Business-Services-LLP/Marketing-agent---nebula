@@ -1,4 +1,5 @@
 const fs = require('fs');
+const logger = require('../utils/logger');
 const path = require('path');
 const { pipeline } = require('stream/promises');
 const { URL } = require('url');
@@ -39,7 +40,7 @@ async function safeUnlink(filePath) {
   if (!filePath) return;
   try {
     await fs.promises.unlink(filePath);
-  } catch (_) {}
+  } catch (err) { logger.debug('video download: temporary file not removed: %s', err && err.message); }
 }
 
 async function ensureDirectory(dirPath) {

@@ -936,7 +936,7 @@ const Campaigns: React.FC = () => {
   useEffect(() => {
     if (!activeGeneratingDraftId) return;
 
-    let intervalId = setInterval(async () => {
+    const intervalId = setInterval(async () => {
       try {
         const response = await draftsAPI.getDraft(activeGeneratingDraftId);
         const draft = response.draft;
@@ -1387,7 +1387,7 @@ const Campaigns: React.FC = () => {
             audio.src = objectUrl;
 
             const cleanup = () => {
-              try { URL.revokeObjectURL(objectUrl); } catch (_) {}
+              try { URL.revokeObjectURL(objectUrl); } catch (_) { /* object URL already released */ }
               audio.onloadedmetadata = null;
               audio.onerror = null;
             };
@@ -1495,7 +1495,7 @@ const Campaigns: React.FC = () => {
       const hasInstagramAudio = selectedPlatforms.includes('instagram') && !!postInstagramAudio?.url;
       console.log(`\n?? [AUDIO CHECK]`);
       console.log(`   - Instagram in platforms: ${selectedPlatforms.includes('instagram') ? 'YES' : 'NO'}`);
-      console.log(`   - Audio object exists: ${!!postInstagramAudio ? 'YES' : 'NO'}`);
+      console.log(`   - Audio object exists: ${postInstagramAudio ? 'YES' : 'NO'}`);
       console.log(`   - Audio URL: ${postInstagramAudio?.url ? postInstagramAudio.url.substring(0, 80) + '...' : 'NONE'}`);
       console.log(`   - Will send audio to backend: ${hasInstagramAudio ? 'YES (video will be composed)' : 'NO (standard image posting)'}`);
       
@@ -1663,7 +1663,7 @@ const Campaigns: React.FC = () => {
         const uid = payload.userId || payload.id || payload.sub || '';
         return `nebula_suggested_campaigns_${uid}`;
       }
-    } catch (_) {}
+    } catch (_) { /* token not readable: use the shared key */ }
     return 'nebula_suggested_campaigns';
   };
 
@@ -1922,14 +1922,14 @@ const Campaigns: React.FC = () => {
           setDismissedIndices(new Set(parsed));
         }
       }
-    } catch (_) {}
+    } catch (_) { /* saved dismissals unreadable: start with none */ }
   }, []);
 
   // Save dismissed indices whenever they change
   useEffect(() => {
     try {
       localStorage.setItem(getCacheKey() + '_dismissed', JSON.stringify(Array.from(dismissedIndices)));
-    } catch (_) {}
+    } catch (_) { /* storage blocked: dismissals last for this visit only */ }
   }, [dismissedIndices]);
 
   const handleCardDismissed = useCallback((cardIndex: number) => {
@@ -5576,7 +5576,7 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
             if (!normalized) {
               errorMessages.push(`${post.platform} (${post.suggestedDate}): Invalid schedule date/time`);
               console.error(`? Invalid schedule for post ${i + 1}:`, post.suggestedDate, post.suggestedTime);
-              try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch(e) {}
+              try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch (e) { /* status reset is best effort */ }
               continue;
             }
 
@@ -5612,14 +5612,14 @@ const CreateCampaignModal: React.FC<{ onClose: () => void; onSuccess: (c: Campai
                 errorMessages.push(`${post.platform} (${post.suggestedDate}): ${msg}`);
                 console.error(`? Ayrshare rejected ${post.platform} post:`, msg);
                 // Update campaign status to indicate failure
-                try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch(e) {}
+                try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch (e) { /* status reset is best effort */ }
               }
             } catch (publishError: any) {
               const msg = publishError?.message || publishError?.error || 'Publish request failed - check connected accounts';
               errorMessages.push(`${post.platform} (${post.suggestedDate}): ${msg}`);
               console.error(`? Error publishing ${post.platform} to Ayrshare:`, publishError);
               // Revert campaign to draft since publish failed
-              try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch(e) {}
+              try { await apiService.updateCampaign(campaign._id, { status: 'draft' }); } catch (e) { /* status reset is best effort */ }
             }
           } catch (postError: any) {
             const msg = postError?.message || 'Failed to create/schedule';
@@ -7609,7 +7609,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
             audio.src = objectUrl;
 
             const cleanup = () => {
-              try { URL.revokeObjectURL(objectUrl); } catch (_) {}
+              try { URL.revokeObjectURL(objectUrl); } catch (_) { /* object URL already released */ }
               audio.onloadedmetadata = null;
               audio.onerror = null;
             };
@@ -7949,7 +7949,7 @@ const TemplatePosterModal: React.FC<TemplatePosterModalProps> = ({ onClose, onSu
           onSuccess(campaign);
         }
 
-        let message = isScheduleMode
+        const message = isScheduleMode
           ? `Scheduled ${generatedPosters.length} poster(s) for ${new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString()}`
           : anyBackendScheduled
             ? `Queued ${generatedPosters.length} poster(s) for publishing ${lastBackendScheduledFor ? `(${new Date(lastBackendScheduledFor).toLocaleString()})` : '(pending)'} -¯-‚Â¿-‚Â½ check again in a few minutes`
@@ -9239,7 +9239,7 @@ const UploadPublishModal: React.FC<UploadPublishModalProps> = ({ onClose, onSucc
                 audio.src = objectUrl;
 
                 const cleanup = () => {
-                  try { URL.revokeObjectURL(objectUrl); } catch (_) {}
+                  try { URL.revokeObjectURL(objectUrl); } catch (_) { /* object URL already released */ }
                   audio.onloadedmetadata = null;
                   audio.onerror = null;
                 };

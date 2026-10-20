@@ -18,7 +18,7 @@ function readStored(): OnboardingLang {
   try {
     const v = localStorage.getItem(LANG_STORAGE_KEY);
     if (isLang(v)) return v;
-  } catch {}
+  } catch { /* storage blocked: fall back to the default language */ }
   return 'en';
 }
 
@@ -32,7 +32,7 @@ export function getOnboardingLang(): OnboardingLang {
 
 export function setOnboardingLang(l: OnboardingLang) {
   current = l;
-  try { localStorage.setItem(LANG_STORAGE_KEY, l); } catch {}
+  try { localStorage.setItem(LANG_STORAGE_KEY, l); } catch { /* storage blocked: the choice lasts for this visit only */ }
   listeners.forEach((fn) => fn());
 }
 

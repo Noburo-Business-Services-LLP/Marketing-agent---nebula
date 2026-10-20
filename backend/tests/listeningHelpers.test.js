@@ -349,7 +349,7 @@ test('safeQuoteText length bounds count characters', () => {
   assert.strictEqual(H.safeQuoteText('க'.repeat(19)), null);
   assert.strictEqual(H.safeQuoteText(null), null);
   assert.strictEqual(H.safeQuoteText(undefined), null);
-  assert.strictEqual(H.safeQuoteText(12345678901234567890), null);
+  assert.strictEqual(H.safeQuoteText(1.2345678901234567e19), null);
   assert.strictEqual(H.safeQuoteText({}), null);
 });
 test('safeQuoteText rejects contact details, numbers, links, handles and addresses', () => {

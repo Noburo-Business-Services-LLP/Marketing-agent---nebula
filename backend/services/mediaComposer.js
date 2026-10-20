@@ -1,4 +1,5 @@
 const fs = require('fs');
+const logger = require('../utils/logger');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
@@ -86,7 +87,7 @@ if (!ffmpegPath) {
 async function safeUnlink(filePath) {
   try {
     await fs.promises.unlink(filePath);
-  } catch (_) {}
+  } catch (err) { logger.debug('compose: temporary file not removed: %s', err && err.message); }
 }
 
 async function downloadToFile(url, filePath) {
@@ -1158,19 +1159,6 @@ async function composeImageToVideoWithAudio({
     }
     
     console.error('='.repeat(70) + '\n');
-    
-    return {
-      success: false,
-      error: errorMsg,
-      details: error.message,
-      compositionTarget: {
-        duration: durationSeconds,
-        maxResolution: `${targetWidth}x${targetHeight}`,
-        imagePath,
-        audioPath,
-        outputPath: outPath
-      }
-    };
     
     return {
       success: false,

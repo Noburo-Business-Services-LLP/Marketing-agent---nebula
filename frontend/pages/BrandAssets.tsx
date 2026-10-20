@@ -461,7 +461,7 @@ const BrandAssets: React.FC = () => {
     }
   };
 
-  const useSwatchAs = (hex: string, target: 'primary' | 'secondary') => {
+  const applySwatchAs = (hex: string, target: 'primary' | 'secondary') => {
     if (target === 'primary') setPrimaryColor(hex);
     else setSecondaryColor(hex);
     setChosenSwatch(null);
@@ -1010,8 +1010,8 @@ const BrandAssets: React.FC = () => {
                   {chosenSwatch && (
                     <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Use ${chosenSwatch}`}>
                       <span className="text-sm" style={{ color: 'var(--gv-text-secondary)' }}>{chosenSwatch}</span>
-                      <button type="button" onClick={() => useSwatchAs(chosenSwatch, 'primary')} className="text-sm font-medium rounded-lg px-3 py-1.5" style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-primary)' }}>Use as primary</button>
-                      <button type="button" onClick={() => useSwatchAs(chosenSwatch, 'secondary')} className="text-sm font-medium rounded-lg px-3 py-1.5" style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-primary)' }}>Use as secondary</button>
+                      <button type="button" onClick={() => applySwatchAs(chosenSwatch, 'primary')} className="text-sm font-medium rounded-lg px-3 py-1.5" style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-primary)' }}>Use as primary</button>
+                      <button type="button" onClick={() => applySwatchAs(chosenSwatch, 'secondary')} className="text-sm font-medium rounded-lg px-3 py-1.5" style={{ background: 'var(--gv-panel)', border: '1px solid var(--gv-border-subtle)', color: 'var(--gv-text-primary)' }}>Use as secondary</button>
                     </div>
                   )}
                 </div>

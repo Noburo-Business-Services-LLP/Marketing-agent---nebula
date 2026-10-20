@@ -4,6 +4,7 @@
  */
 
 const https = require('https');
+const logger = require('../utils/logger');
 const http = require('http');
 const { URL } = require('url');
 
@@ -421,12 +422,12 @@ function parseHTML(html, baseUrl = '') {
         try {
           const base = new URL(baseUrl);
           src = `${base.protocol}//${base.host}${src}`;
-        } catch (e) {}
+        } catch (err) { logger.debug('scraper: could not resolve a root-relative image address: %s', err && err.message); }
       } else if (!src.startsWith('http') && !src.startsWith('data:') && baseUrl) {
         try {
           const base = new URL(baseUrl);
           src = `${base.protocol}//${base.host}/${src}`;
-        } catch (e) {}
+        } catch (err) { logger.debug('scraper: could not resolve a relative image address: %s', err && err.message); }
       }
       
       const alt = altMatch ? altMatch[1].trim() : '';

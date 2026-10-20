@@ -65,7 +65,7 @@ test('the options style sheet uses the page classes, not a :has() guess at the w
   assert.match(css, /\.nb-opt-row \{ display: flex; flex-wrap: wrap; align-items: stretch;/);
   assert.match(css, /\.nb-opt-group \{ --w: 2; flex: var\(--w\) 1 calc\(var\(--w\) \* 64px\); \}/, 'groups grow to fill the row');
   assert.match(css, /grid-auto-columns: minmax\(0, 1fr\)/, 'equal tiles across a group');
-  assert.match(css, /@media \(max-width: 639px\) \{\n  \.nb-opt-group \{ flex-basis: 100%; \}/, 'a phone gives each group a full line');
+  assert.match(css, /@media \(max-width: 639px\) \{\n {2}\.nb-opt-group \{ flex-basis: 100%; \}/, 'a phone gives each group a full line');
 });
 
 test('option tiles are larger and their names are not shrunk to 10 px', () => {

@@ -218,7 +218,7 @@ async function downloadBlobFromApi(
         const text = await response.text();
         if (text) message = text;
       }
-    } catch (_) { }
+    } catch (_) { /* the error body is not text: keep the status message */ }
 
     throw new Error(message);
   }
@@ -297,7 +297,7 @@ const daysFromNow = (n: number) => {
 };
 
 // Empty campaigns - no dummy data
-let campaigns: Campaign[] = [];
+const campaigns: Campaign[] = [];
 
 // Social connections - only supported platforms
 let socialConnections: SocialConnection[] = [
@@ -1217,6 +1217,8 @@ export const apiService = {
     searchKeywords?: string[];
     aiGenerated?: boolean;
     message?: string;
+    /** How many of the found accounts are in each size band (the screen shows it in the "Found N" line). */
+    breakdown?: { mega?: number; macro?: number; micro?: number };
   }> => {
     try {
       const response = await apiCall<{
@@ -1226,6 +1228,7 @@ export const apiService = {
         searchKeywords?: string[];
         aiGenerated?: boolean;
         message?: string;
+        breakdown?: { mega?: number; macro?: number; micro?: number };
       }>(
         '/influencers/discover',
         { method: 'POST', body: JSON.stringify(options || {}) },

@@ -19,7 +19,7 @@ async function stream(path, token, body) {
     const lines = buf.split('\n'); buf = lines.pop() || '';
     for (const l of lines) {
       if (l.startsWith('event: ')) cur = l.slice(7).trim();
-      else if (l.startsWith('data: ') && cur) { try { events.push({ event: cur, data: JSON.parse(l.slice(6)) }); } catch (_) {} }
+      else if (l.startsWith('data: ') && cur) { try { events.push({ event: cur, data: JSON.parse(l.slice(6)) }); } catch (_) { /* a partial JSON line: wait for the rest */ } }
     }
   }
   return events;

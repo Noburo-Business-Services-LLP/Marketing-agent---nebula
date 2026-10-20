@@ -1,5 +1,6 @@
 const { priceText } = require('../config/quarkWording');
 const express = require('express');
+const logger = require('../utils/logger');
 const { buildPrompt } = require('../services/promptRegistry');
 const router = express.Router();
 const rateLimit = require('../services/rateLimitStore').rateLimit;
@@ -273,7 +274,7 @@ videoGenerationQueue.registerHandler('generate_content', async (payload, { updat
       draftDoc.thumbnailUrl = thumbnailUrl;
       await draftDoc.save();
     }
-  } catch (saveErr) {}
+  } catch (err) { logger.debug('video: could not save the thumbnail on the draft: %s', err && err.message); }
 
   await learnVideoStep({
     userId,
@@ -330,7 +331,7 @@ videoGenerationQueue.registerHandler('merge_video', async (payload, { update, lo
             updatedAt: new Date().toISOString()
           }
         }));
-      } catch (_) {}
+      } catch (err) { logger.debug('video: could not save merge progress: %s', err && err.message); }
     },
     onLog: (line) => log(line)
   });
@@ -2028,7 +2029,7 @@ router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimite
     
     const resolvedArtStyle = artStyle || 'Realistic / Photography';
     
-    const prompt = await buildPrompt(req.user.id, 'video.characterSheet', {
+    let prompt = await buildPrompt(req.user.id, 'video.characterSheet', {
       resolvedArtStyle: (resolvedArtStyle),
       videoStyle: (videoStyle || 'Cinematic, extremely high quality.')
     });

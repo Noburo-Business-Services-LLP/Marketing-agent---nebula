@@ -186,7 +186,7 @@ function drawDonutChart(
   ctx.fillText('Total Engagement', cx, cy + 12);
 
   // Legend
-  let ly = cy + radius + 20;
+  const ly = cy + radius + 20;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   data.forEach((d, i) => {
     const yy = ly + i * 22;

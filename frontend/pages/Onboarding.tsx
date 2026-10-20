@@ -534,8 +534,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     const handleBackToLanding = () => {
         // Clear auth so App routes us to the public landing page
-        try { localStorage.removeItem('authToken'); } catch {}
-        try { sessionStorage.removeItem('onboardingState'); } catch {}
+        try { localStorage.removeItem('authToken'); } catch { /* storage blocked */ }
+        try { sessionStorage.removeItem('onboardingState'); } catch { /* storage blocked */ }
         window.location.assign('/#/');
         // Hash routes don't reload on hash change — force a full reload so App re-checks auth
         window.location.reload();

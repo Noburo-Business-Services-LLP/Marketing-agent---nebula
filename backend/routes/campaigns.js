@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 // A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
 require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
@@ -1249,7 +1250,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
     if (aborted) return;
     try {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    } catch(e) {}
+    } catch (err) { logger.debug('campaign stream: write to a closed connection: %s', err && err.message); }
   };
 
   let aborted = false;
@@ -1257,7 +1258,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
   let hasGenerationLock = false;
   req.on('close', () => { 
     aborted = true; 
-    try { res.end(); } catch(e) {}
+    try { res.end(); } catch (err) { logger.debug('campaign stream: end on a closed connection: %s', err && err.message); }
   });
 
   try {
@@ -2088,7 +2089,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
         caption: post.caption,
         hashtags: Array.isArray(post.hashtags)
           ? post.hashtags.map(h => h.startsWith('#') ? h : `#${h}`)
-          : hashtags,
+          : [],
         imageUrl: imageResult.success ? imageResult.imageUrl : '',
         imageDescription: post.imageDescription || '',
         imageText: String(post.imageText || '').trim() || defaultImageText,
@@ -3031,6 +3032,7 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
     // NOTE: We no longer delete existing scheduled Ayrshare posts *before* a new publish succeeds.
     // Deleting first can cause the campaign to lose its original schedule if the new publish fails.
     // Old scheduled posts (if any) are cleaned up after a successful publish.
+    // eslint-disable-next-line no-constant-condition, no-constant-binary-expression -- kept switched off on purpose (see the note above)
     if (false && campaign.status === 'scheduled') {
       const socialPostIdsFromMap = (campaign.socialPostIds && typeof campaign.socialPostIds === 'object')
         ? Object.values(campaign.socialPostIds)
@@ -3253,7 +3255,7 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
       // Store the computed hash for this campaign so future attempts can compare.
       try {
         await Campaign.findByIdAndUpdate(campaign._id, { $set: { publishHash } });
-      } catch (_) {}
+      } catch (err) { logger.debug('campaign publish: could not save publishHash: %s', err && err.message); }
     }
     
     const { resolveToneAudioUrl, getPublicBaseUrl } = require('../utils/toneAudio');
@@ -3917,7 +3919,7 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
                 result: { initial: allResults || null, verified: statusCheck?.data || null }
               });
             }
-          } catch (_) {}
+          } catch (err) { logger.debug('campaign publish: Instagram status re-check failed: %s', err && err.message); }
 
           try {
             const retryScheduledFor = new Date(Date.now() + 5 * 60 * 1000);
@@ -4016,7 +4018,7 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
                 result: { initial: allResults || null, retry: retryRes?.data || retryRes, retryRequestedAt }
               });
             }
-          } catch (_) {}
+          } catch (err) { logger.debug('campaign publish: Instagram retry failed: %s', err && err.message); }
         }
       }
 
@@ -4064,7 +4066,7 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
         try {
           const existing = await Campaign.findOne({ _id: req.params.id, userId }).select('status');
           if (existing?.status === 'scheduled') shouldClearScheduling = true;
-        } catch (_) {}
+        } catch (err) { logger.debug('campaign publish: status lookup before clearing the schedule: %s', err && err.message); }
 
         const update = {
           status: 'draft',
@@ -4086,7 +4088,7 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
           }
         );
       }
-    } catch (_) {}
+    } catch (err) { logger.debug('campaign publish: could not record the failed publish: %s', err && err.message); }
 
     if (isMongoTimeoutOrSelectionError(error)) {
       console.error('campaigns.js request failed:', error && error.message);
@@ -5632,7 +5634,7 @@ router.post('/template-poster/batch', protect, checkTrial, requireCredits('image
       
       // Rate limiting: wait 2 seconds between generations
       if (i < posters.length - 1) {
-        await delay(2000);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
     

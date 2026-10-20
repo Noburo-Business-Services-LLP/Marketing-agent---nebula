@@ -39,4 +39,24 @@ Note: "FAIL before the fix" cannot be shown from this repo state (the fixes are 
 
 ## Lint baseline
 
-See the section at the end of this file (filled in by the ESLint item).
+Run: `cd backend && npm run lint`, `cd frontend && npm run lint` (flat `eslint.config.js` in each; ESLint 9).
+
+| | Errors before | Errors now | Warnings now |
+|---|---|---|---|
+| backend | 78 (34 empty catches, 44 other) | 0 | 1,934 (1,768 `no-console`, 145 `no-unused-vars`, 16 `no-useless-escape`) |
+| frontend | 1,522 (1,473 `no-explicit-any`) | 0 | 1,744 (1,473 `no-explicit-any`, 228 unused vars, 45 hook dependency lists) |
+
+Errors fail CI; warnings do not. The backend was under the 150 limit, so every error was fixed. The frontend was over it: the real problems were fixed (empty catches got a one-line reason, a function named `use...` that was not a hook was renamed, a non-exhaustive `case` got braces, ternary statements became `if`) and `no-explicit-any` (1,473, API payloads typed loosely) is a warning baseline to reduce over time; `tsc --noEmit` still checks everything else.
+
+Rules switched off or softened on purpose (written in each config): `no-control-regex` off (the sanitisers strip control characters), `no-useless-escape` warn, `no-irregular-whitespace` ignores strings, templates, regexes and comments (prompt text and a BOM test contain the characters), `scripts/visual-audit/**` ignored in the frontend (scripts injected into a browser page).
+
+Real bugs ESLint found and the fix:
+- `services/geminiAI.js fetchWithTimeout`: any network error other than a timeout fell through to `throw lastError`, a variable that does not exist, so the caller got a ReferenceError instead of the real error. It now rethrows the real error.
+- `routes/campaigns.js`: the generated-post builder used an undefined `hashtags` when the model returned no list (ReferenceError, now `[]`); the batch poster loop waited with an undefined `delay` (now a plain timer).
+- `services/videoGenerationPipeline.js`: `plan?.globalVisualStyle` named an undefined `plan` (ReferenceError whenever a scene had no image prompt); it now reads the planner's own `globalVisualStyle`.
+- `routes/videoGeneration.js`: `const prompt` was appended to (a TypeError at run time); now `let`.
+- `services/geminiAI.js`: a duplicate `'education'` key in a picture map (the later one won; the dead earlier one is removed).
+- `services/mediaComposer.js`: a second `return` that could never run, removed.
+- `getFallbackSynopsis` (`geminiAI.js`) declared constants inside `case` without braces; braces added.
+- 34 empty `catch` blocks in `routes`, `services`, `server-main.js`, `utils` now log at debug level with context through `utils/logger.js`.
+- Frontend: `services/api.ts` `discoverInfluencers` result type lacked `breakdown`, which `pages/Influencers.tsx` reads (the one old `tsc` error, now fixed; `tsc --noEmit` is clean). The backend route does not currently send `breakdown`, so that screen line shows 0 Mega, 0 Macro, 0 Micro; flagged, not changed here.

@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 // A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
 require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
@@ -1139,7 +1140,7 @@ router.post('/:platform/disconnect', protect, async (req, res) => {
           return dp !== ayrshareKey;
         });
       }
-    } catch (_) {}
+    } catch (err) { logger.debug('social disconnect: could not tidy the account lists: %s', err && err.message); }
     await user.save();
 
     res.json({
@@ -1216,7 +1217,7 @@ router.get('/status', protect, async (req, res) => {
           try {
             user.ayrshare.lastError = ayrshareError;
             await user.save();
-          } catch (_) {}
+          } catch (err) { logger.debug('social disconnect: could not save the provider error: %s', err && err.message); }
         }
       } catch (e) {
         console.log('[Social Status] Ayrshare user profile check exception:', e.message);
@@ -1227,7 +1228,7 @@ router.get('/status', protect, async (req, res) => {
         try {
           user.ayrshare.lastError = ayrshareError;
           await user.save();
-        } catch (_) {}
+        } catch (err) { logger.debug('social disconnect: could not save the provider error: %s', err && err.message); }
       }
     } else {
       console.log(`[Social Status] No Ayrshare profile key found for user ${user.email}.`);
@@ -1758,7 +1759,7 @@ router.delete('/disconnect/:platform', protect, async (req, res) => {
           return dp !== ayrshareKey;
         });
       }
-    } catch (_) {}
+    } catch (err) { logger.debug('social disconnect: could not tidy the account lists: %s', err && err.message); }
     
     await user.save();
     

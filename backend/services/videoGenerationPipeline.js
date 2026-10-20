@@ -1,4 +1,5 @@
 const fs = require('fs');
+const logger = require('../utils/logger');
 const { buildPrompt } = require('./promptRegistry');
 const path = require('path');
 const os = require('os');
@@ -86,7 +87,7 @@ function resolveFfmpegPath() {
       const candidate = String(res.stdout).trim().split(/\r?\n/)[0];
       if (candidate) return candidate;
     }
-  } catch (_) { }
+  } catch (err) { logger.debug('pipeline: system ffmpeg lookup failed: %s', err && err.message); }
   return null;
 }
 
@@ -96,7 +97,7 @@ function resolveFfprobePath() {
   try {
     const fp = require('ffprobe-static');
     if (fp?.path) return fp.path;
-  } catch (_) { }
+  } catch (err) { logger.debug('pipeline: system ffprobe lookup failed: %s', err && err.message); }
   const whichCmd = process.platform === 'win32' ? 'where' : 'which';
   try {
     const res = spawnSync(whichCmd, ['ffprobe'], { windowsHide: true });
@@ -104,7 +105,7 @@ function resolveFfprobePath() {
       const candidate = String(res.stdout).trim().split(/\r?\n/)[0];
       if (candidate) return candidate;
     }
-  } catch (_) { }
+  } catch (err) { logger.debug('pipeline: ffprobe-static lookup failed: %s', err && err.message); }
   return null;
 }
 
@@ -346,7 +347,7 @@ function runFfmpeg(args = [], options = {}) {
     const timer = setTimeout(() => {
       try {
         proc.kill('SIGKILL');
-      } catch (_) {}
+      } catch (err) { logger.debug('pipeline: temporary file not removed: %s', err && err.message); }
       reject(new Error(`ffmpeg timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
@@ -1114,7 +1115,7 @@ ${usageRules}`;
       // downstream Nano Banana still receives a proper prompt.
       const synthesizedImagePrompt = String(
         source?.imagePrompt ||
-        [visualDescription, source?.cameraAngle, source?.cameraMovement, source?.emotion, plan?.globalVisualStyle]
+        [visualDescription, source?.cameraAngle, source?.cameraMovement, source?.emotion, parsed?.globalVisualStyle]
           .filter(Boolean).join(' | ')
       ).trim();
       return {

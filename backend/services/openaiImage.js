@@ -13,6 +13,7 @@ const OPENAI_IMAGE_SAFE_MODEL = 'gpt-image-1';
 const BLUEPRINT_IMAGE_MODEL = process.env.OPENAI_BLUEPRINT_IMAGE_MODEL || 'gpt-image-1';
 
 function fetchWithTimeout(url, opts = {}, timeoutMs = 120000) {
+  // eslint-disable-next-line no-async-promise-executor -- the try/catch/finally inside settles it; the safeFetch guard test matches this text
   return new Promise(async (resolve, reject) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
