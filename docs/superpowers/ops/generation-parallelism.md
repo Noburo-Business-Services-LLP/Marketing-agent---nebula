@@ -118,7 +118,7 @@ In plain words: with `ENABLE_PHOTOSHOOT_CONSUMER=on`, a Photoshoot (and "Make th
 | Piece | Where | What it does |
 |---|---|---|
 | Queue | `services/photoshoot/service.js` `startJob`, `queueForWorker`; `repo.queueCharged` | Row written before the charge (as today) with `via: 'consumer'`; after the charge the SAME row records the charge (`chargedAt`, `quarks`, `payerId`, `quarkCharge` with the ref) and becomes claimable (status stays `queued`, shown to the page as running). Lost reply: read back, accepted = 202, nothing refunded. Not accepted: refund claimed first, then paid. |
-| Consumer | `services/photoshootConsumer.js` | Started with the other consumers (`RUN_JOB_CONSUMERS`) only when the switch is on. Claims waiting rows (fair order, per-account cap re-counted after the claim), `PROVIDER_SLOTS_PHOTOSHOOT` jobs at once, heartbeat, lease sweep, SIGTERM hand-back, spend-ceiling hold, metrics. |
+| Consumer | `services/photoshootConsumer.js` | Started with the other consumers (`RUN_JOB_CONSUMERS`) only when the switch is on. Claims waiting rows (fair order, per-account cap re-counted after the claim), `PROVIDER_SLOTS_PHOTOSHOOT` jobs at once, heartbeat, lease sweep, SIGTERM hand-back, metrics. |
 | Run | `service.runClaimed`, `makePhotoClaimed` | Every write carries the claim (`leaseOwner` = worker id, `runs`); a photo left `calling` by a dead run gets its one extra call (recorded in the spend guard) or fails; finished photos are never called again; the gate (`services/runGate.js`) stops a lost or stopped run before its next paid call; a photo result it can no longer record is deleted from the image host. |
 | Close | `service.consumerClose` | Proof first, refund = failed photos x 10 (everything when none was made), never above the proof, claimed in the closing write, paid with the ref, settled. A crash after the claim: `sweepUnsettled` pays it once through `settleRefund`. |
 | Lost worker | `service.sweepConsumerLeases` (consumer and resume loop) | Lease ran out one heartbeat ago: run 1 -> waiting again (resumes); run 2 -> closed with the per-photo refund. Open 60 minutes after the charge (stuck): closed with the per-photo refund. |
@@ -148,8 +148,8 @@ Known limits of stage B2 (not removed):
 - A photo in flight when its worker dies is called again on the next run (its second and last call; recorded in the spend guard).
 - If the queue write lands AND its read-back also fails, the customer sees "If any Quarks were taken, they come back by themselves" while the photoshoot is made (double failure; nothing refunded twice, nothing charged twice).
 - A photo file whose upload landed but whose run died before recording it stays at the image host (an orphan; only storage).
-- The daily ceiling holds waiting jobs and refunds them after 30 minutes if it does not lift (D95).
-- An image older than this release: see the runbook (refunds waiting rows after 3 minutes or, if older than the Photoshoot code, leaves them): the drain wait before a rollback is mandatory.
+- The daily ceiling no longer holds charged jobs (D99, replaces D95): it refuses new starts only; the overshoot is bounded by one job per account.
+- An image older than this release: see the runbook (the production image refunds a waiting or re-queued row IN FULL after 3 minutes even when photos were delivered, an over-refund; an even older one leaves them charged): the drain wait before a rollback is mandatory.
 
 ## Stage B (one money flow per session, each with an independent read-only money review before and after)
 1. Videos (Omni) create and finishing onto consumers (keep `chargeProof` and the studio sweep). BUILT (above), switch off.
