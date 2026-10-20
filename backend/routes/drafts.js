@@ -487,7 +487,16 @@ const mediaUpload = multer({
   }
 });
 
-router.post('/upload-media', protect, L.upload, mediaUpload.single('file'), async (req, res) => {
+// multer's own refusals (a type that is not a picture or video, a file over the cap) are the caller's mistake: 4xx
+// with plain words, never a 500.
+const MEDIA_MESSAGE = 'Please use a PNG, JPG, WebP or GIF picture, or an MP4 or WebM video.';
+const singleMedia = (req, res, next) => mediaUpload.single('file')(req, res, (err) => {
+  if (!err) return next();
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ success: false, message: 'Please use a file under 120 MB.' });
+  return res.status(400).json({ success: false, unsupportedFile: true, message: MEDIA_MESSAGE });
+});
+
+router.post('/upload-media', protect, L.upload, singleMedia, async (req, res) => {
   const fsp = require('fs').promises;
   let tempPath = '';
   try {
@@ -501,7 +510,7 @@ router.post('/upload-media', protect, L.upload, mediaUpload.single('file'), asyn
       let n = 0;
       try { ({ bytesRead: n } = await fh.read(head, 0, head.length, 0)); } finally { await fh.close(); }
       const check = checkUpload({ mime: req.file.mimetype, name: req.file.originalname, buffer: head.slice(0, n), allow: [...IMAGE_TYPES, ...VIDEO_TYPES] });
-      if (!check.ok) return res.status(400).json({ success: false, unsupportedFile: true, message: 'Please use a PNG, JPG, WebP or GIF picture, or an MP4 or WebM video.' });
+      if (!check.ok) return res.status(400).json({ success: false, unsupportedFile: true, message: MEDIA_MESSAGE });
     }
 
     const { title, caption, platforms } = req.body || {};
