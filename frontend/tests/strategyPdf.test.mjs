@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sanitizeStrategyHtml, nonWhiteShare } from '../utils/strategyPdf.ts';
+import { JSDOM } from 'jsdom';
+
+// The app cleans with DOMPurify in the browser; the tests give it a jsdom window.
+globalThis.window = new JSDOM('').window;
+const { sanitizeStrategyHtml, nonWhiteShare } = await import('../utils/strategyPdf.ts');
 
 test('styles, scripts, classes and inline styling from the AI are removed', () => {
   const dirty = '```html\n<!DOCTYPE html><html><head><style>*{color:#fff}</style></head><body><div class="x" style="background:#000;color:#fff"><h1 style="color:white" id="a">Plan</h1><script>alert(1)</script><p onclick="x()">Text</p></div></body></html>\n```';
   const clean = sanitizeStrategyHtml(dirty);
-  assert.equal(clean, '<div><h1>Plan</h1><p>Text</p></div>');
+  assert.equal(clean, '<h1>Plan</h1><p>Text</p>');
 });
 
 test('tables, lists and cell spans survive', () => {

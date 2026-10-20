@@ -7,28 +7,9 @@
  * is refused instead of saved.
  */
 
-const ALLOWED_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'p', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'strong', 'b', 'em', 'i', 'br', 'div', 'span']);
-const KEEP_ATTRS = ['colspan', 'rowspan'];
+import { sanitizeStrategyHtml } from './sanitizeHtml.ts';
 
-/** Keeps headings, paragraphs, lists and tables; drops scripts, styles, classes, images and every other attribute. */
-export function sanitizeStrategyHtml(input: string): string {
-  let html = String(input || '');
-  html = html.replace(/```(?:html)?/gi, '');
-  html = html.replace(/<!--[\s\S]*?-->/g, '');
-  html = html.replace(/<(script|style|iframe|object|embed|svg|noscript|head)\b[\s\S]*?<\/\1\s*>/gi, '');
-  html = html.replace(/<!doctype[^>]*>/gi, '');
-  html = html.replace(/<\/?(html|body)\b[^>]*>/gi, '');
-  html = html.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (match, tag: string, attrs: string) => {
-    const name = tag.toLowerCase();
-    if (!ALLOWED_TAGS.has(name)) return '';
-    if (match.startsWith('</')) return `</${name}>`;
-    const kept = KEEP_ATTRS
-      .map((a) => { const m = new RegExp(`\\b${a}\\s*=\\s*["']?(\\d{1,2})["']?`, 'i').exec(attrs || ''); return m ? ` ${a}="${m[1]}"` : ''; })
-      .join('');
-    return `<${name}${kept}>`;
-  });
-  return html.trim();
-}
+export { sanitizeStrategyHtml };
 
 /** Share of pixels that are not near-white, from RGBA data. A readable page has at least a fraction of a percent. */
 export function nonWhiteShare(data: ArrayLike<number>): number {
@@ -72,7 +53,14 @@ export async function buildStrategyPdf(html: string): Promise<Blob> {
   wrap.setAttribute('aria-hidden', 'true');
   // On screen but behind the page, at a fixed width, so the browser lays it out and paints it for real.
   wrap.style.cssText = 'position:fixed;left:0;top:0;width:595px;z-index:-1;pointer-events:none;background:#ffffff;';
-  wrap.innerHTML = `<style>${STYLE}</style><div class="nb-strategy" style="width:523px;margin:0 36px;padding:36px 0;">${clean}</div>`;
+  const style = document.createElement('style');
+  style.textContent = STYLE;
+  const page = document.createElement('div');
+  page.className = 'nb-strategy';
+  page.style.cssText = 'width:523px;margin:0 36px;padding:36px 0;';
+  // `clean` is DOMPurify output (headings, lists and tables only): the one reviewed innerHTML in the app (see tests/xss.test.mjs).
+  page.innerHTML = clean;
+  wrap.append(style, page);
   document.body.appendChild(wrap);
 
   try {

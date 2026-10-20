@@ -15,6 +15,7 @@ import AutoReplySettingsPage from './AutoReplySettingsPage';
 import UpgradePrompt from '../components/UpgradePrompt';
 import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
 import { customerMessage } from '../utils/errors';
+import { safeHref } from '../utils/safeHref';
 
 // X (Twitter) logo SVG component
 const XLogo = ({ className }: { className?: string }) => (
@@ -138,19 +139,21 @@ const ConnectSocials: React.FC = () => {
   };
 
   const writePopupLoadingState = (popup: Window, platform: string) => {
+    // Built with DOM calls and textContent, never an HTML string, so the platform name can never be read as markup.
     try {
-      popup.document.write(`
-        <html>
-          <head><title>Connecting ${platform}</title></head>
-          <body style="margin:0;font-family:sans-serif;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;">
-            <div style="text-align:center;max-width:420px;padding:24px;">
-              <div style="font-size:18px;font-weight:700;margin-bottom:12px;">Preparing ${platform} connection...</div>
-              <div style="font-size:14px;color:#94a3b8;">This window will redirect to the secure authorization page shortly.</div>
-            </div>
-          </body>
-        </html>
-      `);
-      popup.document.close();
+      const doc = popup.document;
+      doc.title = `Connecting ${platform}`;
+      doc.body.style.cssText = 'margin:0;font-family:sans-serif;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;';
+      const box = doc.createElement('div');
+      box.style.cssText = 'text-align:center;max-width:420px;padding:24px;';
+      const head = doc.createElement('div');
+      head.style.cssText = 'font-size:18px;font-weight:700;margin-bottom:12px;';
+      head.textContent = `Preparing ${platform} connection...`;
+      const note = doc.createElement('div');
+      note.style.cssText = 'font-size:14px;color:#94a3b8;';
+      note.textContent = 'This window will redirect to the secure authorization page shortly.';
+      box.append(head, note);
+      doc.body.replaceChildren(box);
     } catch (_) {}
   };
 
@@ -171,7 +174,9 @@ const ConnectSocials: React.FC = () => {
     }
 
     try {
-      popup.location.href = authUrl;
+      const safeAuthUrl = safeHref(authUrl);
+      if (!safeAuthUrl) throw new Error('unsafe authorization address');
+      popup.location.href = safeAuthUrl;
       popup.focus();
       setManualAuthUrl(null);
       setNotification({
@@ -219,12 +224,17 @@ const ConnectSocials: React.FC = () => {
 
           // Show a brief success page then close
           document.title = `${displayName} connected`;
-          document.body.innerHTML = `
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#0f172a;color:#fff;gap:16px;">
-              <h2 style="margin:0;font-size:22px;">${displayName} was connected successfully.</h2>
-              <p style="margin:0;color:#94a3b8;">This window will close automatically.</p>
-            </div>
-          `;
+          // Built with DOM calls and textContent: the platform name comes from the address bar, so it is never put into an HTML string.
+          const page = document.createElement('div');
+          page.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#0f172a;color:#fff;gap:16px;';
+          const heading = document.createElement('h2');
+          heading.style.cssText = 'margin:0;font-size:22px;';
+          heading.textContent = `${displayName} was connected successfully.`;
+          const note = document.createElement('p');
+          note.style.cssText = 'margin:0;color:#94a3b8;';
+          note.textContent = 'This window will close automatically.';
+          page.append(heading, note);
+          document.body.replaceChildren(page);
           setTimeout(() => window.close(), 1500);
           return;
         }
