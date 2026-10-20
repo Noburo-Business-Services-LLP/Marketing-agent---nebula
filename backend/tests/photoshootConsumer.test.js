@@ -719,3 +719,37 @@ test('S1: the close stamps finishedAt at the close WRITE, so a slow proof read c
   assert.strictEqual(w.row(id).status, 'failed');
   assert.deepStrictEqual(w.refunds(id).map((m) => m.q), [4 * PER], 'exactly one refund');
 });
+
+test('S2: a photo write that times out on the client and lands afterwards: the file is KEPT (never deleted behind a landed record)', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  const real = w.repo.finishPhotoOwned;
+  const late = []; let first = true;
+  w.repo.finishPhotoOwned = async (...a) => {
+    if (first && a[3].status === 'done') { first = false; late.push(() => real(...a)); throw new Error('timed out'); }
+    return real(...a);
+  };
+  const c = w.consumer('a');
+  await quiet(async () => { await c._drain(); await settle(80); });
+  assert.deepStrictEqual(w.deleted, [], 'unknown outcome: nothing deleted');
+  assert.strictEqual(late.length, 1);
+  await late[0](); // the write lands after the read-back
+  const kept = w.row(id).photos.filter((p) => p.status === 'done' && p.url);
+  assert.ok(kept.length >= 1);
+  assert.ok(kept.every((p) => !w.deleted.includes(p.url)), 'no recorded photo points at a deleted file');
+  assert.strictEqual(c.stats.orphansDeleted, 0);
+});
+
+test('S2: a write that definitely did not match (the claim is gone) still deletes the file', async () => {
+  const w = world();
+  await create(w);
+  w.hangIf = (args, n) => n === 1;
+  const a = w.consumer('a');
+  await quiet(async () => { await a._drain(); await settle(40); });
+  const row = w.repo.rows[0];
+  row.leaseOwner = 'someone-else'; // the claim moved on
+  w.hung[0].release();
+  await quiet(() => settle(60));
+  assert.ok(w.deleted.length >= 1);
+});

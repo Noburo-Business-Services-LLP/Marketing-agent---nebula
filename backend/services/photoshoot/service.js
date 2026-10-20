@@ -717,15 +717,20 @@ function createPhotoshoot(given = {}) {
     const now = deps.now();
     if (out && out.ok && /^https:\/\//i.test(String(out.url || ''))) {
       const url = String(out.url).slice(0, 600);
+      // kept: true = recorded; false = the write DEFINITELY did not match (the claim is gone); null = unknown (the write threw).
       let kept = null;
       try { kept = await repo.finishPhotoOwned(job._id, cond, photo.index, { status: 'done', url, now }); } catch (_) { kept = null; }
       if (kept === null) {
-        // Unknown whether the write landed (a lost reply): look. Recorded = kept; not recorded = delete; cannot tell = keep the file.
-        let row = null; let known = true;
-        try { row = await repo.findById(job._id); } catch (_) { known = false; }
-        const p = row && (row.photos || []).find((x) => x.index === photo.index);
-        if (p && p.url === url) kept = true;
-        else if (known) kept = false;
+        // Unknown whether the write landed (a timed-out write can still be applied later). The file is deleted ONLY on a
+        // definite no-match: an orphan file costs storage, a deleted file behind a landed record is a paid broken photo.
+        // So: look; recorded = kept; anything else = keep the file and stop this run (it can no longer vouch for its claim).
+        try {
+          const row = await repo.findById(job._id);
+          const p = row && (row.photos || []).find((x) => x.index === photo.index);
+          if (p && p.url === url) { gate.notify('photo'); return; }
+        } catch (_) { /* cannot tell */ }
+        ctl.lose();
+        return;
       }
       if (kept === false) {
         ctl.lose();
