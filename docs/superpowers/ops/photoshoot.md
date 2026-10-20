@@ -54,7 +54,7 @@ Restart: a lost runner's job has an expired lease. The resume loop (`services/ph
 
 ## API (routes/photoshoot.js, all behind sign-in and a rate limit)
 
-`GET /api/photoshoot/packs`, `GET /options`, `POST /jobs`, `GET /jobs`, `GET /jobs/:id`, `POST /jobs/:id/photos/:index/redo`, `PATCH /jobs/:id/photos/:index` (`{ inLibrary }`), `GET /library`, `POST /upload` (`{ name, imageData }`, the only route with the big body allowance).
+`GET /api/photoshoot/packs`, `GET /options`, `POST /jobs`, `GET /jobs`, `GET /jobs/:id`, `POST /jobs/:id/photos/:index/redo`, `PATCH /jobs/:id/photos/:index` (`{ inLibrary }`), `DELETE /jobs/:id/photos/:index` (deletes one finished photo for good: owner-only, 409 while the photoshoot runs, stored picture removed from the image host best effort, never touches the charge, refund or ledger), `GET /library`, `POST /upload` (`{ name, imageData }`, the only route with the big body allowance).
 
 ## Staff
 
@@ -66,7 +66,7 @@ Restart: a lost runner's job has an expired lease. The resume loop (`services/ph
 ## Checks
 
 - Unit tests: `backend/tests/photoshootService.test.js`, `photoshootPacks.test.js`, `photoshootRoutes.test.js`, `photoshootRealProof.test.js`; `frontend/tests/photoshoot.test.mjs`, `createTiles.test.mjs`, `homeLayout.test.mjs`, `coverTile.test.mjs`.
-- Real database (nebulaa_dev only, fake image generator): `cd backend && node scripts/photoshoot-check.js` (24 checks: charge and ledger, partial and full refunds, idempotency, the database lock, per-minute and per-day caps, no balance, restart takeover, a photo left calling, stale close, ownership, Library, redo, agency pool, free plan, switch off, staff switch, upload, no outside call; since the money-path review: a charge that throws, the history proof, refund retries, the refund claim on a failed mark, upload gates, scoped keys). `node scripts/photoshoot-check.js cleanup` removes leftovers of an interrupted run. Last run 2026-10-19: 32 PASS, 0 FAIL, 83 rows removed, 0 left, estimated spend (USD 6.03) taken off again.
+- Real database (nebulaa_dev only, fake image generator): `cd backend && node scripts/photoshoot-check.js` (24 checks, plus section 10 delete one photo: charge and ledger, partial and full refunds, idempotency, the database lock, per-minute and per-day caps, no balance, restart takeover, a photo left calling, stale close, ownership, Library, redo, agency pool, free plan, switch off, staff switch, upload, no outside call; since the money-path review: a charge that throws, the history proof, refund retries, the refund claim on a failed mark, upload gates, scoped keys). `node scripts/photoshoot-check.js cleanup` removes leftovers of an interrupted run. Last run 2026-10-19: 32 PASS, 0 FAIL, 83 rows removed, 0 left, estimated spend (USD 6.03) taken off again.
 - Preview: `?photoshootstate=` ready, empty, nophoto, free, off, running, partial, failed, client, error; `#/photoshoot?pack=<key>`.
 
 ## To switch it on (owner)
