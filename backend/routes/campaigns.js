@@ -901,6 +901,8 @@ ${JSON.stringify(posts)}`;
  * GET /api/campaigns
  * Get all campaigns for the user with optional filters
  */
+const NO_POSTS_MESSAGE = 'No posts could be created. Please try again.';
+
 router.get('/', protect, async (req, res) => {
   try {
     const { status, platform, startDate, endDate } = req.query;
@@ -2173,7 +2175,7 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
       }
     }));
 
-    if (!postsEmitted) throw new Error('No posts could be created. Please try again.');
+    if (!postsEmitted) throw new Error(NO_POSTS_MESSAGE);
 
     // Done
     const poolBalance = await walletBalance(userId); // the agency's shared pool for a client workspace
@@ -2209,7 +2211,8 @@ router.post('/generate-campaign-stream', protect, checkTrial, async (req, res) =
 
   } catch (error) {
     console.error('SSE campaign generation error:', error);
-    sendEvent('error', { message: error.message || 'Failed to generate campaign' });
+    // Only our own deliberate sentence goes to the screen; any other exception stays in the log.
+    sendEvent('error', { message: error && error.message === NO_POSTS_MESSAGE ? NO_POSTS_MESSAGE : 'Failed to generate campaign' });
     res.end();
   } finally {
     const userId = req.user?.userId || req.user?.id;
@@ -3321,7 +3324,7 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
         const msg = ' CRITICAL: composeImageToVideoWithAudio returned null or invalid object';
         console.error(msg);
         await persistPublishFailure(msg);
-        return res.status(500).json({ success: false, message: msg });
+        return res.status(500).json({ success: false, message: 'The video could not be prepared. Please try again.' });
       }
       
       if (!composed.success || !composed.videoUrl) {
@@ -3499,7 +3502,7 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
         const msg = ' CRITICAL: Video composition succeeded but URL is missing. This should never happen.';
         console.error(msg);
         await persistPublishFailure(msg);
-        return res.status(500).json({ success: false, message: msg });
+        return res.status(500).json({ success: false, message: 'The video could not be prepared. Please try again.' });
       }
       
       console.log(' [AUDIO FLOW] Posting to Instagram with COMPOSED VIDEO (not image)...');
@@ -3539,14 +3542,14 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
         const msg = ' Composed video snapshot is null - composition failed';
         console.error(msg);
         await persistPublishFailure(msg);
-        return res.status(500).json({ success: false, message: msg });
+        return res.status(500).json({ success: false, message: 'The video could not be prepared. Please try again.' });
       }
 
       if (!composedSnapshot.metadata) {
         const msg = ' Video metadata is missing from composed object';
         console.error(msg);
         await persistPublishFailure(msg, { composed: composedSnapshot });
-        return res.status(500).json({ success: false, message: msg });
+        return res.status(500).json({ success: false, message: 'The video could not be prepared. Please try again.' });
       }
 
       const prePostValidation = validateVideoForInstagramPosting(composedSnapshot.metadata);

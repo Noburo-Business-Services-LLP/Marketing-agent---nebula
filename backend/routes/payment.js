@@ -1165,8 +1165,7 @@ function createPaymentRouter(deps = {}) {
           console.error(`📄 [RETRY-INVOICES] Full error:`, err.stack || err);
           results.push({
             paymentId: payment.razorpayPaymentId,
-            status: 'failed',
-            error: err.message
+            status: 'failed'
           });
         }
       }

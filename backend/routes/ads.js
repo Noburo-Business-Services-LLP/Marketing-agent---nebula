@@ -20,6 +20,13 @@ const {
   updateAd
 } = require('../services/socialMediaAPI');
 
+// A plain answer for a failed ads call. Only our own "connect your profile first" refusal keeps its words; any other
+// exception stays in the log and the customer sees a plain 500.
+function sendAdsError(res, error) {
+  if (error && error.code === 'NO_PROFILE_KEY') return res.status(403).json({ success: false, message: error.message });
+  return res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
+}
+
 /**
  * Helper: Get user's Ayrshare profile key
  */
@@ -50,7 +57,7 @@ router.get('/accounts', protect, requireFeature('publish'), async (req, res) => 
     res.json({ success: true, accounts: result.data });
   } catch (error) {
     console.error('Get ad accounts error:', error);
-    res.status(error.status || 500).json({ success: false, error: error.message });
+    return sendAdsError(res, error);
   }
 });
 
@@ -118,7 +125,7 @@ router.post('/boost', protect, L.spend, requireFeature('publish'), async (req, r
     res.json({ success: true, data: result.data });
   } catch (error) {
     console.error('Boost post error:', error);
-    res.status(error.status || 500).json({ success: false, error: error.message });
+    return sendAdsError(res, error);
   }
 });
 
@@ -166,7 +173,7 @@ router.get('/boosted', protect, requireFeature('publish'), async (req, res) => {
     res.json({ success: true, ads });
   } catch (error) {
     console.error('Get boosted ads error:', error);
-    res.status(error.status || 500).json({ success: false, error: error.message });
+    return sendAdsError(res, error);
   }
 });
 
@@ -190,7 +197,7 @@ router.put('/:adId', protect, L.spend, requireFeature('publish'), async (req, re
     res.json({ success: true, data: result.data });
   } catch (error) {
     console.error('Update ad error:', error);
-    res.status(error.status || 500).json({ success: false, error: error.message });
+    return sendAdsError(res, error);
   }
 });
 
@@ -217,7 +224,7 @@ router.get('/history', protect, requireFeature('publish'), async (req, res) => {
     res.json({ success: true, history: result.data });
   } catch (error) {
     console.error('Get ad history error:', error);
-    res.status(error.status || 500).json({ success: false, error: error.message });
+    return sendAdsError(res, error);
   }
 });
 
@@ -248,7 +255,7 @@ router.get('/interests', protect, requireFeature('publish'), async (req, res) =>
     res.json({ success: true, interests: result.data });
   } catch (error) {
     console.error('Get ad interests error:', error);
-    res.status(error.status || 500).json({ success: false, error: error.message });
+    return sendAdsError(res, error);
   }
 });
 

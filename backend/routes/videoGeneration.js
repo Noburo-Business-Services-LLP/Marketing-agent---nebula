@@ -3170,7 +3170,7 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
           } catch (error) {
             console.error('Nano Banana API Error:', error);
             await refundCredits(userId, 'video_scene_image', 1, 'Refund: scene image regeneration errored').catch(() => {});
-            return res.status(500).json({ success: false, message: 'Nano Banana API Error: ' + error.message });
+            return res.status(500).json({ success: false, message: 'Image generation failed. Your credit was returned. Please try again.' });
           }
       } else {
         const regen = await generateCampaignImageNanoBanana(regenPrompt, {

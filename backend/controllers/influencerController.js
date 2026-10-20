@@ -1,5 +1,6 @@
 
 const Influencer = require('../models/Influencer');
+const { fail } = require('../utils/httpError');
 
 exports.getInfluencers = async (req, res) => {
   try {
@@ -30,7 +31,7 @@ exports.createInfluencer = async (req, res) => {
     });
     res.status(201).json({ success: true, influencer });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    return fail(res, error, 'We could not save that. Please check the details and try again.');
   }
 };
 
@@ -60,7 +61,7 @@ exports.updateInfluencer = async (req, res) => {
 
     res.json({ success: true, influencer });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    return fail(res, error, 'We could not save that. Please check the details and try again.');
   }
 };
 

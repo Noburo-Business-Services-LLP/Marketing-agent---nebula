@@ -383,7 +383,7 @@ router.post('/download-video', protect, L.lightAi, async (req, res) => {
     console.error('[VIDEO DOWNLOAD] Failed:', error.message);
     return res.status(400).json({
       success: false,
-      error: error.message || 'Failed to download video'
+      message: 'Failed to download video'
     });
   }
 });
@@ -410,7 +410,7 @@ router.get('/download-video', protect, L.lightAi, async (req, res) => {
     if (!res.headersSent) {
       return res.status(400).json({
         success: false,
-        error: error.message || 'Failed to stream video download'
+        message: 'Failed to stream video download'
       });
     }
     res.end();

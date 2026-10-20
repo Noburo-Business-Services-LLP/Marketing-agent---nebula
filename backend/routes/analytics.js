@@ -32,7 +32,7 @@ async function getProfileKey(userId) {
 
 function noProfileResponse(res, error) {
   if (error && error.code === 'NO_PROFILE_KEY') {
-    res.status(403).json({ success: false, error: error.message, message: error.message });
+    res.status(403).json({ success: false, message: error.message });
     return true;
   }
   return false;

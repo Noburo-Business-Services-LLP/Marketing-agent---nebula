@@ -388,7 +388,7 @@ router.post('/generate-stream', protect, L.heavyAi, jobCap('carousel'), checkTri
     console.error('Carousel generation error:', error);
     if (draft) {
       try {
-        await Draft.updateOne({ _id: draft._id }, { $set: { status: 'failed', errorMessage: error.message || 'Generation failed.' } });
+        await Draft.updateOne({ _id: draft._id }, { $set: { status: 'failed', errorMessage: 'Generation failed.' } });
       } catch (_) { /* the stream error matters more than this bookkeeping */ }
     } else {
       // Failed before any draft existed — planning itself threw, so nothing
@@ -400,7 +400,7 @@ router.post('/generate-stream', protect, L.heavyAi, jobCap('carousel'), checkTri
         console.error('⚠️ Failed to refund Quarks after carousel error:', refundErr.message);
       }
     }
-    send('error', { message: error.message || 'Something went wrong. Please try again.' });
+    send('error', { message: 'Something went wrong. Please try again.' });
     res.end();
   }
 });

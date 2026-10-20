@@ -752,7 +752,7 @@ router.post('/scrape-by-type', protect, L.scrape, requireFeature('competitors'),
         }
       } catch (err) {
         if (err instanceof ReadRefused) { notice = err.message; break; }
-        results.push({ name: competitor.name, success: false, error: err.message });
+        results.push({ name: competitor.name, success: false, error: 'Could not read this competitor right now.' });
         console.error(`- Failed for ${competitor.name}:`, err.message);
       }
       

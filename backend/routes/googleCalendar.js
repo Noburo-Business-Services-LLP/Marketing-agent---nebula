@@ -245,7 +245,7 @@ router.post('/create-event', protect, async (req, res) => {
 
     if (eventData.error) {
       console.error('Google Calendar event creation error:', eventData);
-      return res.status(500).json({ success: false, message: eventData.error.message || 'Failed to create event' });
+      return res.status(500).json({ success: false, message: 'Failed to create event' });
     }
 
     res.json({

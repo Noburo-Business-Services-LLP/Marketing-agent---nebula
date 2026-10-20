@@ -358,7 +358,7 @@ router.post('/bulk-import', protect, L.upload, upload.single('file'), async (req
     console.error('Bulk import error:', error);
     // Handle multer errors (file type / size)
     if (error.message && error.message.includes('Only CSV')) {
-      return res.status(400).json({ success: false, message: error.message });
+      return res.status(400).json({ success: false, message: 'Only CSV and Excel files are allowed' });
     }
     res.status(500).json({ success: false, message: 'Server error during bulk import' });
   }

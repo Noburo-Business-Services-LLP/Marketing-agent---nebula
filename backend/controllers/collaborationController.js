@@ -1,5 +1,6 @@
 
 const Collaboration = require('../models/Collaboration');
+const { fail } = require('../utils/httpError');
 
 exports.getCollaborations = async (req, res) => {
   try {
@@ -30,7 +31,7 @@ exports.inviteCollaboration = async (req, res) => {
     });
     res.status(201).json({ success: true, collaboration });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    return fail(res, error, 'We could not save that. Please check the details and try again.');
   }
 };
 

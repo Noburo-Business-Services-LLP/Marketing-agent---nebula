@@ -1075,7 +1075,7 @@ router.get('/campaign-suggestions-stream', protect, L.lightAi, async (req, res) 
         }
       } catch (err) {
         console.error(`Error generating campaign ${i}:`, err);
-        res.write(`data: ${JSON.stringify({ type: 'error', index: i, message: err.message })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: 'error', index: i, message: 'Something went wrong. Please try again.' })}\n\n`);
       }
     }
     
@@ -1107,7 +1107,7 @@ router.get('/campaign-suggestions-stream', protect, L.lightAi, async (req, res) 
     
   } catch (error) {
     console.error('Campaign streaming error:', error);
-    res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Something went wrong. Please try again.' })}\n\n`);
     res.end();
   }
 });

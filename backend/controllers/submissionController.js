@@ -1,5 +1,6 @@
 
 const Submission = require('../models/Submission');
+const { fail } = require('../utils/httpError');
 const Collaboration = require('../models/Collaboration');
 
 exports.createSubmission = async (req, res) => {
@@ -16,7 +17,7 @@ exports.createSubmission = async (req, res) => {
     });
     res.status(201).json({ success: true, submission });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    return fail(res, error, 'We could not save that. Please check the details and try again.');
   }
 };
 
