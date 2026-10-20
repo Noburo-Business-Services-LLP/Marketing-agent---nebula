@@ -56,8 +56,9 @@ test('withPlanGuidance adds guidance only when a plan exists and survives lookup
 });
 test('every calendar entry point passes the plan guidance', () => {
   const routes = fs.readFileSync(path.join(__dirname, '../routes/contentCalendar.js'), 'utf8');
-  assert.strictEqual((routes.match(/generateMonthlyCalendar\(/g) || []).length, 3);
-  assert.strictEqual((routes.match(/planGuidance: await planGuidanceFor|await withPlanGuidance\(/g) || []).length, 3);
+  // The content calendar GET is read-only now (performance week 1): two entry points generate, and both pass the guidance.
+  assert.strictEqual((routes.match(/generateMonthlyCalendar\(/g) || []).length, 2);
+  assert.strictEqual((routes.match(/planGuidance: await planGuidanceFor|await withPlanGuidance\(/g) || []).length, 2);
   const auth = fs.readFileSync(path.join(__dirname, '../routes/auth.js'), 'utf8');
   assert.match(auth, /withPlanGuidance\(user\._id\)\.then\(\(opts\) => generateMonthlyCalendar\(user, null, opts\)\)/);
 });
