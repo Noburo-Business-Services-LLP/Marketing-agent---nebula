@@ -59,7 +59,7 @@ test('server-main: every starter is inside startBackgroundJobs, none outside', (
 
 test('no module starts a timer at load time except the allowed local caches', () => {
   // A top-level setInterval runs in every process, web tasks included. Allowed: per-process cache cleanups only.
-  const allowed = new Set(['services/geminiAI.js', 'routes/googleCalendar.js']);
+  const allowed = new Set(['services/geminiAI.js']);
   const found = [];
   for (const dir of ['routes', 'services', 'controllers', 'middleware', 'utils']) {
     const walk = (d) => {

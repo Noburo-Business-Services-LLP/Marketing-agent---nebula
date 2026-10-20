@@ -139,35 +139,15 @@ const PINTEREST_SCOPES = [
   'user_accounts:read'
 ].join(',');
 
-// Store state tokens temporarily. For durable production state, use a MongoDB TTL collection.
-const pendingOAuthStates = new Map();
+// OAuth state: random, single use, bound to the account, 10 minutes, shared by every server task (services/oauthState.js).
+const oauthStates = require('../services/oauthState');
+const YOUTUBE_PURPOSE = 'youtube';
+const SOCIAL_PURPOSE = 'social';
 
-// Helper to clean old states
-function cleanOldStates() {
-  for (const [key, value] of pendingOAuthStates.entries()) {
-    if (Date.now() - value.createdAt > 10 * 60 * 1000) {
-      pendingOAuthStates.delete(key);
-    }
-  }
-}
-
-// Helper to generate state token
+// The state for a direct platform sign-in (meta, twitter, linkedin, pinterest callbacks). Nothing issues these today
+// (the connect flow goes through Ayrshare), so those callbacks refuse every request, as they did before.
 function generateStateToken(userId, platform) {
-  const state = Buffer.from(JSON.stringify({
-    userId,
-    platform,
-    timestamp: Date.now(),
-    random: Math.random().toString(36).substring(7)
-  })).toString('base64');
-  
-  pendingOAuthStates.set(state, {
-    userId,
-    platform,
-    createdAt: Date.now()
-  });
-  
-  cleanOldStates();
-  return state;
+  return oauthStates.issue({ userId: String(userId), purpose: SOCIAL_PURPOSE, platform: String(platform || '') });
 }
 
 // Check if OAuth is configured for a platform
@@ -614,27 +594,9 @@ function getSetupInstructions(platform) {
 // ============================================
 
 // Initiate YouTube OAuth - returns the authorization URL
-router.get('/youtube/auth', protect, requireFeature('social_connect'), (req, res) => {
+router.get('/youtube/auth', protect, requireFeature('social_connect'), async (req, res) => {
   try {
-    // Generate a random state token for security
-    const state = Buffer.from(JSON.stringify({
-      userId: req.user._id.toString(),
-      timestamp: Date.now(),
-      random: Math.random().toString(36).substring(7)
-    })).toString('base64');
-
-    // Store the state for verification
-    pendingOAuthStates.set(state, {
-      userId: req.user._id.toString(),
-      createdAt: Date.now()
-    });
-
-    // Clean up old states (older than 10 minutes)
-    for (const [key, value] of pendingOAuthStates.entries()) {
-      if (Date.now() - value.createdAt > 10 * 60 * 1000) {
-        pendingOAuthStates.delete(key);
-      }
-    }
+    const state = await oauthStates.issue({ userId: req.user._id.toString(), purpose: YOUTUBE_PURPOSE });
 
     // Build the Google OAuth URL
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -674,15 +636,12 @@ router.get('/youtube/callback', async (req, res) => {
   }
 
   try {
-    // Verify the state token
-    const stateData = pendingOAuthStates.get(state);
+    // Verify the state token (single use: consuming it removes it)
+    const stateData = await oauthStates.consume(String(state), { purpose: YOUTUBE_PURPOSE });
     if (!stateData) {
       console.log('Invalid or expired state token');
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=invalid_state`);
     }
-
-    // Remove used state
-    pendingOAuthStates.delete(state);
 
     const userId = stateData.userId;
 
@@ -824,11 +783,10 @@ router.get('/meta/callback', async (req, res) => {
   }
 
   try {
-    const stateData = pendingOAuthStates.get(state);
+    const stateData = await oauthStates.consume(String(state), { purpose: SOCIAL_PURPOSE });
     if (!stateData) {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=invalid_state`);
     }
-    pendingOAuthStates.delete(state);
 
     const userId = stateData.userId;
     const platform = stateData.platform; // 'facebook' or 'instagram'
@@ -900,11 +858,10 @@ router.get('/twitter/callback', async (req, res) => {
   }
 
   try {
-    const stateData = pendingOAuthStates.get(state);
+    const stateData = await oauthStates.consume(String(state), { purpose: SOCIAL_PURPOSE });
     if (!stateData) {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=invalid_state`);
     }
-    pendingOAuthStates.delete(state);
 
     const userId = stateData.userId;
 
@@ -985,11 +942,10 @@ router.get('/linkedin/callback', async (req, res) => {
   }
 
   try {
-    const stateData = pendingOAuthStates.get(state);
+    const stateData = await oauthStates.consume(String(state), { purpose: SOCIAL_PURPOSE });
     if (!stateData) {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=invalid_state`);
     }
-    pendingOAuthStates.delete(state);
 
     const userId = stateData.userId;
 
@@ -1066,11 +1022,10 @@ router.get('/pinterest/callback', async (req, res) => {
   }
 
   try {
-    const stateData = pendingOAuthStates.get(state);
+    const stateData = await oauthStates.consume(String(state), { purpose: SOCIAL_PURPOSE });
     if (!stateData) {
       return res.redirect(`${FRONTEND_URL}/#/connect-socials?error=invalid_state`);
     }
-    pendingOAuthStates.delete(state);
 
     const userId = stateData.userId;
 

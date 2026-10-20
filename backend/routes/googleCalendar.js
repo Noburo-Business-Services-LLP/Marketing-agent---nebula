@@ -13,17 +13,9 @@ const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email'
 ].join(' ');
 
-// In-memory state store for OAuth (same pattern as YouTube)
-const pendingCalendarOAuthStates = new Map();
-
-// Clean up old states every 5 minutes
-setInterval(() => {
-  for (const [key, value] of pendingCalendarOAuthStates.entries()) {
-    if (Date.now() - value.createdAt > 10 * 60 * 1000) {
-      pendingCalendarOAuthStates.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
+// OAuth state: random, single use, bound to the account, 10 minutes, shared by every server task (services/oauthState.js).
+const oauthStates = require('../services/oauthState');
+const CALENDAR_PURPOSE = 'google_calendar';
 
 // GET /api/google-calendar/status — check if user has Google Calendar connected
 router.get('/status', protect, async (req, res) => {
@@ -41,22 +33,13 @@ router.get('/status', protect, async (req, res) => {
 });
 
 // GET /api/google-calendar/auth — initiate OAuth flow
-router.get('/auth', protect, (req, res) => {
+router.get('/auth', protect, async (req, res) => {
   try {
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
       return res.status(400).json({ success: false, message: 'Google Calendar not configured' });
     }
 
-    const state = Buffer.from(JSON.stringify({
-      userId: req.user._id.toString(),
-      timestamp: Date.now(),
-      random: Math.random().toString(36).substring(7)
-    })).toString('base64');
-
-    pendingCalendarOAuthStates.set(state, {
-      userId: req.user._id.toString(),
-      createdAt: Date.now()
-    });
+    const state = await oauthStates.issue({ userId: req.user._id.toString(), purpose: CALENDAR_PURPOSE });
 
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
@@ -88,11 +71,10 @@ router.get('/callback', async (req, res) => {
   }
 
   try {
-    const stateData = pendingCalendarOAuthStates.get(state);
+    const stateData = await oauthStates.consume(String(state), { purpose: CALENDAR_PURPOSE });
     if (!stateData) {
       return res.send('<script>alert("Invalid or expired state");window.close();</script>');
     }
-    pendingCalendarOAuthStates.delete(state);
 
     const userId = stateData.userId;
 
