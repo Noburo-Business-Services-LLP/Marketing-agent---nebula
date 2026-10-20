@@ -1,0 +1,22 @@
+# Secret scanning rules (CI job "secrets"). Starts from gitleaks' default rules and allows only what is documented in
+# docs/superpowers/ops/security-hardening.md ("Secrets found in the repo"): made-up test fixtures, and the one file that
+# once held a real Ayrshare profile key (HUMAN: rotate that key in Ayrshare; it stays in git history until then).
+title = "Nebulaa gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented test fixtures and the deleted file that held an Ayrshare key (already known, rotation is a human task)"
+paths = [
+  '''backend/tests/razorpayTestCheck\.test\.js''',
+  '''backend/tests/helpers/razorpayCheckE2E\.js''',
+  '''backend/tests/sampleGeneratePhotos\.test\.js''',
+  '''backend/tests/backfillPerformanceMetrics\.test\.js''',
+  '''backend/tests/homeIndexes\.test\.js''',
+  '''backend/tests/seedDemoAgency\.test\.js''',
+  '''backend/tests/staffIndexes\.test\.js''',
+  '''backend/tests/staffPerfCheckGuard\.test\.js''',
+  '''(^|/)test-ayrshare-jwt\.js$''',
+  '''package-lock\.json$''',
+]

@@ -1,0 +1,154 @@
+# Continuous integration: every job must pass before a pull request is merged (mark them as required checks).
+# Nothing here calls a paid provider or the live site: the tests use in-memory stand-ins (backend/tests/helpers).
+# Why these Node versions: the API image runs Node 20 (Dockerfile.backend), so backend jobs use 20. The web app tests
+# import TypeScript files directly, which needs Node 22.18 or later, so frontend tests use 24. Details: D65.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, test]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      # ESLint needs no native build, so skip install scripts (faster, nothing downloaded for canvas or ffmpeg).
+      - run: npm ci --ignore-scripts
+        working-directory: backend
+      - run: npm ci --ignore-scripts
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: backend
+      - run: npm run lint
+        working-directory: frontend
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run typecheck
+        working-directory: frontend
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      # Libraries the native canvas module builds against if no prebuilt binary matches.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev pkg-config
+      - run: npm ci
+        working-directory: backend
+      # Each test file runs in its own process and exits on its own. Files run side by side by default; if a file ever
+      # proves flaky on a small runner, add --test-concurrency=1 here (slower, about 3x) and note it in D65.
+      # tests/http/ is the regression probe pack (P1 to P20): the whole app in process, no network, no database.
+      - run: node --test tests/*.test.js tests/http/*.test.js
+        working-directory: backend
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: node --test tests/*.test.mjs
+        working-directory: frontend
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      # The size budget for the tile art (the only budget the repo enforces; there is no bundle-size test yet).
+      - run: node scripts/art-budget.mjs
+        working-directory: frontend
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Reads the lockfile only. Fails on high or critical advisories in anything that ships (dev tools excluded).
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: backend
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The gitleaks binary is used directly (the marketplace action needs a paid licence for organisation repositories).
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz -o gitleaks.tgz
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks version
+      - name: Scan the commits of this change
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            RANGE="${{ github.event.before }}..${{ github.sha }}"
+          else
+            RANGE=""
+          fi
+          if [ -n "$RANGE" ]; then
+            ./gitleaks detect --config .gitleaks.toml --redact --no-banner --verbose --log-opts="$RANGE"
+          else
+            ./gitleaks detect --config .gitleaks.toml --redact --no-banner --verbose
+          fi
+
+  docker-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Static checks of Dockerfile.backend and Dockerfile.frontend (pinned base image, non-root user, entrypoint...).
+      - run: node scripts/verify-dockerfile.js
