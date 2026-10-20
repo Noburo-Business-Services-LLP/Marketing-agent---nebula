@@ -23,6 +23,8 @@ export const useContentCalendarIdeas = (type?: 'post' | 'reel') => {
   const [month, setMonth] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Why there is no plan: 'not_prepared' (prepare it in Calendar), 'preparing' (being made) or 'failed'.
+  const [status, setStatus] = useState<string>('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,6 +32,7 @@ export const useContentCalendarIdeas = (type?: 'post' | 'reel') => {
     try {
       const response = await contentCalendarAPI.get();
       const calendar = response?.calendar;
+      setStatus(String(response?.status || (calendar ? 'ready' : 'not_prepared')));
       if (!calendar) {
         setHasPlan(false);
         setIdeas([]);
@@ -76,5 +79,5 @@ export const useContentCalendarIdeas = (type?: 'post' | 'reel') => {
     return Array.from(seen).sort();
   }, [ideas]);
 
-  return { ideas, pillars, hasPlan, month, loading, error, reload: load };
+  return { ideas, pillars, hasPlan, month, loading, error, status, reload: load };
 };

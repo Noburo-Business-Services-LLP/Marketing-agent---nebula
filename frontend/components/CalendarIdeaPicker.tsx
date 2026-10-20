@@ -14,7 +14,7 @@ const CalendarIdeaPicker: React.FC<{
   onPick: (idea: CalendarIdea) => void;
   type?: 'post' | 'reel';
 }> = ({ open, onClose, onPick, type }) => {
-  const { ideas, pillars, hasPlan, month, loading } = useContentCalendarIdeas(type);
+  const { ideas, pillars, hasPlan, month, loading, status } = useContentCalendarIdeas(type);
   const [pillar, setPillar] = useState<string>('all');
   const [query, setQuery] = useState('');
 
@@ -101,9 +101,9 @@ const CalendarIdeaPicker: React.FC<{
               </div>
             ) : !hasPlan ? (
               <div className="text-center py-14">
-                <p className="text-[13.5px] text-[#F5F4F1]">No content calendar yet.</p>
+                <p className="text-[13.5px] text-[#F5F4F1]">{status === 'preparing' ? 'Your calendar for this month is being prepared.' : 'No content calendar yet.'}</p>
                 <p className="text-[12.5px] text-white/45 mt-1">
-                  Generate a monthly plan in Calendar and its ideas will appear here.
+                  {status === 'preparing' ? 'Its ideas appear here in about a minute.' : 'Prepare this month in Plan > Calendar (free) and its ideas will appear here.'}
                 </p>
               </div>
             ) : shown.length === 0 ? (

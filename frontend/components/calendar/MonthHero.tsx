@@ -24,7 +24,9 @@ export const MonthHero: React.FC<{
   extra?: React.ReactNode;
   /** the plan for this month is being made right now */
   generating?: boolean;
-}> = ({ calendar, month, businessName, primary, extra, generating }) => {
+  /** one short line under the text when there is no plan yet (the price note) */
+  note?: string;
+}> = ({ calendar, month, businessName, primary, extra, generating, note }) => {
   const m = calendar?.month || month || '';
   const name = calendar?.businessName || businessName || '';
   const counts = monthCounts(allItems(calendar as any));
@@ -50,7 +52,10 @@ export const MonthHero: React.FC<{
             {pending && <p className="nb-cal-note">Making the cover picture. It appears here by itself.</p>}
           </>
         ) : (
-          <p className="nb-cal-summary">No plan for {monthName(m) || 'this month'} yet. Nebulaa plans every day of the month from your brand, your plan and your products; you approve it before anything is made.</p>
+          <>
+            <p className="nb-cal-summary">No plan for {monthName(m) || 'this month'} yet. Nebulaa plans every day of the month from your brand, your plan and your products; you approve it before anything is made.</p>
+            {note && <p className="nb-cal-note" data-testid="calendar-hero-note">{note}</p>}
+          </>
         )}
         <div className="nb-cal-hero-foot">
           {calendar && !generating && (

@@ -150,3 +150,19 @@ test('stale covers are retried by the background job instead: bounded, paused ac
   assert.deepEqual(f.month, { $in: ['2026-10', '2026-11'] });
   assert.deepEqual(f.userId, { $nin: ['p1'] });
 });
+
+test('POST /prepare passes the optional language and focus (trimmed, bounded) with the plan guidance', async () => {
+  const seen = [];
+  setDeps({
+    ContentCalendar: readOnlyModel([]),
+    withPlanGuidance: async () => ({ planGuidance: 'PLAN' }),
+    generateMonthlyCalendar: async (user, month, opts) => { seen.push(opts); return { _id: 'x' }; }
+  });
+  const prepare = handlerFor('post', '/prepare');
+  await prepare({ user: { _id: 'u-lang' }, body: { language: ' tamil ', focus: ` ${'f'.repeat(400)} ` } }, mkRes());
+  await tick(); await tick();
+  assert.deepEqual(seen[0], { planGuidance: 'PLAN', language: 'tamil', focus: 'f'.repeat(300) });
+  await prepare({ user: { _id: 'u-none' }, body: { language: 5, focus: '   ' } }, mkRes());
+  await tick(); await tick();
+  assert.deepEqual(seen[1], { planGuidance: 'PLAN' });
+});

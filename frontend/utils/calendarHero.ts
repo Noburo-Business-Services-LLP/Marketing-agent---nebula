@@ -87,10 +87,16 @@ export function weekOfMonth(day: number): number {
   return 4;
 }
 
-export type HeroAction = { kind: 'plan' | 'open' | 'approve' | 'make-week'; label: string };
+export type HeroAction = { kind: 'prepare' | 'plan' | 'open' | 'approve' | 'make-week'; label: string };
+
+/** This month has no plan yet: the hero offers "Prepare this month" (POST /content-calendar/prepare) for it. */
+export function thisMonthMissing(history: CalLike[], todayMonth: string): boolean {
+  return !history.some((c) => c && c.month === todayMonth);
+}
 
 /** The one primary button of the hero. */
-export function heroAction(cal: CalLike | null, opts: { inList: boolean; week: number; nextMonth?: string }): HeroAction {
+export function heroAction(cal: CalLike | null, opts: { inList: boolean; week: number; nextMonth?: string; todayMonth?: string }): HeroAction {
+  if (!cal && opts.todayMonth && opts.nextMonth === opts.todayMonth) return { kind: 'prepare', label: 'Prepare this month' };
   if (!cal) return { kind: 'plan', label: `Plan ${monthName(opts.nextMonth) || 'next month'}` };
   if (opts.inList) return { kind: 'open', label: `Open ${monthName(cal.month) || 'this month'}` };
   if (!cal.approved) return { kind: 'approve', label: 'Approve this month' };

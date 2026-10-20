@@ -4273,9 +4273,20 @@ export const heroVideoAPI = {
 // ============================================
 // GRAVITY SMART CONTENT CALENDAR API
 // ============================================
+export type CalendarMonthStatus = 'ready' | 'not_prepared' | 'preparing' | 'failed';
+
 export const contentCalendarAPI = {
-  get: async (): Promise<{ success: boolean; calendar: ContentCalendar }> => {
+  /**
+   * This month's calendar. Only reads: when there is none yet, `calendar` is null and `status` says why
+   * ('not_prepared', 'preparing' or 'failed'); `prepare()` makes it.
+   */
+  get: async (): Promise<{ success: boolean; calendar: ContentCalendar | null; status?: CalendarMonthStatus; message?: string }> => {
     return apiCall('/content-calendar', { method: 'GET' }, true);
+  },
+
+  /** Starts making this month's plan in the background (free, no Quarks). 'ready' with the calendar if it exists. */
+  prepare: async (data: { language?: string; focus?: string } = {}): Promise<{ success: boolean; calendar?: ContentCalendar | null; status: CalendarMonthStatus; message?: string }> => {
+    return apiCall('/content-calendar/prepare', { method: 'POST', body: JSON.stringify(data) }, true);
   },
 
   getHistory: async (): Promise<{ success: boolean; calendars: ContentCalendar[] }> => {

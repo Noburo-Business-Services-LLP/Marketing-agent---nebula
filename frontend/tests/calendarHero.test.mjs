@@ -78,3 +78,27 @@ test('plan inputs come only from stored fields and say when something is not set
   assert.deepEqual(bare.products.values, [NOT_SET]);
   assert.deepEqual(planInputs(null), []);
 });
+
+// Load-test week 1: GET /content-calendar only reads; a month that is not prepared shows "Prepare this month" (POST /prepare).
+test('a month that is not prepared offers "Prepare this month"; otherwise the actions are unchanged', async () => {
+  const { heroAction: act, thisMonthMissing } = await import('../utils/calendarHero.ts');
+  assert.equal(thisMonthMissing([], '2026-10'), true);
+  assert.equal(thisMonthMissing([{ month: '2026-11' }], '2026-10'), true);
+  assert.equal(thisMonthMissing([{ month: '2026-10' }], '2026-10'), false);
+  assert.deepEqual(act(null, { inList: true, week: 1, nextMonth: '2026-10', todayMonth: '2026-10' }), { kind: 'prepare', label: 'Prepare this month' });
+  assert.equal(act(null, { inList: true, week: 1, nextMonth: '2026-12', todayMonth: '2026-10' }).kind, 'plan');
+  assert.equal(act(null, { inList: true, week: 1, nextMonth: '2026-12' }).kind, 'plan');
+});
+
+test('the Calendar tab prepares through POST /prepare and polls; no screen relies on GET to make a month', async () => {
+  const fs = await import('node:fs');
+  const api = fs.readFileSync(new URL('../services/api.ts', import.meta.url), 'utf8');
+  assert.match(api, /prepare: async[\s\S]{0,200}'\/content-calendar\/prepare', \{ method: 'POST'/);
+  const page = fs.readFileSync(new URL('../pages/ContentCalendar.tsx', import.meta.url), 'utf8');
+  assert.match(page, /contentCalendarAPI\.prepare\(/);
+  assert.match(page, /if \(prep !== 'preparing'\) return;[\s\S]{0,400}contentCalendarAPI\.get\(\)/);
+  assert.match(page, /onClick: handlePrepare, busy: preparing/);
+  assert.match(page, /Free: preparing the plan and its cover picture takes no Quarks\./);
+  const picker = fs.readFileSync(new URL('../components/CalendarIdeaPicker.tsx', import.meta.url), 'utf8');
+  assert.match(picker, /status === 'preparing'/);
+});

@@ -79,10 +79,16 @@ router.post('/prepare', protect, async (req, res) => {
     const d = depsFor();
     const generate = d.generateMonthlyCalendar || generateMonthlyCalendar;
     const guidance = d.withPlanGuidance || withPlanGuidance;
+    // The same optional choices as "Plan next month": a language and a focus (blank = the account's language and brand memory).
+    const language = typeof req.body?.language === 'string' && req.body.language.trim() ? req.body.language.trim().slice(0, 40) : undefined;
+    const focus = typeof req.body?.focus === 'string' && req.body.focus.trim() ? req.body.focus.trim().slice(0, 300) : undefined;
     Promise.resolve()
       .then(async () => {
         const user = await (d.User || User).findById(userId);
-        return generate(user, null, await guidance(userId));
+        const opts = { ...((await guidance(userId)) || {}) };
+        if (language) opts.language = language;
+        if (focus) opts.focus = focus;
+        return generate(user, null, opts);
       })
       .then(() => { preparation.delete(userId); })
       .catch((error) => {

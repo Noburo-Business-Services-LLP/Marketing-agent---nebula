@@ -12,7 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { CalendarCover } from '../components/calendar/CalendarCover';
 import { MonthHero, PlanInputsCard } from '../components/calendar/MonthHero';
-import { indiaMonthKey, nextPlanMonth, pickHeroCalendar, heroAction, monthCounts, weekOfMonth, allItems as allPlanItems } from '../utils/calendarHero';
+import { indiaMonthKey, nextPlanMonth, pickHeroCalendar, heroAction, monthCounts, weekOfMonth, thisMonthMissing, allItems as allPlanItems } from '../utils/calendarHero';
 import { fillRows } from '../utils/rowSpans';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -73,6 +73,9 @@ const ContentCalendar: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   // True while "Plan next month" is running (the request takes about a minute); the hero shows it.
   const [generating, setGenerating] = useState(false);
+  // This month's plan made in the background by POST /content-calendar/prepare: 'preparing' while it is being made
+  // (the page asks every few seconds), 'failed' when the last try did not work. GET /content-calendar only reads.
+  const [prep, setPrep] = useState<'idle' | 'preparing' | 'failed'>('idle');
   // Month cards and weekly drafts: columns follow the grid's real width, the last row is filled.
   const [cardCols, setCardCols] = useState(1);
   const cardsRef = React.useRef<HTMLUListElement | null>(null);
@@ -167,11 +170,16 @@ const ContentCalendar: React.FC = () => {
     setError('');
     try {
       const response = await contentCalendarAPI.getHistory();
-      setHistory(response.calendars || []);
+      const calendars = response.calendars || [];
+      setHistory(calendars);
       if (calendar) {
-        const updated = response.calendars.find((c: any) => c._id === calendar._id);
+        const updated = calendars.find((c: any) => c._id === calendar._id);
         if (updated) setCalendar(updated);
       }
+      // No plan for this month: is one being made already (another tab, the first sign-in)? Reading only.
+      if (thisMonthMissing(calendars, indiaMonthKey(Date.now())) && prep === 'idle') {
+        try { const now = await contentCalendarAPI.get(); if (now?.status === 'preparing') setPrep('preparing'); } catch { /* the button still works */ }
+      } else if (!thisMonthMissing(calendars, indiaMonthKey(Date.now()))) setPrep('idle');
     } catch (err: any) {
       setError(err?.message || 'Failed to load content calendar history');
     } finally {
@@ -198,6 +206,42 @@ const ContentCalendar: React.FC = () => {
   useEffect(() => {
     loadCalendar();
   }, []);
+
+  // "Prepare this month": the server makes the plan in the background (free, no Quarks) and answers at once.
+  const handlePrepare = async () => {
+    if (prep === 'preparing') return;
+    setError('');
+    setPrep('preparing');
+    try {
+      const r = await contentCalendarAPI.prepare({ language: planLanguage || undefined, focus: planFocus.trim() || undefined });
+      if (r?.status === 'ready') { setPrep('idle'); await loadCalendar(true); }
+      else if (r?.status === 'failed') { setPrep('failed'); setError(r.message || 'We could not prepare your calendar just now. Please try again.'); }
+    } catch (err: any) {
+      setPrep('failed');
+      setError(err?.message || 'We could not prepare your calendar just now. Please try again.');
+    }
+  };
+
+  // While it is being made: ask every 5 seconds (for up to 5 minutes), then show the plan.
+  useEffect(() => {
+    if (prep !== 'preparing') return;
+    let tries = 0;
+    let stopped = false;
+    const id = window.setInterval(async () => {
+      tries += 1;
+      try {
+        const r = await contentCalendarAPI.get();
+        if (stopped) return;
+        if (r?.status === 'ready' || r?.calendar) { window.clearInterval(id); setPrep('idle'); await loadCalendar(true); }
+        else if (r?.status === 'failed') { window.clearInterval(id); setPrep('failed'); setError(r.message || 'We could not prepare your calendar just now. Please try again.'); }
+        // "Not prepared" for two minutes: the work stopped (a restart). With several servers another one may answer
+        // "not prepared" while the month is still being made, so this waits well past the usual minute.
+        else if (r?.status === 'not_prepared' && tries > 24) { window.clearInterval(id); setPrep('failed'); setError('We could not prepare your calendar just now. Please try again.'); }
+      } catch { /* try again on the next tick */ }
+      if (tries >= 60) { window.clearInterval(id); setPrep('idle'); setError('Your calendar is taking longer than usual. It appears here when it is ready; please check again in a few minutes.'); }
+    }, 5000);
+    return () => { stopped = true; window.clearInterval(id); };
+  }, [prep]);
 
   const updateCalendar = async (action: () => Promise<{ calendar?: ContentCalendarType } | any>, busyKey: string) => {
     setSaving(busyKey);
@@ -343,7 +387,10 @@ const ContentCalendar: React.FC = () => {
 
   const todayMonth = indiaMonthKey(Date.now());
   const nextMonth = nextPlanMonth(history, todayMonth);
-  const heroCal = pickHeroCalendar(history, todayMonth);
+  // A month that is not prepared yet shows "Prepare this month" (never a GET that makes it).
+  const missingNow = thisMonthMissing(history, todayMonth);
+  const heroCal = missingNow ? null : pickHeroCalendar(history, todayMonth);
+  const preparing = prep === 'preparing';
   const weekNow = weekOfMonth(new Date().getDate());
   const sortedHistory = useMemo(
     () => history.slice().sort((x, y) => String(y.month || '').localeCompare(String(x.month || ''))),
@@ -365,12 +412,15 @@ const ContentCalendar: React.FC = () => {
       <div className="nb-cal space-y-5">
         <MonthHero
           calendar={generating ? null : heroCal}
-          month={generating || !heroCal ? nextMonth : undefined}
+          month={missingNow ? todayMonth : (generating || !heroCal ? nextMonth : undefined)}
           businessName={heroCal?.businessName || history[0]?.businessName}
-          generating={generating}
-          primary={heroCal && !generating
-            ? { label: heroAction(heroCal, { inList: true, week: weekNow }).label, onClick: () => openPlan(heroCal) }
-            : { label: heroAction(null, { inList: true, week: weekNow, nextMonth }).label, onClick: handleGenerateNextMonth }}
+          generating={generating || preparing}
+          note={missingNow && !preparing ? 'Free: preparing the plan and its cover picture takes no Quarks.' : undefined}
+          primary={missingNow
+            ? { label: heroAction(null, { inList: true, week: weekNow, nextMonth: todayMonth, todayMonth }).label, onClick: handlePrepare, busy: preparing }
+            : heroCal && !generating
+              ? { label: heroAction(heroCal, { inList: true, week: weekNow }).label, onClick: () => openPlan(heroCal) }
+              : { label: heroAction(null, { inList: true, week: weekNow, nextMonth }).label, onClick: handleGenerateNextMonth }}
         />
 
         {heroCal && !generating && <PlanInputsCard calendar={heroCal} />}
@@ -380,7 +430,7 @@ const ContentCalendar: React.FC = () => {
         {/* Plan the month after the newest plan. Language empty means "use my account setting"; the focus is
             optional (left blank, the plan uses brand memory and recent Idea Inbox items). */}
         <div className="nb-cal-next">
-          <p className="nb-cal-next-title">{history.length ? `Plan ${monthLabel(nextMonth)}` : 'Before you plan'}</p>
+          <p className="nb-cal-next-title">{missingNow ? 'Before you prepare this month' : history.length ? `Plan ${monthLabel(nextMonth)}` : 'Before you plan'}</p>
           <select
             value={planLanguage}
             onChange={(e) => setPlanLanguage(e.target.value)}
@@ -400,7 +450,7 @@ const ContentCalendar: React.FC = () => {
             aria-label="Focus for the next plan (optional)"
             className="nb-cal-field"
           />
-          {history.length > 0 && (
+          {history.length > 0 && !missingNow && (
             <button type="button" onClick={handleGenerateNextMonth} disabled={generating} className="nb-cal-primary">
               {generating ? <Loader2 className="nb-cal-spin w-4 h-4" aria-hidden="true" /> : <Sparkles className="w-4 h-4" aria-hidden="true" />}
               Plan {MONTH_NAMES[Number(nextMonth.slice(5, 7)) - 1] || 'next month'}

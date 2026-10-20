@@ -254,6 +254,11 @@
   // opens the post sheet; and the videos made on the Videos page (GET /videos) for the Videos list and the Library.
   drafts.push(Object.assign(draft(8, 'draft', 'post', IMG2), { origin: 'manual', title: 'Masala chai and bun', scheduledDate: null }));
   drafts[0].campaignId = 'audit-campaign-0'; drafts[2].campaignId = { _id: 'audit-campaign-1', campaignName: 'Sourdough subscription' }; drafts[3].campaignId = 'audit-campaign-2';
+  // ?draftpage=many: 40 older posts as well, so the Library shows its first 30 posts and "Load more posts".
+  try { if (params.get('draftpage')) sessionStorage.setItem('audit-draft-page', params.get('draftpage')); } catch (e) { /* ignore */ }
+  if ((function () { try { return sessionStorage.getItem('audit-draft-page'); } catch (e) { return ''; } })() === 'many') {
+    for (var dp = 0; dp < 40; dp++) drafts.push(Object.assign(draft(20 + dp, 'published', 'post', [IMG1, IMG2, IMG3][dp % 3]), { origin: 'manual', title: 'Older post ' + (dp + 1), createdAt: iso(-10 - dp), updatedAt: iso(-10 - dp) }));
+  }
   var studioVideos = [
     { id: 'sv-1', status: 'completed', title: 'Diwali sweets box', concept: 'Hands open a gold sweets box on a wooden table; warm morning light.', spokenLine: 'Fresh for the festival.', style: 'festive-campaign', language: 'english', voice: 'female', aspectRatio: '9:16', videoUrl: '/audit-missing/sweets.mp4', clips: 1, clipsDone: 1, platforms: ['instagram'], parts: [], transition: 'fade', subtitles: false, logo: true, endLine: '', notice: '', seconds: 10, parent: null, change: '', quarks: 161, error: '', createdAt: iso(-1), completedAt: iso(-1) },
     { id: 'sv-2', status: 'completed', title: 'Sourdough morning', concept: 'A baker scores a loaf and slides it into the oven, then the golden loaf comes out.', spokenLine: '', style: 'behind-the-scenes', language: 'none', voice: 'female', aspectRatio: '9:16', videoUrl: '/audit-missing/sourdough.mp4', clips: 2, clipsDone: 2, platforms: ['instagram', 'facebook'], parts: [{ beats: ['Scoring the loaf'], spokenLine: '' }, { beats: ['The loaf comes out'], spokenLine: '' }], transition: 'fade', subtitles: false, logo: false, endLine: '', notice: '', seconds: 20, parent: null, change: '', quarks: 322, error: '', createdAt: iso(-2), completedAt: iso(-2) },
@@ -382,7 +387,7 @@
   var planCalendar = Object.assign({}, calendar, {
     _id: 'audit-plan-calendar', month: '2026-10', businessName: 'Audit Bakery', approved: false, autoGenerate: false, weeks: planWeeks,
   });
-  // ?calstate= ready | none | pending | failed | generating | empty picks the Calendar Plan tab variant (kept for the tab):
+  // ?calstate= ready | none | preparing | pending | failed | generating | empty picks the Calendar Plan tab variant (kept for the tab):
   // ready = four months (August to November 2026), October partly approved and published, a real cover picture;
   // none = no calendar yet; pending = October's cover is being made; failed = October's cover failed (built-in cover);
   // generating = ready, and "Plan next month" answers after 8 seconds with a December plan; empty = no theme, no pillars or products.
@@ -408,7 +413,18 @@
     calMonth('audit-plan-2026-08', '2026-08', { themeTitle: 'Monsoon comfort bakes', weeks: calWeeks(function (it) { it.status = it.status === 'rejected' ? 'rejected' : 'published'; return it; }) }),
     calMonth('audit-plan-2026-11', '2026-11', { themeTitle: 'Gifting season and Children\'s Day', approved: false, coverStatus: 'pending', weeks: calWeeks(function (it) { it.status = 'draft'; return it; }) }),
   ];
+  if (CALSTATE === 'none' || CALSTATE === 'preparing') calHistory = calHistory.filter(function (c) { return c.month !== '2026-10' && c.month !== '2026-11'; });
   if (CALSTATE === 'none') calHistory = [];
+  // ?calstate=none or preparing: October is not prepared. GET /content-calendar only reads (routes/contentCalendar.js):
+  // { calendar: null, status: 'not_prepared' | 'preparing' }. POST /prepare answers 202 'preparing'; about 8 seconds
+  // later GET answers 'ready' and the history has October. 'preparing' starts as if it was already asked for.
+  var calPreparedAt = CALSTATE === 'preparing' ? Date.now() + 8000 : 0;
+  var calMonthStatus = function () {
+    var has = calHistory.some(function (c) { return c.month === '2026-10'; });
+    if (has) return 'ready';
+    if (calPreparedAt && Date.now() >= calPreparedAt) { calHistory = [planCalendar].concat(calHistory); return 'ready'; }
+    return calPreparedAt ? 'preparing' : 'not_prepared';
+  };
   if (CALSTATE === 'pending') Object.assign(planCalendar, { coverImageUrl: '', coverStatus: 'pending' });
   if (CALSTATE === 'failed') Object.assign(planCalendar, { coverImageUrl: '', coverStatus: 'failed' });
   if (CALSTATE === 'empty') {
@@ -897,7 +913,11 @@
     ['GET', /^\/drafts\/?$/, function (c) {
       var st = c.url.searchParams.get('status');
       var list = st === 'binned' ? drafts.filter(function (d) { return d.status === 'binned'; }) : drafts.filter(function (d) { return d.status !== 'binned'; });
-      return ok({ drafts: list, total: list.length });
+      // Pages like routes/drafts.js (30 by default, at most 50, ?cursor=); ?draftpage=many adds older posts to page through.
+      var size = Math.min(Number(c.url.searchParams.get('limit')) || 30, 50);
+      var from = Number(c.url.searchParams.get('cursor') || 0) || 0;
+      var page = list.slice(from, from + size);
+      return ok({ drafts: page, total: list.length, nextCursor: from + size < list.length ? String(from + size) : null, hasMore: from + size < list.length });
     }],
     ['POST', /^\/drafts\/[^/]+\/approve$/, draftAction('approve')],
     ['POST', /^\/drafts\/[^/]+\/unapprove$/, draftAction('unapprove')],
@@ -916,7 +936,7 @@
     ['GET', /^\/campaigns\/reel\/options/, ok({ tones: [], styles: [], voices: [], music: [] })],
     ['GET', /^\/campaigns\/icp-strategy/, ok({ strategy: null })],
     ['GET', /^\/campaigns\/[^/]+$/, ok({ campaign: campaigns[0] })],
-    ['GET', /^\/content-calendar\/history/, function () { return ok({ calendars: calHistory }); }],
+    ['GET', /^\/content-calendar\/history/, function () { calMonthStatus(); return ok({ calendars: calHistory }); }],
     ['POST', /^\/content-calendar\/generate-next/, function () {
       var dec = calMonth('audit-plan-next', calHistory.length ? '2026-12' : '2026-10', { themeTitle: 'Christmas cakes and year-end thanks', approved: false, coverStatus: 'pending', weeks: calWeeks(function (it) { it.status = 'draft'; return it; }) });
       calHistory = calHistory.concat([dec]);
@@ -932,7 +952,16 @@
     ['GET', /^\/hero-video\/styles/, ok({ styles: [["cinematic-commercial","Cinematic Commercial","cinematic","Filmic grade, shallow depth, dramatic light"],["storytelling","Storytelling","cinematic","Narrative arc with characters and emotional beats"],["product-advertisement","Product Advertisement","product","Clean studio focus on the product itself"],["daily-life-vlog","Daily Life Vlog","ugc","Handheld, casual, first-person energy"],["documentary","Documentary","cinematic","Observational, grounded, real-world texture"],["educational","Educational","explainer","Clear explainer pacing with visual aids"],["motivational","Motivational","explainer","Rising energy, aspirational imagery"],["corporate-presentation","Corporate Presentation","explainer","Polished, professional, data-forward"],["testimonial","Creator recommendation","ugc","A creator to camera, honest and trust-building"],["product-showcase","Product Showcase","product","Hero product on a lit stage"],["news-update","News Update","explainer","Broadcast framing with lower-third titling"],["social-media-reel","Social Media Reel","ugc","Fast cuts, vertical-first, punchy hooks"],["luxury-advertisement","Luxury Advertisement","cinematic","Restrained, premium, gold and black"],["unboxing","UGC Unboxing","ugc","Someone opens it for the first time, on a phone"],["fashion-lookbook","Fashion Lookbook","cinematic","Fabric, fit and movement, styled like a campaign"],["festive-campaign","Festive Campaign","cinematic","Warm celebration, family and gifting"],["behind-the-scenes","Behind the Scenes","ugc","The making: hands, tools and craft"],["founder-story","Founder Story","ugc","Why the business exists, in plain words"],["before-and-after","Before and After","product","A clear change, shown not told"],["get-ready-with-me","Get Ready With Me","ugc","A relaxed routine, step by step"],["myth-busting","Myth Busting Q&A","explainer","One common question, answered plainly"],["comedy-skit","Comedy Skit","ugc","A relatable moment with a funny turn"]].map(function (x) { return { slug: x[0], label: x[1], group: x[2], blurb: x[3], coverUrl: '/assets/video-styles/' + x[0] + '.jpg' }; }) })],
     ['GET', /^\/content-calendar\/today/, ok({ items: calendarItems.slice(0, 1), drafts: [] })],
     ['GET', /^\/content-calendar\/settings/, ok({ settings: { autoGenerate: false, limit: 1 } })],
-    ['GET', /^\/content-calendar\/?$/, ok({ calendar: planCalendar, calendars: [planCalendar] })],
+    ['GET', /^\/content-calendar\/?$/, function () {
+      var st = calMonthStatus();
+      if (st === 'ready') return ok({ calendar: planCalendar, calendars: [planCalendar], status: 'ready' });
+      return ok({ calendar: null, status: st, message: st === 'preparing' ? 'Your calendar for this month is being prepared. This takes about a minute.' : 'Your calendar for this month is not prepared yet.' });
+    }],
+    ['POST', /^\/content-calendar\/prepare$/, function () {
+      if (calMonthStatus() === 'ready') return ok({ calendar: planCalendar, status: 'ready' });
+      if (!calPreparedAt) calPreparedAt = Date.now() + 8000;
+      return { __status: 202, body: ok({ calendar: null, status: 'preparing', message: 'Your calendar for this month is being prepared. This takes about a minute.' }) };
+    }],
     ['GET', /^\/content-calendar\/[^/]+\/drafts/, ok({ drafts: drafts.slice(0, 2) })],
     ['GET', /^\/content-calendar\/[^/]+$/, ok({ calendar: planCalendar })],
     ['GET', /^\/ideas/, ok({ ideas: ideas })],
