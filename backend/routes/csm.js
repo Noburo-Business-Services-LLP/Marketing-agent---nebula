@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+// A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
+require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
 const User = require('../models/User');
 const CsmSession = require('../models/CsmSession');
 const { protect } = require('../middleware/auth');

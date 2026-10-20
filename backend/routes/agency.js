@@ -10,6 +10,8 @@ const del = require('../services/accountDeletion');
 const usage = require('../services/agencyUsage');
 
 const router = express.Router();
+// A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
+require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
 const idOf = (req) => String(req.user?._id || req.user?.id || '');
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false,

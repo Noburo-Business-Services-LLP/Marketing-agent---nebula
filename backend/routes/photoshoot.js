@@ -25,6 +25,8 @@ const GENERIC = 'We could not do that just now. Please try again.';
 
 function createPhotoshootRouter(impl = {}) {
   const router = express.Router();
+  // A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
+  require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
   let service = impl.service || null;
   const svc = () => (service = service || (impl.deps ? require('../services/photoshoot/service').createPhotoshoot(impl.deps) : require('../services/photoshoot').shared()));
   const passOf = (req) => Boolean(req.actingCsm || req.actingAgency);

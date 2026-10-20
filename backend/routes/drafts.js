@@ -3,6 +3,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const path = require('path');
 const router = express.Router();
+// A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
+require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
 const { protect } = require('../middleware/auth');
 // Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
 const L = require('../middleware/limits');

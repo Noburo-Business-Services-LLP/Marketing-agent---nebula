@@ -6,6 +6,8 @@
 
 const express = require('express');
 const router = express.Router();
+// A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
+require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
 // The two hot reads use the short auth cache (only the id is read); every write keeps protect. See auth-cache.md.
 const { protect, protectCached } = require('../middleware/auth');
 const Notification = require('../models/Notification');

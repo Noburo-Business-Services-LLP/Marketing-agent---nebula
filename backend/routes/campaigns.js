@@ -5,6 +5,8 @@
 
 const express = require('express');
 const router = express.Router();
+// A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
+require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
 const { protect } = require('../middleware/auth');
 const { listTimeout } = require('../utils/listQueryTimeout');
 const { requireFeature, requireFeatureWhen, wantsScheduling } = require('../middleware/requireFeature');
@@ -897,12 +899,12 @@ ${JSON.stringify(posts)}`;
   }
 }
 
+const NO_POSTS_MESSAGE = 'No posts could be created. Please try again.';
+
 /**
  * GET /api/campaigns
  * Get all campaigns for the user with optional filters
  */
-const NO_POSTS_MESSAGE = 'No posts could be created. Please try again.';
-
 router.get('/', protect, async (req, res) => {
   try {
     const { status, platform, startDate, endDate } = req.query;

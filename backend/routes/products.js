@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+// A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
+require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
 
 // After any change that worked, What Nebulaa learned looks again (debounced, code only; never throws or delays the answer).
 router.use((req, res, next) => {

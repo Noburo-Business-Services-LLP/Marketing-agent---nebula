@@ -5,6 +5,8 @@
 
 const express = require('express');
 const router = express.Router();
+// A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
+require('../middleware/validateObjectId').applyObjectIdParams(router, ['id']);
 // GET /performance (the Performance page view) is mounted first so the GET /:id route below never takes it.
 router.use(require('./performanceView'));
 const { protect } = require('../middleware/auth');
