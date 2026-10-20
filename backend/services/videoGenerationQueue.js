@@ -875,6 +875,22 @@ class PersistentVideoGenerationQueue {
     return out;
   }
 
+  /** Accounts with JOB_PER_USER_RUNNING or more jobs running now (all workers): one aggregate over the running rows (at most the global ceiling). */
+  async _cappedUsers() {
+    const cap = this.settings.perUserRunning;
+    if (!(cap > 0) || typeof this.model.aggregate !== 'function') return [];
+    try {
+      const rows = (await this.model.aggregate([
+        { $match: { status: 'processing', userId: { $ne: null } } },
+        { $group: { _id: '$userId', n: { $sum: 1 } } }
+      ])) || [];
+      return rows.filter((r) => r._id != null && Number(r.n) >= cap).map((r) => r._id);
+    } catch (err) {
+      logger.error('⚠️ Per-account running count failed (candidates are not narrowed):', err.message);
+      return [];
+    }
+  }
+
   /**
    * Fair claim for one pool: among the oldest waiting jobs, the account with the fewest running jobs goes first (oldest
    * first on a tie), and an account at JOB_PER_USER_RUNNING is skipped: a simple round-robin by account, so one account
@@ -883,7 +899,11 @@ class PersistentVideoGenerationQueue {
    */
   async _claimFair(pool, free) {
     const poolFilter = pool === 'video' ? { pool: { $in: ['video', null] } } : { pool };
-    const candidates = (await this.model.find({ status: 'queued', ...poolFilter })
+    // Accounts already at the cap are left out of the QUERY (D74 item 7): otherwise 50 older waiting rows of capped
+    // accounts fill the whole candidate window and every other account waits behind them.
+    const capped = await this._cappedUsers();
+    const notCapped = capped.length ? { userId: { $nin: capped } } : {};
+    const candidates = (await this.model.find({ status: 'queued', ...poolFilter, ...notCapped })
       .sort({ createdAt: 1 }).limit(CANDIDATES).select({ jobId: 1, userId: 1, createdAt: 1 }).lean()) || [];
     if (!candidates.length) return 0;
     const seen = new Map();

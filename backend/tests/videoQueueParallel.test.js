@@ -524,3 +524,18 @@ test('D74 item 5: a worker re-claiming its own lost job keeps run 2 in its runni
   });
   w.stop();
 });
+
+test('D74 item 7: 60 waiting jobs of a capped account do not hide another account from the 50-row window', async () => {
+  const w = world({ settings: { slots: { video: 2 }, perUserRunning: 2 } });
+  const started = [];
+  w.qs[0].registerHandler('create_video_pipeline', async (payload) => { started.push(payload.who); await new Promise(() => {}); });
+  for (let i = 0; i < 2; i += 1) w.model.docs.push({ jobId: `run${i}`, userId: 'A', status: 'processing', workerId: 'elsewhere', attempts: 1, leaseUntil: new Date(w.clock.t + 60000), metadata: { jobType: 'create_video_pipeline' }, createdAt: new Date(w.clock.t - 1e6), logs: [] });
+  await quiet(async () => {
+    for (let i = 0; i < 60; i += 1) await w.qs[0].enqueue({ userId: 'A', jobType: 'create_video_pipeline', payload: { who: 'A' }, metadata: { quarkCharge: [{ action: 'video_base', count: 1, ref: `a${i}`, payerId: '' }] } });
+    await w.qs[0].enqueue({ userId: 'B', jobType: 'create_video_pipeline', payload: { who: 'B' }, metadata: { quarkCharge: [{ action: 'video_base', count: 1, ref: 'b0', payerId: '' }] } });
+    await w.qs[0]._drainQueue();
+    await settle();
+  });
+  assert.deepStrictEqual(started, ['B'], 'B starts although 60 older rows of capped A come first; A starts nothing (already at its cap)');
+  w.stop();
+});
