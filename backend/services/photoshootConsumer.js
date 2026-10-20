@@ -19,8 +19,8 @@
  *     JOB_MAX_ATTEMPTS) or, at the cap, closed with the per-photo refund, proof first, once;
  *   - SIGTERM: claim nothing more, every run stops before its next batch, wait JOB_SHUTDOWN_GRACE_MS, hand back what is
  *     still held (resumable; at most 3 per job, then closed with the per-photo refund);
- *   - the daily AI ceiling holds claims (the row waits; the 30-minute close refunds it); a staff switch does not (the run
- *     closes the job at once with the refund).
+ *   - the daily AI ceiling blocks NEW starts (the route), never a job that is already charged (D99: a paying customer is not
+ *     made to wait 30 minutes for a refund); a staff switch closes the claimed run at once with the full refund.
  * In-process rows (no `via`) are never claimed or swept here.
  */
 const crypto = require('crypto');
@@ -104,21 +104,11 @@ class PhotoshootConsumer {
     return this._draining;
   }
 
-  /** The daily AI ceiling says stop: claim nothing (the row waits; the 30-minute close refunds it). A staff switch does not hold. */
-  async _spendOk() {
-    for (const action of ['photoshoot_image', 'image_generated']) {
-      try {
-        const g = await this.spend.check(action);
-        if (g && g.ok === false && g.reason !== 'switched_off') { this.stats.spendHolds += 1; return false; }
-      } catch (_) { /* the guard never blocks on its own failure */ }
-    }
-    return true;
-  }
-
   async _drainOnce() {
     if (this.stopping) return 0;
     const s = this.settings;
-    if (!(await this._spendOk())) return 0;
+    // The daily AI ceiling does NOT hold a claim (review S5, D99): every waiting row is already charged, so its units are in
+    // the daily counter; the ceiling stops NEW starts at the route (create/redo). A staff switch closes the run at once.
     let ceilingLeft = Infinity;
     if (s.globalCeiling > 0) {
       ceilingLeft = s.globalCeiling - (await this.repo.countRunningAll());

@@ -597,27 +597,42 @@ test('the in-process paths leave consumer rows alone: the stale sweep, the resum
   w.hung.forEach((h) => h.release()); await quiet(() => settle(40));
 });
 
-test('daily spend ceiling: consumers claim nothing (the row waits); a staff switch is claimed and closed at once with the full refund', async () => {
+test('S5: daily spend ceiling reached: a job that is already charged still completes, a new start is refused, its spend is recorded; a staff switch still closes at once with the full refund', async () => {
   let mode = 'daily_cap';
   const w = world({ guard: () => ({ ok: false, reason: mode }) });
-  // created while the guard allowed it
+  // created while the guard allowed it (the charge counts its units in the daily counter)
   const allow = w.deps.guard; w.deps.guard = async () => ({ ok: true });
   const web = w.server('web-ok');
   await web.create(userOf(U1), body());
   w.deps.guard = allow;
   const id = w.repo.rows[0]._id;
+  assert.deepStrictEqual(w.spends(id).map((m) => m.units), [4], 'the job\'s units were recorded at the charge');
+  // the ceiling is reached: a NEW start is refused (no charge) ...
+  const refused = await w.server('web-late').create(userOf(U2), body(U2));
+  assert.strictEqual(refused.status, 503);
+  assert.strictEqual(refused.body.serviceBusy, true);
+  assert.strictEqual(w.spends().length, 1, 'no charge for the refused start');
+  // ... but the charged job is made, not held for 30 minutes and refunded
   const a = w.consumer('a');
-  await quiet(async () => { await a._drain(); await settle(20); });
-  assert.strictEqual(a.stats.spendHolds, 1);
-  assert.strictEqual(w.row(id).status, 'queued');
+  await quiet(async () => { await a._drain(); await settle(80); });
+  assert.strictEqual(a.stats.spendHolds, 0);
+  assert.strictEqual(w.row(id).status, 'done');
+  assert.strictEqual(w.calls.gen, 4);
+  assert.strictEqual(w.refunds().length, 0);
+  // the staff switch is different: the claimed run closes the job at once with the full refund
   mode = 'switched_off';
+  w.deps.guard = async () => ({ ok: true });
+  await w.server('web-ok2').create(userOf(U2), body(U2));
+  w.deps.guard = allow;
+  const id2 = w.repo.rows.find((r) => String(r.user) === U2)._id;
   const b = w.consumer('b');
+  const genBefore = w.calls.gen;
   await quiet(async () => { await b._drain(); await settle(60); });
-  const r = w.row(id);
+  const r = w.row(id2);
   assert.strictEqual(r.status, 'failed');
   assert.strictEqual(r.outcome, 'switched_off');
-  assert.deepStrictEqual(w.refunds(id).map((m) => m.q), [4 * PER]);
-  assert.strictEqual(w.calls.gen, 0);
+  assert.deepStrictEqual(w.refunds(id2).map((m) => m.q), [4 * PER]);
+  assert.strictEqual(w.calls.gen, genBefore);
 });
 
 test('the all-accounts running cap counts consumer rows that wait for a worker', async () => {
