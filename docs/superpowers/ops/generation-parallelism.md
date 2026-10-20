@@ -5,7 +5,7 @@ Impact map: `docs/superpowers/impact-maps/generation-parallelism.md`. Decisions 
 ## What changed (in plain words)
 Before: the step-by-step video queue ran at most 2 jobs at once for ALL customers together, whatever the number of servers, because it counted running jobs across the whole database. Now every worker server runs its own slots (by default 2 picture jobs and 2 video jobs at once), so two worker servers run twice as many. A job is "claimed" by one server with a time-limited lease that the server renews while it works; if the server dies, another one takes the job over after the lease runs out (or refunds it). One account cannot take every slot.
 
-Stage A covers the persistent video queue (`VideoJob`: create video, clips, merge, missing scene pictures and clips, calendar reels) and gives the campaign image runner the same slot setting, metrics and shutdown. Videos (Omni), Photoshoot, Hero, Blueprint, plan runs and Drafts redo still run in the server that accepted the request (stage B, below).
+Stage A covers the persistent video queue (`VideoJob`: create video, clips, merge, missing scene pictures and clips, calendar reels) and gives the campaign image runner the same slot setting, metrics and shutdown. Videos (Omni, stage B1) and Photoshoot (stage B2) can move onto consumers behind their own switches (both off by default); Hero, Blueprint, plan runs and Drafts redo still run in the server that accepted the request (stage B, below).
 
 ## How it works
 | Piece | Where | What it does |
@@ -110,9 +110,50 @@ Known limits of stage B1 (not removed):
 - Whisper (subtitle timing) runs once per attempt: a run lost during finishing may have paid one transcription the re-run pays again (recorded in the spend guard).
 - Old-code servers (before this release) would delete a `queued` row on `DELETE /api/videos/:id` without a refund: turn the switch on only after this code is live everywhere (the runbook does this).
 
+## Stage B step 2: Photoshoot on consumers (built 2026-10-20 night, NOT released, switch default OFF)
+Impact map: `impact-maps/generation-parallelism.md` "Stage B step 2". Decisions D90 to D98. Independent money review: NOT done yet (the controller dispatches it next).
+
+In plain words: with `ENABLE_PHOTOSHOOT_CONSUMER=on`, a Photoshoot (and "Make this one again") takes the Quarks, then leaves the job waiting in the database. Any worker claims it (same claim, lease and heartbeat as stage A), makes the photos two at a time in its own slots, and stores each photo the moment it is made. If the worker stops, another one carries on with the photos not finished yet: photos already made are never made again and nothing is charged twice. Every refund reads the proof of the charge first and is claimed in the same write that closes the job (paid at most once, never above the charge, to the wallet that paid).
+
+| Piece | Where | What it does |
+|---|---|---|
+| Queue | `services/photoshoot/service.js` `startJob`, `queueForWorker`; `repo.queueCharged` | Row written before the charge (as today) with `via: 'consumer'`; after the charge the SAME row records the charge (`chargedAt`, `quarks`, `payerId`, `quarkCharge` with the ref) and becomes claimable (status stays `queued`, shown to the page as running). Lost reply: read back, accepted = 202, nothing refunded. Not accepted: refund claimed first, then paid. |
+| Consumer | `services/photoshootConsumer.js` | Started with the other consumers (`RUN_JOB_CONSUMERS`) only when the switch is on. Claims waiting rows (fair order, per-account cap re-counted after the claim), `PROVIDER_SLOTS_PHOTOSHOOT` jobs at once, heartbeat, lease sweep, SIGTERM hand-back, spend-ceiling hold, metrics. |
+| Run | `service.runClaimed`, `makePhotoClaimed` | Every write carries the claim (`leaseOwner` = worker id, `runs`); a photo left `calling` by a dead run gets its one extra call (recorded in the spend guard) or fails; finished photos are never called again; the gate (`services/runGate.js`) stops a lost or stopped run before its next paid call; a photo result it can no longer record is deleted from the image host. |
+| Close | `service.consumerClose` | Proof first, refund = failed photos x 10 (everything when none was made), never above the proof, claimed in the closing write, paid with the ref, settled. A crash after the claim: `sweepUnsettled` pays it once through `settleRefund`. |
+| Lost worker | `service.sweepConsumerLeases` (consumer and resume loop) | Lease ran out one heartbeat ago: run 1 -> waiting again (resumes); run 2 -> closed with the per-photo refund. Open 60 minutes after the charge (stuck): closed with the per-photo refund. |
+| Unclaimed | `service.sweepConsumerQueued`, `closeWaiting`, `GET /jobs/:id` | Waiting more than 30 minutes (`PHOTOSHOOT_QUEUED_MAX_MS`) -> closed and refunded once. |
+| Metrics | `GET /api/metrics/queue` -> `photoshoot` | queueDepth, running, oldestQueuedAgeSeconds, runningByWorker, inProcessRunning, thisWorker (slots, slotsInUse, claims, finished, lostRuns, leaseRequeues, leaseFailures, ceilingCloses, released, shutdownFailed, capHandBacks, spendHolds, orphansDeleted). CloudWatch (when on): `Queue=photoshoot`. |
+| Agency | `services/agencyWorkspaces.js` `runningWork` | A client is not removed while a photoshoot is in flight or its refund is not settled (also closes the same gap of the in-process path). |
+| Rollback leftovers | `scripts/photoshoot-drain-queued.js` | Dry run by default (counts waiting and running consumer photoshoots); `CONFIRM_DRAIN=yes` closes and refunds the waiting ones. |
+
+Switches: `ENABLE_PHOTOSHOOT_CONSUMER` (off), `PROVIDER_SLOTS_PHOTOSHOOT` (2, 1 to 32; `PROVIDER_SLOTS` when not set; a guess, D91), `PHOTOSHOOT_DRAIN_INTERVAL_MS` (5000), `PHOTOSHOOT_QUEUED_MAX_MS` (1800000); lease, heartbeat, attempts, per-account cap and shutdown grace are the stage A variables. How to turn it on and off: `ecs-web-worker.md` "Photoshoot on the worker" (the drain wait before any rollback is MANDATORY).
+
+Real-database check (nebulaa_dev only, a throwaway collection, fake generator/wallet/proof/image delete, at most 16 jobs, cleanup):
+
+```
+cd backend && node scripts/photoshoot-consumer-check.js
+```
+
+If a run was interrupted:
+
+```
+cd backend && node scripts/photoshoot-consumer-check.js cleanup
+```
+
+Last runs (2026-10-20 night, from the Mac): 9 PASS, 0 FAIL, twice. 1 worker made 3 photoshoots in 13.6 to 15.3 s, 3 workers in 5.0 to 5.1 s (2.66x to 3.00x; fake image call 1.5 s); a killed worker's job was resumed 8.7 to 10.2 s after the kill (lease 6 s in the check) without re-making the photo it had stored; all-fail refunded the price once, one failing photo refunded that photo once; a job lost twice was closed once by two sweeps at the same moment; the per-account cap held across 3 workers (one hand-back seen); a waiting job nobody claimed was refunded once by two sweeps; every refund to the paying wallet, never above its charge; 0 rows left. Unit tests: `tests/photoshootConsumer.test.js` (33), `tests/photoshootDrain.test.js` (5); the existing photoshoot test files pass unchanged.
+
+Known limits of stage B2 (not removed):
+- A worker alive but past its lease (database stall longer than the lease) may finish a photo the next run calls again (our provider cost; its result is deleted, never recorded).
+- A photo in flight when its worker dies is called again on the next run (its second and last call; recorded in the spend guard).
+- If the queue write lands AND its read-back also fails, the customer sees "If any Quarks were taken, they come back by themselves" while the photoshoot is made (double failure; nothing refunded twice, nothing charged twice).
+- A photo file whose upload landed but whose run died before recording it stays at the image host (an orphan; only storage).
+- The daily ceiling holds waiting jobs and refunds them after 30 minutes if it does not lift (D95).
+- An image older than this release: see the runbook (refunds waiting rows after 3 minutes or, if older than the Photoshoot code, leaves them): the drain wait before a rollback is mandatory.
+
 ## Stage B (one money flow per session, each with an independent read-only money review before and after)
 1. Videos (Omni) create and finishing onto consumers (keep `chargeProof` and the studio sweep). BUILT (above), switch off.
-2. Photoshoot: stop scheduling `runJob` in the request on web tasks; the consumer resume loop claims it (already lease based).
+2. Photoshoot: the request no longer runs `runJob` when `ENABLE_PHOTOSHOOT_CONSUMER` is on; consumers claim the charged job. BUILT (above), switch off; money review pending.
 3. Hero: finishing moves out of the status poll into a consumer job.
 4. Blueprint and plan runs: persisted claims instead of in-memory lanes.
 5. Drafts redo and weekly items: first convert the inline `deductCredits`/`refundCredits` to `refundSettle` + `chargeProof`, then persist and claim.

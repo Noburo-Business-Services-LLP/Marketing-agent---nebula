@@ -223,6 +223,23 @@ How to turn it off (rollback). **The wait in step 2 is MANDATORY before any roll
 
 Never turn it on in the web service while NO task runs the consumer (worker at 0 tasks): videos would wait 30 minutes and then be refunded.
 
+### Photoshoot on the worker (E9 stage B2, switch `ENABLE_PHOTOSHOOT_CONSUMER`)
+Today (switch off) a Photoshoot runs in the web task that took the request; if that task stops, another task's resume loop takes the job over after its 10-minute lease. With the switch on, the charged photoshoot waits in the database and a worker makes it; if that worker stops, another one carries on with the photos that are not finished yet (photos already made are kept and never made again; nothing is charged twice). Details: `generation-parallelism.md` (stage B2) and the impact map "Stage B step 2".
+
+How to turn it on (after the release that contains this code is live and checked, with the switch still off; `ENABLE_PHOTOSHOOT` must already be on for Photoshoot itself):
+1. Worker service: new task-definition revision with `ENABLE_PHOTOSHOOT_CONSUMER=on` (it already has `RUN_JOB_CONSUMERS=1`; leave `PROVIDER_SLOTS_PHOTOSHOOT` at 2 unless the image provider's concurrency limit is known: worker tasks x this x 2 photos must stay under it). Deploy it and wait until it is running. Its log shows `[photoshoot consumer] started (worker ...; 2 job slot(s), 2 photos each, ...)`.
+2. Web service: new revision with `ENABLE_PHOTOSHOOT_CONSUMER=on`. Deploy. From now on new photoshoots are made on the worker.
+3. Check: make one small photoshoot in the app (owner's OK for the image cost), then `GET /api/metrics/queue` as staff: `photoshoot.queueDepth` goes back to 0, `photoshoot.runningByWorker` names the worker while it runs.
+
+On a single task (no split, `RUN_BACKGROUND` not set) the switch also works: that task queues and claims its own photoshoots.
+
+How to turn it off (rollback). **The wait in step 2 is MANDATORY before any rollback of the image** (also a rollback to an older release): an image from before this release does not claim waiting photoshoots; depending on how old it is it refunds them after a few minutes or leaves them charged, never made and blocking the account from starting another one.
+1. Web service first: revision without the variable (new photoshoots run in the web task again).
+2. MANDATORY: wait until `photoshoot.queueDepth` and `photoshoot.running` in `GET /api/metrics/queue` are both 0 (the worker finishes what was waiting). Only then the worker revision without the variable, and only then any older image.
+3. Leftovers (the switch went off, or an older image was already released, with photoshoots still waiting): a current image's resume loop closes and refunds them 30 minutes after they started waiting (`PHOTOSHOOT_QUEUED_MAX_MS`), and re-queues or closes running ones whose worker is gone. To list them, and close and refund the waiting ones at once, from a machine with the current code: `cd backend && MONGODB_URI='<uri that names its database>' node scripts/photoshoot-drain-queued.js` is a dry run (counts of waiting and running only); add `CONFIRM_DRAIN=yes` to act. It refuses when the URI has no database name and prints counts only. Never run it against a real database without the owner.
+
+Never turn it on in the web service while NO task runs the consumer (worker at 0 tasks): photoshoots would wait 30 minutes and then be refunded.
+
 ### Rolling back
 - Worker trouble: `aws ecs update-service ... --service prod-nebulaa-gravity-worker-svc --desired-count 0`, then switch the web service back to the revision WITHOUT `RUN_BACKGROUND` (the deploy script printed it, or pick the previous revision) with desired count 1: one task does everything again, as today. Do the worker first, so two task sets never both run the schedulers.
 - Limits trouble: set `RATE_LIMIT_STORE=memory` (new revision): per-task counters, as today.

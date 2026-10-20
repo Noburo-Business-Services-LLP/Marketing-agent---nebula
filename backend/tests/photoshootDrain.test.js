@@ -78,3 +78,18 @@ test('the drain refuses a connection string without a database name (shared help
   const { explicitDbName } = require('../scripts/studio-video-drain-queued');
   assert.strictEqual(explicitDbName('mongodb+srv://u:p@cluster0.example.mongodb.net/?retryWrites=true'), '');
 });
+
+test('rollback hazard: the runbook makes the drain wait mandatory for Photoshoot and names the drain script and the queue numbers', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const doc = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'superpowers', 'ops', 'ecs-web-worker.md'), 'utf8');
+  const start = doc.indexOf('### Photoshoot on the worker');
+  assert.ok(start > 0, 'the runbook has a Photoshoot on the worker section');
+  const section = doc.slice(start, doc.indexOf('\n### ', start + 10));
+  assert.match(section, /MANDATORY/);
+  assert.match(section, /photoshoot\.queueDepth/);
+  assert.match(section, /photoshoot\.running/);
+  assert.match(section, /scripts\/photoshoot-drain-queued\.js/);
+  assert.match(section, /CONFIRM_DRAIN=yes/);
+  assert.match(section, /Worker service[^\n]*first|1\. Worker service/);
+});
