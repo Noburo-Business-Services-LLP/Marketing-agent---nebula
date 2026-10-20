@@ -82,7 +82,7 @@ function createAuthHarness({ seed = [] } = {}) {
     return new Promise((resolve, reject) => {
       const data = body === undefined ? null : Buffer.from(JSON.stringify(body));
       const u = new URL(base + p);
-      const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, method, headers: {
+      const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, method, headers: {
         ...(data ? { 'Content-Type': 'application/json', 'Content-Length': data.length } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(ip ? { 'X-Forwarded-For': ip } : {}),
