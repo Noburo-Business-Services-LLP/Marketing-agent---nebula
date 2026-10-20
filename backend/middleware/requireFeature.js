@@ -5,6 +5,7 @@
  * `managed` and are never blocked. Use after `protect`.
  */
 const { canUse } = require('../config/entitlements');
+const logger = require('../utils/logger');
 
 function defaultLoadUser(userId) {
   return require('../models/User').findById(userId);
@@ -19,7 +20,7 @@ function requireFeature(feature, { loadUser = defaultLoadUser, when = null } = {
     try {
       user = await loadUser(userId);
     } catch (error) {
-      console.error('requireFeature lookup error:', error.message);
+      logger.error('requireFeature lookup error:', error.message);
       return res.status(500).json({ success: false, message: 'We could not check your plan right now. Please try again.' });
     }
     if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });

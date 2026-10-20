@@ -81,7 +81,7 @@ function describe(err, publicMessage) {
 function fail(res, err, publicMessage) {
   const { status, body } = describe(err, publicMessage);
   const req = res && res.req;
-  logError(err, { status, method: req && req.method, path: req && (req.originalUrl || req.path) });
+  logError(err, { status, method: req && req.method, path: req && String(req.originalUrl || req.path || '').split('?')[0] });
   if (res.headersSent) return res;
   return res.status(status).json(body);
 }

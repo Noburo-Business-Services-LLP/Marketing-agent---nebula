@@ -32,7 +32,7 @@ test('role: default on, 0/off means web only, set either way means split', () =>
 
 test('server-main: the gate calls startBackgroundJobs only when background jobs run, and logs the role once', () => {
   const src = read('server-main.js');
-  assert.match(src, /console\.log\(backgroundRole\.describe\(\)\);\s*\n\s*if \(backgroundRole\.runsBackground\(\)\) startBackgroundJobs\(\);/);
+  assert.match(src, /logger\.info\(backgroundRole\.describe\(\)\);\s*\n\s*if \(backgroundRole\.runsBackground\(\)\) startBackgroundJobs\(\);/);
   assert.strictEqual((src.match(/startBackgroundJobs\(\)/g) || []).length, 2, 'defined once and called once');
 });
 

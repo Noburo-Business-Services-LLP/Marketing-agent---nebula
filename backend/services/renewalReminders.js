@@ -125,7 +125,7 @@ async function runRenewalRemindersOnce({ now = Date.now(), deps = {} } = {}) {
   return { sent, skipped, considered: candidates.length };
 }
 
-function startRenewalReminders({ intervalMs = 6 * 60 * 60 * 1000, logger = console } = {}) {
+function startRenewalReminders({ intervalMs = 6 * 60 * 60 * 1000, logger = require('../utils/logger') } = {}) {
   if (String(process.env.ENABLE_RENEWAL_REMINDERS || 'true').toLowerCase() === 'false') {
     logger.log('[reminders] disabled via ENABLE_RENEWAL_REMINDERS=false');
     return () => {};

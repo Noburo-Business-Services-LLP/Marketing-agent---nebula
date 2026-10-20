@@ -12,6 +12,7 @@
  */
 
 const quarkBuckets = require('../services/quarkBuckets');
+const logger = require('../utils/logger');
 const agencyRules = require('../services/agency');
 const User = require('../models/User');
 
@@ -96,7 +97,7 @@ function checkCredits(requiredCredits) {
       req.creditsAvailable = balance;
       next();
     } catch (error) {
-      console.error('Credit check error:', error);
+      logger.error('Credit check error:', error);
       res.status(500).json({ success: false, message: 'Quark check failed' });
     }
   };

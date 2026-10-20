@@ -1,4 +1,5 @@
 'use strict';
+const logger = require('../utils/logger');
 /**
  * Which browser origins may call the API, and what a refused origin gets.
  *  - No Origin header (server to server, curl, same-origin GET, mobile): allowed.
@@ -32,7 +33,7 @@ function rejectDisallowedOrigin(allowedOrigins, env = process.env) {
     const origin = req.headers.origin;
     if (!origin || isOriginAllowed(origin, allowedOrigins, env)) return next();
     if (String(req.path || req.url || '').startsWith('/api')) {
-      console.warn(`CORS refused origin: ${String(origin).slice(0, 200)}`);
+      logger.warn(`CORS refused origin: ${String(origin).slice(0, 200)}`);
       return res.status(403).json({ success: false, message: 'Origin not allowed' });
     }
     return next();

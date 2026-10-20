@@ -48,7 +48,7 @@ async function runBillingOnce({ now = Date.now(), deps = {} } = {}) {
   return { clients: clients.length, made, failed: failures.length };
 }
 
-function startBillingScheduler({ intervalMs = 60 * 60 * 1000, logger = console } = {}) {
+function startBillingScheduler({ intervalMs = 60 * 60 * 1000, logger = require('../utils/logger') } = {}) {
   if (String(process.env.ENABLE_BILLING_SCHEDULER || 'true').toLowerCase() === 'false') {
     logger.log('[billing] Scheduler disabled via ENABLE_BILLING_SCHEDULER=false');
     return () => {};

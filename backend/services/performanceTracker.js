@@ -175,7 +175,7 @@ async function runPerformanceTrackerOnce({ now = new Date(), limit = MAX_CHECKS_
   return { checked, candidateCount: candidates.length };
 }
 
-function startPerformanceTrackerScheduler({ intervalMs = 60 * 60 * 1000, logger = console } = {}) {
+function startPerformanceTrackerScheduler({ intervalMs = 60 * 60 * 1000, logger = require('../utils/logger') } = {}) {
   if (String(process.env.ENABLE_PERFORMANCE_TRACKER || 'true').toLowerCase() === 'false') {
     logger.log('[PerformanceTracker] Scheduler disabled via ENABLE_PERFORMANCE_TRACKER=false');
     return () => {};

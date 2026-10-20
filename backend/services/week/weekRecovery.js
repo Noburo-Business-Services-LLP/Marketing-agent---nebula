@@ -4,7 +4,7 @@
 const FIRST_MS = 60 * 1000;
 const EVERY_MS = 15 * 60 * 1000;
 
-function startWeekRecovery({ service, env = process.env, intervalMs = EVERY_MS, firstDelayMs = FIRST_MS, logger = console } = {}) {
+function startWeekRecovery({ service, env = process.env, intervalMs = EVERY_MS, firstDelayMs = FIRST_MS, logger = require('../../utils/logger') } = {}) {
   if (String(env.ENABLE_WEEK_RECOVERY || '').trim().toLowerCase() === 'off' || env.NODE_ENV === 'test') return null;
   const svc = service || require('./weekService').createWeekService();
   let running = false;

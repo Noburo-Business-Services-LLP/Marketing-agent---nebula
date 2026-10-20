@@ -1090,7 +1090,7 @@ async function remapProposalItems({ userId, oldCalendar, newCalendar, WeeklyProp
   }
 }
 
-function startContentCalendarScheduler({ intervalMs = 60_000, logger = console } = {}) {
+function startContentCalendarScheduler({ intervalMs = 60_000, logger = require('../utils/logger') } = {}) {
   if (String(process.env.ENABLE_CONTENT_CALENDAR_SCHEDULER || 'true').toLowerCase() === 'false') {
     logger.log('[ContentCalendar] Scheduler disabled');
     return () => {};

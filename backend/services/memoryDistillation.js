@@ -204,7 +204,7 @@ async function runDistillationOnce({ limit = 50, deps = {} } = {}) {
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-function startMemoryDistillationScheduler({ intervalMs = WEEK_MS, logger = console } = {}) {
+function startMemoryDistillationScheduler({ intervalMs = WEEK_MS, logger = require('../utils/logger') } = {}) {
   if (['false', 'off'].includes(String(process.env.ENABLE_MEMORY_DISTILLATION || 'true').toLowerCase())) {
     logger.log('[MemoryDistillation] Scheduler disabled via ENABLE_MEMORY_DISTILLATION');
     return () => {};

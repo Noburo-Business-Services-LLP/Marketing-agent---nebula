@@ -123,7 +123,7 @@ test('the User model hashes and checks through the helper', async () => {
 test('credential routes answer 503 with the plain message when hashing is saturated, and sign-in re-stores old-cost hashes', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
   for (const label of ['Signup error', 'Send OTP error', 'Verify OTP error', 'Forgot password error', 'Verify reset OTP error', 'Reset password error', 'Login error', 'Change password error']) {
-    assert.ok(new RegExp(`if \\(answerBusy\\(res, error\\)\\) return;\\n\\s*console\\.error\\('${label}:`).test(src), label);
+    assert.ok(new RegExp(`if \\(answerBusy\\(res, error\\)\\) return;\\n\\s*logger\\.error\\('${label}:`).test(src), label);
   }
   assert.ok(/rehashIfNeeded\(user, password\)\.catch\(/.test(src));
 });

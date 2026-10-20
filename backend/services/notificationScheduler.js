@@ -9,6 +9,7 @@
  */
 
 const Notification = require('../models/Notification');
+const logger = require('../utils/logger');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const sesEmailService = require('./sesEmailService');
@@ -33,15 +34,15 @@ class NotificationScheduler {
    */
   start() {
     if (this.isRunning) {
-      console.log('⚠️  Notification scheduler already running');
+      logger.info('⚠️  Notification scheduler already running');
       return;
     }
 
     // Initialize SES
     sesEmailService.initialize();
 
-    console.log(`📧 Campaign reminder emails are ${reminderEmailsOn() ? 'ON' : 'OFF'} (CAMPAIGN_REMINDER_EMAILS=${reminderEmailsOn() ? 'on' : 'not on'})`);
-    console.log('🔔 Starting campaign notification scheduler...');
+    logger.info(`📧 Campaign reminder emails are ${reminderEmailsOn() ? 'ON' : 'OFF'} (CAMPAIGN_REMINDER_EMAILS=${reminderEmailsOn() ? 'on' : 'not on'})`);
+    logger.info('🔔 Starting campaign notification scheduler...');
     this.isRunning = true;
 
     // Every tick runs through a lease (services/leaseLock.js): a second server running background jobs by mistake
@@ -49,7 +50,7 @@ class NotificationScheduler {
     const tick = require('./leaseLock').leased('scheduler:notifications', 2 * 60 * 1000, () => this.checkAndSendNotifications());
 
     // Run immediately on start
-    tick().catch((e) => console.error('Notification scheduler error:', e && e.message));
+    tick().catch((e) => logger.error('Notification scheduler error:', e && e.message));
 
     // Then run every 30 seconds
     this.intervalId = setInterval(() => {
@@ -60,10 +61,10 @@ class NotificationScheduler {
           this.isProcessing = false;
         }
       }
-      tick().catch((e) => console.error('Notification scheduler error:', e && e.message));
+      tick().catch((e) => logger.error('Notification scheduler error:', e && e.message));
     }, this.checkInterval);
 
-    console.log('✅ Notification scheduler started (checking every 30 seconds)');
+    logger.info('✅ Notification scheduler started (checking every 30 seconds)');
   }
 
   /**
@@ -75,7 +76,7 @@ class NotificationScheduler {
       this.intervalId = null;
     }
     this.isRunning = false;
-    console.log('🛑 Notification scheduler stopped');
+    logger.info('🛑 Notification scheduler stopped');
   }
 
   /**
@@ -83,7 +84,7 @@ class NotificationScheduler {
    */
   async checkAndSendNotifications() {
     if (this.isProcessing) {
-      console.log('⚠️ Scheduler already processing, skipping...');
+      logger.info('⚠️ Scheduler already processing, skipping...');
       return;
     }
     this.isProcessing = true;
@@ -120,7 +121,7 @@ class NotificationScheduler {
       }
 
     } catch (error) {
-      console.error('❌ Notification scheduler error:', error.message);
+      logger.error('❌ Notification scheduler error:', error.message);
     } finally {
       this.isProcessing = false;
     }
@@ -133,7 +134,7 @@ class NotificationScheduler {
     try {
       const scheduledTime = this.getCampaignScheduledTime(campaign);
       if (!scheduledTime) {
-        console.log(`⚠️ Campaign "${campaign.name}" has no valid scheduled time`);
+        logger.info(`⚠️ Campaign "${campaign.name}" has no valid scheduled time`);
         return;
       }
 
@@ -147,18 +148,18 @@ class NotificationScheduler {
 
       // Check for 30-minute notification (send when 25-35 minutes left)
       if (minutesUntilLive >= 25 && minutesUntilLive <= 35) {
-        console.log(`🔔 30-min reminder: "${campaign.name}" goes live in ${minutesUntilLive} mins`);
+        logger.info(`🔔 30-min reminder: "${campaign.name}" goes live in ${minutesUntilLive} mins`);
         await this.sendNotificationIfNotSent(campaign, 'campaign_reminder_30', 30, scheduledTime);
       }
 
       // Check for 15-minute notification (send when 10-20 minutes left)
       if (minutesUntilLive >= 10 && minutesUntilLive <= 20) {
-        console.log(`🔔 15-min reminder: "${campaign.name}" goes live in ${minutesUntilLive} mins`);
+        logger.info(`🔔 15-min reminder: "${campaign.name}" goes live in ${minutesUntilLive} mins`);
         await this.sendNotificationIfNotSent(campaign, 'campaign_reminder_15', 15, scheduledTime);
       }
 
     } catch (error) {
-      console.error(`Error checking campaign ${campaign._id}:`, error.message);
+      logger.error(`Error checking campaign ${campaign._id}:`, error.message);
     }
   }
 
@@ -200,7 +201,7 @@ class NotificationScheduler {
       
       return startDate;
     } catch (error) {
-      console.error('Error parsing campaign time:', error.message);
+      logger.error('Error parsing campaign time:', error.message);
       return null;
     }
   }
@@ -221,7 +222,7 @@ class NotificationScheduler {
         return;
       }
 
-      console.log(`🔔 Sending ${minutesLeft}-minute reminder for: ${campaign.name}`);
+      logger.info(`🔔 Sending ${minutesLeft}-minute reminder for: ${campaign.name}`);
 
       // Create the notification
       const notification = new Notification({
@@ -243,13 +244,13 @@ class NotificationScheduler {
       });
 
       await notification.save();
-      console.log(`✅ In-app notification sent: ${campaign.name} - ${minutesLeft} min left`);
+      logger.info(`✅ In-app notification sent: ${campaign.name} - ${minutesLeft} min left`);
 
       // Send email notification
       await this.sendEmailNotification(campaign, minutesLeft, scheduledTime);
 
     } catch (error) {
-      console.error(`Error sending notification:`, error.message);
+      logger.error(`Error sending notification:`, error.message);
     }
   }
 
@@ -279,14 +280,14 @@ class NotificationScheduler {
     try {
       const userEmail = await this.recipientFor(campaign);
       if (!userEmail) {
-        console.log('📧 No owner email for this campaign - skipping email');
+        logger.info('📧 No owner email for this campaign - skipping email');
         return;
       }
 
-      console.log(`📧 Preparing to send reminder email for: ${campaign.name}`);
+      logger.info(`📧 Preparing to send reminder email for: ${campaign.name}`);
 
       if (!sesEmailService.initialized) {
-        console.log('⚠️  SES not initialized - skipping email');
+        logger.info('⚠️  SES not initialized - skipping email');
         return;
       }
 
@@ -299,13 +300,13 @@ class NotificationScheduler {
       });
 
       if (result.success) {
-        console.log(`📧 Email sent: ${campaign.name} - ${minutesLeft} min reminder`);
+        logger.info(`📧 Email sent: ${campaign.name} - ${minutesLeft} min reminder`);
       } else {
-        console.error(`❌ Email failed: ${result.error}`);
+        logger.error(`❌ Email failed: ${result.error}`);
       }
 
     } catch (error) {
-      console.error('Email sending error:', error.message);
+      logger.error('Email sending error:', error.message);
     }
   }
 
@@ -367,7 +368,7 @@ class NotificationScheduler {
           scheduledTime: this.formatTime(scheduledTime),
           platforms: campaign.platforms || []
         });
-        console.log('📧 Test email sent to the campaign owner');
+        logger.info('📧 Test email sent to the campaign owner');
       }
 
       return { success: true, notification };

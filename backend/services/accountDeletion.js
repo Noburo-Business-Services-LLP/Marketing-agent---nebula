@@ -287,7 +287,7 @@ const defaultDeps = () => ({
   mail: require('./accountMail')
 });
 
-function startAccountPurge({ intervalMs = 6 * 60 * 60 * 1000, logger = console } = {}) {
+function startAccountPurge({ intervalMs = 6 * 60 * 60 * 1000, logger = require('../utils/logger') } = {}) {
   if (String(process.env.ENABLE_ACCOUNT_PURGE || 'true').toLowerCase() === 'false') { logger.log('[account delete] purge disabled via ENABLE_ACCOUNT_PURGE=false'); return () => {}; }
   logger.log(`[account delete] purge job started (every ${intervalMs}ms)`);
   // Through a lease (services/leaseLock.js; a long purge keeps it by renewal), kept for half the interval after a good run.

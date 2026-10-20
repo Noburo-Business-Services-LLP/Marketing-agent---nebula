@@ -5,6 +5,7 @@
  */
 
 const SocialSnapshot = require('../models/SocialSnapshot');
+const logger = require('../utils/logger');
 const User = require('../models/User');
 const { getAyrshareUserProfile, getUserSocialAnalytics } = require('./socialMediaAPI');
 
@@ -18,34 +19,34 @@ class SnapshotScheduler {
 
   start() {
     if (this.intervalId) {
-      console.log('⚠️  Snapshot scheduler already running');
+      logger.info('⚠️  Snapshot scheduler already running');
       return;
     }
     // Kill switch — disable via env var to stop Ayrshare polling from this cron entirely
     if (String(process.env.AYRSHARE_SNAPSHOT_ENABLED || 'true').toLowerCase() === 'false') {
-      console.log('🛑 Snapshot scheduler disabled via AYRSHARE_SNAPSHOT_ENABLED=false');
+      logger.info('🛑 Snapshot scheduler disabled via AYRSHARE_SNAPSHOT_ENABLED=false');
       return;
     }
-    console.log('📊 Starting analytics snapshot scheduler...');
+    logger.info('📊 Starting analytics snapshot scheduler...');
 
     // Every run goes through a lease (services/leaseLock.js; kept for half the interval after a good run), so a second
     // server running background jobs by mistake does not poll Ayrshare for the same accounts.
     const run = require('./leaseLock').leased('scheduler:snapshots', 60 * 60 * 1000, () => this.collectSnapshots(), { cooldownMs: TWELVE_HOURS / 2 });
-    const safeRun = () => run().catch((e) => console.error('Snapshot scheduler error:', e && e.message));
+    const safeRun = () => run().catch((e) => logger.error('Snapshot scheduler error:', e && e.message));
 
     // Run once on startup (after 60s delay to let other services initialize)
     setTimeout(safeRun, 60000);
 
     // Then every 12 hours
     this.intervalId = setInterval(safeRun, TWELVE_HOURS);
-    console.log('✅ Snapshot scheduler started (every 12 hours)');
+    logger.info('✅ Snapshot scheduler started (every 12 hours)');
   }
 
   stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log('🛑 Snapshot scheduler stopped');
+      logger.info('🛑 Snapshot scheduler stopped');
     }
   }
 
@@ -66,7 +67,7 @@ class SnapshotScheduler {
         return;
       }
 
-      console.log(`📊 Collecting snapshots for ${users.length} user(s)...`);
+      logger.info(`📊 Collecting snapshots for ${users.length} user(s)...`);
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Normalize to start of day
 
@@ -74,13 +75,13 @@ class SnapshotScheduler {
         try {
           await this.collectForUser(user._id, user.ayrshare.profileKey, today);
         } catch (err) {
-          console.error(`📊 Snapshot failed for user ${user._id}:`, err.message);
+          logger.error(`📊 Snapshot failed for user ${user._id}:`, err.message);
         }
       }
 
-      console.log('📊 Snapshot collection complete');
+      logger.info('📊 Snapshot collection complete');
     } catch (error) {
-      console.error('📊 Snapshot scheduler error:', error.message);
+      logger.error('📊 Snapshot scheduler error:', error.message);
     }
 
     this.running = false;
@@ -190,7 +191,7 @@ class SnapshotScheduler {
     // The Performance view caches each account's answer for a minute: forget it now that new numbers are stored.
     require('./performance/cache').forgetAccount(userId);
 
-    console.log(`📊 Snapshot saved for user ${userId}: ${Object.keys(platforms).length} platforms`);
+    logger.info(`📊 Snapshot saved for user ${userId}: ${Object.keys(platforms).length} platforms`);
   }
 }
 

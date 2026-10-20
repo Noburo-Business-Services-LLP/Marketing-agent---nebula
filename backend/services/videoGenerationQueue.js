@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const logger = require('../utils/logger');
 const VideoJob = require('../models/VideoJob');
 const { settleRefund, SWEEP_AFTER_MS } = require('./refundSettle');
 const { QUARK_COSTS } = require('../config/apiCosts');
@@ -115,7 +116,7 @@ class PersistentVideoGenerationQueue {
       throw new Error(`Handler for ${jobType} must be a function`);
     }
     this.handlers.set(jobType, handlerFn);
-    console.log(`🤖 Persistent Queue: Registered handler for job type [${jobType}]`);
+    logger.info(`🤖 Persistent Queue: Registered handler for job type [${jobType}]`);
   }
 
   /**
@@ -136,19 +137,19 @@ class PersistentVideoGenerationQueue {
     const drainIntervalMs = Number(process.env.VIDEO_QUEUE_DRAIN_INTERVAL_MS) || (require('./backgroundRole').isSplit() ? 5000 : 15000);
     this.workerTimer = setInterval(() => {
       this._drainQueue().catch((err) => {
-        console.error('⚠️ Persistent Queue drain error:', err.message);
+        logger.error('⚠️ Persistent Queue drain error:', err.message);
       });
     }, drainIntervalMs);
     
     this.workerTimer.unref?.();
-    console.log(`🚀 Persistent Queue: Background worker successfully started (concurrency = ${this.concurrency})`);
+    logger.info(`🚀 Persistent Queue: Background worker successfully started (concurrency = ${this.concurrency})`);
 
     // Run crash recovery on startup (non-blocking, safe for rolling updates)
     this.recoverInterruptedJobsOnStartup().catch((err) => {
-      console.error('Persistent Queue startup interrupted-job recovery error:', err.message);
+      logger.error('Persistent Queue startup interrupted-job recovery error:', err.message);
     });
     this.recoverStaleJobs().catch((err) => {
-      console.error('⚠️ Persistent Queue startup recovery error:', err.message);
+      logger.error('⚠️ Persistent Queue startup recovery error:', err.message);
     });
   }
 
@@ -161,7 +162,7 @@ class PersistentVideoGenerationQueue {
     // NEVER re-queue on startup. Every restart and every redeploy used to
     // re-run whatever was mid-flight, silently spending fal.ai credits with
     // nobody asking for it. Mark them failed instead — the user decides.
-    console.log(`Persistent Queue: Marking ${processingJobs.length} interrupted job(s) failed after startup (no auto-retry).`);
+    logger.info(`Persistent Queue: Marking ${processingJobs.length} interrupted job(s) failed after startup (no auto-retry).`);
     for (const job of processingJobs) {
       const won = await this._failIfProcessing(job, {
         currentStep: 'stale_recovery_failed',
@@ -191,7 +192,7 @@ class PersistentVideoGenerationQueue {
         { new: true }
       ).lean();
     } catch (err) {
-      console.error(`⚠️ Failed to mark job ${job.jobId} failed:`, err.message);
+      logger.error(`⚠️ Failed to mark job ${job.jobId} failed:`, err.message);
       return null;
     }
   }
@@ -228,7 +229,7 @@ class PersistentVideoGenerationQueue {
     let all = true;
     for (const e of plan) {
       let ok = false;
-      try { ok = await this._payEntry(job, e, why); } catch (err) { console.error(`⚠️ Failed to refund credits for job ${job.jobId}:`, err.message); }
+      try { ok = await this._payEntry(job, e, why); } catch (err) { logger.error(`⚠️ Failed to refund credits for job ${job.jobId}:`, err.message); }
       if (!ok) all = false;
     }
     if (!all) return false;
@@ -259,7 +260,7 @@ class PersistentVideoGenerationQueue {
         if (outs.every((o) => o === 'paid' || o === 'already')) { await this.model.updateOne({ jobId: job.jobId, refundState: 'refunding' }, { $set: { refundState: 'refunded' } }); settled += 1; }
         else if (outs.some((o) => o === 'failed' || o === 'unknown')) { /* held for another two minutes */ }
         else { await this.model.updateOne({ jobId: job.jobId, refundState: 'refunding' }, { $set: { refundState: 'unproven' } }); }
-      } catch (e) { console.error('⚠️ Video refund sweep failed:', e.message); }
+      } catch (e) { logger.error('⚠️ Video refund sweep failed:', e.message); }
     }
     return settled;
   }
@@ -271,7 +272,7 @@ class PersistentVideoGenerationQueue {
         await this.recoverStaleJobs();
         await this.sweepRefunds();
       } catch (err) {
-        console.error('⚠️ Persistent Queue stale job recovery loop failed:', err.message);
+        logger.error('⚠️ Persistent Queue stale job recovery loop failed:', err.message);
       }
     }, 60000); // Scan every 1 minute
     this.recoveryTimer.unref?.();
@@ -293,7 +294,7 @@ class PersistentVideoGenerationQueue {
 
       if (staleJobs.length === 0) return;
 
-      console.log(`⚠️ Persistent Queue: Found ${staleJobs.length} stale/hung jobs in 'processing' state.`);
+      logger.info(`⚠️ Persistent Queue: Found ${staleJobs.length} stale/hung jobs in 'processing' state.`);
       
       for (const job of staleJobs) {
         // NEVER re-queue a stale job. fal.subscribe has no timeout, so a
@@ -312,13 +313,13 @@ class PersistentVideoGenerationQueue {
           extraFilter: { updatedAt: { $lt: threshold } }
         });
         if (!won) continue;
-        console.log(`❌ Stale job ${job.jobId} marked failed (no auto-retry; user can retry manually).`);
+        logger.info(`❌ Stale job ${job.jobId} marked failed (no auto-retry; user can retry manually).`);
         require('./opsAlerts').recordFailure('video', `job ${job.jobId} stalled and was marked failed`);
         // Per-scene jobs charge each scene as it renders and refund that scene themselves (see _refundPlan).
         await this._refundJob(won, 'stalled and failed');
       }
     } catch (err) {
-      console.error('⚠️ Failed to recover stale jobs:', err.message);
+      logger.error('⚠️ Failed to recover stale jobs:', err.message);
     }
   }
 
@@ -329,10 +330,10 @@ class PersistentVideoGenerationQueue {
         const threshold = new Date(Date.now() - this.jobTtlMs);
         const res = await this.model.deleteMany({ updatedAt: { $lt: threshold } });
         if (res.deletedCount > 0) {
-          console.log(`🧹 Persistent Queue GC: Deleted ${res.deletedCount} stale jobs updated before ${threshold.toISOString()}`);
+          logger.info(`🧹 Persistent Queue GC: Deleted ${res.deletedCount} stale jobs updated before ${threshold.toISOString()}`);
         }
       } catch (err) {
-        console.error('⚠️ Persistent Queue GC failed:', err.message);
+        logger.error('⚠️ Persistent Queue GC failed:', err.message);
       }
     }, 10 * 60 * 1000); // GC every 10 minutes
     this.gcTimer.unref?.();
@@ -346,7 +347,7 @@ class PersistentVideoGenerationQueue {
       throw new Error('jobType is required to enqueue');
     }
     if (!this.handlers.has(jobType)) {
-      console.warn(`⚠️ Enqueuing job type [${jobType}] before its handler is registered.`);
+      logger.warn(`⚠️ Enqueuing job type [${jobType}] before its handler is registered.`);
     }
 
     const jobId = crypto.randomUUID();
@@ -368,7 +369,7 @@ class PersistentVideoGenerationQueue {
     // Proactively trigger the drain loop (only in a process that runs jobs: a web-only task leaves it to the worker)
     if (this.runsJobsHere) {
       this._drainQueue().catch((err) => {
-        console.error('⚠️ Persistent Queue drain trigger error:', err.message);
+        logger.error('⚠️ Persistent Queue drain trigger error:', err.message);
       });
     }
 
@@ -388,7 +389,7 @@ class PersistentVideoGenerationQueue {
       if (!job) return null;
       return this._publicView(job);
     } catch (err) {
-      console.error(`⚠️ Failed to get job ${jobId}:`, err.message);
+      logger.error(`⚠️ Failed to get job ${jobId}:`, err.message);
       return null;
     }
   }
@@ -430,7 +431,7 @@ class PersistentVideoGenerationQueue {
         const Draft = this.draftModel || require('../models/Draft');
         await Draft.updateMany({ 'generationProgress.jobId': jobId, status: 'processing' }, { $set: { status: 'failed', errorMessage: 'Cancelled.' } });
       } catch (draftErr) {
-        console.error(`⚠️ Failed to update Draft status for cancelled job ${jobId}:`, draftErr.message);
+        logger.error(`⚠️ Failed to update Draft status for cancelled job ${jobId}:`, draftErr.message);
       }
       if (owed) await this._refundJob(won, 'was cancelled');
       if (won.status === 'processing') {
@@ -438,7 +439,7 @@ class PersistentVideoGenerationQueue {
       }
       return this._publicView((await this.model.findOne(query).lean()) || current);
     } catch (err) {
-      console.error(`⚠️ Failed to cancel job ${jobId}:`, err.message);
+      logger.error(`⚠️ Failed to cancel job ${jobId}:`, err.message);
       throw err;
     }
   }
@@ -457,7 +458,7 @@ class PersistentVideoGenerationQueue {
       ).lean();
       return job;
     } catch (err) {
-      console.error(`⚠️ Failed to update job ${jobId}:`, err.message);
+      logger.error(`⚠️ Failed to update job ${jobId}:`, err.message);
       return null;
     }
   }
@@ -480,7 +481,7 @@ class PersistentVideoGenerationQueue {
         }
       );
     } catch (err) {
-      console.error(`⚠️ Failed to push log to job ${jobId}:`, err.message);
+      logger.error(`⚠️ Failed to push log to job ${jobId}:`, err.message);
     }
   }
 
@@ -490,7 +491,7 @@ class PersistentVideoGenerationQueue {
     const handler = this.handlers.get(jobType);
 
     if (!handler) {
-      console.error(`❌ No handler registered for job type [${jobType}]. Job ${jobId} failed.`);
+      logger.error(`❌ No handler registered for job type [${jobType}]. Job ${jobId} failed.`);
       const won = await this._failIfProcessing(jobDoc, {
         currentStep: 'missing_handler',
         error: { message: `No handler registered for job type [${jobType}]` },
@@ -525,7 +526,7 @@ class PersistentVideoGenerationQueue {
             patch.metadata = { ...(current?.metadata || {}), ...stepMetadata };
           }
           let wrote = null;
-          try { wrote = await this._updateIfProcessing(jobId, patch); } catch (err) { console.error(`⚠️ Failed to update job ${jobId}:`, err.message); return; }
+          try { wrote = await this._updateIfProcessing(jobId, patch); } catch (err) { logger.error(`⚠️ Failed to update job ${jobId}:`, err.message); return; }
           if (!wrote) throw new JobCancelledError(jobId);
         },
         isCancelled: async () => {
@@ -555,7 +556,7 @@ class PersistentVideoGenerationQueue {
           error: null
         });
       } catch (err) {
-        console.error(`⚠️ Failed to complete job ${jobId}:`, err.message);
+        logger.error(`⚠️ Failed to complete job ${jobId}:`, err.message);
       }
       if (!completed) {
         await this._pushLog(jobId, `Finished after the job was cancelled or stopped: the result was discarded.`);
@@ -606,13 +607,13 @@ class PersistentVideoGenerationQueue {
                 language: rawPayload.languageCode || 'English',
                 duration: rawPayload.durationSeconds || null,
                 generatedVideos: [finalUrl]
-              }).catch((err) => console.warn('[VideoQueue] AI memory write failed (non-fatal):', err.message));
+              }).catch((err) => logger.warn('[VideoQueue] AI memory write failed (non-fatal):', err.message));
             } catch (memErr) {
-              console.warn('[VideoQueue] AI memory write failed (non-fatal):', memErr.message);
+              logger.warn('[VideoQueue] AI memory write failed (non-fatal):', memErr.message);
             }
           }
         } catch (err) {
-          console.error(`⚠️ Failed to update Draft status to completed for job ${jobId}:`, err.message);
+          logger.error(`⚠️ Failed to update Draft status to completed for job ${jobId}:`, err.message);
         }
       }
     } catch (error) {
@@ -621,7 +622,7 @@ class PersistentVideoGenerationQueue {
         await this._pushLog(jobId, 'Stopped: the job was cancelled.');
         return;
       }
-      console.error(`❌ Video job ${jobId} failed:`, error);
+      logger.error(`❌ Video job ${jobId} failed:`, error);
       require('./opsAlerts').recordFailure('video', `job ${jobId}: ${error?.message || error}`);
       // NO AUTOMATIC RETRY. Every retry re-runs paid fal.ai generation, so a
       // failure must cost exactly one run. The job is left failed (credits are
@@ -645,7 +646,7 @@ class PersistentVideoGenerationQueue {
           { $set: { status: 'failed', errorMessage: error?.message || 'Video generation failed' } }
         );
       } catch (err) {
-        console.error(`⚠️ Failed to update Draft status to failed for job ${jobId}:`, err.message);
+        logger.error(`⚠️ Failed to update Draft status to failed for job ${jobId}:`, err.message);
       }
 
       // Refund exactly what was charged for this job (metadata.quarkCharge, set by the caller at enqueue time as
@@ -681,11 +682,11 @@ class PersistentVideoGenerationQueue {
 
         // Run the job in the background (non-blocking)
         this._runJob(nextJob.toObject()).catch((err) => {
-          console.error(`⚠️ Error launching job ${nextJob.jobId}:`, err.message);
+          logger.error(`⚠️ Error launching job ${nextJob.jobId}:`, err.message);
         });
       }
     } catch (err) {
-      console.error('⚠️ Persistent Queue drain loop failed:', err.message);
+      logger.error('⚠️ Persistent Queue drain loop failed:', err.message);
     }
   }
 

@@ -380,7 +380,7 @@ async function applyPublishFailure(campaign, errorMessage, result) {
   await Campaign.findByIdAndUpdate(campaign._id, { $set: update });
 }
 
-function startCampaignScheduler({ intervalMs = 30_000, logger = console } = {}) {
+function startCampaignScheduler({ intervalMs = 30_000, logger = require('../utils/logger') } = {}) {
   if (!isEnabled()) {
     logger.log('🕒 Campaign scheduler disabled (ENABLE_CAMPAIGN_SCHEDULER=false)');
     return () => {};

@@ -35,7 +35,7 @@ async function reapStaleDrafts({ Draft, refund, now = Date.now(), log = console 
   return { handled };
 }
 
-function startStaleDraftReaper({ intervalMs = 5 * 60 * 1000, logger = console } = {}) {
+function startStaleDraftReaper({ intervalMs = 5 * 60 * 1000, logger = require('../utils/logger') } = {}) {
   const Draft = require('../models/Draft');
   const { refundCredits } = require('../middleware/trialGuard');
   // Through a lease (services/leaseLock.js): it returns Quarks, so two servers must not both reap the same draft.

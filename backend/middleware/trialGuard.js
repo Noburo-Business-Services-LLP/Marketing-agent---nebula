@@ -1,4 +1,5 @@
 const { priceText, balanceText } = require('../config/quarkWording');
+const logger = require('../utils/logger');
 const User = require('../models/User');
 const quarkBuckets = require('../services/quarkBuckets');
 const agencyRules = require('../services/agency');
@@ -50,7 +51,7 @@ const checkTrial = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Trial guard error:', error);
+    logger.error('Trial guard error:', error);
     next(); // Don't block on errors — let the request through
   }
 };
@@ -67,7 +68,7 @@ const deductCredits = async (userId, action, count = 1, description = '', opts =
   try {
     const cost = CREDIT_COSTS[action];
     if (cost === undefined) {
-      console.warn(`Unknown credit action: ${action}`);
+      logger.warn(`Unknown credit action: ${action}`);
       return { success: true, creditsRemaining: -1, creditsDeducted: 0 };
     }
 
@@ -108,7 +109,7 @@ const deductCredits = async (userId, action, count = 1, description = '', opts =
       workspaceId: spent.workspaceId
     };
   } catch (error) {
-    console.error('Credit deduction error:', error);
+    logger.error('Credit deduction error:', error);
     return { success: false, creditsRemaining: 0, creditsDeducted: 0, error: error.message };
   }
 };
@@ -155,7 +156,7 @@ const requireCredits = (action, countOrFn = 1) => {
       req.creditAction = { action, count, totalCost };
       next();
     } catch (error) {
-      console.error('requireCredits error:', error);
+      logger.error('requireCredits error:', error);
       next();
     }
   };
@@ -241,7 +242,7 @@ const refundCredits = async (userId, action, count = 1, description = '', opts =
       creditsRefunded: totalRefund
     };
   } catch (error) {
-    console.error('Credit refund error:', error);
+    logger.error('Credit refund error:', error);
     return { success: false, creditsRemaining: 0, creditsRefunded: 0, error: error.message };
   }
 };

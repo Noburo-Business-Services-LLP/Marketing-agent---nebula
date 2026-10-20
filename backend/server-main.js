@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const logger = require('./utils/logger');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -35,31 +36,31 @@ const optionalEnvVars = ['GROK_API_KEY', 'MONGODB_URI', 'JWT_SECRET', 'SES_AWS_A
 // NEBULAA_SERVER_NO_START=1) only prints the problems.
 {
   const boot = require('./utils/bootEnv').validateBootEnv(process.env);
-  for (const w of boot.warnings) console.warn(`⚠️  ${w}`);
-  for (const e of boot.errors) console.error(`❌ ${e}`);
+  for (const w of boot.warnings) logger.warn(`⚠️  ${w}`);
+  for (const e of boot.errors) logger.error(`❌ ${e}`);
   if (!boot.ok && process.env.NEBULAA_SERVER_NO_START !== '1') {
-    console.error('❌ The server cannot start with this configuration. Fix the values above and start it again.');
+    logger.error('❌ The server cannot start with this configuration. Fix the values above and start it again.');
     process.exit(1);
   }
 }
 
-console.log('\n🔍 Validating environment...');
+logger.info('\n🔍 Validating environment...');
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
-    console.error(`❌ Missing required environment variable: ${envVar}`);
+    logger.error(`❌ Missing required environment variable: ${envVar}`);
     // Don't exit - use fallback for Gemini
   } else {
-    console.log(`✅ ${envVar}: configured`);
+    logger.info(`✅ ${envVar}: configured`);
   }
 }
 for (const envVar of optionalEnvVars) {
   if (process.env[envVar]) {
-    console.log(`✅ ${envVar}: configured`);
+    logger.info(`✅ ${envVar}: configured`);
   } else {
-    console.log(`⚠️  ${envVar}: not set (optional)`);
+    logger.info(`⚠️  ${envVar}: not set (optional)`);
   }
 }
-console.log('');
+logger.info('');
 
 // ============================================
 // Route Imports
@@ -206,13 +207,20 @@ const extraOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
 
 const allowedOrigins = Array.from(new Set([...BASE_ALLOWED_ORIGINS, ...extraOrigins]));
 if (extraOrigins.length > 0) {
-  console.log(`[CORS] Extra origins from CORS_ALLOWED_ORIGINS env: ${extraOrigins.join(', ')}`);
+  logger.info(`[CORS] Extra origins from CORS_ALLOWED_ORIGINS env: ${extraOrigins.join(', ')}`);
 }
 
 // A refused browser origin gets 403 { success:false, message:'Origin not allowed' } on /api (middleware/corsPolicy.js), not a 500.
 const corsPolicy = require('./middleware/corsPolicy');
 app.use(corsPolicy.rejectDisallowedOrigin(allowedOrigins));
 app.use(cors(corsPolicy.corsOptions(allowedOrigins)));
+
+// Compression (A8): gzip for JSON and text over 1 KB; never for text/event-stream (the inbox stream). Before every route.
+app.use(require('./middleware/compression').createCompression());
+
+// Request logging (first thing after CORS, so refused and rate-limited requests are logged too): one compact pino-http line per request (method, URL without any token= value, status, ms). Headers are
+// never logged; LOG_LEVEL sets the level; the load balancer's health and ready probes stay out at the default level.
+app.use(require('./middleware/requestLogger').createRequestLogger());
 
 // ============================================
 // Security: Rate Limiting
@@ -345,11 +353,6 @@ app.use(hpp());
 // (utils/escapeHtml.js). See docs/superpowers/ops/performance-week1.md.
 // ============================================
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  next();
-});
 
 // ============================================
 // Feature Event Tracking — fire-and-forget, non-breaking
@@ -541,7 +544,8 @@ app.use('/audio', express.static(path.join(__dirname, 'tone-audio'), { setHeader
 app.use('/generated-media', express.static(path.join(__dirname, 'storage', 'ai-videos'), { setHeaders: userFileHeaders }));
 
 // Serve static files from React frontend build
-app.use(express.static(path.join(__dirname, 'public')));
+// Hashed files in public/assets are cached for a year (immutable), index.html is always revalidated (middleware/staticCache.js).
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: require('./middleware/staticCache').setStaticHeaders }));
 
 // Catch-all handler for React Router - serve index.html for any non-API routes
 app.get('*', (req, res, next) => {
@@ -555,6 +559,7 @@ app.get('*', (req, res, next) => {
   if (!require('fs').existsSync(indexFile)) {
     return res.status(404).json({ success: false, message: 'This address serves the Nebulaa API only.' });
   }
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(indexFile);
 });
 
@@ -574,23 +579,23 @@ app.use(require('./middleware/errorHandler').errorHandler);
 // Production Environment Health Validation
 // ============================================
 const validateProductionEnvironment = async () => {
-  console.log('\n🏥 Running Production Environment Health Checks...');
+  logger.info('\n🏥 Running Production Environment Health Checks...');
   
   // 1. Validate Fal.ai API key
   const falKey = process.env.FAL_KEY;
   if (falKey) {
-    console.log(`   ✅ FAL_KEY is configured (Length: ${falKey.length})`);
+    logger.info(`   ✅ FAL_KEY is configured (Length: ${falKey.length})`);
   } else {
-    console.warn(`   ⚠️  FAL_KEY is NOT configured. Fal.ai video generation will fail.`);
+    logger.warn(`   ⚠️  FAL_KEY is NOT configured. Fal.ai video generation will fail.`);
   }
 
   // 2. Validate FFmpeg
   let resolvedFfmpeg = null;
   try {
     resolvedFfmpeg = require('ffmpeg-static');
-    console.log(`   ✅ ffmpeg-static resolved path: ${resolvedFfmpeg}`);
+    logger.info(`   ✅ ffmpeg-static resolved path: ${resolvedFfmpeg}`);
   } catch (err) {
-    console.warn(`   ⚠️  ffmpeg-static require failed, checking system path...`);
+    logger.warn(`   ⚠️  ffmpeg-static require failed, checking system path...`);
   }
 
   if (!resolvedFfmpeg) {
@@ -600,7 +605,7 @@ const validateProductionEnvironment = async () => {
       const res = spawnSync(whichCmd, ['ffmpeg'], { windowsHide: true });
       if (res.status === 0 && res.stdout) {
         resolvedFfmpeg = String(res.stdout).trim().split(/\r?\n/)[0];
-        console.log(`   ✅ System ffmpeg resolved: ${resolvedFfmpeg}`);
+        logger.info(`   ✅ System ffmpeg resolved: ${resolvedFfmpeg}`);
       }
     } catch (_) {}
   }
@@ -611,24 +616,24 @@ const validateProductionEnvironment = async () => {
       const ver = spawnSync(resolvedFfmpeg, ['-version'], { windowsHide: true });
       if (ver.status === 0) {
         const firstLine = String(ver.stdout).split('\n')[0];
-        console.log(`   ✅ FFmpeg is accessible and working: ${firstLine}`);
+        logger.info(`   ✅ FFmpeg is accessible and working: ${firstLine}`);
       } else {
-        console.error(`   ❌ FFmpeg found but failed to run with status ${ver.status}`);
+        logger.error(`   ❌ FFmpeg found but failed to run with status ${ver.status}`);
       }
     } catch (err) {
-      console.error(`   ❌ Failed to run FFmpeg:`, err.message);
+      logger.error(`   ❌ Failed to run FFmpeg:`, err.message);
     }
   } else {
-    console.error(`   ❌ FFmpeg was NOT found on this system! Video merging will fail.`);
+    logger.error(`   ❌ FFmpeg was NOT found on this system! Video merging will fail.`);
   }
 
   // 3. Validate FFprobe
   let resolvedFfprobe = null;
   try {
     resolvedFfprobe = require('ffprobe-static')?.path;
-    if (resolvedFfprobe) console.log(`   ✅ ffprobe-static resolved path: ${resolvedFfprobe}`);
+    if (resolvedFfprobe) logger.info(`   ✅ ffprobe-static resolved path: ${resolvedFfprobe}`);
   } catch (err) {
-    console.warn(`   ⚠️  ffprobe-static require failed, checking system path...`);
+    logger.warn(`   ⚠️  ffprobe-static require failed, checking system path...`);
   }
 
   if (!resolvedFfprobe) {
@@ -638,7 +643,7 @@ const validateProductionEnvironment = async () => {
       const res = spawnSync(whichCmd, ['ffprobe'], { windowsHide: true });
       if (res.status === 0 && res.stdout) {
         resolvedFfprobe = String(res.stdout).trim().split(/\r?\n/)[0];
-        console.log(`   ✅ System ffprobe resolved: ${resolvedFfprobe}`);
+        logger.info(`   ✅ System ffprobe resolved: ${resolvedFfprobe}`);
       }
     } catch (_) {}
   }
@@ -649,15 +654,15 @@ const validateProductionEnvironment = async () => {
       const ver = spawnSync(resolvedFfprobe, ['-version'], { windowsHide: true });
       if (ver.status === 0) {
         const firstLine = String(ver.stdout).split('\n')[0];
-        console.log(`   ✅ FFprobe is accessible and working: ${firstLine}`);
+        logger.info(`   ✅ FFprobe is accessible and working: ${firstLine}`);
       } else {
-        console.error(`   ❌ FFprobe found but failed to run with status ${ver.status}`);
+        logger.error(`   ❌ FFprobe found but failed to run with status ${ver.status}`);
       }
     } catch (err) {
-      console.error(`   ❌ Failed to run FFprobe:`, err.message);
+      logger.error(`   ❌ Failed to run FFprobe:`, err.message);
     }
   } else {
-    console.error(`   ❌ FFprobe was NOT found on this system! Subtitles/audio timing analysis may fail.`);
+    logger.error(`   ❌ FFprobe was NOT found on this system! Subtitles/audio timing analysis may fail.`);
   }
 
   // 4. Validate Storage Directories and Permissions
@@ -674,12 +679,12 @@ const validateProductionEnvironment = async () => {
       const testFile = path.join(dir, '.write-test');
       fs.writeFileSync(testFile, 'test');
       fs.unlinkSync(testFile);
-      console.log(`   ✅ Storage directory exists and is writeable: ${dir}`);
+      logger.info(`   ✅ Storage directory exists and is writeable: ${dir}`);
     } catch (err) {
-      console.error(`   ❌ Storage directory error for ${dir}:`, err.message);
+      logger.error(`   ❌ Storage directory error for ${dir}:`, err.message);
     }
   }
-  console.log('🏥 Environment Health Checks Completed.\n');
+  logger.info('🏥 Environment Health Checks Completed.\n');
 };
 
 // ============================================
@@ -695,7 +700,7 @@ function startBackgroundJobs() {
     const { videoGenerationQueue } = require('./services/videoGenerationQueue');
     videoGenerationQueue.startWorker();
   } catch (queueError) {
-    console.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
+    logger.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
   }
 
   // Campaign image jobs stored by any task (async regenerate): claimed and run here, IMAGE_JOB_CONCURRENCY at once
@@ -703,28 +708,28 @@ function startBackgroundJobs() {
   try {
     require('./services/imageJobQueue').startImageJobRunner();
   } catch (queueError) {
-    console.warn('Image job runner failed to start:', queueError.message);
+    logger.warn('Image job runner failed to start:', queueError.message);
   }
 
   // Start notification scheduler for campaign reminders
   try {
     notificationScheduler.start();
   } catch (schedulerError) {
-    console.warn('⚠️  Notification scheduler failed to start:', schedulerError.message);
+    logger.warn('⚠️  Notification scheduler failed to start:', schedulerError.message);
   }
 
   // Start analytics snapshot scheduler (every 12 hours)
   try {
     snapshotScheduler.start();
   } catch (schedulerError) {
-    console.warn('⚠️  Snapshot scheduler failed to start:', schedulerError.message);
+    logger.warn('⚠️  Snapshot scheduler failed to start:', schedulerError.message);
   }
 
   // Start campaign scheduler for due scheduled posts
   try {
     startCampaignScheduler();
   } catch (schedulerError) {
-    console.warn('Campaign scheduler failed to start:', schedulerError.message);
+    logger.warn('Campaign scheduler failed to start:', schedulerError.message);
   }
 
   // Posts scheduled on Ayrshare whose time has passed: ask Ayrshare whether they went out (bounded, single runner,
@@ -732,21 +737,21 @@ function startBackgroundJobs() {
   try {
     require('./services/campaignStatusSync').startCampaignStatusSync();
   } catch (schedulerError) {
-    console.warn('Campaign status sync failed to start:', schedulerError.message);
+    logger.warn('Campaign status sync failed to start:', schedulerError.message);
   }
 
   // Start Gravity Smart Calendar scheduler for approved auto mode
   try {
     startContentCalendarScheduler();
   } catch (schedulerError) {
-    console.warn('Content calendar scheduler failed to start:', schedulerError.message);
+    logger.warn('Content calendar scheduler failed to start:', schedulerError.message);
   }
 
   // Pick up photoshoots a restart left half-made (off with ENABLE_PHOTOSHOOT_RESUME=off)
   try {
     require('./services/photoshoot').startPhotoshootResume();
   } catch (schedulerError) {
-    console.warn('Photoshoot resume failed to start:', schedulerError.message);
+    logger.warn('Photoshoot resume failed to start:', schedulerError.message);
   }
 
   // Close Videos a restart left processing (refunding only what was charged) and finish interrupted refunds
@@ -754,7 +759,7 @@ function startBackgroundJobs() {
   try {
     require('./routes/studioVideos').startStudioVideoSweep();
   } catch (schedulerError) {
-    console.warn('Videos sweep failed to start:', schedulerError.message);
+    logger.warn('Videos sweep failed to start:', schedulerError.message);
   }
 
   // Close Home drafts a restart left open (refunding their Quarks) and retry refunds that did not land
@@ -762,35 +767,35 @@ function startBackgroundJobs() {
   try {
     require('./services/homeDrafts').startHomeDraftsSweep();
   } catch (schedulerError) {
-    console.warn('Home drafts sweep failed to start:', schedulerError.message);
+    logger.warn('Home drafts sweep failed to start:', schedulerError.message);
   }
 
   // Remove items that have been in the Bin for more than 14 days, with their stored files (off with ENABLE_BIN_PURGE=off)
   try {
     require('./services/binPurge').startBinPurge();
   } catch (schedulerError) {
-    console.warn('Bin purge failed to start:', schedulerError.message);
+    logger.warn('Bin purge failed to start:', schedulerError.message);
   }
 
   // Pick up weekly posts a restart left half-made (off with ENABLE_WEEK_RECOVERY=off)
   try {
     require('./services/week/weekRecovery').startWeekRecovery();
   } catch (schedulerError) {
-    console.warn('Weekly post recovery failed to start:', schedulerError.message);
+    logger.warn('Weekly post recovery failed to start:', schedulerError.message);
   }
 
   // Start automatic performance-tracking scheduler (24h/3d/7d/2w/1m checks)
   try {
     startPerformanceTrackerScheduler();
   } catch (schedulerError) {
-    console.warn('Performance tracker scheduler failed to start:', schedulerError.message);
+    logger.warn('Performance tracker scheduler failed to start:', schedulerError.message);
   }
 
   // Monthly invoices for managed clients who have automatic invoices on (hourly check)
   try {
     require('./services/billingScheduler').startBillingScheduler();
   } catch (schedulerError) {
-    console.warn('Billing scheduler failed to start:', schedulerError.message);
+    logger.warn('Billing scheduler failed to start:', schedulerError.message);
   }
 
   // Owner is emailed once when social profiles reach the alert level (counted from our own accounts, checked hourly)
@@ -798,62 +803,62 @@ function startBackgroundJobs() {
     const watch = require('./services/ayrshareProfileWatch');
     // Through a lease (services/leaseLock.js) so only one server sends the alert email.
     const run = () => require('./services/leaseLock').withLease('scheduler:profile-watch', 10 * 60 * 1000, () => watch.check({ User: require('./models/User'), alert: watch.opsAlert(require('./services/opsAlerts')), store: watch.modelStore(require('./models/OpsState')) }))
-      .catch((e) => console.warn('Profile watch failed:', e.message));
+      .catch((e) => logger.warn('Profile watch failed:', e.message));
     setTimeout(run, 60 * 1000).unref();
     setInterval(run, 60 * 60 * 1000).unref();
   } catch (watchError) {
-    console.warn('Profile watch failed to start:', watchError.message);
+    logger.warn('Profile watch failed to start:', watchError.message);
   }
 
   // Accounts that asked to be deleted are erased once their 14 days are over
   try {
     require('./services/accountDeletion').startAccountPurge();
   } catch (schedulerError) {
-    console.warn('Account purge failed to start:', schedulerError.message);
+    logger.warn('Account purge failed to start:', schedulerError.message);
   }
 
   // A reminder email three days before each monthly plan charge
   try {
     require('./services/renewalReminders').startRenewalReminders();
   } catch (schedulerError) {
-    console.warn('Renewal reminders failed to start:', schedulerError.message);
+    logger.warn('Renewal reminders failed to start:', schedulerError.message);
   }
 
   // Drafts left "creating" by a restart or a lost connection are closed, and their Quarks returned
   try {
     require('./services/staleDrafts').startStaleDraftReaper();
   } catch (reaperError) {
-    console.warn('Unfinished-draft cleanup failed to start:', reaperError.message);
+    logger.warn('Unfinished-draft cleanup failed to start:', reaperError.message);
   }
 
   // Plan runs a restart interrupted are ended (all of them in a single process; only stale ones in a web/worker split).
   try {
     require('./services/plan/planService').reapOnBoot()
-      .then((r) => { if (r && r.reaped) console.log(`[plan] ended ${r.reaped} plan run(s) a restart interrupted`); })
-      .catch((e) => console.warn('[plan] could not end interrupted plan runs:', e && e.message));
+      .then((r) => { if (r && r.reaped) logger.info(`[plan] ended ${r.reaped} plan run(s) a restart interrupted`); })
+      .catch((e) => logger.warn('[plan] could not end interrupted plan runs:', e && e.message));
   } catch (reapError) {
-    console.warn('Plan run cleanup failed to start:', reapError.message);
+    logger.warn('Plan run cleanup failed to start:', reapError.message);
   }
 
   // Weekly competitor snapshots: capped scraper reads. OFF unless ENABLE_COMPETITOR_TRACKER is exactly "on" (the owner sets it in the production secret)
   try {
     require('./services/competitors/tracker').startCompetitorTracker();
   } catch (schedulerError) {
-    console.warn('Competitor tracker failed to start:', schedulerError.message);
+    logger.warn('Competitor tracker failed to start:', schedulerError.message);
   }
 
   // Weekly comment scoring (a small model reads each account's own comments and messages). OFF unless ENABLE_LISTENING is exactly "on"
   try {
     require('./services/listening/scorer').startListeningScorer();
   } catch (schedulerError) {
-    console.warn('Comment scoring failed to start:', schedulerError.message);
+    logger.warn('Comment scoring failed to start:', schedulerError.message);
   }
 
   // The plan each paying account gets from its profile: monthly refresh, retries for a failed first plan
   try {
     require('./services/plan/planScheduler').startPlanScheduler();
   } catch (schedulerError) {
-    console.warn('Plan scheduler failed to start:', schedulerError.message);
+    logger.warn('Plan scheduler failed to start:', schedulerError.message);
   }
 
   // What Nebulaa learned: daily bounded refresh from the six sources plus change triggers (code only, no model call;
@@ -861,14 +866,14 @@ function startBackgroundJobs() {
   try {
     require('./services/brandMemory/runner').startBrandMemoryJob();
   } catch (schedulerError) {
-    console.warn('Brand memory refresh failed to start:', schedulerError.message);
+    logger.warn('Brand memory refresh failed to start:', schedulerError.message);
   }
 
   // Start weekly AI memory distillation scheduler
   try {
     startMemoryDistillationScheduler();
   } catch (schedulerError) {
-    console.warn('Memory distillation scheduler failed to start:', schedulerError.message);
+    logger.warn('Memory distillation scheduler failed to start:', schedulerError.message);
   }
 }
 
@@ -878,23 +883,23 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   // Run environment health checks at boot
   await validateProductionEnvironment().catch((err) => {
-    console.error('⚠️  Failed running startup health checks:', err.message);
+    logger.error('⚠️  Failed running startup health checks:', err.message);
   });
 
   let mongoConnected = false;
   try {
-    console.log('Connecting to MongoDB...');
+    logger.info('Connecting to MongoDB...');
     let retries = 5;
     while (retries > 0) {
       try {
         // Pool and timeouts from config/mongoOptions.js (MONGO_MAX_POOL_SIZE default 20 per task, MONGO_MIN_POOL_SIZE 2).
         await mongoose.connect(process.env.MONGODB_URI, mongoConnectOptions());
-        console.log('✅ MongoDB connected successfully');
+        logger.info('✅ MongoDB connected successfully');
         mongoConnected = true;
         break;
       } catch (err) {
         retries -= 1;
-        console.warn(`⚠️  MongoDB connection failed. Retries left: ${retries}. Waiting 5 seconds...`);
+        logger.warn(`⚠️  MongoDB connection failed. Retries left: ${retries}. Waiting 5 seconds...`);
         if (retries === 0) throw err;
         await new Promise(res => setTimeout(res, 5000));
       }
@@ -902,7 +907,7 @@ const startServer = async () => {
 
     // Schedulers, sweeps, queue consumers and loops: only where background jobs run (RUN_BACKGROUND, default on).
     // A web-only task (RUN_BACKGROUND=0) serves every request and leaves this work to the worker task.
-    console.log(backgroundRole.describe());
+    logger.info(backgroundRole.describe());
     if (backgroundRole.runsBackground()) startBackgroundJobs();
 
     // Initialize OTP email service
@@ -910,22 +915,22 @@ const startServer = async () => {
       const otpService = require('./services/otpService');
       otpService.initialize();
     } catch (otpError) {
-      console.warn('⚠️  OTP service failed to initialize:', otpError.message);
+      logger.warn('⚠️  OTP service failed to initialize:', otpError.message);
     }
   } catch (error) {
-    console.warn('⚠️  MongoDB not available:', error.message);
+    logger.warn('⚠️  MongoDB not available:', error.message);
     if (process.env.NODE_ENV === 'production') {
-      console.error('❌ MongoDB connection is required in production. Exiting.');
+      logger.error('❌ MongoDB connection is required in production. Exiting.');
       process.exit(1);
     }
-    console.warn('   Server will start in demo mode (no database persistence)');
+    logger.warn('   Server will start in demo mode (no database persistence)');
   }
 
   const server = app.listen(PORT, () => {
-    console.log(`✅ Gravity API server running on http://localhost:${PORT}`);
-    console.log(`   Health check: http://localhost:${PORT}/api/health`);
+    logger.info(`✅ Gravity API server running on http://localhost:${PORT}`);
+    logger.info(`   Health check: http://localhost:${PORT}/api/health`);
     if (!mongoConnected) {
-      console.log('   ⚠️  Running in DEMO MODE (MongoDB unavailable)');
+      logger.info('   ⚠️  Running in DEMO MODE (MongoDB unavailable)');
     }
   });
 
@@ -937,26 +942,26 @@ const startServer = async () => {
   // Memory leak hunting — logs heap + handles every 5 min as [MEM] in stdout.
   // Temporary diagnostic, remove once the leak is identified and fixed.
   try { require('./utils/memoryWatchdog').start(); } catch (e) {
-    console.warn('memoryWatchdog failed to start:', e.message);
+    logger.warn('memoryWatchdog failed to start:', e.message);
   }
 
   server.on('error', (err) => {
     if (err && err.code === 'EADDRINUSE') {
-      console.error(`❌ Port ${PORT} is already in use. Stop the other process or set PORT to a different value.`);
+      logger.error(`❌ Port ${PORT} is already in use. Stop the other process or set PORT to a different value.`);
       process.exit(1);
     }
-    console.error('Server listen error:', err);
+    logger.error('Server listen error:', err);
     process.exit(1);
   });
 };
 
 // Handle MongoDB connection events
 mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB disconnected');
+  logger.info('MongoDB disconnected');
 });
 
 mongoose.connection.on('error', (err) => {
-  console.error('MongoDB connection error:', err);
+  logger.error('MongoDB connection error:', err);
 });
 
 // Graceful shutdown. ECS stops a task with SIGTERM: health and ready answer 503 at once (the load balancer stops sending
@@ -969,7 +974,7 @@ const shutdownDrainMs = () => {
 };
 process.on('SIGTERM', () => {
   const drainMs = shutdownDrainMs();
-  console.log(`SIGTERM received: finishing open requests (at most ${Math.round(drainMs / 1000)} s), then stopping.`);
+  logger.info(`SIGTERM received: finishing open requests (at most ${Math.round(drainMs / 1000)} s), then stopping.`);
   health.markShuttingDown();
   const stop = () => mongoose.connection.close().catch(() => {}).finally(() => process.exit(0));
   setTimeout(() => process.exit(0), drainMs).unref();
@@ -978,7 +983,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', async () => {
   health.markShuttingDown();
-  console.log('\nShutting down gracefully...');
+  logger.info('\nShutting down gracefully...');
   notificationScheduler.stop();
   snapshotScheduler.stop();
   await mongoose.connection.close();
