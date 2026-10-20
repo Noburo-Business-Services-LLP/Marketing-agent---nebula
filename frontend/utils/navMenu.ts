@@ -11,16 +11,11 @@ export function groupHasPath(pathname: string, paths: string[]): boolean {
 type NavUser = { plan?: { tier?: string | null } | null; staffRole?: string | null; isCsm?: boolean; actingAgency?: unknown } | null | undefined;
 
 /**
- * The Competitors tab of Insights. Shown to every account on a paid plan (a managed account has no tier here)
- * so the add-on can be found; the page itself shows the calm "add-on" note to those without it.
- * Hidden for free accounts and for staff-only navigation; shown inside a client the owner or a CSM has opened.
+ * The Competitors tab of Insights. Shown to every signed-in account (free, paid, managed, staff, CSM, agency) so the
+ * feature can always be found; the page itself shows the calm "add-on" note to those without it (decision D22).
  */
-export function showsCompetitorsEntry(user: NavUser, holdsReturnPass: boolean): boolean {
-  if (!user) return false;
-  if (user.plan?.tier === 'free') return false;
-  const inside = !!user.actingAgency || holdsReturnPass;
-  if (inside) return true;
-  return !user.staffRole && !user.isCsm;
+export function showsCompetitorsEntry(user: NavUser, _holdsReturnPass: boolean): boolean {
+  return !!user;
 }
 
 export type NavSection = 'staff' | 'clients' | 'home' | 'plan' | 'create' | 'library' | 'inbox' | 'insights' | 'setup' | 'other';
