@@ -18,6 +18,7 @@ const photoSchema = new mongoose.Schema({
   reason: { type: String, maxlength: 40 }, // why it failed, a code only
   url: { type: String, maxlength: 600 },
   inLibrary: { type: Boolean, default: true },
+  deleted: { type: Boolean }, // the customer deleted this photo: its link is removed and it is never listed again
   startedAt: Date,
   finishedAt: Date
 }, { _id: false });

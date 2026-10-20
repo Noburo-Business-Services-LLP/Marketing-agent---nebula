@@ -14,7 +14,7 @@ const last = (r) => r.handlers[r.handlers.length - 1];
 test('nine routes, every one behind sign-in and a rate limit, mounted under /api/photoshoot', () => {
   const list = routesOf(createPhotoshootRouter({ service: {} }));
   assert.deepStrictEqual(list.map((r) => `${r.method} ${r.path}`), [
-    'get /packs', 'get /options', 'post /jobs', 'get /jobs', 'get /jobs/:id', 'post /jobs/:id/photos/:index/redo', 'patch /jobs/:id/photos/:index', 'get /library', 'post /upload'
+    'get /packs', 'get /options', 'post /jobs', 'get /jobs', 'get /jobs/:id', 'post /jobs/:id/photos/:index/redo', 'patch /jobs/:id/photos/:index', 'delete /jobs/:id/photos/:index', 'get /library', 'post /upload'
   ]);
   for (const r of list) { assert.strictEqual(r.handlers[0], require('../middleware/auth').protect); assert.strictEqual(r.handlers.length, 3); }
   const main = read('server-main.js');
@@ -28,7 +28,7 @@ test('each route passes the user, the params, the body and whether this is a CSM
   const ok = (name) => async (...a) => { seen.push([name, ...a]); return { status: 202, body: { success: true } }; };
   const service = {
     packs: () => ({ packs: [] }), options: async (u, o) => { seen.push(['options', u, o]); return { enabled: true }; },
-    create: ok('create'), list: ok('list'), get: ok('get'), redo: ok('redo'), setInLibrary: ok('setInLibrary'), library: ok('library'), upload: ok('upload')
+    create: ok('create'), list: ok('list'), get: ok('get'), redo: ok('redo'), setInLibrary: ok('setInLibrary'), deletePhoto: ok('deletePhoto'), library: ok('library'), upload: ok('upload')
   };
   const list = routesOf(createPhotoshootRouter({ service }));
   const req = { user: { _id: 'u' }, params: { id: 'j', index: '2' }, body: { key: 'k', inLibrary: false }, actingCsm: { _id: 'c' } };
@@ -37,13 +37,14 @@ test('each route passes the user, the params, the body and whether this is a CSM
   assert.deepStrictEqual(byName.create[2], { pass: true });
   assert.deepStrictEqual(byName.redo.slice(1, 4), ['j', '2', { key: 'k', inLibrary: false }]);
   assert.deepStrictEqual(byName.setInLibrary.slice(1), ['j', '2', false]);
+  assert.deepStrictEqual(byName.deletePhoto.slice(1), ['j', '2']);
   assert.deepStrictEqual(byName.upload[2], { pass: true });
   assert.deepStrictEqual(byName.options[1], { pass: true });
 });
 
 test('a service error is a plain 500 without the error text', async () => {
   const boom = async () => { throw new Error('secret db detail'); };
-  const service = { packs: () => { throw new Error('secret'); }, options: boom, create: boom, list: boom, get: boom, redo: boom, setInLibrary: boom, library: boom, upload: boom };
+  const service = { packs: () => { throw new Error('secret'); }, options: boom, create: boom, list: boom, get: boom, redo: boom, setInLibrary: boom, deletePhoto: boom, library: boom, upload: boom };
   const e = console.error; console.error = () => {};
   try {
     for (const r of routesOf(createPhotoshootRouter({ service }))) {

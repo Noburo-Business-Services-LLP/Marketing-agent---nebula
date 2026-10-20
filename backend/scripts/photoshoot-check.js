@@ -137,6 +137,7 @@ async function runChecks() {
   if (foreign) throw new Error(`Refusing: ${foreign} running photoshoot(s) of other accounts in ${DEV_DB}`);
 
   // ---- fakes: the image generator, the reference loader, the upload store; counted --------------------------------------
+  const removedUrls = [];
   const gen = { calls: 0, failScene: null, hold: null, extra: 0 };
   const fakes = {
     generate: async (args) => {
@@ -147,6 +148,8 @@ async function runChecks() {
     },
     loadRef: async (src) => (src ? { mimeType: 'image/png', data: PNG_B64 } : null),
     upload: async () => ({ success: true, url: 'https://res.cloudinary.com/zz-check/image/upload/nebula-product-images/zz-upload.png' }),
+    // The image host is a fake too: it only remembers which stored pictures it was asked to remove.
+    deleteImage: async (url) => { removedUrls.push(url); return { success: true }; },
     recordSpend: (action, units) => { gen.extra += units; spent.usd += units * ACTION_USD[action]; return spendGuard.record(action, units); },
     env: { ENABLE_PHOTOSHOOT: 'on' }
   };
@@ -199,6 +202,7 @@ async function runChecks() {
     const resumer = await mkUser('resumer');
     const failer = await mkUser('failer');
     const idem = await mkUser('idem');
+    const deleter = await mkUser('deleter');
     const dead1 = await mkUser('dead1'); const dead2 = await mkUser('dead2'); const dead3 = await mkUser('dead3');
     const ownerP = await mkProduct(owner, 'ZZ Brownie box');
     const ownerNoPhoto = await mkProduct(owner, 'ZZ No photo', false);
@@ -206,6 +210,7 @@ async function runChecks() {
     const ownerPlace = await BrandAsset.create({ user: owner._id, type: 'environment', name: 'ZZ Our counter', url: 'https://res.cloudinary.com/zz-check/image/upload/nebula-env/zz.png', cloudinaryPublicId: 'zz-check-env' });
     const poorP = await mkProduct(poor, 'ZZ Poor item'); const minuteP = await mkProduct(minute, 'ZZ Minute item'); const freeP = await mkProduct(free, 'ZZ Free item');
     const resumerP = await mkProduct(resumer, 'ZZ Resume item');
+    const deleterP = await mkProduct(deleter, 'ZZ Delete item');
     const failerP = await mkProduct(failer, 'ZZ Failer item'); const idemP = await mkProduct(idem, 'ZZ Idem item');
     const dead1P = await mkProduct(dead1, 'ZZ Dead one'); const dead2P = await mkProduct(dead2, 'ZZ Dead two'); const dead3P = await mkProduct(dead3, 'ZZ Dead three');
 
@@ -587,6 +592,49 @@ async function runChecks() {
       const r = await call('POST', `/api/photoshoot/jobs/${first._id}/photos/1/redo`, T(owner), { key: first.key });
       assert.strictEqual(r.status, 409); assert.strictEqual(r.body.keyReused, true);
       assert.strictEqual(await balanceOf(owner._id), before);
+    });
+
+    section = '(10) delete one photo:';
+    await check('a photoshoot still being made cannot lose a photo; once finished one photo is deleted, the others stay', async () => {
+      let release; gen.hold = new Promise((r) => { release = r; });
+      const r = await call('POST', '/api/photoshoot/jobs', T(deleter), pack(deleter, deleterP));
+      assert.strictEqual(r.status, 202, r.text.slice(0, 200)); charged(4);
+      const running = await call('DELETE', `/api/photoshoot/jobs/${r.body.job.id}/photos/0`, T(deleter));
+      assert.strictEqual(running.status, 409, running.text.slice(0, 200));
+      release(); gen.hold = null;
+      const j = await finished(r.body.job.id);
+      assert.strictEqual(j.status, 'done');
+      assert.strictEqual((await Job.findById(j._id).lean()).photos.filter((p) => p.deleted).length, 0, 'the refused delete changed nothing');
+      const ledgerBefore = await QuarkLedger.countDocuments({ user: deleter._id });
+      const balBefore = await balanceOf(deleter._id);
+      const doomed = j.photos[1].url;
+      const del = await call('DELETE', `/api/photoshoot/jobs/${j._id}/photos/1`, T(deleter));
+      assert.strictEqual(del.status, 200, del.text.slice(0, 200)); assert.strictEqual(del.body.deleted, true);
+      const after = await Job.findById(j._id).lean();
+      assert.strictEqual(after.photos[1].deleted, true); assert.strictEqual(after.photos[1].url, undefined); assert.strictEqual(after.photos[1].inLibrary, false);
+      assert.ok(after.photos.filter((p) => p.index !== 1).every((p) => !p.deleted && /^https:/.test(p.url)));
+      assert.deepStrictEqual(removedUrls, [doomed], 'the stored picture was handed to the image host cleanup');
+      assert.strictEqual(after.quarks, j.quarks); assert.strictEqual(after.refunded, j.refunded); assert.strictEqual(after.refundedQuarks, j.refundedQuarks); assert.strictEqual(after.photoCount, j.photoCount);
+      assert.strictEqual(await balanceOf(deleter._id), balBefore, 'no refund');
+      assert.strictEqual(await QuarkLedger.countDocuments({ user: deleter._id }), ledgerBefore, 'no ledger row');
+      const view = await call('GET', `/api/photoshoot/jobs/${j._id}`, T(deleter));
+      assert.strictEqual(view.body.job.photos.length, 3); assert.ok(!view.text.includes(doomed));
+      const lib = await call('GET', '/api/photoshoot/library', T(deleter));
+      assert.strictEqual(lib.body.photos.length, 3); assert.ok(!lib.text.includes(doomed));
+      return 'photo 1 gone, 3 left, no refund, no ledger row';
+    });
+    await check('deleting is owner-only, twice is a plain not found, a deleted photo cannot be redone or put back', async () => {
+      const j = await Job.findOne({ user: deleter._id }).lean();
+      assert.strictEqual((await call('DELETE', `/api/photoshoot/jobs/${j._id}/photos/0`, T(other))).status, 404);
+      assert.strictEqual((await Job.findById(j._id).lean()).photos[0].deleted, undefined, 'the other account changed nothing');
+      assert.strictEqual((await call('DELETE', `/api/photoshoot/jobs/${j._id}/photos/1`, T(deleter))).status, 404);
+      assert.strictEqual((await call('DELETE', `/api/photoshoot/jobs/${j._id}/photos/-1`, T(deleter))).status, 400);
+      assert.strictEqual((await call('DELETE', `/api/photoshoot/jobs/nope/photos/0`, T(deleter))).status, 400);
+      assert.strictEqual((await call('DELETE', `/api/photoshoot/jobs/${j._id}/photos/0`)).status, 401);
+      const bal = await balanceOf(deleter._id);
+      assert.strictEqual((await call('POST', `/api/photoshoot/jobs/${j._id}/photos/1/redo`, T(deleter), { key: key() })).status, 404);
+      assert.strictEqual((await call('PATCH', `/api/photoshoot/jobs/${j._id}/photos/1`, T(deleter), { inLibrary: true })).status, 404);
+      assert.strictEqual(await balanceOf(deleter._id), bal, 'nothing charged');
     });
 
     section = '(8) safety at the end:';

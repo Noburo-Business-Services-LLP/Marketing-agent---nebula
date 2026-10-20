@@ -86,7 +86,16 @@ function createPhotoshootRepo({ Job = () => require('../../models/PhotoshootJob'
     listOwn: (user, limit = 20) => lean(J().find({ user, kind: 'pack', status: { $ne: 'refused' } }).sort({ createdAt: -1 }).limit(limit)),
     childrenOf: (user, parentIds) => lean(J().find({ user, parent: { $in: parentIds } }).sort({ createdAt: 1 })),
     libraryOwn: (user, limit = 200) => lean(J().find({ user, status: { $in: ['done', 'partial'] }, photos: { $elemMatch: { status: 'done', inLibrary: true } } }).sort({ createdAt: -1 }).limit(limit)),
-    setInLibrary: async (user, id, index, on) => (await J().updateOne({ _id: id, user, photos: { $elemMatch: { index, status: 'done' } } }, { $set: { 'photos.$.inLibrary': !!on } })).matchedCount === 1,
+    setInLibrary: async (user, id, index, on) => (await J().updateOne({ _id: id, user, photos: { $elemMatch: { index, status: 'done', deleted: { $ne: true } } } }, { $set: { 'photos.$.inLibrary': !!on } })).matchedCount === 1,
+    /**
+     * Deletes ONE finished photo of a finished job: marks it deleted, takes it out of the Library and removes its link,
+     * in one conditional step (a running job never matches). Returns the job as it was before (so the caller can clean up
+     * the stored image), or null. Never touches the refund, the charge or the counts on the job.
+     */
+    deletePhoto: (user, id, index) => lean(J().findOneAndUpdate(
+      { _id: id, user, status: { $in: ['done', 'partial', 'failed'] }, photos: { $elemMatch: { index, status: 'done', deleted: { $ne: true } } } },
+      { $set: { 'photos.$.deleted': true, 'photos.$.inLibrary': false }, $unset: { 'photos.$.url': 1 } },
+      { new: false })),
     countsByOutcome: (day) => J().aggregate([{ $match: { day } }, { $group: { _id: { kind: '$kind', outcome: '$outcome' }, n: { $sum: 1 }, photos: { $sum: '$photoCount' } } }])
   };
 }

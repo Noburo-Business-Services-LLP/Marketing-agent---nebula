@@ -96,8 +96,16 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
     libraryOwn: async (user, limit = 200) => clone(rows.filter((r) => S(r.user) === S(user) && ['done', 'partial'].includes(r.status) && r.photos.some((p) => p.status === 'done' && p.inLibrary)).slice(0, limit)),
     setInLibrary: async (user, id, index, on) => {
       const r = rows.find((x) => S(x._id) === S(id) && S(x.user) === S(user)); if (!r) return false;
-      const p = r.photos.find((x) => x.index === index && x.status === 'done'); if (!p) return false;
+      const p = r.photos.find((x) => x.index === index && x.status === 'done' && x.deleted !== true); if (!p) return false;
       p.inLibrary = !!on; return true;
+    },
+    deletePhoto: async (user, id, index) => {
+      const r = rows.find((x) => S(x._id) === S(id) && S(x.user) === S(user));
+      if (!r || !['done', 'partial', 'failed'].includes(r.status)) return null;
+      const p = r.photos.find((x) => x.index === index && x.status === 'done' && x.deleted !== true); if (!p) return null;
+      const before = clone(r);
+      p.deleted = true; p.inLibrary = false; delete p.url;
+      return before;
     },
     countsByOutcome: async (day) => {
       const m = new Map();

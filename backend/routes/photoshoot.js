@@ -6,6 +6,7 @@
 //   GET    /api/photoshoot/jobs/:id                       one photoshoot with its photos (polled by the page)
 //   POST   /api/photoshoot/jobs/:id/photos/:index/redo    { key } one photo made again, priced as one photo
 //   PATCH  /api/photoshoot/jobs/:id/photos/:index         { inLibrary } keep it in the Library or take it out
+//   DELETE /api/photoshoot/jobs/:id/photos/:index         delete ONE finished photo for good (not while the photoshoot is running)
 //   GET    /api/photoshoot/library                        finished photos kept in the Library
 //   POST   /api/photoshoot/upload                         { name, imageData } a product photo, saved as a new product
 // Inside an agency client or a CSM pass req.user already is the client, and the charge goes to the wallet that pays for
@@ -47,6 +48,7 @@ function createPhotoshootRouter(impl = {}) {
   router.get('/jobs/:id', protect, readLimit, wrap((req) => svc().get(req.user, req.params.id)));
   router.post('/jobs/:id/photos/:index/redo', protect, writeLimit, wrap((req) => svc().redo(req.user, req.params.id, req.params.index, req.body, { pass: passOf(req) })));
   router.patch('/jobs/:id/photos/:index', protect, writeLimit, wrap((req) => svc().setInLibrary(req.user, req.params.id, req.params.index, req.body && req.body.inLibrary)));
+  router.delete('/jobs/:id/photos/:index', protect, writeLimit, wrap((req) => svc().deletePhoto(req.user, req.params.id, req.params.index)));
   router.get('/library', protect, readLimit, wrap((req) => svc().library(req.user)));
   router.post('/upload', protect, limiter(30), wrap((req) => svc().upload(req.user, req.body, { pass: passOf(req) })));
   return router;

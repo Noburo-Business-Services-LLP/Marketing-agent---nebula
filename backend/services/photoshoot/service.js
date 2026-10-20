@@ -51,6 +51,8 @@ const MESSAGES = Object.freeze({
   chargeUnsure: 'We could not start the photoshoot just now. If any Quarks were taken, they come back by themselves in a few minutes. Please try again shortly.',
   keyReused: 'That request was already used for something else. Please reload the page and try again.',
   notFound: 'That photoshoot was not found.',
+  photoNotFound: 'That photo was not found.',
+  deleteRunning: 'This photoshoot is still being made. You can delete its photos once it has finished.',
   redoNotReady: 'This photo can be made again once the photoshoot has finished.',
   upload: 'Please add a PNG, JPEG or WEBP photo of up to 6 MB.',
   uploadName: 'Please give the product a name.',
@@ -119,7 +121,7 @@ function planPhotos({ pack, products, count, background, aspectRatio, placeChose
 /** A job as the page sees it: never the prompt, the payer or the lease. */
 function jobView(job, versions = []) {
   if (!job) return null;
-  const photos = (job.photos || []).map((p) => ({
+  const photos = (job.photos || []).filter((p) => !p.deleted).map((p) => ({
     index: p.index, scene: p.scene, sceneLabel: p.sceneLabel || '',
     product: ((job.products || [])[p.productIndex] || {}).name || '',
     status: p.status === 'done' ? 'done' : p.status === 'failed' ? 'failed' : p.status === 'calling' ? 'making' : 'waiting',
@@ -144,12 +146,23 @@ function jobView(job, versions = []) {
     photoCount: photos.length, done, failed, photos,
     quarks: job.quarks || 0, refundedQuarks: job.refundedQuarks || 0,
     minutes: minutesFor(photos.length), notice,
-    versions: versions.map((v) => {
+    versions: versions.filter((v) => !((v.photos || [])[0] || {}).deleted).map((v) => {
       const p = (v.photos || [])[0] || {};
       return { id: String(v._id), index: v.parentIndex, status: v.status === 'queued' ? 'running' : v.status, url: p.status === 'done' ? p.url || '' : '', inLibrary: p.status === 'done' ? p.inLibrary !== false : false };
     }),
     createdAt: job.createdAt, finishedAt: job.finishedAt || null
   };
+}
+
+/**
+ * The image host's id of one of our stored pictures, from its https link (".../image/upload/[v123/]folder/name.png"
+ * gives "folder/name"). '' for any other link, so nothing else can ever be deleted from here. Pure.
+ */
+function publicIdOf(url) {
+  const m = /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?:v\d+\/)?([^?#]+?)(?:\.[a-z0-9]{2,5})?(?:[?#].*)?$/i.exec(String(url || ''));
+  if (!m) return '';
+  const id = m[1];
+  return /^[A-Za-z0-9_\-\/]+$/.test(id) && !id.includes('..') ? id : '';
 }
 
 function defaultDeps() {
@@ -161,6 +174,8 @@ function defaultDeps() {
     placesOf: (userId, ids) => m('BrandAsset').find({ user: userId, type: 'environment', ...(ids ? { _id: { $in: ids } } : {}) }).select('user name url').sort({ createdAt: -1 }).limit(ids ? ids.length : 30).maxTimeMS(20000).lean(),
     createProduct: async (doc) => (await m('Product').create(doc)).toObject(),
     countUploadsSince: (userId, since) => m('Product').countDocuments({ user: userId, tags: 'photoshoot-upload', createdAt: { $gte: since } }),
+    // Best effort: the stored picture is removed from the image host; a failure never blocks or undoes the delete.
+    deleteImage: async (url) => { const id = publicIdOf(url); if (!id) return { success: false }; return require('../imageUploader').deleteImage(id); },
     upload: (dataUrl) => require('../imageUploader').uploadBase64Image(dataUrl, 'nebula-product-images'),
     spend: (userId, cost, opts) => quarks().spend(userId, cost, opts),
     settle: (userId) => quarks().settleWallet(userId).catch(() => null),
@@ -439,7 +454,7 @@ function createPhotoshoot(given = {}) {
       if (!parent || parent.kind !== 'pack') return reply(404, { message: MESSAGES.notFound });
       if (!['done', 'partial', 'failed'].includes(parent.status)) return reply(409, { message: MESSAGES.redoNotReady });
       const photo = (parent.photos || []).find((p) => p.index === i);
-      if (!photo) return reply(404, { message: MESSAGES.notFound });
+      if (!photo || photo.deleted) return reply(404, { message: MESSAGES.notFound });
       await resumeLost().catch(() => null);
       if (await repo.anyInFlight(userId)) return reply(409, { inProgress: true, message: MESSAGES.inProgress });
       // The product and the place must still be the caller's own, with a photo.
@@ -675,7 +690,7 @@ function createPhotoshoot(given = {}) {
     for (const j of jobs) {
       const pack = packOf(j.pack);
       for (const p of j.photos || []) {
-        if (p.status !== 'done' || p.inLibrary === false || !p.url) continue;
+        if (p.status !== 'done' || p.deleted || p.inLibrary === false || !p.url) continue;
         photos.push({
           jobId: String(j._id), index: p.index, url: p.url, kind: j.kind || 'pack', pack: j.pack, packTitle: pack ? pack.title : '',
           scene: p.sceneLabel || '', product: ((j.products || [])[p.productIndex] || {}).name || '', aspectRatio: j.aspectRatio, createdAt: p.finishedAt || j.createdAt
@@ -691,6 +706,27 @@ function createPhotoshoot(given = {}) {
     if (!isObjectId(id) || !Number.isInteger(i) || i < 0 || typeof on !== 'boolean') return reply(400, { message: MESSAGES.input });
     const ok = await repo.setInLibrary(userId, id, i, on);
     return ok ? reply(200, { inLibrary: on }) : reply(404, { message: MESSAGES.notFound });
+  }
+
+  /**
+   * DELETE /jobs/:id/photos/:index: deletes ONE finished photo of the caller's own finished photoshoot. It leaves the job,
+   * the Library and the page, and its stored picture is removed from the image host (best effort). It never touches the
+   * charge, the refund or the ledger: what was spent stays spent. A photoshoot still being made cannot lose photos.
+   */
+  async function deletePhoto(user, id, index) {
+    const userId = idOf(user);
+    const i = Number(index);
+    if (!isObjectId(id) || !Number.isInteger(i) || i < 0) return reply(400, { message: MESSAGES.input });
+    const job = await repo.findOwn(userId, id);
+    if (!job) return reply(404, { message: MESSAGES.notFound });
+    if (!['done', 'partial', 'failed'].includes(job.status)) return reply(409, { message: MESSAGES.deleteRunning });
+    const before = await repo.deletePhoto(userId, id, i);
+    if (!before) return reply(404, { message: MESSAGES.photoNotFound });
+    const gone = (before.photos || []).find((p) => p.index === i);
+    if (gone && gone.url && deps.deleteImage) {
+      try { await deps.deleteImage(gone.url); } catch (e) { console.warn('[photoshoot] stored picture was not removed:', e && e.message); }
+    }
+    return reply(200, { deleted: true });
   }
 
   /** POST /upload: one product photo, saved as a new product of the caller. Free. */
@@ -722,7 +758,7 @@ function createPhotoshoot(given = {}) {
     return rows.map((r) => ({ kind: r._id.kind, outcome: r._id.outcome || 'running', jobs: r.n, photos: r.photos }));
   }
 
-  return { packs, options, create, redo, get, list, library, setInLibrary, upload, runJob, resumeLost, finalize, sweepStale, retryRefunds, dailyCounts, _locks: locks, _running: running };
+  return { packs, options, create, redo, get, list, library, setInLibrary, deletePhoto, upload, runJob, resumeLost, finalize, sweepStale, retryRefunds, dailyCounts, _locks: locks, _running: running };
 }
 
-module.exports = { createPhotoshoot, catalogue, packView, planPhotos, jobView, minutesFor, istDay, MESSAGES, ACTION, ACTION_USD_PER_PHOTO: () => ACTION_USD[ACTION] };
+module.exports = { createPhotoshoot, publicIdOf, catalogue, packView, planPhotos, jobView, minutesFor, istDay, MESSAGES, ACTION, ACTION_USD_PER_PHOTO: () => ACTION_USD[ACTION] };

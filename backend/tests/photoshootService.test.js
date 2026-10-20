@@ -2,7 +2,7 @@
 // are in memory (tests/helpers/fakePhotoshootRepo.js mirrors services/photoshoot/repo.js).
 const test = require('node:test');
 const assert = require('node:assert');
-const { createPhotoshoot, MESSAGES, planPhotos, jobView, catalogue } = require('../services/photoshoot/service');
+const { createPhotoshoot, MESSAGES, planPhotos, jobView, catalogue, publicIdOf } = require('../services/photoshoot/service');
 const { createFakePhotoshootRepo } = require('./helpers/fakePhotoshootRepo');
 const { QUARK_COSTS } = require('../config/apiCosts');
 const caps = require('../config/photoshoot');
@@ -620,4 +620,76 @@ test('M7: a key is one request: a pack key is not replayed for a redo, nor a red
   assert.strictEqual((await w.svc.redo(userOf(U1), a.body.job.id, 1, { key: k })).status, 409);
   assert.strictEqual((await w.svc.create(userOf(U1), { ...body(), key: k })).status, 409);
   assert.strictEqual(w.money.filter((m) => m.type === 'spend').length, 2);
+});
+
+test('delete one photo: it leaves the job and the Library, its stored picture is removed, money and counts stay', async () => {
+  const w = world();
+  const removed = [];
+  w.deps.deleteImage = async (url) => { removed.push(url); return { success: true }; };
+  const svc = createPhotoshoot(w.deps);
+  await svc.create(userOf(U1), body());
+  await w.drain();
+  const job = w.repo.rows[0];
+  const url = job.photos[2].url;
+  const money = JSON.stringify(w.money); const refunded = job.refunded; const quarks = job.quarks;
+  const r = await svc.deletePhoto(userOf(U1), job._id, 2);
+  assert.strictEqual(r.status, 200); assert.strictEqual(r.body.deleted, true);
+  assert.deepStrictEqual(removed, [url]);
+  const view = (await svc.get(userOf(U1), job._id)).body.job;
+  assert.strictEqual(view.photos.length, 3); assert.ok(!view.photos.some((p) => p.index === 2));
+  assert.strictEqual((await svc.library(userOf(U1))).body.photos.length, 3);
+  assert.ok(!JSON.stringify(view).includes(url));
+  assert.strictEqual(JSON.stringify(w.money), money, 'no charge and no refund moved');
+  assert.strictEqual(w.repo.rows[0].refunded, refunded); assert.strictEqual(w.repo.rows[0].quarks, quarks);
+  assert.strictEqual(w.repo.rows[0].photoCount, job.photoCount);
+  // Twice is a plain not found; the photo cannot be made again or put back in the Library.
+  assert.strictEqual((await svc.deletePhoto(userOf(U1), job._id, 2)).status, 404);
+  assert.strictEqual((await svc.setInLibrary(userOf(U1), job._id, 2, true)).status, 404);
+  assert.strictEqual((await svc.redo(userOf(U1), job._id, 2, { key: key() })).status, 404);
+  assert.strictEqual(removed.length, 1);
+});
+
+test('delete one photo: only your own, only when finished, a bad index or id is refused, a host failure changes nothing', async () => {
+  const w = world();
+  w.deps.deleteImage = async () => { throw new Error('host down'); };
+  const svc = createPhotoshoot(w.deps);
+  await svc.create(userOf(U1), body());
+  const id = w.repo.rows[0]._id;
+  // Still running (queued work not yet drained).
+  assert.strictEqual((await svc.deletePhoto(userOf(U1), id, 0)).status, 409);
+  assert.ok(w.repo.rows[0].photos.every((p) => !p.deleted));
+  await w.drain();
+  assert.strictEqual((await svc.deletePhoto(userOf(U2), id, 0)).status, 404, 'someone else\'s job');
+  assert.strictEqual((await svc.deletePhoto(userOf(U1), 'nope', 0)).status, 400);
+  assert.strictEqual((await svc.deletePhoto(userOf(U1), id, -1)).status, 400);
+  assert.strictEqual((await svc.deletePhoto(userOf(U1), id, 'x')).status, 400);
+  assert.strictEqual((await svc.deletePhoto(userOf(U1), id, 99)).status, 404);
+  const quiet2 = console.warn; console.warn = () => {};
+  try { assert.strictEqual((await svc.deletePhoto(userOf(U1), id, 0)).status, 200, 'the host failing is best effort'); } finally { console.warn = quiet2; }
+  assert.strictEqual(w.repo.rows[0].photos[0].deleted, true);
+});
+
+test('delete one photo: a photo that did not finish cannot be deleted, a version leaves the page and the original shows again', async () => {
+  const w = world({ gens: sideFails() });
+  const svc = createPhotoshoot(w.deps);
+  await svc.create(userOf(U1), body());
+  await w.drain();
+  const parent = w.repo.rows[0];
+  assert.strictEqual(parent.photos[1].status, 'failed');
+  assert.strictEqual((await svc.deletePhoto(userOf(U1), parent._id, 1)).status, 404, 'not made, nothing to delete');
+  w.clock.t = new Date(NOW.getTime() + 61000);
+  w.deps.generate = async () => ({ ok: true, url: 'https://res.cloudinary.com/x/image/upload/nebula-campaign-posts/again.png' });
+  await createPhotoshoot(w.deps).redo(userOf(U1), parent._id, 1, { key: key() });
+  await w.drain();
+  const child = w.repo.rows[1];
+  assert.strictEqual((await svc.get(userOf(U1), parent._id)).body.job.versions.length, 1);
+  assert.strictEqual((await svc.deletePhoto(userOf(U1), child._id, 0)).status, 200);
+  assert.strictEqual((await svc.get(userOf(U1), parent._id)).body.job.versions.length, 0);
+  assert.strictEqual((await svc.library(userOf(U1))).body.photos.length, 3);
+});
+
+test('publicIdOf only ever names one of our stored pictures', () => {
+  assert.strictEqual(publicIdOf('https://res.cloudinary.com/x/image/upload/v17/nebula-campaign-posts/abc_1.png'), 'nebula-campaign-posts/abc_1');
+  assert.strictEqual(publicIdOf('https://res.cloudinary.com/x/image/upload/nebula-campaign-posts/p1.png?x=1'), 'nebula-campaign-posts/p1');
+  for (const bad of ['', null, 'http://res.cloudinary.com/x/image/upload/a.png', 'https://evil.example/image/upload/a.png', 'https://res.cloudinary.com/x/video/upload/a.mp4', 'https://res.cloudinary.com/x/image/upload/../a.png', 'data:image/png;base64,AAAA']) assert.strictEqual(publicIdOf(bad), '', String(bad));
 });
