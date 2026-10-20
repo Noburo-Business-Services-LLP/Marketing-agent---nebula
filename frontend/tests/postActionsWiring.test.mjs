@@ -72,7 +72,8 @@ test('the api helpers call the Phase 1 routes', () => {
     assert.match(src, new RegExp(`${fn}: async[\\s\\S]{0,200}?\\$\\{encodeURIComponent\\(id\\)\\}${path}\`, \\{ method: 'POST' \\}`), fn);
   }
   assert.match(src, /getDraftCounts: async[\s\S]{0,120}'\/drafts\/counts'/);
-  assert.match(src, /getBin: async[\s\S]{0,120}'\/drafts\?status=binned'/);
+  // The Bin is the drafts list with status=binned, read page after page (load-test weeks 2 to 3).
+  assert.match(src, /getBin: async[\s\S]{0,120}draftsAPI\.getDrafts\('binned'\)/);
 });
 
 test('the Library has the views, the counts and the Bin note', () => {

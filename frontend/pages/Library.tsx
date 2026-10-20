@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BookmarkMinus, Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, RotateCcw, Trash2, Wand2, X } from 'lucide-react';
 import { GravityButton } from '../components/gravity';
@@ -36,6 +36,8 @@ const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible
 const seg = (on: boolean) =>
   `shrink-0 whitespace-nowrap h-6 px-2.5 rounded-full text-[12px] font-medium transition-colors ${focusRing} ${on ? 'bg-[var(--gv-accent-fill)] text-[var(--gv-text-primary)] font-semibold shadow-[inset_0_0_0_1px_var(--gv-accent)]' : 'text-[var(--gv-text-secondary)] hover:text-[var(--gv-text-primary)]'}`;
 const select = 'h-9 rounded-lg border border-[var(--gv-border-default)] bg-[var(--gv-panel)] px-3 text-[13px] text-[var(--gv-text-primary)]';
+
+const POSTS_STEP = 30;
 
 const fmtDate = (t: number) => (t ? new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
@@ -84,10 +86,15 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
     } catch { setBinItems([]); } finally { setBinLoading(false); }
   }, []);
 
+  // Posts come in pages (newest first): the Library reads the newest POSTS_STEP and "Load more" reads the next ones.
+  // A refresh reads as many as are already shown, so nothing disappears while you look.
+  const postTarget = useRef(POSTS_STEP);
+  const [morePosts, setMorePosts] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     const [posts, videos, heroes, shoots, studio] = await Promise.allSettled([
-      draftsAPI.getDrafts(),
+      draftsAPI.getDraftsUpTo(postTarget.current),
       videoGenerationAPI.getDrafts(),
       heroVideoAPI.list(),
       photoshootAPI.library(),
@@ -96,6 +103,7 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
     const bad: string[] = [];
     const all: LibraryItem[] = [];
     if (posts.status === 'fulfilled') {
+      setMorePosts(Boolean(posts.value?.nextCursor));
       (posts.value?.drafts || []).forEach((d: any) => {
         const c = fromPostDraft(d); if (c && c.status !== 'binned') all.push(c);
       });
@@ -110,6 +118,12 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
     else bad.push('photoshoots');
     setItems(all); setProblems(bad); setLoading(false);
   }, []);
+
+  const loadMore = async () => {
+    postTarget.current += POSTS_STEP;
+    setLoadingMore(true);
+    try { await load(true); } finally { setLoadingMore(false); }
+  };
 
   useEffect(() => { load(); loadCounts(); }, [load, loadCounts]);
   // A post action anywhere on the page (also inside Review one by one) refreshes the list and the counts.
@@ -286,7 +300,7 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
         <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[var(--gv-accent)]" aria-label="Loading your library" /></div>
       ) : shown.length === 0 ? (
         <div className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] py-14 px-4 text-center space-y-3">
-          <p className="text-[14.5px] text-[var(--gv-text-primary)]">{source.some((i) => inView(i, view)) ? 'Nothing matches these filters.' : emptyText[view]}</p>
+          <p className="text-[14.5px] text-[var(--gv-text-primary)]">{source.some((i) => inView(i, view)) ? 'Nothing matches these filters.' : morePosts && view !== 'bin' ? 'None of your newest posts are in this view. Load more posts to look further back.' : emptyText[view]}</p>
           {source.some((i) => inView(i, view)) ? <GravityButton variant="ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>Clear filters</GravityButton>
             : view === 'all' && !items.length ? <GravityButton onClick={() => navigate('/campaigns')}>Create content</GravityButton>
               : view !== 'all' ? <GravityButton variant="ghost" onClick={() => setView('all')}>Show everything</GravityButton> : null}
@@ -344,6 +358,16 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
             );
           })}
         </ul>
+      )}
+
+      {/* Older posts load on request: the list reads the newest posts first so the page opens fast. */}
+      {!oneByOne && view !== 'bin' && !listLoading && morePosts && (
+        <div className="flex flex-col items-center gap-2 pt-2" data-testid="library-load-more">
+          <p className="text-[13px] text-[var(--gv-text-secondary)]">Showing your newest posts. Older ones load when you ask.</p>
+          <GravityButton variant="ghost" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? <><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Loading</> : 'Load more posts'}
+          </GravityButton>
+        </div>
       )}
 
       {open && isPost(open) && (

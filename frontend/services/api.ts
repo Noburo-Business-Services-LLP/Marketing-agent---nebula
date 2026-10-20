@@ -3,6 +3,7 @@ import { apiErrorFrom } from '../utils/plans';
 import { isShareableRead, shareInflight } from '../utils/inflight';
 import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
+import { collectPages, queryString } from '../utils/pages';
 import type { BlueprintView } from '../utils/blueprint';
 import type { BestPostsResponse } from '../utils/competitorsHome';
 import type { DraftAnswer, DraftKind, DraftOptions } from '../utils/homeDrafts';
@@ -1319,15 +1320,20 @@ export const apiService = {
   // CAMPAIGNS - REAL BACKEND
   // ============================================
 
+  /** Every campaign, page after page (the server sends 20 a page by default, at most 50); the counts come with the first. */
   getCampaigns: async (status?: string): Promise<{ campaigns: Campaign[]; counts?: any }> => {
     try {
-      const queryString = status && status !== 'all' ? `?status=${status}` : '';
-      const response = await apiCall<{ success: boolean; campaigns: Campaign[]; counts: any }>(
-        `/campaigns${queryString}`,
-        { method: 'GET' },
-        true
-      );
-      return { campaigns: response.campaigns || [], counts: response.counts };
+      let counts: any;
+      const { items } = await collectPages<Campaign>(async (cursor, limit) => {
+        const response = await apiCall<{ success: boolean; campaigns: Campaign[]; counts: any; nextCursor?: string | null }>(
+          `/campaigns${queryString({ status: status && status !== 'all' ? status : undefined, cursor, limit })}`,
+          { method: 'GET' },
+          true
+        );
+        if (counts === undefined) counts = response.counts;
+        return { items: response.campaigns || [], nextCursor: response.nextCursor || null };
+      });
+      return { campaigns: items, counts };
     } catch (error) {
       // Using fallback campaign data
       return { campaigns };
@@ -4783,14 +4789,28 @@ export const draftsAPI = {
     }, true);
   },
 
-  getDrafts: async (status?: string, type?: string): Promise<{ drafts: Draft[] }> => {
-    const params = [];
-    if (status) params.push(`status=${encodeURIComponent(status)}`);
-    if (type) params.push(`type=${encodeURIComponent(type)}`);
-    const query = params.length > 0 ? `?${params.join('&')}` : '';
-    return apiCall(`/drafts${query}`, {
-      method: 'GET'
-    }, true);
+  /** One page of drafts, newest first (the server sends 30 by default, at most 50; `nextCursor` asks for the next). */
+  getDraftsPage: async ({ status, type, cursor, limit }: { status?: string; type?: string; cursor?: string | null; limit?: number } = {}): Promise<{ drafts: Draft[]; nextCursor: string | null }> => {
+    const r: any = await apiCall(`/drafts${queryString({ status, type, cursor, limit })}`, { method: 'GET' }, true);
+    return { ...r, drafts: r?.drafts || [], nextCursor: r?.nextCursor || null };
+  },
+
+  /** Every draft (page after page): for the screens that need all of them, like the calendar. */
+  getDrafts: async (status?: string, type?: string): Promise<{ drafts: Draft[]; nextCursor?: string | null }> => {
+    const { items, nextCursor } = await collectPages<Draft>(async (cursor, limit) => {
+      const r = await draftsAPI.getDraftsPage({ status, type, cursor, limit });
+      return { items: r.drafts, nextCursor: r.nextCursor };
+    });
+    return { success: true, drafts: items, nextCursor } as any;
+  },
+
+  /** The newest `count` drafts (the Library shows these and offers Load more); `nextCursor` says there are more. */
+  getDraftsUpTo: async (count: number, status?: string, type?: string): Promise<{ drafts: Draft[]; nextCursor: string | null }> => {
+    const { items, nextCursor } = await collectPages<Draft>(async (cursor, limit) => {
+      const r = await draftsAPI.getDraftsPage({ status, type, cursor, limit });
+      return { items: r.drafts, nextCursor: r.nextCursor };
+    }, { maxItems: count });
+    return { drafts: items, nextCursor };
   },
 
   /** Makes one separate draft per language from one of your drafts. Takes no Quarks and publishes nothing. */
@@ -4868,7 +4888,7 @@ export const draftsAPI = {
 
   /** What is in the Bin (it is never part of the normal list). */
   getBin: async (): Promise<{ drafts: Draft[] }> => {
-    return apiCall('/drafts?status=binned', { method: 'GET' }, true);
+    return draftsAPI.getDrafts('binned');
   },
 
   rejectDraft: async (id: string): Promise<{ success: boolean; message: string }> => {
