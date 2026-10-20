@@ -14,15 +14,21 @@ const GRACE_DAYS = 14;
 const DAY = 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
-const secret = () => process.env.JWT_SECRET || 'nebulaa-account-hash';
-const hmac = (v) => crypto.createHmac('sha256', secret()).update(String(v)).digest('hex');
+// Keyed with HASH_PEPPER (utils/hashPepper.js, G7; no literal fallback). Records made before were keyed with
+// JWT_SECRET, so lookups try that key too (decision D52).
+const pepper = require('../utils/hashPepper');
+const hmac = (v, key = pepper.primaryKey()) => crypto.createHmac('sha256', key).update(String(v)).digest('hex');
 const accountHash = (userId) => hmac(`account:${userId}`);
-const emailHash = (email) => hmac(`email:${String(email || '').trim().toLowerCase()}`);
+const emailText = (email) => `email:${String(email || '').trim().toLowerCase()}`;
+const emailHash = (email) => hmac(emailText(email));
+const emailForms = (email) => [...new Set([String(email || '').trim().toLowerCase(), require('./signupGuard').canonicalEmail(email)])];
 /**
- * Every hash an address is kept or looked up by: the plain lower-case address (what earlier tombstones used) and its
- * canonical form (no +tag, no dots for Gmail), so a deleted person cannot come back under j.ohn+2@gmail.com.
+ * Every hash an address is KEPT by: the plain lower-case address (what earlier tombstones used) and its canonical form
+ * (no +tag, no dots for Gmail), so a deleted person cannot come back under j.ohn+2@gmail.com.
  */
-const emailHashes = (email) => [...new Set([emailHash(email), emailHash(require('./signupGuard').canonicalEmail(email))])];
+const emailHashes = (email) => [...new Set(emailForms(email).map((e) => emailHash(e)))];
+/** Every hash an address may have been kept by, for LOOKUPS: both forms under the current and the earlier key. */
+const emailLookupHashes = (email) => [...new Set(pepper.verificationKeys().flatMap((key) => emailForms(email).map((e) => hmac(emailText(e), key))))];
 
 /** Who may ask to be deleted from the app. Staff and managed clients go through support. */
 function eligibility(user, { isStaff = () => false, resolveTier = () => 'free' } = {}) {
@@ -292,4 +298,4 @@ function startAccountPurge({ intervalMs = 6 * 60 * 60 * 1000, logger = console }
   return () => clearInterval(timer);
 }
 
-module.exports = { RUNNING_STALE_MS, passwordOk, ownsClients, realClientCount, purgeWorkspace, GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, emailHashes, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };
+module.exports = { RUNNING_STALE_MS, passwordOk, ownsClients, realClientCount, purgeWorkspace, GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, emailHashes, emailLookupHashes, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };

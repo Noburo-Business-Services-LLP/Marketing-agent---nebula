@@ -40,7 +40,7 @@ function defaultDeps() {
   return {
     Blueprint: require('../../models/Blueprint'),
     freeBlueprintIsFree: true,
-    deletedBefore: async (email) => !!(await require('../../models/DeletedAccount').exists({ emailHash: { $in: require('../accountDeletion').emailHashes(email) } })),
+    deletedBefore: async (email) => !!(await require('../../models/DeletedAccount').exists({ emailHash: { $in: require('../accountDeletion').emailLookupHashes(email) } })),
     deduct: (...a) => require('../../middleware/trialGuard').deductCredits(...a),
     refund: (...a) => require('../../middleware/trialGuard').refundCredits(...a),
     chargeProof: (...a) => require('../quarkBuckets').chargeProof(...a),
@@ -60,7 +60,8 @@ function defaultDeps() {
     alertOwner: (a) => require('../opsAlerts').notify(a),
     now: () => Date.now(),
     uuid: () => crypto.randomUUID(),
-    hashIp: (ip) => crypto.createHash('sha256').update(`${process.env.JWT_SECRET || 'blueprint'}:${ip}`).digest('hex')
+    // Keyed with HASH_PEPPER (G7, no literal fallback). Only compared within one day, so no earlier key is kept (D52).
+    hashIp: (ip) => require('../../utils/hashPepper').hmacWith(require('../../utils/hashPepper').primaryKey(), `blueprint-ip:${ip}`)
   };
 }
 
