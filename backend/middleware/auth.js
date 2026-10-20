@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { extractBearer } = require('../utils/bearer');
 
 // Demo mode when MONGODB_URI is missing or clearly a placeholder
 // Read at call time so the live inbox stream and socket hub use the exact same rule (never true in production).
@@ -71,12 +72,8 @@ async function _tokenProblem(decoded, user, { UserModel = User } = {}) {
 // every money, plan, entitlement and write route uses this. (`createProtect` only lets tests pass a fake model.)
 const createProtect = ({ UserModel = User, demoMode = isDemoMode } = {}) => async function protect(req, res, next) {
   try {
-    let token;
-
-    // Check for token in Authorization header
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
+    // Only an exact "Bearer <token>" header counts (utils/bearer.js, B6).
+    const token = extractBearer(req);
 
     if (!token) {
       return res.status(401).json({
@@ -214,10 +211,7 @@ const createProtectCached = ({ UserModel = User, cache = authCache.sharedAuthCac
   return async function protectCached(req, res, next) {
     if (demoMode || !settings().enabled) return full(req, res, next);
     try {
-      let token;
-      if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        token = req.headers.authorization.split(' ')[1];
-      }
+      const token = extractBearer(req);
       if (!token) {
         return res.status(401).json({ success: false, message: 'Not authorized. Please log in to access this resource.' });
       }
@@ -297,14 +291,9 @@ async function requireFullUser(req, res, next) {
 }
 
 // Optional auth - doesn't require token but will use it if present
-const optionalAuth = async (req, res, next) => {
+const createOptionalAuth = ({ UserModel = User, demoMode = isDemoMode } = {}) => async function optionalAuth(req, res, next) {
   try {
-    let token;
-
-    // Check for token in Authorization header
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
+    const token = extractBearer(req);
 
     if (!token) {
       // No token, continue without user
@@ -313,7 +302,7 @@ const optionalAuth = async (req, res, next) => {
     }
 
     // Demo mode: accept simple "demo:<email>" token without JWT/Mongo
-    if (isDemoMode) {
+    if (demoMode) {
       if (token.startsWith('demo:')) {
         const email = token.slice(5);
         req.demoEmail = email;
@@ -328,7 +317,7 @@ const optionalAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Check if user still exists
-    const user = await User.findById(decoded.id);
+    const user = await UserModel.findById(decoded.id);
     if (user && user.isActive && !_sessionEnded(decoded, user)) {
       req.user = user;
     } else {
@@ -342,5 +331,6 @@ const optionalAuth = async (req, res, next) => {
     next();
   }
 };
+const optionalAuth = createOptionalAuth();
 
-module.exports = { demoModeActive, generateToken, protect, createProtect, protectCached, createProtectCached, requireFullUser, AUTH_FIELDS, optionalAuth, _agencyPassProblem, _tokenProblem, _allowedWhileDeleting };
+module.exports = { extractBearer, createOptionalAuth, demoModeActive, generateToken, protect, createProtect, protectCached, createProtectCached, requireFullUser, AUTH_FIELDS, optionalAuth, _agencyPassProblem, _tokenProblem, _allowedWhileDeleting };

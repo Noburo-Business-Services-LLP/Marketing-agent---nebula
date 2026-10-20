@@ -41,10 +41,10 @@ const addressKey = (req) => ipKeyGenerator(String(req.ip || ''));
 
 /** The signed-in user's id from the bearer token (signature checked, no database read), or ''. */
 function tokenUserId(req) {
-  const h = String((req.headers && req.headers.authorization) || '');
-  if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return '';
+  const token = require('../utils/bearer').extractBearer(req); // strict "Bearer <token>" (B6)
+  if (!token || !process.env.JWT_SECRET) return '';
   try {
-    const decoded = jwt.verify(h.slice(7), process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     return String((decoded && (decoded.id || decoded.userId)) || '');
   } catch (_) { return ''; }
 }

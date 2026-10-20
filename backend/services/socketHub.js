@@ -12,7 +12,11 @@ function roomForUser(userId) {
 
 async function socketAuth(socket, next) {
   try {
-    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    // A plain token in the handshake (auth or query), or a strict "Bearer <token>" header (utils/bearer.js, B6).
+    const { plainToken, extractBearer } = require('../utils/bearer');
+    const hs = socket.handshake || {};
+    const given = (hs.auth && hs.auth.token) || (hs.query && hs.query.token);
+    const token = given !== undefined && given !== null && given !== '' ? plainToken(given) : extractBearer(hs);
     if (!token) return next(new Error('Missing auth token'));
 
     // Demo tokens name the user with no check, so they work only in demo mode (never in production).

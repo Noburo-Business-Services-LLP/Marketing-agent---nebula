@@ -27,7 +27,9 @@ async function loadReviewContext(req) {
 
 const streamAuth = async (req, res, next) => {
   try {
-    const token = req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    // A plain ?token= (EventSource cannot send headers) or a strict "Bearer <token>" header (utils/bearer.js, B6).
+    const { plainToken, extractBearer } = require('../utils/bearer');
+    const token = req.query.token !== undefined ? plainToken(req.query.token) : extractBearer(req);
     if (!token) return res.status(401).json({ success: false, message: 'Missing auth token' });
     // A demo token names the user with no check at all, so it works only in demo mode (never in production).
     if (String(token).startsWith('demo:') && require('../middleware/auth').demoModeActive()) {
