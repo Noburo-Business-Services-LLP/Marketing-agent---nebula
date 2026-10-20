@@ -95,26 +95,22 @@ test('no customer-facing credits, trial or 7-day wording in the frontend', () =>
 });
 
 test('landing page plan figures come from the backend PLANS config', async () => {
+  // The landing reads the public plans answer; until it arrives it shows PLANS_SNAPSHOT (utils/landingPlans.ts).
+  // The snapshot must match the config: allowance, posts and videos, price, included clients and the extra client price.
   const cfg = await import(path.resolve(ROOT, '../backend/config/apiCosts.js'));
-  const PLANS = (cfg.default || cfg).PLANS;
-  const outputsFor = (cfg.default || cfg).outputsFor;
-  const land = fs.readFileSync(path.join(ROOT, 'pages/LandingPage.tsx'), 'utf8');
-  for (const id of ['starter', 'professional']) {
-    const q = PLANS[id].quarks ?? PLANS[id].credits ?? PLANS[id].allowance;
-    assert.ok(Number.isInteger(q), `PLANS.${id} has a Quark allowance`);
-    const o = outputsFor(q);
-    assert.ok(land.includes(`Up to ${o.posts} posts a month`), `landing shows ${o.posts} posts for ${id}`);
-    assert.ok(land.includes(`up to ${o.videos} short videos`), `landing shows ${o.videos} videos for ${id}`);
+  const { PLANS, outputsFor, AGENCY } = cfg.default || cfg;
+  const { PLANS_SNAPSHOT } = await import(path.join(ROOT, 'utils/landingPlans.ts'));
+  for (const id of ['starter', 'professional', 'agency']) {
+    const snap = PLANS_SNAPSHOT.plans.find((p) => p.id === id);
+    assert.equal(snap.quarks, PLANS[id].quarks, `${id} Quarks`);
+    assert.equal(snap.inr, PLANS[id].inr, `${id} price`);
+    const o = outputsFor(PLANS[id].quarks);
+    assert.ok(snap.features.includes(`Up to ${o.posts.toLocaleString('en-IN')} posts a month, or`), `landing shows ${o.posts} posts for ${id}`);
+    assert.ok(snap.features.includes(`up to ${o.videos.toLocaleString('en-IN')} short videos with voice and music`), `landing shows ${o.videos} videos for ${id}`);
   }
-  // The Agency card: the figures come from the same config (plan allowance, price, client slot, included clients).
-  const A = PLANS.agency;
-  const oa = outputsFor(A.quarks);
-  assert.ok(land.includes(`Up to ${oa.posts} posts a month`), `landing shows ${oa.posts} posts for agency`);
-  assert.ok(land.includes(`up to ${oa.videos} short videos`), `landing shows ${oa.videos} videos for agency`);
-  assert.ok(new RegExp(`price: ${A.inr}\\b`).test(land), 'landing shows the agency price');
-  const AG = (cfg.default || cfg).AGENCY;
-  assert.ok(land.includes(`${AG.includedClients} client brands included`), 'landing shows the included client brands');
-  assert.ok(land.includes(`₹${AG.slot.inr.toLocaleString('en-IN')}/month`), 'landing shows the extra client price');
+  assert.equal(PLANS_SNAPSHOT.agency.includedClients, AGENCY.includedClients, 'included client brands');
+  assert.equal(PLANS_SNAPSHOT.agency.slotInr, AGENCY.slot.inr, 'extra client price');
+  const land = ['pages/LandingPage.tsx', 'constants/landingCopy.ts', 'utils/landingPlans.ts'].map((f) => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
   assert.ok(!/7 days free|free for 7 days|no card needed/i.test(land));
 });
 

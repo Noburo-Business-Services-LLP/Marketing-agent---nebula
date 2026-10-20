@@ -339,7 +339,7 @@ test('document.title is only ever set from plain text (the browser does not read
   const bad = [];
   for (const { rel, src } of SOURCES) for (const m of src.matchAll(/document\.title\s*=\s*([^;\n]+)/g)) {
     const rhs = m[1].trim();
-    if (!/^(documentFileName\(|previous\b|`\$\{displayName\} connected`)/.test(rhs)) bad.push(`${rel}: ${rhs}`);
+    if (!/^(documentFileName\(|previous\b|LANDING_META\.title;?$|`\$\{displayName\} connected`)/.test(rhs)) bad.push(`${rel}: ${rhs}`);
   }
   assert.deepEqual(bad, []);
 });
