@@ -10,6 +10,11 @@ const { PhotoshootConsumer, enabled, startPhotoshootConsumer } = require('../ser
 const { QUARK_COSTS } = require('../config/apiCosts');
 const caps = require('../config/photoshoot');
 
+// Node 20's test runner cancels a test whose pending promise waits on a timer that was unref()'d (the consumer's timers are, so
+// they never keep the real server alive): hold the event loop open with a ref'd timer for the duration of this file.
+const keepLoopAlive = setInterval(() => {}, 1000);
+test.after(() => clearInterval(keepLoopAlive));
+
 const NOW = new Date('2026-10-20T06:00:00Z');
 const MIN = 60000;
 const U1 = '6a0000000000000000000001';
