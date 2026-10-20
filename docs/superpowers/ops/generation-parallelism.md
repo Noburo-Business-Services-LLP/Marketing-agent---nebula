@@ -101,6 +101,8 @@ Last runs (2026-10-20 evening, from the Mac): 7 PASS, 0 FAIL, three runs in a ro
 
 Money review fixes (2026-10-20 night, D83 to D88): a lost reply after the queue flip answers 202 (no refund of a live claim); stale closes close only the claim they read; a claim resolving after SIGTERM is handed back; stored clips are deleted by every stale close and unresumable links by the resume; Omni calls made again after a lost lease, hand-back or unreadable clip are recorded as `studio_video` units, and consumers claim nothing at the daily ceiling or staff switch (`thisWorker.spendHolds`; the row waits and the 30-minute close refunds it); the CPU slot is only around ffmpeg; agency removal waits for open refunds; rollback needs queue depth and running at 0 first, and `scripts/studio-video-drain-queued.js` (dry run by default, `CONFIRM_DRAIN=yes`) closes and refunds leftover queued rows.
 
+After the review fixes (2026-10-20 night): `studio-video-consumer-check.js` 7 PASS, 0 FAIL (3 consumers 2.28x; killed consumer resumed 8.6 s after the kill); `queue-parallel-check.js` 4 PASS, 0 FAIL; unit tests 3037 pass, http tests 22 pass.
+
 Known limits of stage B1 (not removed):
 - A worker that is alive but lost its lease (database stalled longer than the lease) may finish the clip it was making while the re-run makes it again (our provider cost); at the cap the video is failed and refunded although the stalled worker could have finished (customer-favourable). Seen in the check with a 2 s lease and 2 to 4 s write spikes from a laptop; production lease is 60 s.
 - A lost worker at run 2 means a FULL refund, even when some clips were made (no partial delivery from the sweep: it has no ffmpeg).
