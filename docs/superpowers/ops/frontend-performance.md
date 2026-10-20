@@ -21,6 +21,36 @@ What dominated the old script: `services/api.ts` (190 KB of source, the biggest 
 
 Home stays in the main script: it is the page every signed-in visitor lands on, so loading it as a separate file would add one more round trip before the first screen. Measured: the Home page is small beside the shell; keeping it eager costs nothing extra.
 
+## Tailwind at build time (2026-10-20, D67)
+
+The Tailwind Play CDN script is gone. Tailwind now runs inside `vite build` (and the dev server) through PostCSS, with the same version the CDN served (3.4.17, pinned exactly) and the same config `index.html` used to set in the browser.
+
+| First load, sizes in KB raw / gzip (`vite build`; the CDN script measured from `cdn.tailwindcss.com/3.4.17`) | Before | After |
+|---|---|---|
+| Tailwind Play CDN script (third party, ran before the first paint, then built the styles in the browser and watched the page for changes) | 407.3 / 123.1 | gone |
+| Main style sheet `index-*.css` (now holds all Tailwind rules the source uses) | 47.3 / 9.5 | 199.0 / 32.1 |
+| `index.html` (the page `<style>` with tokens and the override layer stays inline) | 111.5 / 18.4 | 110.4 / 17.8 (the inline config script and import map are gone; autoprefixer adds a few prefixes to the inline style) |
+| Scripts of the app (unchanged) | 551 / 165 | 551 / 165 |
+| **Total first load** | **1,117 / 316** | **861 / 215** |
+
+So every first visit downloads about 100 KB gzip less, makes one fewer third-party connection, and no longer runs a 407 KB compiler before anything is drawn. Local measurement in headless Chrome on the production build with sample data (cache off, 7 loads, median): first contentful paint 164 ms -> 128 ms, DOMContentLoaded 150 ms -> 48 ms. On a phone and a slow network the gain is larger (the CDN script was a third-party round trip plus parse and compile on the main thread). The style sheet is 22.6 KB gzip bigger because it now holds every class in the source rather than the ones on the current page; it is cached as `immutable` with the other assets.
+
+What changed:
+- `frontend/tailwind.config.js` (the inline config: `darkMode: 'class'`, the `nebula` and `gravity` colours, the `serif` and `sans` font families, no plugins; the CDN loaded none). `content`: `index.html`, the root `*.{ts,tsx}` and `components`, `pages`, `context`, `hooks`, `utils`, `services`, `constants` (not `tests`, `scripts`, `node_modules`). `safelist`: six hover classes the source builds from pieces (`hover:${isDarkMode ? 'bg-[#161b22]' : 'bg-[#f5f5f5]'}` in `pages/Dashboard.tsx` and the like in `components/NotificationBell.tsx`); the Play CDN saw them in the live page, a build cannot. `tests/tailwindBuild.test.mjs` fails when a new `variant:${...}` appears.
+- `frontend/postcss.config.js` (tailwindcss, autoprefixer), `frontend/index.css` (`@tailwind base; components; utilities`), imported FIRST in `index.tsx`.
+- `index.html`: removed the CDN script and its preconnect, the inline config script and the esm.sh import map (nothing imported from esm.sh: the build bundles React, Router and icons). The Google Fonts stylesheet stays non-blocking (`media=print`, preconnect, `noscript` copy); its inline `onload` handler moved into the bundle (`utils/fontStyles.ts`), so the page has no inline script left.
+- Cascade order is the one the CDN produced, measured in the browser: the page `<style>` in `index.html` (tokens, override layer, LIGHT SEMANTICS) first, then the Tailwind rules, then each component's own `.css`. The CDN appended its `<style>` after the page `<style>`; Vite puts the built `<link>` after it too. The override layer wins by specificity (`body.gravity-shell ...`), never by order, so it did not move. One difference: in the old production build the entry chunk's own CSS (`index-*.css`, then component styles only) came BEFORE the CDN sheet; now the Tailwind rules are at the top of that same file, so those component styles come after the utilities, which is the order the dev server and the audit preview always had. No screen changed (below).
+- `scripts/visual-audit/gen-layer-lists.mjs` skips tool config files (`*.config.js`): the theme hex colours in `tailwind.config.js` would otherwise read as inline backgrounds. The generated block is byte-identical.
+- `scripts/visual-audit/vite.audit.config.mjs`: runs Tailwind with the fixture pages added to `content` (so the production build carries no audit-only classes), and `/__layer-fixtures` links `/index.css` and switches the font sheet on itself (it has no app script).
+- CSP (report-only): `cdn.tailwindcss.com` and `esm.sh` removed from `script-src` and `connect-src` in `backend/config/csp.js` and `nginx.conf` (D67, security-hardening.md section 5).
+
+Proof that nothing changed on screen:
+- Pixel diff, headless Chrome, sample-data preview, before from the committed code (a second worktree) and after: 21 screens at 1280 and 375 (Home, My plan, Create, Videos, Photoshoot, Library needs approval and all, Inbox, Insights performance, Competitors, What Nebulaa learned, Settings billing and profile, Help, Plan calendar, Brand assets, Connect socials, Blueprint, landing, both layer-fixture pages), up to 4 viewport-high segments of each page's scroller (121 images per set), animations off. Every screen 0.000 percent at a tolerance of 16 per channel; at tolerance 0 the largest is 0.032 percent (Library all at 375: text anti-aliasing). The same 19 app screens on the production builds (before with the CDN, after with the built CSS, served with the mock session): 0.000 percent everywhere.
+- Contrast audit (all modes, 1280 and 375, 182 result files): failures 147 (1280) and 70 (375) before and after, every one of the 182 results identical (elements checked, failures, ratios). The gate was already FAIL before for the known items (`layer-needs-fix.json`, unsigned unknowns); unchanged.
+- Purge: every class in the DOM of every audit route (1,868 tokens, both widths, all modes) was compiled with Tailwind and looked up in the build output. Missing: none of the app's classes (the six composed hover classes were found this way and safelisted); the 15 still missing exist only in the audit fixture pages, which the audit server adds for itself.
+- Dark theme: not applicable. The app is light only (`utils/theme.ts` removes `dark`), so `dark:` variants never apply, before or after.
+- Docker: `docker build -f Dockerfile.frontend` (Node 20.20.2; `npm ci` installs the dev dependencies in the build stage, and Tailwind runs inside `npm run build`) produced the same CSS file (same hash) as the local build; the nginx container served it as `text/css`, gzip, `public, immutable`, with the new report-only CSP header.
+
 ## What changed
 
 - `App.tsx`: every page except Layout and Home is `lazyWithRetry` (list of loaders in `utils/routeChunks.ts`). HashRouter, every route and every redirect are unchanged (guarded by `tests/lazyPages.test.mjs` and the older route tests).
@@ -37,14 +67,14 @@ Home stays in the main script: it is the page every signed-in visitor lands on, 
 
 | Item | Cost | Done / advice |
 |---|---|---|
-| Tailwind Play CDN script (`cdn.tailwindcss.com`) | Largest remaining cost. About 300+ KB of script that must run before the first paint, then builds the styles in the browser and re-scans the page on every change. Production use is discouraged by Tailwind itself. | Not removed: the whole app depends on it at run time. Preconnect added. See "Tailwind" below. |
+| Tailwind Play CDN script (`cdn.tailwindcss.com`) | Was the largest remaining cost: 407 KB (123 KB gzip) of script that ran before the first paint, then built the styles in the browser and re-scanned the page on every change. | Removed (D67): Tailwind is built at build time. See "Tailwind at build time". |
 | Google Fonts stylesheet (9 families) | Blocked the first paint on a third-party round trip, then font files for any family used. | Made non-blocking, preconnect added. Advice: the 9 families (Montserrat, Poppins, Lora, Roboto, Tamil, Devanagari are picks for posts or languages) could load only when chosen; or self-host the two used by the app shell (Plus Jakarta Sans, Playfair Display) as woff2 with a `preload`. Not done, it needs a design check. |
-| esm.sh import map | Zero. The build bundles React, Router and icons, so nothing reads the map. It only matters if someone opens the source without a build. | Left alone; safe to delete later. |
+| esm.sh import map | Zero. The build bundles React, Router and icons, so nothing read the map. | Removed (D67). |
 | Razorpay `checkout.js` | One blocking third-party request on every page. | Now loaded on first payment. |
 
-## Tailwind: the risk of moving to a build step
+## Tailwind: the risk of moving to a build step (resolved by D67, kept for the record)
 
-The styles are produced in the browser. A build-time Tailwind (PostCSS plugin plus a `tailwind.config` with the same colours and font families that `index.html` sets in `tailwind.config = {...}`) would remove the biggest remaining cost and also remove the flash of unstyled content. It is not a small change here, so it was not done:
+This was written before the move; "Tailwind at build time" above says how each point was handled (the layer did not move: it wins by specificity and stays before the utilities, as with the CDN). The styles were produced in the browser. A build-time Tailwind (PostCSS plugin plus a `tailwind.config` with the same colours and font families that `index.html` sets in `tailwind.config = {...}`) would remove the biggest remaining cost and also remove the flash of unstyled content. It is not a small change here, so it was not done:
 
 1. The light-theme layer (`gen-layer-lists.mjs` writes the class lists into `index.html`) overrides Tailwind classes such as `bg-white/5` and `text-white` and relies on that rule order: the CDN adds its generated sheet at a known place. With a build, the generated sheet comes from a `<link>` in a different order, so the overrides could lose to the utilities (specificity ties are decided by order). The layer would have to move into the build as a real `@layer` or be loaded after Tailwind.
 2. The generator and `tests/layer-lists.test.mjs` scan class names in the source. Arbitrary values (`bg-[var(--gv-bg)]`) and class names assembled in strings must still be found by the Tailwind `content` globs, or they silently lose their styles.
@@ -78,5 +108,9 @@ The web app is served by nginx (`nginx.conf`, built into `Dockerfile.frontend`),
 - Optionally keep the previous release's `/assets/` files for a few days after a deploy so open tabs of the old release do not get 404s; the retry and reload prompt cover the rest.
 
 ## Checks run
+
+Tailwind at build time (D67): `npx vite build` (also on Node 20.20.2, same output), `node --test tests/*.test.mjs` (875 pass), `npx tsc --noEmit` (0 errors), `npm run lint` (0 errors), `node scripts/visual-audit/gen-layer-lists.mjs --check`, brand, voice and art-budget audits, the pixel diff and contrast audit above, `docker build -f Dockerfile.frontend` and the container serving the CSS, the backend suite (CSP test).
+
+Earlier (code splitting):
 
 `npx vite build`, `node --test tests/*.test.mjs` (843 pass, includes the brand, voice and art-budget audits and the layer-list test), `npx tsc --noEmit` (the one old error in `pages/Influencers.tsx`), and the sample-data preview on port 3170: eleven routes opened in a row (Library, Create, Plan, Insights, Videos, Photoshoot, Settings, Help, Brand assets, the Upload redirect, Home), each loaded on demand with no console error and no error screen.

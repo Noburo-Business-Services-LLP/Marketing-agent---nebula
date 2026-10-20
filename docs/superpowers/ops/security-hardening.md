@@ -121,19 +121,21 @@ Owner: create the bucket and an IAM permission `s3:PutObject` on `uploads/*` for
 
 - Content-Security-Policy in REPORT-ONLY mode: one list in `backend/config/csp.js`, sent by helmet on the API and the
   same header in `nginx.conf` on the app page (index.html and the SPA fallback; a test keeps them equal). Allowed:
-  self; scripts from cdn.tailwindcss.com, esm.sh, checkout.razorpay.com, challenges.cloudflare.com (Turnstile) and
-  inline; styles self, inline, fonts.googleapis.com; fonts fonts.gstatic.com and data; pictures self, data, blob,
+  self; scripts from checkout.razorpay.com, challenges.cloudflare.com (Turnstile) and inline (cdn.tailwindcss.com
+  and esm.sh were removed 2026-10-20, D67: Tailwind is built at build time and the import map is gone); styles self, inline, fonts.googleapis.com; fonts fonts.gstatic.com and data; pictures self, data, blob,
   res.cloudinary.com, *.amazonaws.com, images.unsplash.com, *.cdninstagram.com, *.fbcdn.net, ui-avatars.com; media
   self, data, blob, Cloudinary, S3, soundhelix (sample tracks); connections self, Razorpay (api, lumberjack,
-  checkout), esm.sh, Cloudinary, S3, Turnstile; frames Razorpay and Turnstile; object none; base and form self;
+  checkout), Cloudinary, S3, Turnstile; frames Razorpay and Turnstile; object none; base and form self;
   frame-ancestors self. Reports: `POST /api/csp-report` logs the directive and the blocked origin only (each new pair
   once, a summary every 10 minutes); no page address, sample or file name is kept.
-- WHAT BLOCKS ENFORCING IT: the Tailwind Play CDN (`cdn.tailwindcss.com`) builds the CSS in the browser from an inline
-  config script and injects inline styles, so scripts need `'unsafe-inline'` (it does not need eval as far as we
-  know: the report-only run will show it); `index.html` has other inline scripts; the esm.sh import map loads code
-  from a third party. Build Tailwind at build time and drop the import map (frontend job), then replace
-  `'unsafe-inline'` for scripts with hashes or nonces and switch helmet `reportOnly` to false and nginx to
-  `Content-Security-Policy`. Read a week of `[csp]` log lines first and add any real host they show.
+- WHAT BLOCKS ENFORCING IT: done on the app page (D67, 2026-10-20): Tailwind is built at build time, the inline
+  config script, the esm.sh import map and the fonts `onload` handler are gone, so the built `index.html` has no
+  inline script (only the external bundle). Left: `'unsafe-inline'` for scripts stays because pages the API renders
+  itself carry an inline `<script>` (the Google Calendar sign-in callback in `routes/googleCalendar.js` answers
+  `<script>window.close();</script>`): give those a hash or a nonce, then drop `'unsafe-inline'` from `script-src`.
+  Inline styles stay allowed (React `style={}` attributes and the page `<style>`). Then switch helmet `reportOnly`
+  to false and nginx to `Content-Security-Policy`. Read a week of `[csp]` log lines first and add any real host
+  they show. Still report-only today.
 - `/generated-media` and `/audio`: `Content-Security-Policy: sandbox`, `X-Content-Type-Options: nosniff`,
   `Content-Disposition` (inline for pictures, video and audio; attachment for anything else).
 - SVG and HTML refused at every upload by claimed type, name AND first bytes (`services/uploadSafety.js`): brand
@@ -203,7 +205,8 @@ passes (short-lived, re-checked on every request) do not end when the agency own
 password; a "sign out everywhere" button would be the same one-line raise.
 
 ### Others
-- Build Tailwind at build time and remove the esm.sh import map (frontend job): needed before the CSP is enforced.
+- Build Tailwind at build time and remove the esm.sh import map: done (D67, `frontend-performance.md`). Next for the
+  CSP: hash or nonce the API's inline callback scripts, drop `'unsafe-inline'` from `script-src`, then enforce.
 - Signed S3 uploads (section 4).
 - `npm audit` in CI and pinned dependencies (ledger).
 

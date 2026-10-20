@@ -33,7 +33,7 @@ Source: `/Users/dineshkannaa/Downloads/NEBULAA HARDE.txt` (written for a Windows
 | E5 Redis adapter | optional loader done | |
 | E6 container hardening, E7 ECS docs | done (nginx image stays root: owner decision) | `Dockerfile.backend`, `backend/docker-entrypoint.sh`, `scripts/verify-dockerfile.js`, D60 |
 | F1 safeHref, F2 DOMPurify, F4 code splitting | done | |
-| F3 build-time Tailwind | TODO (risky) | frontend-performance doc |
+| F3 build-time Tailwind | done: Tailwind 3.4.17 (the CDN's version) built by PostCSS in `vite build`, CDN script, inline config and esm.sh import map removed; about 100 KB gzip less on every first load; 21 screens pixel-identical at 1280 and 375 (dev and production builds), contrast audit unchanged (147 / 70); CSP report-only drops the two hosts | `frontend/tailwind.config.js`, `tests/tailwindBuild.test.mjs`, frontend-performance.md, D67 |
 | F5/F6 UI, G1 zero failing tests | green on Linux/Mac now (backend 2,959 and frontend 870 pass; `tsc --noEmit` has 0 errors) | |
 | G2 HTTP suite | done in a smaller form: no supertest or mongodb-memory-server (not installed); the whole app is loaded in process and called over real HTTP with in-memory stand-ins. Probe pack P1 to P20 (18 tests) plus the metrics route | `backend/tests/http/`, `regression-probes.md`, D63, D64 |
 | G3 CI | done, not yet run on GitHub (Node 20 backend, Node 24 frontend tests, gitleaks binary scanning the change) | `.github/workflows/ci.yml`, `.gitleaks.toml`, D65 |
