@@ -18,6 +18,7 @@ const { getPublicBaseUrl, normalizeTone, audioFilePathForTone } = require('../ut
 const { generateVideoClip, getKlingDuration, generateCharacterImageFal, generateCharacterSheetFal, applyFaceSwapFal, extractFaceEmbedding } = require('./videoService');
 const { uploadVideoFile } = require('./imageUploader');
 const { createRunGate } = require('./runGate');
+const { resolveAllowedLocalFile } = require('../utils/safeLocalFile');
 
 const STORAGE_ROOT = path.resolve(__dirname, '../storage/ai-videos');
 const VIDEO_TARGET = { width: 1080, height: 1920, fps: 30 };
@@ -764,7 +765,7 @@ function resolveLocalGeneratedMediaPath(sourceUrl = '') {
   }
 }
 
-async function materializeSourceToFile({ source, destinationPath }) {
+async function materializeSourceToFile({ source, destinationPath, allowedRoots }) {
   const raw = String(source || '').trim();
   if (!raw) throw new Error('Missing source media');
 
@@ -791,7 +792,8 @@ async function materializeSourceToFile({ source, destinationPath }) {
     return downloadToFile(raw, destinationPath);
   }
 
-  const absolute = path.resolve(raw);
+  // A local file is copied only from the app's own storage (D108): never an arbitrary path.
+  const absolute = await resolveAllowedLocalFile(raw, allowedRoots);
   await fs.promises.copyFile(absolute, destinationPath);
   const stat = await fs.promises.stat(destinationPath);
   if (!stat.size) throw new Error('Copied file is empty');
@@ -3912,7 +3914,7 @@ async function generateThumbnail({
   // Fallback to first scene image.
   const firstScene = Array.isArray(sceneData) && sceneData.length > 0 ? sceneData[0] : null;
   if (firstScene?.imagePath) {
-    await fs.promises.copyFile(firstScene.imagePath, outputPath);
+    await fs.promises.copyFile(await resolveAllowedLocalFile(firstScene.imagePath), outputPath);
     return { path: outputPath, url: outputUrl };
   }
 
@@ -4785,6 +4787,7 @@ module.exports = {
   normalizeCreateInput,
   // Low-level helpers exposed for the per-scene /generateSingleVideoClip route
   materializeSourceToFile,
+  resolveAllowedLocalFile,
   normalizeSceneVideoClip,
   // Exposed so the credit deduction can charge for the same scene count the
   // pipeline will actually generate, rather than a second, possibly

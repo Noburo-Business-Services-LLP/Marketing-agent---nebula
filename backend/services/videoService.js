@@ -208,7 +208,8 @@ async function uploadSceneImageIfNeeded({ fal, scene, imageUrl }) {
     );
   }
 
-  const buffer = await fs.promises.readFile(imagePath);
+  const safePath = await require('../utils/safeLocalFile').resolveAllowedLocalFile(imagePath);
+  const buffer = await fs.promises.readFile(safePath);
   const fileName = path.basename(imagePath) || 'scene.jpg';
   const BlobImpl = globalThis.Blob || BufferBlob;
   if (!BlobImpl) {
