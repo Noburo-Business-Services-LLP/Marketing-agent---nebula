@@ -4,7 +4,7 @@
 // from the request), quotes and previews are read live from the inbox so a deleted or edited item is never shown from
 // a copy, and the model name, vendor names and the model's raw reasons are never returned.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');

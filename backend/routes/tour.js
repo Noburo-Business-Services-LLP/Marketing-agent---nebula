@@ -1,7 +1,7 @@
 // The guided tour's saved progress (/api/tour). Only the customer's own session writes it: staff accounts, a CSM pass and
 // an agency client pass are refused, so looking at a customer's account never marks their tour done.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 

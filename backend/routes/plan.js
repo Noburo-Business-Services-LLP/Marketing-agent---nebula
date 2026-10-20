@@ -1,7 +1,7 @@
 // My plan routes (/api/plan). The plan is made by the system from the business profile; the customer can only read it
 // and ask for a refresh (once a week). The user id is always read from the signed-in account, never from the request.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { resolveTier } = require('../config/entitlements');

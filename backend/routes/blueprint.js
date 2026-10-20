@@ -1,7 +1,7 @@
 // Brand Growth Blueprint routes (/api/blueprint). Every route needs a signed-in user. The tier, user id and price are
 // always read on the server; nothing the client sends can set them.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');

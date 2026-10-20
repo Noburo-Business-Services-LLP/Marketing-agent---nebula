@@ -3,7 +3,7 @@
 // one (inside an agency or CSM pass req.user already is the client); an id in the request is ignored. Reads only.
 // Cached for 60 seconds per account, look, range and platform; ?refresh=1 skips the cache. See docs/superpowers/ops/performance-view.md
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { sharedCache } = require('../services/performance/cache');

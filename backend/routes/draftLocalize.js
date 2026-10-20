@@ -3,7 +3,7 @@
 // Quarks are taken (the existing localisation has no price). Kept in its own small router so it can
 // be tested without loading the whole drafts router. Mounted on /api/drafts in server-main.js.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { protect } = require('../middleware/auth');
 const Draft = require('../models/Draft');
 const User = require('../models/User');

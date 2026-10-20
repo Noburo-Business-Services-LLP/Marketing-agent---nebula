@@ -8,7 +8,7 @@
 // the charge goes to the wallet that pays for it. Nothing here posts anywhere: the customer copies a comment and posts it
 // themselves, and a post goes to Create.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 

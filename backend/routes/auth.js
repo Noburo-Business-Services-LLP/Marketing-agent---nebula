@@ -18,7 +18,7 @@ const answerBusy = (res, error) => {
   return true;
 };
 const { newAccountPlan } = require('../config/entitlements');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { signupGuard, publicConfig, canonicalEmail, MSG: SIGNUP_MSG } = require('../services/signupGuard');
 const agencyRules = require('../services/agency');
 const { determineBrandColors } = require('../services/brandIntelligenceService');

@@ -45,7 +45,7 @@ function createPaymentRouter(deps = {}) {
   // Checkout attempts are limited per account and address: a person pays a handful of times, a card-testing script
   // tries hundreds. The test harness injects its own `protect`, and is not limited.
   const payLimiter = deps.protect ? (_req, _res, next) => next() : (() => {
-    const rateLimit = require('express-rate-limit');
+    const rateLimit = require('../services/rateLimitStore').rateLimit;
     return rateLimit({
       windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false,
       message: { success: false, message: 'Too many payment attempts. Please wait a few minutes and try again.' },

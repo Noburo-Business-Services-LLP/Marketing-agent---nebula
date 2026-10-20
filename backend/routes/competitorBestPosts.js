@@ -5,7 +5,7 @@
 // Without the competitors add-on no competitor data is read at all (entitled: false) and only the other honest sources
 // appear under "Trending for you". How it works: docs/superpowers/ops/competitors-home.md
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const caps = require('../config/competitors');

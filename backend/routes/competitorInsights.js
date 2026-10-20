@@ -2,7 +2,7 @@
 // competitors, as short sentences and a small trend. Raw snapshots are never returned, and only competitors that belong
 // to the signed-in account are ever read. Refused for accounts without the competitors add-on (the standard message).
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');

@@ -1,6 +1,6 @@
 // Your data and your account (/api/account): download it, ask for it to be deleted, undo that, and agree to the current terms.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { isStaff } = require('../services/staff/permissions');

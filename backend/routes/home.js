@@ -2,7 +2,7 @@
 // account kind). The account is always the signed-in one (inside an agency or CSM pass req.user already is the client).
 // Reads only. Cached for 60 seconds per account; ?refresh=1 skips the cache. See docs/superpowers/ops/home-summary.md
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protectCached } = require('../middleware/auth');
 const { sharedCache: sharedSummaryCache } = require('../services/homeSummaryCache');

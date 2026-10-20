@@ -1,5 +1,5 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const router = express.Router();
 
 // Anyone can reach this form, and every message becomes an email to the support inbox, so it is limited hard.

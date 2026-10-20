@@ -9,13 +9,14 @@
  *    /auth/me and sign-out are never counted. The account lock after 5 wrong passwords still applies on top.
  *  - social: per signed-in user (300 per 15 minutes) plus a per-address safety cap (1000), instead of 30 per address.
  *  - ai: unchanged, per address.
- * Counters live in this process's memory (one instance today; a shared store is a week 3 item).
+ * Counters: RATE_LIMIT_STORE (memory by default; `mongo` shares them across every task, `redis` when REDIS_URL is set).
+ * Every limiter of the app, these and the route-local ones, is made through services/rateLimitStore.js.
  *
  * The client address comes from `trust proxy` = TRUST_PROXY_HOPS (default 1: the AWS load balancer appends the real
  * address as the last X-Forwarded-For entry). If requests reach this server through a second proxy (the frontend
  * nginx), set TRUST_PROXY_HOPS=2. /api/health/details shows the address the server sees.
  */
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const jwt = require('jsonwebtoken');
 
 const { ipKeyGenerator } = rateLimit;
@@ -69,6 +70,7 @@ function createRateLimits({
 
   const general = rateLimit({
     ...base,
+    name: 'general',
     max: generalMax,
     message: { error: 'Too many requests, please try again later.' },
     keyGenerator: addressKey,
@@ -79,14 +81,14 @@ function createRateLimits({
     }
   });
 
-  const ai = rateLimit({ ...base, max: aiMax, message: { error: 'Too many AI generation requests, please try again later.' }, keyGenerator: addressKey });
+  const ai = rateLimit({ ...base, name: 'ai', max: aiMax, message: { error: 'Too many AI generation requests, please try again later.' }, keyGenerator: addressKey });
 
-  const credentialIp = rateLimit({ ...base, max: credentialIpMax, message: answer(CREDENTIAL_MESSAGE), keyGenerator: addressKey });
-  const credentialAccount = rateLimit({ ...base, max: credentialMax, message: answer(CREDENTIAL_MESSAGE), keyGenerator: (req) => `${addressKey(req)}|${accountKey(req)}` });
+  const credentialIp = rateLimit({ ...base, name: 'credential-ip', max: credentialIpMax, message: answer(CREDENTIAL_MESSAGE), keyGenerator: addressKey });
+  const credentialAccount = rateLimit({ ...base, name: 'credential-account', max: credentialMax, message: answer(CREDENTIAL_MESSAGE), keyGenerator: (req) => `${addressKey(req)}|${accountKey(req)}` });
   const runCredential = (req, res, next) => credentialIp(req, res, (err) => (err ? next(err) : credentialAccount(req, res, next)));
 
-  const socialIp = rateLimit({ ...base, max: socialIpMax, message: answer(SOCIAL_MESSAGE), keyGenerator: addressKey });
-  const socialUser = rateLimit({ ...base, max: socialUserMax, message: answer(SOCIAL_MESSAGE), keyGenerator: (req) => { const id = tokenUserId(req); return id ? `u:${id}` : `a:${addressKey(req)}`; } });
+  const socialIp = rateLimit({ ...base, name: 'social-ip', max: socialIpMax, message: answer(SOCIAL_MESSAGE), keyGenerator: addressKey });
+  const socialUser = rateLimit({ ...base, name: 'social-user', max: socialUserMax, message: answer(SOCIAL_MESSAGE), keyGenerator: (req) => { const id = tokenUserId(req); return id ? `u:${id}` : `a:${addressKey(req)}`; } });
 
   return {
     general,

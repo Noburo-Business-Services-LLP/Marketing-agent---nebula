@@ -2,7 +2,7 @@
 // (inside an agency or CSM pass req.user already is the client). Approve only claims posts and answers at once; the slow
 // work (charging and making each post) runs in the background and is picked up again on the next page load if it stops.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { resolveTier } = require('../config/entitlements');

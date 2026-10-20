@@ -6,7 +6,7 @@
 // The account is always the signed-in one (inside an agency or CSM pass req.user already is the client). No model call,
 // no provider call, nothing charged. See docs/superpowers/ops/brand-memory.md.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 

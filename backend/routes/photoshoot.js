@@ -12,7 +12,7 @@
 // Inside an agency client or a CSM pass req.user already is the client, and the charge goes to the wallet that pays for
 // it. Every read is filtered by the signed-in account, so one account never sees another's photos.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 

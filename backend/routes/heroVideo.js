@@ -1,6 +1,6 @@
 // Gravity Hero video routes (/api/hero-video). The Kling pipeline in videoGeneration.js is untouched.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { checkTrial } = require('../middleware/trialGuard');

@@ -1,6 +1,6 @@
 // Client brands for an agency account (/api/agency): list, add, rename and open.
 const express = require('express');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { AGENCY } = require('../config/apiCosts');

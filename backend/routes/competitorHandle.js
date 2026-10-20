@@ -3,7 +3,7 @@
 // competitor that stopped working is not a dead end. Entitled accounts only, the owner's own competitor only.
 const express = require('express');
 const mongoose = require('mongoose');
-const rateLimit = require('express-rate-limit');
+const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { ipKeyGenerator } = rateLimit;
 const { protect } = require('../middleware/auth');
 const { requireFeature } = require('../middleware/requireFeature');
