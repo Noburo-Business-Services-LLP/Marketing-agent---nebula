@@ -1,4 +1,4 @@
-const bcrypt = require('bcryptjs');
+const passwordHash = require('./passwordHash');
 const crypto = require('crypto');
 
 const usersByEmail = new Map();
@@ -37,7 +37,7 @@ function attachMethods(user) {
       return createPublicUser(user);
     },
     async comparePassword(candidatePassword) {
-      return bcrypt.compare(String(candidatePassword || ''), user.passwordHash);
+      return passwordHash.compare(String(candidatePassword || ''), user.passwordHash);
     },
   };
 }
@@ -57,14 +57,13 @@ async function createUser({ email, password, firstName, lastName = '', companyNa
   }
 
   const passwordString = String(password || '');
-  const salt = await bcrypt.genSalt(12);
-  const passwordHash = await bcrypt.hash(passwordString, salt);
+  const storedHash = await passwordHash.hash(passwordString);
 
   const now = new Date();
   const userRecord = {
     _id: crypto.randomBytes(12).toString('hex'),
     email: normalizedEmail,
-    passwordHash,
+    passwordHash: storedHash,
     firstName: String(firstName || '').trim(),
     lastName: String(lastName || '').trim(),
     companyName: String(companyName || '').trim(),
@@ -137,8 +136,7 @@ async function setPassword(id, newPassword) {
   const user = usersById.get(String(id || ''));
   if (!user) return null;
 
-  const salt = await bcrypt.genSalt(12);
-  user.passwordHash = await bcrypt.hash(String(newPassword || ''), salt);
+  user.passwordHash = await passwordHash.hash(String(newPassword || ''));
   user.updatedAt = new Date();
   usersById.set(user._id, user);
   return attachMethods(user);

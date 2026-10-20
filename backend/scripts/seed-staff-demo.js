@@ -316,7 +316,7 @@ async function main() {
   const uri = process.env.MONGODB_URI;
   const { host, db } = assertSafeTarget(uri);
   const mongoose = require('mongoose');
-  const bcrypt = require('bcryptjs');
+  const passwordHash = require('../services/passwordHash');
   const User = require('../models/User');
   const Draft = require('../models/Draft');
   const FeatureEvent = require('../models/FeatureEvent');
@@ -332,7 +332,7 @@ async function main() {
   console.log(`Seeding ${db} on ${host}`);
 
   const now = Date.now();
-  const hash = await bcrypt.hash(SEED_PASSWORD, 10);
+  const hash = await passwordHash.hash(SEED_PASSWORD, { rounds: 10 });
   const data = buildData(now, hash);
 
   await Promise.all([User, Draft, FeatureEvent, StaffAction, Campaign, VideoJob, HeroVideoJob, Blueprint, SocialInboxMessage].map((m) => m.deleteMany({})));

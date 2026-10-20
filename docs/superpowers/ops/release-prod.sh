@@ -59,6 +59,7 @@ echo; echo "== Smoke test of the backend image (no network): native libraries an
 docker run --rm --network none --platform linux/amd64 -e NODE_ENV=production "$BACKEND_IMAGE" node -e "
 const c=require('canvas'); if(!c.createCanvas(10,10).getContext('2d')) throw new Error('canvas');
 if(!require('fs').existsSync(require('ffmpeg-static'))) throw new Error('ffmpeg missing');
+const bc=require('bcrypt'); if(!bc.compareSync('x', bc.hashSync('x', 4))) throw new Error('bcrypt');
 require('./services/heroVideoFinish'); require('./services/blueprint/service'); require('./routes/blueprint'); require('./config/entitlements');
 console.log('backend image smoke test: ok');"
 

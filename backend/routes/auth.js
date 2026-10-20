@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
-const { generateToken, protect } = require('../middleware/auth');
+const { generateToken, protect, protectCached } = require('../middleware/auth');
 const Competitor = require('../models/Competitor');
 const { removeCompetitorsWithSnapshots } = require('../services/competitors/cleanup');
 
@@ -10,6 +10,13 @@ const { lookupInstagramHandle } = require('../services/serperLookup');
 const { callClaude, parseClaudeJSON } = require('../services/claudeAI');
 const axios = require('axios');
 const otpService = require('../services/otpService');
+// Password and code hashing: native bcrypt on the thread pool, at most 3 at once; a full queue answers a plain 503.
+const { isBusyError, BUSY_MESSAGE: HASH_BUSY_MESSAGE, rehashIfNeeded } = require('../services/passwordHash');
+const answerBusy = (res, error) => {
+  if (!isBusyError(error)) return false;
+  res.status(503).json({ success: false, message: HASH_BUSY_MESSAGE });
+  return true;
+};
 const { newAccountPlan } = require('../config/entitlements');
 const rateLimit = require('express-rate-limit');
 const { signupGuard, publicConfig, canonicalEmail, MSG: SIGNUP_MSG } = require('../services/signupGuard');
@@ -677,6 +684,7 @@ router.post('/signup', signupLimiter, signupGuard(), [
       requiresVerification: true
     });
   } catch (error) {
+    if (answerBusy(res, error)) return;
     console.error('Signup error:', error);
     
     // Handle duplicate key error
@@ -765,6 +773,7 @@ router.post('/send-otp', [
       message: 'Verification code sent to your email.'
     });
   } catch (error) {
+    if (answerBusy(res, error)) return;
     console.error('Send OTP error:', error);
     res.status(500).json({
       success: false,
@@ -865,6 +874,7 @@ router.post('/verify-otp', [
       user: user.toPublicJSON()
     });
   } catch (error) {
+    if (answerBusy(res, error)) return;
     console.error('Verify OTP error:', error);
     res.status(500).json({
       success: false,
@@ -916,6 +926,7 @@ router.post('/forgot-password', [
     console.log(`📧 Password reset OTP sent to ${email}`);
     res.status(200).json({ success: true, message: 'Reset code sent to your email.' });
   } catch (error) {
+    if (answerBusy(res, error)) return;
     console.error('Forgot password error:', error);
     res.status(500).json({ success: false, message: 'Failed to send reset code. Please try again.' });
   }
@@ -949,6 +960,7 @@ router.post('/verify-reset-otp', [
     // OTP valid — don't clear it yet, we need it for the reset step
     res.status(200).json({ success: true, message: 'Code verified. You can now set a new password.' });
   } catch (error) {
+    if (answerBusy(res, error)) return;
     console.error('Verify reset OTP error:', error);
     res.status(500).json({ success: false, message: 'Verification failed.' });
   }
@@ -989,6 +1001,7 @@ router.post('/reset-password', [
     console.log(`✅ Password reset successful for ${email}`);
     res.status(200).json({ success: true, message: 'Password updated successfully. Please sign in.' });
   } catch (error) {
+    if (answerBusy(res, error)) return;
     console.error('Reset password error:', error);
     res.status(500).json({ success: false, message: 'Failed to reset password.' });
   }
@@ -1113,6 +1126,8 @@ router.post('/login', [
     // Update last login
     user.lastLoginAt = new Date();
     await user.save({ validateBeforeSave: false });
+    // A password stored at another cost than BCRYPT_ROUNDS is stored again at that cost (not waited for, never fails the sign-in)
+    rehashIfNeeded(user, password).catch(() => {});
 
     res.status(200).json({
       success: true,
@@ -1121,6 +1136,7 @@ router.post('/login', [
       user: user.toPublicJSON()
     });
   } catch (error) {
+    if (answerBusy(res, error)) return;
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
@@ -1165,7 +1181,8 @@ router.get('/business-context', protect, async (req, res) => {
 // @route   GET /api/auth/me
 // @desc    Get current logged in user
 // @access  Private
-router.get('/me', protect, async (req, res) => {
+// protectCached: only the id is read from req.user; the handler loads the full, fresh user itself (auth-cache.md).
+router.get('/me', protectCached, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
@@ -1508,6 +1525,7 @@ router.put('/change-password', protect, [
       token
     });
   } catch (error) {
+    if (answerBusy(res, error)) return;
     console.error('Change password error:', error);
     res.status(500).json({
       success: false,

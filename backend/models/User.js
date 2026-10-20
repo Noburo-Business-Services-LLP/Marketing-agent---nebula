@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const passwordHash = require('../services/passwordHash');
 const { BASE_LANGUAGES, MAX_ADDITIONAL_LANGUAGES } = require('../services/languageSupport');
 
 const userSchema = new mongoose.Schema({
@@ -466,15 +466,14 @@ userSchema.pre('save', async function (next) {
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
 
-  // Hash password with cost of 12
-  const salt = await bcrypt.genSalt(12);
-  this.password = await bcrypt.hash(this.password, salt);
+  // Cost from BCRYPT_ROUNDS (default 11), on the thread pool, at most 3 at once (services/passwordHash.js)
+  this.password = await passwordHash.hash(this.password);
   next();
 });
 
 // Method to check if password is correct
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+  return passwordHash.compare(candidatePassword, this.password);
 };
 
 // Method to get public profile (without sensitive data)
@@ -527,6 +526,9 @@ userSchema.methods.toPublicJSON = function () {
     createdAt: this.createdAt
   };
 };
+
+// Every write to a user clears that user's short auth cache entries (docs/superpowers/ops/auth-cache.md).
+require('../services/authCacheHooks').attachUserCacheHooks(userSchema);
 
 const User = mongoose.model('User', userSchema);
 

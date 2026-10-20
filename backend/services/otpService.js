@@ -4,7 +4,7 @@
  */
 const { Resend } = require('resend');
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
+const passwordHash = require('./passwordHash');
 
 class OTPService {
   constructor() {
@@ -34,15 +34,14 @@ class OTPService {
    * Hash OTP before storing in DB
    */
   async hashOTP(otp) {
-    const salt = await bcrypt.genSalt(10);
-    return bcrypt.hash(otp, salt);
+    return passwordHash.hash(otp, { rounds: 10 });
   }
 
   /**
    * Verify OTP against stored hash
    */
   async verifyOTP(plainOtp, hashedOtp) {
-    return bcrypt.compare(plainOtp, hashedOtp);
+    return passwordHash.compare(String(plainOtp == null ? '' : plainOtp), hashedOtp);
   }
 
   /**
