@@ -987,4 +987,6 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-startServer();
+// scripts/bench-local.js loads the app without connecting, listening or starting any scheduler.
+module.exports = { app };
+if (process.env.NEBULAA_SERVER_NO_START !== '1') startServer();
