@@ -155,7 +155,8 @@ async function run(doc, work, io = {}, fin = null) {
     const done = await applyFinish(out.buffer, fin, io, null);
     const url = await (io.store || store)(done.buffer);
     if (!url) throw Object.assign(new Error('The video could not be saved. Your Quarks were returned. Please try again.'), { friendly: true });
-    await StudioVideo.updateOne({ _id: doc._id }, { $set: { status: 'completed', videoUrl: url, completedAt: new Date(), ...(done.notice ? { notice: done.notice } : {}), ...(done.seconds ? { seconds: done.seconds } : {}) } });
+    const won = await completeIfOpen(doc, { status: 'completed', videoUrl: url, completedAt: new Date(), ...(done.notice ? { notice: done.notice } : {}), ...(done.seconds ? { seconds: done.seconds } : {}) }, url, io);
+    if (!won) return;
   } catch (e) {
     console.error('[videos] failed:', e.message);
     await fail(doc, e.friendly ? e.message : 'The video could not be made this time. Your Quarks were returned. Please try again.');
@@ -180,25 +181,112 @@ async function applyFinish(buffer, fin, io, timing) {
   }
 }
 
-async function fail(doc, message) {
-  const claimed = await StudioVideo.findOneAndUpdate(
-    { _id: doc._id, refunded: false },
-    { $set: { status: 'failed', error: message, refunded: true, completedAt: new Date() } },
-    { new: true }
-  );
-  if (claimed && claimed.quarks > 0) {
-    // Back to the wallet that paid (recorded at charge time), never to a client record.
-    const back = await quarkBuckets.refundTo(doc.user, claimed.quarks, { action: 'studio_video_refund', ref: String(doc._id), payerId: claimed.payer });
-    if (!back.ok) console.error('[videos] could not return Quarks for', String(doc._id), '- no wallet to return them to');
-  }
+const MAX_REFUND_TRIES = 5;
+const REFUNDING_STALE_MS = 2 * 60 * 1000;
+const OPEN = (id) => ({ _id: id, status: 'processing', refunded: false, refundState: { $ne: 'refunding' } });
+
+/** A refund that did not land needs a person: same alert helpers the Photoshoot module uses. */
+function alertRefund(text, final = false) {
+  if (testIo.alert) return testIo.alert(text, final);
+  try {
+    const ops = require('../services/opsAlerts');
+    ops.recordFailure('studio_video_refund', text);
+    if (final) ops.notify({ key: `studio_video_refund_gave_up:${text}`, subject: 'Nebulaa alert: a Videos refund needs a person', text: `${text}\n\nReturn it by hand and set refundState to done on the video.` });
+  } catch (_) { /* best effort */ }
 }
 
-async function charge(userId, id, amount = COST()) {
+/** Pays a claimed refund (refundState 'refunding'), then marks it done. Returns true when the Quarks are back. */
+async function payClaimed(row) {
+  const id = String(row._id);
+  let ok = false;
+  try {
+    const r = await quarkBuckets.refundTo(row.user, row.refundAmount, { action: 'studio_video_refund', ref: id, payerId: row.refundPayer });
+    ok = !!(r && r.ok);
+  } catch (e) { console.error('[videos] refund threw for', id, e.message); }
+  if (ok) {
+    await StudioVideo.updateOne({ _id: row._id, refundState: 'refunding' }, { $set: { refunded: true, refundState: 'done', refundFailed: false } }).catch((e) => console.error('[videos] could not mark refund done for', id, e.message));
+    return true;
+  }
+  console.error('[videos] could not return Quarks for', id);
+  await StudioVideo.updateOne({ _id: row._id, refundState: 'refunding' }, { $set: { refundFailed: true } }).catch(() => null);
+  alertRefund(`Videos ${id}: the refund did not land (Quarks: ${row.refundAmount}); the sweep will retry.`);
+  return false;
+}
+
+/**
+ * Closes a processing video and returns Quarks, safely:
+ *  - only what the charge proof shows was spent, never more, and only when no refund exists yet;
+ *  - the claim (status change, amount, wallet, refundState 'refunding') is ONE atomic update, then the refund is paid,
+ *    then refunded:true is written. A crash in between leaves 'refunding' for the sweep.
+ * setFor(proof) returns the fields to set on the video; refundFor(doc, proof) the Quarks wanted back.
+ */
+async function closeWithRefund(doc, setFor, refundFor) {
+  const id = String(doc._id);
+  let proof;
+  try {
+    proof = await quarkBuckets.chargeProof(id, { userId: String(doc.user), payerId: doc.payer ? String(doc.payer) : '' });
+  } catch (e) {
+    console.error('[videos] cannot read the charge proof for', id, '- left open for the sweep:', e.message);
+    return null;
+  }
+  const spent = proof && proof.spend ? proof.spend.quarks : 0;
+  const amount = proof && proof.spend && !proof.refunded ? Math.min(Math.max(0, Math.round(refundFor(doc, proof))), spent) : 0;
+  const set = { ...setFor(proof || {}), completedAt: new Date(), refundAmount: amount };
+  if (amount <= 0) {
+    return StudioVideo.findOneAndUpdate(OPEN(doc._id), { $set: { ...set, refunded: true, refundState: '' } }, { new: true });
+  }
+  const claimed = await StudioVideo.findOneAndUpdate(OPEN(doc._id), { $set: { ...set, refundState: 'refunding', refundPayer: String(proof.spend.payer || ''), refundStartedAt: new Date(), refundTries: 0, refundFailed: false } }, { new: true });
+  if (claimed) await payClaimed(claimed);
+  return claimed;
+}
+
+async function fail(doc, message) {
+  return closeWithRefund(
+    doc,
+    (proof) => ({ status: 'failed', error: proof.spend ? message : 'The video could not be started. You were not charged.' }),
+    (d) => d.quarks || 0
+  );
+}
+
+/** Completes a video only while it is still open (not failed, refunded or being refunded). Otherwise the file is discarded. */
+async function completeIfOpen(doc, set, url, io = {}) {
+  const won = await StudioVideo.findOneAndUpdate(OPEN(doc._id), { $set: set }, { new: true });
+  if (won) return won;
+  console.error('[videos] finished after it was closed and refunded; not delivering', String(doc._id));
+  await discardFile(url, io);
+  return null;
+}
+
+/** Deletes an uploaded video nobody will see (best effort; never throws). */
+async function discardFile(url, io = {}) {
+  try {
+    if (io.discard) await io.discard(url);
+    else {
+      const publicId = (/\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i.exec(String(url)) || [])[1];
+      if (publicId) await require('cloudinary').v2.uploader.destroy(publicId, { resource_type: 'video' });
+    }
+  } catch (_) { /* best effort */ }
+}
+
+async function charge(userId, id, amount = COST(), units = 1) {
   await quarkBuckets.settleWallet(userId).catch(() => null);
-  const r = await quarkBuckets.spend(userId, amount, { action: 'studio_video', description: 'Video', ref: id });
+  const r = await quarkBuckets.spend(userId, amount, { action: 'studio_video', description: 'Video', ref: id, units });
   if (r.success) await StudioVideo.updateOne({ _id: id }, { $set: { payer: r.payerId } }).catch(() => null);
   return r.success;
 }
+
+/** The charge did not (or may not have) land: delete the record when nothing was charged, else close it with a proven refund. */
+async function settleUnstarted(doc) {
+  if (!doc) return;
+  try {
+    const p = await quarkBuckets.chargeProof(String(doc._id), { userId: String(doc.user), payerId: doc.payer ? String(doc.payer) : '' });
+    if (!p.spend) { await StudioVideo.deleteOne({ _id: doc._id }); return; }
+    await fail(doc, 'The video could not be started. Your Quarks were returned. Please try again.');
+  } catch (e) { console.error('[videos] could not settle an unstarted video', String(doc._id), e.message); }
+}
+
+// Users with a create in flight: makes the two-at-once check and the insert one step (in this process).
+const creating = new Set();
 
 // Hooks for tests: fakes for the network and ffmpeg steps of a background run. Empty in production.
 const testIo = {};
@@ -228,9 +316,9 @@ async function runChain(doc, work, io = {}) {
     // Real length: the clips overlap a little when they are joined with a fade or zoom.
     const realSeconds = done.seconds || (out.timing && out.timing.seconds ? Math.round(out.timing.seconds * 10) / 10 : out.made * STUDIO_CLIP_SECONDS);
     if (out.made >= total) {
-      await StudioVideo.updateOne({ _id: doc._id }, { $set: { status: 'completed', videoUrl: url, clipsDone: total, seconds: realSeconds, notice: done.notice, completedAt: new Date() } });
+      await completeIfOpen(doc, { status: 'completed', videoUrl: url, clipsDone: total, seconds: realSeconds, notice: done.notice, completedAt: new Date() }, url, io);
     } else {
-      await finishShort(doc, out.made, total, url, realSeconds, done.notice);
+      await finishShort(doc, out.made, total, url, realSeconds, done.notice, io);
     }
   } catch (e) {
     console.error('[videos] failed:', e.message);
@@ -239,22 +327,22 @@ async function runChain(doc, work, io = {}) {
 }
 
 /** Keeps the clips that were made as a shorter video and returns the Quarks for the ones that were not. Once only. */
-async function finishShort(doc, made, total, url, realSeconds = 0, extraNotice = '') {
+async function finishShort(doc, made, total, url, realSeconds = 0, extraNotice = '', io = {}) {
   const secs = realSeconds || made * STUDIO_CLIP_SECONDS;
   const shown = Math.round(secs);
   const notice = [`Only ${made} of ${total} parts could be made, so this video is ${shown} seconds instead of ${total * STUDIO_CLIP_SECONDS}. You were not charged for the missing ${total - made === 1 ? 'part' : 'parts'}.`, extraNotice].filter(Boolean).join(' ');
-  const before = await StudioVideo.findOneAndUpdate(
-    { _id: doc._id, refunded: false },
-    { $set: { status: 'completed', videoUrl: url, clipsDone: made, seconds: secs, notice, refunded: true, completedAt: new Date() } },
-    { new: false }
+  const per = Math.round((doc.quarks || 0) / (doc.clips || total));
+  // One atomic update: the shorter video, the lowered cost and the refund claim together.
+  const closed = await closeWithRefund(
+    doc,
+    (proof) => (proof.spend
+      ? { status: 'completed', videoUrl: url, clipsDone: made, seconds: secs, notice, quarks: per * made }
+      : { status: 'failed', error: 'The video could not be started. You were not charged.' }),
+    (d) => (d.quarks || 0) - per * made
   );
-  if (!before) return;
-  const per = Math.round((before.quarks || 0) / (before.clips || total));
-  const back = (before.quarks || 0) - per * made;
-  await StudioVideo.updateOne({ _id: doc._id }, { $set: { quarks: per * made } }).catch(() => null);
-  if (back > 0) {
-    const r = await quarkBuckets.refundTo(doc.user, back, { action: 'studio_video_refund', ref: String(doc._id), payerId: before.payer });
-    if (!r.ok) console.error('[videos] could not return Quarks for', String(doc._id), '- no wallet to return them to');
+  if (!closed || closed.status === 'failed') {
+    if (!closed) console.error('[videos] short video was not delivered (already closed or proof unavailable):', String(doc._id));
+    await discardFile(url, io);
   }
 }
 
@@ -268,12 +356,18 @@ function partsFrom(b, clips) {
 }
 
 router.post('/create', protect, async (req, res) => {
+  let doc = null; let charged = false; let launched = false; let holding = false; let userId = '';
+  const release = () => { if (holding) { holding = false; creating.delete(userId); } };
   try {
-    const userId = userIdOf(req);
+    userId = userIdOf(req);
     if (!allowed('create', userId, 30)) return res.status(429).json({ success: false, message: 'Please wait a little before making another video.' });
     if (await busy(res, 'studio_video')) return;
+    const tooMany = () => res.status(429).json({ success: false, message: 'Two videos are already being made. Please wait for one to finish.' });
+    // The count and the insert are one step per account (this process), so two quick requests cannot both pass.
+    if (creating.has(userId)) return tooMany();
+    creating.add(userId); holding = true;
     const active = await StudioVideo.countDocuments({ user: userId, status: 'processing', startedAt: { $gt: new Date(Date.now() - STALE_MS * sv.MAX_CLIPS) } });
-    if (active >= 2) return res.status(429).json({ success: false, message: 'Two videos are already being made. Please wait for one to finish.' });
+    if (active >= 2) return tooMany();
     const b = req.body || {};
     const concept = sv.clip(b.concept, 700);
     if (!concept) return res.status(400).json({ success: false, message: 'Plan the video first.' });
@@ -291,17 +385,21 @@ router.post('/create', protect, async (req, res) => {
     };
     const prompts = parts.map((p, k) => sv.assemblePrompt({ ...base, beats: p.beats, spokenLine: p.spokenLine, continuation: k > 0 }));
     const total = clips * COST();
-    const doc = await StudioVideo.create({
+    doc = await StudioVideo.create({
       user: userId, title: sv.clip(b.title, 60) || 'My video', idea: sv.clip(b.idea, 1200), concept,
       spokenLine: parts.map((p) => p.spokenLine).filter(Boolean).join(' ').slice(0, 1200), style, language, voice, aspectRatio, clips, clipsDone: 0,
       parts: clips > 1 ? parts : [], platforms, transition: finishOpts.transition, subtitles: finishOpts.subtitles, logo: finishOpts.logo, endLine: finishOpts.endLine, prompt: prompts.join('\n---\n'), references: refs, quarks: total, seconds: clips * STUDIO_CLIP_SECONDS
     });
     // The whole price is taken in one charge, before anything is made: it either covers every clip or nothing starts.
-    if (!(await charge(userId, String(doc._id), total))) {
+    release();
+    if (!(await charge(userId, String(doc._id), total, clips))) {
       await StudioVideo.deleteOne({ _id: doc._id });
+      doc = null;
       return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `${clips > 1 ? `A ${clips * STUDIO_CLIP_SECONDS} second video` : 'A video'} needs ${priceText(total)}. Please top up or choose a plan.` });
     }
+    charged = true;
     res.status(202).json({ success: true, video: shape(doc) });
+    launched = true;
     const loadRefs = async () => (await Promise.all(refs.map((r) => toRef(r.url)))).filter(Boolean);
     setImmediate(async () => {
       const logoUrl = finishOpts.logo ? await logoUrlOf(userId) : '';
@@ -313,8 +411,10 @@ router.post('/create', protect, async (req, res) => {
     });
   } catch (e) {
     console.error('[videos] create failed:', e.message);
-    res.status(500).json({ success: false, message: 'We could not start the video. Please try again.' });
-  }
+    // A record may exist without a started job: remove it if nothing was charged, else close it with a proven refund.
+    if (doc && !launched) await settleUnstarted(doc);
+    if (!res.headersSent) res.status(500).json({ success: false, message: 'We could not start the video. Please try again.' });
+  } finally { release(); }
 });
 
 // Who could appear in this idea: up to three roles with a short description each. Free: a short text call.
@@ -344,29 +444,46 @@ Return JSON only: {"cast":[{"role":"2 to 4 words","description":"age, looks, clo
 router.post('/reference', protect, async (req, res) => {
   const userId = userIdOf(req);
   const kind = req.body && req.body.kind === 'place' ? 'place' : 'person';
+  // A reference for this attempt: written on the charge, so chargeProof can see it and a refund is never paid twice or without a charge.
+  const ref = `studio_ref_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   try {
     if (!allowed('reference', userId, 20)) return res.status(429).json({ success: false, message: 'Please wait a little before making more pictures.' });
     if (await busy(res, 'studio_reference')) return;
     const cost = QUARK_COSTS.studio_reference;
     await quarkBuckets.settleWallet(userId).catch(() => null);
-    const paid = await quarkBuckets.spend(userId, cost, { action: 'studio_reference', description: kind === 'person' ? 'Person for a video' : 'Place for a video' });
+    const paid = await quarkBuckets.spend(userId, cost, { action: 'studio_reference', description: kind === 'person' ? 'Person for a video' : 'Place for a video', ref });
     if (!paid.success) return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `This needs ${priceText(cost)}. Please top up or choose a plan.` });
     const brand = await brandOf(userId);
     let out = null;
     try {
-      out = await generateOpenAIImage(sv.buildReferencePrompt({ kind, description: req.body && req.body.description, city: brand.location }), { aspectRatio: kind === 'person' ? '16:9' : '9:16', quality: 'medium' });
+      out = await (testIo.image || generateOpenAIImage)(sv.buildReferencePrompt({ kind, description: req.body && req.body.description, city: brand.location }), { aspectRatio: kind === 'person' ? '16:9' : '9:16', quality: 'medium' });
     } catch (e) { console.error('[videos] reference failed:', e.message); }
     if (!out || !out.success || !/^https:\/\//.test(String(out.imageUrl || ''))) {
-      // Back to the wallet that was just charged (the agency pool for a client workspace).
-      await quarkBuckets.refundTo(userId, cost, { action: 'studio_reference_refund', payerId: paid.payerId });
-      return res.status(502).json({ success: false, message: 'We could not make that picture. Your Quarks were returned. Please try again.' });
+      // Back to the wallet that was just charged, only if the proof shows the charge and no refund yet.
+      await refundReference(userId, ref, cost, paid.payerId);
+      return res.status(502).json({ success: false, ref, message: 'We could not make that picture. Your Quarks were returned. Please try again.' });
     }
-    res.json({ success: true, url: out.imageUrl, kind, quarks: cost });
+    res.json({ success: true, url: out.imageUrl, kind, quarks: cost, ref });
   } catch (e) {
     console.error('[videos] reference error:', e.message);
-    res.status(500).json({ success: false, message: 'We could not make that picture. Please try again.' });
+    res.status(500).json({ success: false, ref, message: 'We could not make that picture. Please try again.' });
   }
 });
+
+/** Refunds a failed reference picture: proof first, one retry, an alert when it still does not land. */
+async function refundReference(userId, ref, cost, payerId) {
+  try {
+    const p = await quarkBuckets.chargeProof(ref, { userId, payerId: payerId ? String(payerId) : '' });
+    if (!p.spend || p.refunded) return false;
+    const amount = Math.min(cost, p.spend.quarks);
+    for (let i = 0; i < 2; i += 1) {
+      const r = await quarkBuckets.refundTo(userId, amount, { action: 'studio_reference_refund', ref, payerId: p.spend.payer }).catch(() => null);
+      if (r && r.ok) return true;
+    }
+    alertRefund(`Videos reference ${ref}: the refund (Quarks: ${amount}) did not land.`, true);
+  } catch (e) { console.error('[videos] reference refund error:', e.message); }
+  return false;
+}
 
 // Keep an approved picture in the brand assets so it can be used again. Only pictures made here are accepted.
 router.post('/reference/approve', protect, async (req, res) => {
@@ -388,6 +505,7 @@ router.post('/reference/approve', protect, async (req, res) => {
 });
 
 router.post('/:id/change', protect, async (req, res) => {
+  let doc = null; let launched = false;
   try {
     const userId = userIdOf(req);
     if (!allowed('create', userId, 30)) return res.status(429).json({ success: false, message: 'Please wait a little before making another change.' });
@@ -397,16 +515,18 @@ router.post('/:id/change', protect, async (req, res) => {
     const base = await StudioVideo.findOne({ _id: req.params.id, user: userId, status: 'completed' });
     if (!base || !base.videoUrl) return res.status(404).json({ success: false, message: 'That video is not ready yet.' });
     if ((base.clips || 1) > 1 && (base.seconds || 0) > STUDIO_CLIP_SECONDS) return res.status(400).json({ success: false, message: 'Changes are available for 10-second videos. For a longer video, make a new version.' });
-    const doc = await StudioVideo.create({
+    doc = await StudioVideo.create({
       user: userId, title: base.title, idea: base.idea, concept: base.concept, spokenLine: base.spokenLine, style: base.style,
       language: base.language, voice: base.voice || 'female', platforms: base.platforms || [], aspectRatio: base.aspectRatio, prompt: instruction, parent: base._id, change: instruction,
       references: base.references, quarks: COST(), seconds: STUDIO_CLIP_SECONDS
     });
     if (!(await charge(userId, String(doc._id)))) {
       await StudioVideo.deleteOne({ _id: doc._id });
+      doc = null;
       return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `A change needs ${priceText(COST())}. Please top up or choose a plan.` });
     }
     res.status(202).json({ success: true, video: shape(doc) });
+    launched = true;
     setImmediate(() => run(doc, async () => {
       const r = await fetch(base.videoUrl);
       if (!r.ok) return { ok: false, message: 'The earlier video could not be opened. Your Quarks were returned.' };
@@ -414,12 +534,24 @@ router.post('/:id/change', protect, async (req, res) => {
     }));
   } catch (e) {
     console.error('[videos] change failed:', e.message);
-    res.status(500).json({ success: false, message: 'We could not start the change. Please try again.' });
+    if (doc && !launched) await settleUnstarted(doc);
+    if (!res.headersSent) res.status(500).json({ success: false, message: 'We could not start the change. Please try again.' });
   }
 });
 
+const staleMs = (v) => STALE_MS * (v.clips || 1);
+const isStale = (v, now = Date.now()) => v.status === 'processing' && now - new Date(v.startedAt).getTime() > staleMs(v);
+const STALE_REASON = 'The video took too long and was stopped. Your Quarks were returned. Please try again.';
+
 router.get('/', protect, async (req, res) => {
-  const list = await StudioVideo.find({ user: userIdOf(req) }).sort({ createdAt: -1 }).limit(30).lean();
+  const userId = userIdOf(req);
+  let list = await StudioVideo.find({ user: userId }).sort({ createdAt: -1 }).limit(30).lean();
+  // Lost jobs (a restart, a crash) are closed here too, not only when one video is opened. Bounded per request.
+  const stale = list.filter((v) => isStale(v)).slice(0, 5);
+  if (stale.length) {
+    for (const v of stale) await fail(v, STALE_REASON).catch((e) => console.error('[videos] stale close failed:', e.message));
+    list = await StudioVideo.find({ user: userId }).sort({ createdAt: -1 }).limit(30).lean();
+  }
   res.json({ success: true, videos: list.map(shape) });
 });
 
@@ -427,21 +559,63 @@ router.get('/:id', protect, async (req, res) => {
   const v = await StudioVideo.findOne({ _id: req.params.id, user: userIdOf(req) });
   if (!v) return res.status(404).json({ success: false, message: 'Video not found.' });
   // A job that has been running far too long was lost (a restart, a crash): finish it as failed and return the Quarks.
-  if (v.status === 'processing' && Date.now() - new Date(v.startedAt).getTime() > STALE_MS * (v.clips || 1)) {
-    await fail(v, 'The video took too long and was stopped. Your Quarks were returned. Please try again.');
+  if (isStale(v)) {
+    await fail(v, STALE_REASON);
     const again = await StudioVideo.findById(v._id);
-    return res.json({ success: true, video: shape(again) });
+    return res.json({ success: true, video: shape(again || v) });
   }
   res.json({ success: true, video: shape(v) });
 });
 
 router.delete('/:id', protect, async (req, res) => {
-  await StudioVideo.deleteOne({ _id: req.params.id, user: userIdOf(req), status: { $ne: 'processing' } });
+  // Never while the video is processing or a refund is still being paid.
+  await StudioVideo.deleteOne({ _id: req.params.id, user: userIdOf(req), status: { $ne: 'processing' }, refundState: { $ne: 'refunding' } });
   res.json({ success: true });
 });
+
+/**
+ * One bounded pass: close lost processing videos (refunding only what the proof shows was charged) and pay refunds
+ * that a crash left in 'refunding'. Idempotent and safe to run in several processes: every step is an atomic claim.
+ */
+async function sweep({ limit = 25, now = Date.now() } = {}) {
+  let closed = 0; let paid = 0;
+  const lost = await StudioVideo.find({ status: 'processing', startedAt: { $lt: new Date(now - STALE_MS) } }).sort({ startedAt: 1 }).limit(limit * 2).lean();
+  for (const v of lost.filter((x) => isStale(x, now)).slice(0, limit)) {
+    try { await fail(v, STALE_REASON); closed += 1; } catch (e) { console.error('[videos] sweep close failed:', e.message); }
+  }
+  const stuck = await StudioVideo.find({ refundState: 'refunding', refundStartedAt: { $lt: new Date(now - REFUNDING_STALE_MS) }, refundTries: { $lt: MAX_REFUND_TRIES } }).sort({ refundStartedAt: 1 }).limit(limit).lean();
+  for (const row of stuck) {
+    try {
+      // Take this retry atomically so another process (or the request itself) does not pay it at the same time.
+      const mine = await StudioVideo.findOneAndUpdate({ _id: row._id, refundState: 'refunding', refundStartedAt: row.refundStartedAt }, { $set: { refundStartedAt: new Date(now) }, $inc: { refundTries: 1 } }, { new: true });
+      if (!mine) continue;
+      const proof = await quarkBuckets.chargeProof(String(row._id), { userId: String(row.user), payerId: row.refundPayer || '' });
+      if (proof.refunded) {
+        await StudioVideo.updateOne({ _id: row._id, refundState: 'refunding' }, { $set: { refunded: true, refundState: 'done', refundFailed: false } });
+        paid += 1; continue;
+      }
+      const spent = proof.spend ? proof.spend.quarks : 0;
+      const amount = Math.min(row.refundAmount || 0, spent);
+      if (amount <= 0) { await StudioVideo.updateOne({ _id: row._id, refundState: 'refunding' }, { $set: { refunded: true, refundState: 'done', refundAmount: 0 } }); continue; }
+      if (await payClaimed({ ...row, refundAmount: amount, refundPayer: row.refundPayer || (proof.spend && proof.spend.payer) || '' })) paid += 1;
+      else if ((mine.refundTries || 0) >= MAX_REFUND_TRIES) alertRefund(`Videos ${String(row._id)}: the refund (Quarks: ${amount}) to ${row.refundPayer || String(row.user)} did not land after ${MAX_REFUND_TRIES} tries. Return it by hand.`, true);
+    } catch (e) { console.error('[videos] sweep refund failed:', e.message); }
+  }
+  return { closed, paid };
+}
+
+/** Once shortly after start, then every 10 minutes. Off with ENABLE_STUDIO_VIDEO_SWEEP=off. Never throws. */
+function startStudioVideoSweep({ env = process.env } = {}) {
+  if (String(env.ENABLE_STUDIO_VIDEO_SWEEP || '').trim().toLowerCase() === 'off') return null;
+  const run = () => Promise.resolve().then(() => sweep()).catch((e) => console.warn('[videos] sweep failed:', e && e.message));
+  setTimeout(run, 60 * 1000).unref();
+  return setInterval(run, 10 * 60 * 1000).unref();
+}
 
 module.exports = router;
 module.exports.run = run;
 module.exports.runChain = runChain;
 module.exports._io = testIo;
-module.exports._money = { charge, fail }; // for tests: the two places the Videos flow moves Quarks
+module.exports._money = { charge, fail, finishShort, sweep, settleUnstarted }; // for tests: the places the Videos flow moves Quarks
+module.exports.sweep = sweep;
+module.exports.startStudioVideoSweep = startStudioVideoSweep;

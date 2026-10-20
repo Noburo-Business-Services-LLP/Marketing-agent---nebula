@@ -198,28 +198,50 @@ const resp = () => { const r = { code: 200, body: null, status(c) { r.code = c; 
 const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
 const flush = () => new Promise((r) => setTimeout(r, 30));
 
+// A small Mongo-style matcher for the filters the route uses: equality, $ne, $lt, $in.
+const matches = (d, q) => Object.entries(q).every(([k, c]) => {
+  const v = d[k];
+  if (c && typeof c === 'object' && !(c instanceof Date) && !Array.isArray(c)) {
+    if ('$ne' in c && String(v === undefined ? '' : v) === String(c.$ne)) return false;
+    if ('$lt' in c && !(v < c.$lt)) return false;
+    if ('$in' in c && !c.$in.includes(v)) return false;
+    return true;
+  }
+  return String(v) === String(c);
+});
+const applyUpdate = (d, u) => { Object.assign(d, u.$set || {}); for (const [k, n] of Object.entries(u.$inc || {})) d[k] = (d[k] || 0) + n; };
+
 function world({ balance = 1000 } = {}) {
   const w = { docs: {}, spends: [], refunds: [], updates: [], balance, nextId: 0 };
   const orig = {
     create: StudioVideo.create, count: StudioVideo.countDocuments, del: StudioVideo.deleteOne, upd: StudioVideo.updateOne, fou: StudioVideo.findOneAndUpdate, fo: StudioVideo.findOne,
-    uf: User.findById, spend: quarkBuckets.spend, settle: quarkBuckets.settleWallet, refund: quarkBuckets.refundTo, guard: spendGuard.check
+    uf: User.findById, find: StudioVideo.find, proof: quarkBuckets.chargeProof, spend: quarkBuckets.spend, settle: quarkBuckets.settleWallet, refund: quarkBuckets.refundTo, guard: spendGuard.check
   };
   StudioVideo.create = async (d) => { const id = `v${++w.nextId}`; w.docs[id] = { _id: id, createdAt: new Date(), startedAt: new Date(), refunded: false, status: 'processing', ...d }; return w.docs[id]; };
   StudioVideo.countDocuments = async () => 0;
   StudioVideo.deleteOne = async ({ _id }) => { delete w.docs[_id]; };
-  StudioVideo.updateOne = async (q, u) => { w.updates.push(u.$set); Object.assign(w.docs[q._id] || {}, u.$set); };
+  StudioVideo.updateOne = async (q, u) => { const d = w.docs[q._id]; if (!d || !matches(d, q)) return { modifiedCount: 0 }; w.updates.push(u.$set); applyUpdate(d, u); return { modifiedCount: 1 }; };
   StudioVideo.findOneAndUpdate = async (q, u, o) => {
-    const d = w.docs[q._id]; if (!d || (q.refunded === false && d.refunded)) return null;
-    const before = { ...d }; Object.assign(d, u.$set); return o && o.new === false ? before : d;
+    const d = w.docs[q._id]; if (!d || !matches(d, q)) return null;
+    const before = { ...d }; applyUpdate(d, u); return o && o.new === false ? before : d;
   };
-  StudioVideo.findOne = async (q) => { const d = w.docs[q._id]; return d && d.status === (q.status || d.status) ? d : null; };
+  StudioVideo.findOne = async (q) => { const d = w.docs[q._id]; return d && matches(d, q) ? d : null; };
+  const chain = (rows) => ({ sort: () => chain(rows), limit: (n) => chain(rows.slice(0, n)), lean: async () => rows, then: (r, j) => Promise.resolve(rows).then(r, j) });
+  StudioVideo.find = (q) => chain(Object.values(w.docs).filter((d) => matches(d, q)));
+  // The charge proof, read from the fake wallet: a spend with this ref, and whether a refund with it exists.
+  quarkBuckets.chargeProof = async (ref) => {
+    if (w.proofThrows) throw new Error('db down');
+    const sp = w.spends.find((x) => x.ok && x.meta.ref === ref);
+    return { spend: sp ? { payer: 'payer1', quarks: sp.amount, source: 'ledger' } : null, refunded: w.refunds.some((x) => x.meta.ref === ref) };
+  };
   User.findById = () => ({ select: () => ({ lean: async () => ({ companyName: 'Sri Lakshmi' }) }) });
   quarkBuckets.settleWallet = async () => null;
-  quarkBuckets.spend = async (u, amount, meta) => { w.spends.push({ amount, meta }); if (w.balance < amount) return { success: false }; w.balance -= amount; return { success: true, payerId: 'payer1' }; };
-  quarkBuckets.refundTo = async (u, amount, meta) => { w.refunds.push({ amount, meta }); w.balance += amount; return { ok: true }; };
+  quarkBuckets.spend = async (u, amount, meta) => { const rec = { amount, meta, ok: false }; w.spends.push(rec); if (w.spendThrows) throw new Error('db down'); if (w.balance < amount) return { success: false }; w.balance -= amount; rec.ok = true; return { success: true, payerId: 'payer1' }; };
+  quarkBuckets.refundTo = async (u, amount, meta) => { if (w.refundFails) { w.refundTries = (w.refundTries || 0) + 1; return { ok: false }; } w.refunds.push({ amount, meta, user: u }); w.balance += amount; return { ok: true }; };
   spendGuard.check = async () => ({ ok: true });
   w.restore = () => {
-    Object.assign(StudioVideo, { create: orig.create, countDocuments: orig.count, deleteOne: orig.del, updateOne: orig.upd, findOneAndUpdate: orig.fou, findOne: orig.fo });
+    Object.assign(StudioVideo, { create: orig.create, countDocuments: orig.count, deleteOne: orig.del, updateOne: orig.upd, findOneAndUpdate: orig.fou, findOne: orig.fo, find: orig.find });
+    quarkBuckets.chargeProof = orig.proof;
     User.findById = orig.uf; quarkBuckets.spend = orig.spend; quarkBuckets.settleWallet = orig.settle; quarkBuckets.refundTo = orig.refund; spendGuard.check = orig.guard;
     for (const k of Object.keys(route._io)) delete route._io[k];
   };
@@ -458,5 +480,229 @@ test('a single clip is finished too, and subtitles are ignored when there is no 
     assert.deepStrictEqual({ s: args.features.subtitles, l: args.features.logo, e: args.features.endLine }, { s: false, l: true, e: 'Visit us' });
     assert.strictEqual(w.docs.v1.videoUrl, 'https://cdn.example/F.mp4');
     assert.match(w.docs.v1.notice, /could not find your logo/);
+  } finally { w.restore(); }
+});
+
+// ---- money safety: refunds only for proven charges, claim-then-pay, no delivery after a refund ----
+const COST1 = QUARK_COSTS.studio_video;
+const old = (ms) => new Date(Date.now() - ms);
+const seedSpent = (w, id, quarks, extra = {}) => {
+  w.spends.push({ amount: quarks, meta: { ref: id }, ok: true });
+  w.docs[id] = { _id: id, user: 'uS', status: 'processing', refunded: false, refundState: '', refundTries: 0, quarks, clips: Math.round(quarks / COST1) || 1, startedAt: old(16 * 60 * 1000 * 6), payer: 'payer1', ...extra };
+  return w.docs[id];
+};
+const getVideo = async (id, user = 'uS') => { const res = resp(); await handler('/:id', 'get')({ user: { userId: user }, params: { id } }, res); return res; };
+
+test('spend throwing deletes the record and refunds nothing', async () => {
+  const w = world();
+  try {
+    w.spendThrows = true;
+    const res = await quiet(() => create(longBody()));
+    assert.strictEqual(res.code, 500);
+    assert.deepStrictEqual(w.docs, {});
+    assert.strictEqual(w.refunds.length, 0);
+  } finally { w.restore(); }
+});
+
+test('spend throwing after the debit landed closes the record with a proven refund, once', async () => {
+  const w = world();
+  try {
+    const realSpend = quarkBuckets.spend;
+    quarkBuckets.spend = async (...a) => { await realSpend(...a); throw new Error('lost the answer'); };
+    const res = await quiet(() => create(longBody()));
+    assert.strictEqual(res.code, 500);
+    assert.strictEqual(w.docs.v1.status, 'failed');
+    assert.strictEqual(w.refunds.length, 1);
+    assert.strictEqual(w.refunds[0].amount, 3 * COST1);
+    assert.strictEqual(w.balance, 1000);
+  } finally { w.restore(); }
+});
+
+test('a stale video with no charge proof is closed without any refund', async () => {
+  const w = world();
+  try {
+    w.docs.v9 = { _id: 'v9', user: 'uS', status: 'processing', refunded: false, quarks: 3 * COST1, clips: 3, startedAt: old(3 * 60 * 60 * 1000) };
+    const res = await quiet(() => getVideo('v9'));
+    assert.strictEqual(res.body.video.status, 'failed');
+    assert.match(res.body.video.error, /not charged/);
+    assert.strictEqual(w.refunds.length, 0);
+    assert.strictEqual(w.balance, 1000);
+  } finally { w.restore(); }
+});
+
+test('a stale video with proof is refunded once to the payer, never more than the proof', async () => {
+  const w = world();
+  try {
+    seedSpent(w, 'v5', 2 * COST1, { quarks: 6 * COST1, clips: 6 }); // record claims more than was charged
+    await quiet(() => getVideo('v5'));
+    await quiet(() => getVideo('v5'));
+    assert.strictEqual(w.refunds.length, 1);
+    assert.strictEqual(w.refunds[0].amount, 2 * COST1);
+    assert.strictEqual(w.refunds[0].meta.payerId, 'payer1');
+    assert.strictEqual(w.refunds[0].meta.ref, 'v5');
+    assert.strictEqual(w.docs.v5.refundState, 'done');
+    assert.strictEqual(w.docs.v5.refunded, true);
+  } finally { w.restore(); }
+});
+
+test('a refund that already exists is not paid again', async () => {
+  const w = world();
+  try {
+    seedSpent(w, 'v6', COST1);
+    w.refunds.push({ amount: COST1, meta: { ref: 'v6' } });
+    await quiet(() => getVideo('v6'));
+    assert.strictEqual(w.refunds.length, 1);
+    assert.strictEqual(w.docs.v6.status, 'failed');
+  } finally { w.restore(); }
+});
+
+test('a failed refund keeps the claim, sets refundFailed and alerts; the sweep pays it once, only after 2 minutes', async () => {
+  const w = world();
+  const alerts = []; route._io.alert = (t, final) => alerts.push({ t, final });
+  try {
+    seedSpent(w, 'v7', 2 * COST1);
+    w.refundFails = true;
+    await quiet(() => getVideo('v7'));
+    const d = w.docs.v7;
+    assert.deepStrictEqual({ status: d.status, state: d.refundState, failed: d.refundFailed, amount: d.refundAmount, payer: d.refundPayer, refunded: d.refunded }, { status: 'failed', state: 'refunding', failed: true, amount: 2 * COST1, payer: 'payer1', refunded: false });
+    assert.strictEqual(alerts.length, 1);
+    w.refundFails = false;
+    await route.sweep(); // too soon
+    assert.strictEqual(w.refunds.length, 0);
+    const r = await quiet(() => route.sweep({ now: Date.now() + 3 * 60 * 1000 }));
+    assert.strictEqual(r.paid, 1);
+    assert.strictEqual(w.refunds.length, 1);
+    assert.strictEqual(w.docs.v7.refundState, 'done');
+    await route.sweep({ now: Date.now() + 10 * 60 * 1000 });
+    assert.strictEqual(w.refunds.length, 1);
+  } finally { w.restore(); }
+});
+
+test('a crash after the refund was paid but before it was marked is finished by the sweep without paying twice', async () => {
+  const w = world();
+  try {
+    seedSpent(w, 'v8', COST1, { status: 'failed', refundState: 'refunding', refundAmount: COST1, refundPayer: 'payer1', refundStartedAt: old(5 * 60 * 1000) });
+    w.refunds.push({ amount: COST1, meta: { ref: 'v8' } });
+    const r = await route.sweep();
+    assert.strictEqual(r.paid, 1);
+    assert.strictEqual(w.refunds.length, 1);
+    assert.strictEqual(w.docs.v8.refundState, 'done');
+  } finally { w.restore(); }
+});
+
+test('the sweep gives up after the retry limit with an alert for a person', async () => {
+  const w = world();
+  const alerts = []; route._io.alert = (t, final) => alerts.push({ t, final });
+  try {
+    seedSpent(w, 'v4', COST1, { status: 'failed', refundState: 'refunding', refundAmount: COST1, refundPayer: 'payer1', refundStartedAt: old(5 * 60 * 1000), refundTries: 4 });
+    w.refundFails = true;
+    await quiet(() => route.sweep());
+    assert.ok(alerts.some((a) => a.final && /by hand/.test(a.t)));
+    assert.strictEqual(w.docs.v4.refundTries, 5);
+    await quiet(() => route.sweep({ now: Date.now() + 60 * 60 * 1000 }));
+    assert.strictEqual(w.docs.v4.refundTries, 5); // no more tries
+  } finally { w.restore(); }
+});
+
+test('a slow job that finishes after it was stopped and refunded does not publish its video', async () => {
+  const w = world();
+  try {
+    const d = seedSpent(w, 'v3', COST1, { startedAt: new Date() });
+    let release; const gate = new Promise((r) => { release = r; });
+    const discarded = [];
+    const job = route.run(d, async () => { await gate; return { ok: true, buffer: Buffer.from('x') }; }, { store: async () => 'https://cdn.example/late.mp4', discard: async (u) => discarded.push(u) });
+    await route._money.fail(d, 'The video took too long and was stopped. Your Quarks were returned. Please try again.');
+    release(); await job;
+    assert.strictEqual(w.docs.v3.status, 'failed');
+    assert.strictEqual(w.docs.v3.videoUrl, undefined);
+    assert.deepStrictEqual(discarded, ['https://cdn.example/late.mp4']);
+    assert.strictEqual(w.refunds.length, 1);
+  } finally { w.restore(); }
+});
+
+test('the list closes the caller\'s own stale videos (and returns them as failed)', async () => {
+  const w = world();
+  try {
+    seedSpent(w, 'v2', COST1);
+    const res = resp();
+    await quiet(() => handler('/', 'get')({ user: { userId: 'uS' } }, res));
+    assert.strictEqual(res.body.videos.find((v) => v.id === 'v2').status, 'failed');
+    assert.strictEqual(w.refunds.length, 1);
+  } finally { w.restore(); }
+});
+
+test('the sweep closes lost processing videos once and leaves fresh ones alone', async () => {
+  const w = world();
+  try {
+    seedSpent(w, 'a1', COST1);
+    seedSpent(w, 'a2', COST1, { startedAt: new Date() });
+    const r1 = await quiet(() => route.sweep());
+    const r2 = await quiet(() => route.sweep());
+    assert.deepStrictEqual([r1.closed, r2.closed], [1, 0]);
+    assert.strictEqual(w.refunds.length, 1);
+    assert.strictEqual(w.docs.a2.status, 'processing');
+  } finally { w.restore(); }
+});
+
+test('the spend guard is told one unit per clip', async () => {
+  const w = world();
+  try {
+    Object.assign(route._io, { generate: async () => ok('c'), lastFrame: async () => png, concat: async (b) => Buffer.from(b.join('+')), store: async () => 'https://cdn.example/v.mp4', loadRefs: async () => [] });
+    await create(longBody());
+    assert.strictEqual(w.spends[0].meta.units, 3);
+    await flush();
+  } finally { w.restore(); }
+});
+
+test('a fail and a finish racing for the same video pay the refund once', async () => {
+  const w = world();
+  try {
+    const d = seedSpent(w, 'r1', 3 * COST1, { clips: 3, startedAt: new Date() });
+    await Promise.all([route._money.fail(d, 'stopped'), route._money.finishShort(d, 1, 3, 'https://cdn.example/s.mp4', 10, '', { discard: async () => {} })]);
+    assert.strictEqual(w.refunds.length, 1);
+    assert.ok(w.refunds[0].amount <= 3 * COST1);
+    assert.strictEqual(w.balance, 1000 + w.refunds[0].amount);
+  } finally { w.restore(); }
+});
+
+test('a short video lowers its cost in the same update as the refund claim', async () => {
+  const w = world();
+  try {
+    const d = seedSpent(w, 'r2', 3 * COST1, { clips: 3, startedAt: new Date() });
+    await route._money.finishShort(d, 1, 3, 'https://cdn.example/s.mp4', 10);
+    assert.strictEqual(w.docs.r2.quarks, COST1);
+    assert.strictEqual(w.refunds[0].amount, 2 * COST1);
+    assert.strictEqual(w.docs.r2.status, 'completed');
+  } finally { w.restore(); }
+});
+
+test('two creates at once for one account: only the free slot is used', async () => {
+  const w = world();
+  try {
+    let n = 0; StudioVideo.countDocuments = async () => { await flush(); return n; };
+    const origCreate = StudioVideo.create;
+    StudioVideo.create = async (d) => { n += 1; return origCreate(d); };
+    Object.assign(route._io, { generate: async () => ok('c'), lastFrame: async () => png, concat: async (b) => Buffer.from('x'), store: async () => 'x', loadRefs: async () => [], work: async () => ({ ok: true, buffer: Buffer.from('x') }) });
+    const body = { concept: 'A shop.' };
+    const one = (u) => { const res = resp(); return handler('/create', 'post')({ user: { userId: u }, body }, res).then(() => res); };
+    n = 1; // one video already being made
+    const rs = await Promise.all([one('uR'), one('uR')]);
+    assert.deepStrictEqual(rs.map((r) => r.code).sort(), [202, 429]);
+    await flush();
+  } finally { w.restore(); }
+});
+
+test('a failed reference picture is refunded with the ref of its charge, once, and only when charged', async () => {
+  const w = world();
+  try {
+    route._io.image = async () => ({ success: false, error: 'provider down' });
+    const res = resp();
+    await quiet(() => handler('/reference', 'post')({ user: { userId: 'uQ' }, body: { kind: 'person' } }, res));
+    assert.strictEqual(res.code, 502);
+    assert.ok(res.body.ref);
+    assert.strictEqual(w.spends[0].meta.ref, res.body.ref);
+    assert.strictEqual(w.refunds.length, 1);
+    assert.strictEqual(w.refunds[0].meta.ref, res.body.ref);
+    assert.strictEqual(w.refunds[0].amount, QUARK_COSTS.studio_reference);
   } finally { w.restore(); }
 });

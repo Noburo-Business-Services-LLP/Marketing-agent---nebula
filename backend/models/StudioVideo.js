@@ -32,6 +32,14 @@ const studioVideoSchema = new mongoose.Schema({
   seconds: { type: Number, default: 10 },
   quarks: { type: Number, default: 0 },
   refunded: { type: Boolean, default: false },
+  // Refund claim: set in the same atomic update that closes the video ('refunding' until the Quarks are back, then 'done'),
+  // with the amount and wallet recorded so a sweep can finish a refund a crash interrupted. See routes/studioVideos.js.
+  refundState: { type: String, enum: ['', 'refunding', 'done'], default: '' },
+  refundAmount: { type: Number, default: 0 },
+  refundPayer: { type: String, default: '' },
+  refundStartedAt: { type: Date, default: null },
+  refundTries: { type: Number, default: 0 },
+  refundFailed: { type: Boolean, default: false },
   // Whose Quarks paid for this video (the agency for a client workspace), so a refund goes back to the same wallet.
   payer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   error: { type: String, default: '' },
@@ -40,5 +48,6 @@ const studioVideoSchema = new mongoose.Schema({
 }, { collection: 'studio_videos', timestamps: true });
 
 studioVideoSchema.index({ user: 1, createdAt: -1 });
+studioVideoSchema.index({ refundState: 1, refundStartedAt: 1 });
 
 module.exports = mongoose.models.StudioVideo || mongoose.model('StudioVideo', studioVideoSchema);

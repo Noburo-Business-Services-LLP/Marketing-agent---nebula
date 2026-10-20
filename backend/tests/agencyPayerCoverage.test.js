@@ -36,7 +36,7 @@ const UserStub = {
 };
 const StudioVideoStub = {
   updateOne: async (q, u) => { videos.updates.push({ q, u }); },
-  findOneAndUpdate: async (q) => videos.docs[String(q._id)] || null
+  findOneAndUpdate: async (q, u) => { const d = videos.docs[String(q._id)]; if (!d) return null; Object.assign(d, (u && u.$set) || {}); return d; }
 };
 const reg = (p, exports) => { const f = require.resolve(p); require.cache[f] = { id: f, filename: f, loaded: true, exports }; };
 reg('../models/User', UserStub);
@@ -158,25 +158,32 @@ test('a Videos charge for a client stamps the agency as payer on the video', asy
   assert.strictEqual(String(videos.updates[0].u.$set.payer), 'o1');
 });
 
+// The Videos refund is paid only against the charge proof: fake it as "this wallet paid this many Quarks".
+const withProof = async (spend, fn) => {
+  const orig = qb.chargeProof;
+  qb.chargeProof = async () => ({ spend, refunded: false });
+  try { return await fn(); } finally { qb.chargeProof = orig; }
+};
+
 test('a failed Videos job refunds the recorded payer, not the client, and a plain account gets its own Quarks back', async () => {
   reset([agency(10), client(777), plain(50)]);
   videos.docs.v1 = { _id: 'v1', user: 'w1', quarks: 8, payer: 'o1' };
-  await fail({ _id: 'v1', user: 'w1' }, 'boom');
+  await withProof({ payer: 'o1', quarks: 8 }, () => fail({ _id: 'v1', user: 'w1', quarks: 8, payer: 'o1' }, 'boom'));
   assert.strictEqual(users.o1.credits.balance, 18);
   assert.strictEqual(users.w1.credits.balance, 777);
   videos.docs.v2 = { _id: 'v2', user: 'p1', quarks: 8, payer: 'p1' };
-  await fail({ _id: 'v2', user: 'p1' }, 'boom');
+  await withProof({ payer: 'p1', quarks: 8 }, () => fail({ _id: 'v2', user: 'p1', quarks: 8, payer: 'p1' }, 'boom'));
   assert.strictEqual(users.p1.credits.balance, 58);
   // no Quarks charged: nothing is refunded
   videos.docs.v3 = { _id: 'v3', user: 'w1', quarks: 0 };
-  await fail({ _id: 'v3', user: 'w1' }, 'boom');
+  await withProof(null, () => fail({ _id: 'v3', user: 'w1', quarks: 0 }, 'boom'));
   assert.strictEqual(users.o1.credits.balance, 18);
 });
 
 test('a failed Videos job whose client was removed still refunds the recorded payer', async () => {
   reset([agency(10)]);
   videos.docs.v1 = { _id: 'v1', user: 'w1', quarks: 5, payer: 'o1' };
-  await fail({ _id: 'v1', user: 'w1' }, 'boom');
+  await withProof({ payer: 'o1', quarks: 5 }, () => fail({ _id: 'v1', user: 'w1', quarks: 5, payer: 'o1' }, 'boom'));
   assert.strictEqual(users.o1.credits.balance, 15);
 });
 
