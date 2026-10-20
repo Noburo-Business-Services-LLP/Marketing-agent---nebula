@@ -12,12 +12,11 @@ Repo folder used in every command below:
 
 Documents that disagree (I picked the safer one each time, and say so where it matters):
 - Handover 27/28 say "run `cd backend && node scripts/create-perf-indexes.js`"; that script needs the database address in the environment, so I use the wrapper `create-staff-indexes.sh` with `INDEX_SCRIPT` (it reads the address from the secret and never prints it). Source: the script header and `performance-week1.md`.
-- Handover 28 says "switches with `set-secret-value.sh`"; the script only accepts 20 names (see section 5). Most new switches are not on its list.
+- Handover 28 says "switches with `set-secret-value.sh`"; the script accepts only 19 names (2.3). Most new switches are not on its list.
 - `security-hardening.md` section 10 says the screens still ask for 8 characters; handover 27 says they were changed to 10. I trust handover 27 (newer) and the smoke check below proves it.
 - `photoshoot.md` says the page shows "Photoshoots open soon."; decision D6 changed it to "Photoshoots are not switched on for your account yet." (checked in `frontend/pages/Photoshoot.tsx`). Look for the D6 wording.
 - `mapping` doc says the Photoshoot money review is "pending"; the review file and D99/D100 show it was done and fixed (backend suite 3116 pass). I trust the review file.
 - The ledger "OWNER STEPS" line still says "everything since `bc514a9`"; handover 27/28 say live is `3a281f2`. I trust the handovers.
-- `release-checklist-2026-10-18.md` is the OLD release (already done). Do not follow it again; only its Razorpay and switch notes still matter.
 
 ---
 
@@ -229,8 +228,6 @@ cd "/Users/dineshkannaa/Documents/0 CONTENT/Claude Agents/nebula-worktrees/nebul
 12. Leave one browser tab from BEFORE the release open, then click a menu entry: it should show "Nebulaa has been updated" with Reload, and Reload fixes it.
 13. Rate-limit address check: open `https://gravity.nebulaa.ai/api/health/details` in the browser and compare the client address it shows with your own (search "what is my IP"). **CHECK:** I did not read which field holds it. If it shows a load-balancer or server address instead of yours, every visitor shares one rate limit: tell the assistant; the fix is `TRUST_PROXY_HOPS=2` (the frontend nginx also forwards `/api` calls, `nginx.conf`) and it is not on the script's list.
 
-Steps counted in sections 2 to 4: 9 (section 2) + 4 (section 3) + 5 (section 4) = 18, with 13 click checks inside 4.5.
-
 ---
 
 ## 5. Switches: leave OFF at first, turn on one at a time
@@ -385,11 +382,9 @@ Roll back backend AND frontend together (approval needs both). Rolling back is s
 - **Wrong-bucket refunds are deferred**, older inline charge/refund spots in campaigns, drafts, carousels, dashboard and content remain, and Razorpay `refund.*` events are not handled. Jobs queued by old code and failing after this ships are not refunded automatically (support refunds by hand).
 - **Heavy stored documents:** drafts average 740 KB and campaigns 1.7 MB because pictures are stored inside them; a full campaigns scan took 134 s on dev. Lists are paged, background jobs use the new indexes, but the weight is still there (and the Atlas disk is finite).
 - **Not built from the hardening list:** login token in an HttpOnly cookie, signed S3 uploads, enforced CSP, a per-campaign claim before posting, staff two-step sign-in, full-history secret scan.
-- **Calendar "being prepared" mark and caches are per task**; with several web tasks a page can look stale for up to 15 seconds or say "not prepared" for a moment.
-- **Without Redis, live Inbox updates are per task** (a message may show on the next refresh).
+- **Per-task memory:** with several web tasks a page can look stale up to 15 seconds, the Calendar may say "not prepared" for a moment, and without Redis live Inbox updates show on the next refresh.
 - **Razorpay:** live webhook and live purchase test are parked by you; real delivery of webhooks to our server is not proven.
-- **Lawyer and accountant reviews** of Terms section 21, Privacy text and GST are still open from the last release.
-- **Tamil and Hindi wording** on the questionnaire is machine-careful and needs a native read.
+- **Open reviews:** lawyer and accountant (Terms section 21, Privacy text, GST) from the last release; Tamil and Hindi questionnaire wording needs a native read.
 
 ---
 
