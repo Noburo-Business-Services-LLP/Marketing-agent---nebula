@@ -40,3 +40,24 @@ test('the monitor measures a blocked loop', async () => {
   await new Promise((r) => setTimeout(r, 30));
   assert.ok(monitor.snapshot().max >= 80, `max lag ${monitor.snapshot().max} ms`);
 });
+
+test('GET /api/metrics/queue (E9): 401 without sign-in, 403 for a customer, staff get the queue numbers of both queues', async () => {
+  const router = require('../../routes/metrics');
+  const saved = router.queues;
+  router.queues = {
+    video: () => ({ metrics: async () => ({ queueDepth: 3, running: 2, oldestQueuedAgeSeconds: 12, byType: {}, byPool: {}, runningByWorker: { w1: 2 }, thisWorker: { workerId: 'w1', claims: 2 } }) }),
+    image: () => ({ metrics: async () => ({ queueDepth: 0, running: 0, oldestQueuedAgeSeconds: 0, thisWorker: { slots: 2 } }) })
+  };
+  try {
+    const customer = await t.addUser({ email: 'cust-queue@example.test', password: 'Tr0ub4dor&3-horse' });
+    const staff = await t.addUser({ email: 'staff-queue@example.test', password: 'Tr0ub4dor&3-horse', staffRole: 'owner' });
+    assert.equal((await t.call(t.base, '/api/metrics/queue', { method: 'GET' })).status, 401);
+    assert.equal((await t.call(t.base, '/api/metrics/queue', { method: 'GET', token: token(customer) })).status, 403);
+    const r = await t.call(t.base, '/api/metrics/queue', { method: 'GET', token: token(staff) });
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.body.videoJobs.queueDepth, 3);
+    assert.deepEqual(r.body.videoJobs.runningByWorker, { w1: 2 });
+    assert.equal(r.body.imageJobs.thisWorker.slots, 2);
+    assert.ok(r.body.at);
+  } finally { router.queues = saved; }
+});

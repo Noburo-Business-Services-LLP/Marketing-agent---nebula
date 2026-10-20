@@ -35,7 +35,11 @@ class PayloadTooLargeError extends Error {
   constructor() { super('This request is too large to queue.'); this.name = 'PayloadTooLargeError'; this.status = 413; }
 }
 
+// Image slots per runner (E9 stage A, config/jobSlots.js): PROVIDER_SLOTS_IMAGE / PROVIDER_SLOTS win when set; the older
+// IMAGE_JOB_CONCURRENCY (or CAMPAIGN_IMAGE_QUEUE_CONCURRENCY) still works; default 2. Per runner, so it grows with workers.
 function concurrencySetting(env = process.env) {
+  const has = (k) => env[k] != null && String(env[k]).trim() !== '';
+  if (has('PROVIDER_SLOTS_IMAGE') || has('PROVIDER_SLOTS')) return require('../config/jobSlots').readJobSlots(env).slots.image;
   const n = Number.parseInt(String(env.IMAGE_JOB_CONCURRENCY || env.CAMPAIGN_IMAGE_QUEUE_CONCURRENCY || ''), 10);
   return Number.isFinite(n) && n >= 1 ? Math.min(n, 20) : 2;
 }
@@ -47,6 +51,8 @@ function mongoRepo(model = () => require('../models/ImageJob')) {
     insert: (doc) => M().create(doc),
     countFor: (userId, status) => M().countDocuments({ userId: String(userId), status }),
     countProcessing: () => M().countDocuments({ status: 'processing' }),
+    /** For the staff queue metrics: open rows per status and the oldest waiting one. */
+    openCounts: () => M().aggregate([{ $match: { status: { $in: ['queued', 'processing'] } } }, { $group: { _id: '$status', n: { $sum: 1 }, oldest: { $min: '$createdAt' } } }]),
     oldestQueued: (limit) => M().find({ status: 'queued' }).sort({ createdAt: 1 }).limit(limit).lean(),
     claim: (jobId, owner, now, leaseUntil) => M().findOneAndUpdate(
       { jobId, status: 'queued' },
@@ -76,7 +82,7 @@ function createImageJobQueue({
   now = () => new Date(),
   concurrency = concurrencySetting(),
   owner = `${os.hostname()}:${process.pid}:${crypto.randomBytes(4).toString('hex')}`,
-  runsJobsHere = require('./backgroundRole').runsBackground(),
+  runsJobsHere = require('./backgroundRole').runsJobConsumers(),
   timers = { setInterval, clearInterval, setTimeout },
   log = console
 } = {}) {
@@ -84,6 +90,8 @@ function createImageJobQueue({
   const active = new Set();
   let draining = null;
   let pollTimer = null;
+  let stopping = false;
+  const stats = { claims: 0 };
 
   function registerHandler(type, fn) {
     if (typeof fn !== 'function') throw new Error(`Handler for ${type} must be a function`);
@@ -148,7 +156,7 @@ function createImageJobQueue({
       if (busy.get(uid) >= USER_ACTIVE_MAX) continue; // fairness: this account already has 2 running
       const at = now();
       const claimed = await repo.claim(job.jobId, owner, at, new Date(at.getTime() + LEASE_MS));
-      if (claimed) return claimed;
+      if (claimed) { stats.claims += 1; return claimed; }
     }
     return null;
   }
@@ -183,7 +191,7 @@ function createImageJobQueue({
     } finally {
       timers.clearInterval(heartbeat);
       active.delete(job.jobId);
-      drain().catch(() => null);
+      if (!stopping) drain().catch(() => null);
     }
   }
 
@@ -192,7 +200,7 @@ function createImageJobQueue({
     if (draining) return draining;
     draining = (async () => {
       try {
-        while (active.size < concurrency) {
+        while (!stopping && active.size < concurrency) {
           const job = await claimNext();
           if (!job) break;
           run(job).catch((e) => log.error('[image jobs] run failed:', e && e.message));
@@ -219,13 +227,39 @@ function createImageJobQueue({
 
   function stop() { if (pollTimer) timers.clearInterval(pollTimer); pollTimer = null; }
 
-  return { registerHandler, enqueue, getJob, drain, sweepLost, claimNext, start, stop, activeCount: () => active.size, owner };
+  /**
+   * SIGTERM: claim nothing more and wait up to graceMs for running pictures. A picture still running when the process
+   * ends is failed by the lost-job sweep of another runner (nothing is charged before delivery, so nothing to refund).
+   */
+  async function shutdown({ graceMs = 0, sleep = (ms) => new Promise((r) => { const t = timers.setTimeout(r, ms); if (t && t.unref) t.unref(); }) } = {}) {
+    stopping = true;
+    stop();
+    const end = Date.now() + Math.max(0, graceMs);
+    while (active.size && Date.now() < end) await sleep(Math.min(250, Math.max(1, end - Date.now())));
+    return { finished: active.size === 0, stillRunning: active.size };
+  }
+
+  /** Numbers for the staff queue metrics. */
+  async function metrics() {
+    const rows = (repo.openCounts ? await repo.openCounts() : []) || [];
+    const at = now().getTime();
+    const by = Object.fromEntries(rows.map((r) => [r._id, r]));
+    const oldest = by.queued && by.queued.oldest ? new Date(by.queued.oldest).getTime() : null;
+    return {
+      queueDepth: Number(by.queued && by.queued.n) || 0,
+      running: Number(by.processing && by.processing.n) || 0,
+      oldestQueuedAgeSeconds: oldest ? Math.max(0, Math.round((at - oldest) / 1000)) : 0,
+      thisWorker: { owner, consumers: runsJobsHere, slots: concurrency, slotsInUse: active.size, claims: stats.claims, stopping }
+    };
+  }
+
+  return { registerHandler, enqueue, getJob, drain, sweepLost, claimNext, start, stop, shutdown, metrics, activeCount: () => active.size, owner };
 }
 
 let shared = null;
 const imageJobQueue = () => (shared = shared || createImageJobQueue());
 
-/** For server-main's startBackgroundJobs(). Off with ENABLE_IMAGE_JOB_RUNNER=off. */
+/** For server-main's startBackgroundJobs() (job consumers). Off with ENABLE_IMAGE_JOB_RUNNER=off. */
 function startImageJobRunner({ env = process.env } = {}) {
   if (String(env.ENABLE_IMAGE_JOB_RUNNER || '').trim().toLowerCase() === 'off') return null;
   return imageJobQueue().start();

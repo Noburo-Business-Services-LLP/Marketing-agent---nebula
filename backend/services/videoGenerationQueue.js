@@ -1,13 +1,26 @@
 const crypto = require('crypto');
+const os = require('os');
 const logger = require('../utils/logger');
 const VideoJob = require('../models/VideoJob');
 const { settleRefund, SWEEP_AFTER_MS } = require('./refundSettle');
 const { QUARK_COSTS } = require('../config/apiCosts');
 
-const DEFAULT_CONCURRENCY = Math.max(
-  1,
-  Number.parseInt(process.env.VIDEO_QUEUE_CONCURRENCY || '2', 10) || 2
-);
+// Per-worker slots (E9 stage A, config/jobSlots.js, docs/superpowers/ops/generation-parallelism.md). Each worker claims
+// jobs for ITS OWN slots (image and video pools), so total capacity = worker tasks x slots. VIDEO_QUEUE_CONCURRENCY
+// still works as the video default.
+const POOLS = ['image', 'video'];
+const IMAGE_JOB_TYPES = new Set(['render_missing_scene_images', 'generate_content']);
+const poolFor = (jobType) => (IMAGE_JOB_TYPES.has(String(jobType || '')) ? 'image' : 'video');
+// Job types whose handler takes no charge (the route charged before the job existed): when the worker running one is
+// lost (its lease ran out) the job may be run again, at most JOB_MAX_ATTEMPTS runs, with no new charge. Per-scene jobs
+// charge inside the handler and are never re-run automatically.
+const RETRY_SAFE_TYPES = new Set(['create_video_pipeline', 'generate_clips', 'merge_video', 'generate_content']);
+const MAX_RELEASES = 3; // graceful hand-backs (SIGTERM) per job before it is failed instead
+const CANDIDATES = 50; // waiting rows read per pool per drain (fair choice among them)
+const SWEEP_BATCH = 25;
+const newWorkerId = () => `${os.hostname()}:${process.pid}:${Date.now().toString(36)}:${crypto.randomBytes(3).toString('hex')}`;
+const matchedCount = (r) => Number(r && (r.matchedCount !== undefined ? r.matchedCount : r.n)) || 0;
+
 const DEFAULT_JOB_TTL_MS = Math.max(
   10 * 60 * 1000,
   Number.parseInt(process.env.VIDEO_JOB_TTL_MS || String(6 * 60 * 60 * 1000), 10) || (6 * 60 * 60 * 1000)
@@ -88,17 +101,29 @@ class JobCancelledError extends Error {
 }
 
 class PersistentVideoGenerationQueue {
-  constructor({ concurrency = DEFAULT_CONCURRENCY, jobTtlMs = DEFAULT_JOB_TTL_MS, model, draftModel, refund, chargeProof, alertOwner, runsJobsHere } = {}) {
-    // A web-only task (RUN_BACKGROUND=0) only stores the job; the worker's drain loop claims it (atomic queued ->
-    // processing). Everywhere else enqueue starts the drain at once, as before.
-    this.runsJobsHere = typeof runsJobsHere === 'boolean' ? runsJobsHere : require('./backgroundRole').runsBackground();
+  constructor({ concurrency, settings, jobTtlMs = DEFAULT_JOB_TTL_MS, model, draftModel, refund, chargeProof, alertOwner, runsJobsHere, workerId, now, leaseLock, sleep } = {}) {
+    // A process that does not run job consumers (a web task, RUN_JOB_CONSUMERS=0) only stores the job; a consumer's
+    // drain claims it (atomic queued -> processing with this worker's id and a lease). Elsewhere enqueue drains at once.
+    this.runsJobsHere = typeof runsJobsHere === 'boolean' ? runsJobsHere : require('./backgroundRole').runsJobConsumers();
+    const base = settings || require('../config/jobSlots').jobSlots();
+    // `concurrency` (older callers and tests) sets the video slots.
+    this.settings = { ...base, slots: { ...base.slots, ...(Number.isFinite(concurrency) ? { video: Math.max(1, concurrency) } : {}) } };
+    this.workerId = workerId || newWorkerId();
+    this.now = now || (() => Date.now());
+    this.leaseLock = leaseLock || require('./leaseLock');
+    this.sleep = sleep || ((ms) => new Promise((r) => { const t = setTimeout(r, ms); if (t.unref) t.unref(); }));
+    this.running = new Map(); // jobId -> { pool, attempt, lost } for the jobs THIS worker runs
+    this.stopping = false;
+    this._draining = null;
+    this._drainAgain = false;
+    this.stats = { claims: 0, completed: 0, failed: 0, leaseRequeues: 0, leaseFailures: 0, released: 0, lostRuns: 0 };
     this.draftModel = draftModel || null;
     // Injectable for tests; the real ones load on first use.
     this.model = model || VideoJob;
     this.refund = refund || ((...a) => require('../middleware/trialGuard').refundCredits(...a));
     this.chargeProof = chargeProof || ((...a) => require('./quarkBuckets').chargeProof(...a));
     this.alertOwner = alertOwner || ((a) => require('./opsAlerts').notify(a));
-    this.concurrency = concurrency;
+    this.concurrency = this.settings.slots.video;
     this.jobTtlMs = jobTtlMs;
     this.handlers = new Map();
     this.workerTimer = null;
@@ -123,6 +148,7 @@ class PersistentVideoGenerationQueue {
    * Starts the background queue worker and GC/recovery loops
    */
   startWorker() {
+    this.stopping = false;
     this._startGcTimer();
     this._startRecoveryTimer();
     
@@ -142,21 +168,30 @@ class PersistentVideoGenerationQueue {
     }, drainIntervalMs);
     
     this.workerTimer.unref?.();
-    logger.info(`🚀 Persistent Queue: Background worker successfully started (concurrency = ${this.concurrency})`);
+    const st = this.settings;
+    logger.info(`🚀 Persistent Queue: Background worker successfully started (worker ${this.workerId}; slots image ${st.slots.image}, video ${st.slots.video}, cpu ${st.cpu}; per account ${st.perUserRunning} running; lease ${Math.round(st.leaseMs / 1000)} s; up to ${st.maxAttempts} run(s) per job; global ceiling ${st.globalCeiling || 'off'})`);
 
-    // Run crash recovery on startup (non-blocking, safe for rolling updates)
+    // Run crash recovery on startup (non-blocking, safe for rolling updates and for several workers)
     this.recoverInterruptedJobsOnStartup().catch((err) => {
       logger.error('Persistent Queue startup interrupted-job recovery error:', err.message);
     });
-    this.recoverStaleJobs().catch((err) => {
+    this._leasedSweep().catch((err) => {
       logger.error('⚠️ Persistent Queue startup recovery error:', err.message);
     });
   }
 
+  /**
+   * Rows that older code left 'processing' (no worker id, so no lease). In a single process (RUN_BACKGROUND not set)
+   * nothing else can be running them: failed and refunded at once, as before. In a split, only the stale rule
+   * (recoverStaleJobs) touches them. Jobs claimed by this code (with a worker id) are NEVER ended here: their lease
+   * decides (another worker may be running them).
+   */
+
   async recoverInterruptedJobsOnStartup() {
     if (String(process.env.VIDEO_JOB_RECOVER_PROCESSING_ON_STARTUP || 'true').toLowerCase() === 'false') return;
 
-    const processingJobs = await this.model.find({ status: 'processing' });
+    if (require('./backgroundRole').isSplit()) return;
+    const processingJobs = await this.model.find({ status: 'processing', workerId: null });
     if (!processingJobs.length) return;
 
     // NEVER re-queue on startup. Every restart and every redeploy used to
@@ -167,7 +202,8 @@ class PersistentVideoGenerationQueue {
       const won = await this._failIfProcessing(job, {
         currentStep: 'stale_recovery_failed',
         error: { message: 'The server restarted while this job was running. Press Retry to try again.', stack: null },
-        log: 'App restarted while job was processing. Marked failed — retries are manual only.'
+        log: 'App restarted while job was processing. Marked failed — retries are manual only.',
+        extraFilter: { workerId: null }
       });
       if (won) await this._refundJob(won, 'was interrupted by a server restart');
     }
@@ -265,32 +301,117 @@ class PersistentVideoGenerationQueue {
     return settled;
   }
 
+  /** The expired-lease sweep and the refund sweep, through one lease so two consumers do not run the same pass at once. */
+  _leasedSweep() {
+    return this.leaseLock.withLease('scheduler:video-jobs:lease-sweep', 60000, async () => {
+      await this.recoverStaleJobs();
+      await this.sweepRefunds();
+    });
+  }
+
   _startRecoveryTimer() {
     if (this.recoveryTimer) clearInterval(this.recoveryTimer);
+    // Half a lease (30 s by default, 10 s to 60 s): a lost worker's job is re-queued or refunded within about
+    // lease + half a lease.
+    const every = Math.max(10000, Math.min(60000, Math.floor(this.settings.leaseMs / 2)));
     this.recoveryTimer = setInterval(async () => {
       try {
-        await this.recoverStaleJobs();
-        await this.sweepRefunds();
+        await this._leasedSweep();
       } catch (err) {
         logger.error('⚠️ Persistent Queue stale job recovery loop failed:', err.message);
       }
-    }, 60000); // Scan every 1 minute
+    }, every);
     this.recoveryTimer.unref?.();
   }
 
+  _retrySafe(job = {}) {
+    const type = job?.metadata?.jobType;
+    return RETRY_SAFE_TYPES.has(String(type || '')) && !job?.metadata?.perSceneCharging && !job?.metadata?.noRetry;
+  }
+
+  async _markDraftFailed(jobId, message) {
+    try {
+      const Draft = this.draftModel || require('../models/Draft');
+      await Draft.updateMany({ 'generationProgress.jobId': jobId, status: 'processing' }, { $set: { status: 'failed', errorMessage: message } });
+    } catch (err) {
+      logger.error(`⚠️ Failed to update Draft status for job ${jobId}:`, err.message);
+    }
+  }
+
   /**
-   * Periodically scans for processing jobs that have hung or crashed (no updates for 5 minutes)
+   * One job whose lease ran out (its worker died, or lost the database for longer than the lease). Every write is
+   * conditional on the worker id, the attempt and the lease end this pass READ, so two sweeps (or a sweep and a late
+   * completion) never both act. Retry-safe and under JOB_MAX_ATTEMPTS: back to 'queued' (no charge: the route charged
+   * once, before the job existed). Otherwise: failed, with the refund claimed in the same write, then paid once.
    */
-  async recoverStaleJobs() {
+  async _expireLease(job) {
+    const now = new Date(this.now());
+    const cond = { workerId: job.workerId, attempts: job.attempts, leaseUntil: job.leaseUntil };
+    const attempts = Number(job.attempts) || 0;
+    if (this._retrySafe(job) && attempts < this.settings.maxAttempts) {
+      let back = null;
+      try {
+        back = await this.model.findOneAndUpdate(
+          { jobId: job.jobId, status: 'processing', ...cond },
+          {
+            $set: { status: 'queued', workerId: null, leaseUntil: null, currentStep: 'retrying', updatedAt: now },
+            $inc: { leaseRequeues: 1 },
+            $push: { logs: { $each: [`[${now.toISOString()}] The server running this job stopped (lease ran out). Queued again (run ${attempts + 1} of ${this.settings.maxAttempts}); nothing is charged again.`], $slice: -200 } }
+          },
+          { new: true }
+        ).lean();
+      } catch (err) {
+        logger.error(`⚠️ Failed to re-queue job ${job.jobId}:`, err.message);
+        return 0;
+      }
+      if (!back) return 0;
+      this.stats.leaseRequeues += 1;
+      logger.info(`🔁 Persistent Queue: job ${job.jobId} re-queued after its worker was lost (run ${attempts + 1} of ${this.settings.maxAttempts}).`);
+      return 1;
+    }
+    const won = await this._failIfProcessing(job, {
+      currentStep: 'stale_recovery_failed',
+      error: { message: 'The server running this job stopped. Press Retry to try again.', stack: null },
+      log: `The server running this job stopped (lease ran out after ${attempts} run(s)). Marked failed — retries are manual only.`,
+      extraFilter: cond
+    });
+    if (!won) return 0;
+    this.stats.leaseFailures += 1;
+    require('./opsAlerts').recordFailure('video', `job ${job.jobId}: its worker was lost and it was marked failed`);
+    await this._markDraftFailed(job.jobId, 'This video stopped. Please try again.');
+    await this._refundJob(won, 'stopped when its server was lost');
+    return 1;
+  }
+
+  /**
+   * The expired-lease sweep (bounded, idempotent): jobs whose lease ran out are re-queued or failed and refunded
+   * (_expireLease). Rows that older code left 'processing' (no worker id) keep the old rule: no update for
+   * VIDEO_JOB_STALE_TIMEOUT_MS (5 minutes) = failed and refunded, never re-queued.
+   */
+  async recoverStaleJobs({ limit = SWEEP_BATCH } = {}) {
+    let expired = [];
+    try {
+      expired = (await this.model.find({ status: 'processing', leaseUntil: { $lt: new Date(this.now()) } }).limit(limit).lean()) || [];
+    } catch (err) {
+      logger.error('⚠️ Failed to read expired job leases:', err.message);
+    }
+    for (const job of expired) {
+      const mine = this.running.get(job.jobId);
+      // Still running here and not lost (the heartbeat will renew it when the database answers again): leave it.
+      if (mine && !mine.lost && job.workerId === this.workerId) continue;
+      try { await this._expireLease(job); } catch (err) { logger.error(`⚠️ Lease sweep failed for job ${job.jobId}:`, err.message); }
+    }
+
     const STALE_TIMEOUT_MS = Number(process.env.VIDEO_JOB_STALE_TIMEOUT_MS) || (5 * 60 * 1000); // Default 5 minutes
-    const threshold = new Date(Date.now() - STALE_TIMEOUT_MS);
+    const threshold = new Date(this.now() - STALE_TIMEOUT_MS);
 
     try {
-      // Find all processing jobs that haven't been updated since threshold
+      // Rows of older code only (no worker id) that haven't been updated since threshold
       const staleJobs = await this.model.find({
         status: 'processing',
+        workerId: null,
         updatedAt: { $lt: threshold }
-      });
+      }).limit(limit);
 
       if (staleJobs.length === 0) return;
 
@@ -310,7 +431,7 @@ class PersistentVideoGenerationQueue {
             stack: null
           },
           log: `Job detected as stale/hung (no updates for ${Math.round(STALE_TIMEOUT_MS / 60000)}m). Marked failed — retries are manual only.`,
-          extraFilter: { updatedAt: { $lt: threshold } }
+          extraFilter: { updatedAt: { $lt: threshold }, workerId: null }
         });
         if (!won) continue;
         logger.info(`❌ Stale job ${job.jobId} marked failed (no auto-retry; user can retry manually).`);
@@ -356,6 +477,9 @@ class PersistentVideoGenerationQueue {
       jobId,
       userId: userId ? userId : null,
       status: 'queued',
+      pool: poolFor(jobType),
+      workerId: null,
+      leaseUntil: null,
       progress: 0,
       currentStep: 'queued',
       payload,
@@ -367,7 +491,7 @@ class PersistentVideoGenerationQueue {
     });
 
     // Proactively trigger the drain loop (only in a process that runs jobs: a web-only task leaves it to the worker)
-    if (this.runsJobsHere) {
+    if (this.runsJobsHere && !this.stopping) {
       this._drainQueue().catch((err) => {
         logger.error('⚠️ Persistent Queue drain trigger error:', err.message);
       });
@@ -444,9 +568,17 @@ class PersistentVideoGenerationQueue {
     }
   }
 
-  /** Writes `patch` only while the job is still 'processing'. Returns the job, null when it is not, and throws on a database error. */
-  async _updateIfProcessing(jobId, patch = {}) {
-    return this.model.findOneAndUpdate({ jobId, status: 'processing' }, { $set: { ...patch, updatedAt: new Date() } }, { new: true }).lean();
+  /**
+   * Writes `patch` only while the job is still 'processing' and (with `owner`) still run by this worker on this attempt.
+   * Returns the job, null when it is not, and throws on a database error.
+   */
+  async _updateIfProcessing(jobId, patch = {}, owner = null) {
+    return this.model.findOneAndUpdate({ jobId, status: 'processing', ...(owner || {}) }, { $set: { ...patch, updatedAt: new Date(this.now()) } }, { new: true }).lean();
+  }
+
+  /** The conditions every write of a running job carries: this worker, this attempt (a re-claimed job has another). */
+  _owner(jobDoc = {}) {
+    return { workerId: jobDoc.workerId || null, ...(Number.isFinite(jobDoc.attempts) ? { attempts: jobDoc.attempts } : {}) };
   }
 
   async _updateJob(jobId, patch = {}) {
@@ -489,13 +621,17 @@ class PersistentVideoGenerationQueue {
     const { jobId, metadata } = jobDoc;
     const jobType = metadata?.jobType;
     const handler = this.handlers.get(jobType);
+    const owner = this._owner(jobDoc);
+    // Shared with the drain (this.running) so the shutdown and the heartbeat can mark the run lost.
+    const run = this.running.get(jobId) || { pool: jobDoc.pool || poolFor(jobType), attempt: jobDoc.attempts, lost: false };
 
     if (!handler) {
       logger.error(`❌ No handler registered for job type [${jobType}]. Job ${jobId} failed.`);
       const won = await this._failIfProcessing(jobDoc, {
         currentStep: 'missing_handler',
         error: { message: `No handler registered for job type [${jobType}]` },
-        log: `No handler registered for job type [${jobType}]`
+        log: `No handler registered for job type [${jobType}]`,
+        extraFilter: owner
       });
       if (won) await this._refundJob(won, 'could not start');
       return;
@@ -504,9 +640,15 @@ class PersistentVideoGenerationQueue {
     try {
       await this._pushLog(jobId, `Starting job execution [${jobType}]`);
       const heartbeatTimer = setInterval(() => {
-        // Only while processing, and only the heartbeat key: never over step metadata or a cancelled job.
-        this._updateIfProcessing(jobId, { 'metadata.heartbeatAt': new Date().toISOString() }).catch(() => {});
-      }, 30000);
+        // Only while processing and still ours (this worker, this attempt), and only the heartbeat keys: never over step
+        // metadata or a cancelled job. It renews the lease; a write that matches nothing means the job was cancelled,
+        // re-queued or failed by someone else: the run is lost and stops at its next step.
+        const at = this.now();
+        this.model.updateOne(
+          { jobId, status: 'processing', ...owner },
+          { $set: { leaseUntil: new Date(at + this.settings.leaseMs), updatedAt: new Date(at), 'metadata.heartbeatAt': new Date(at).toISOString() } }
+        ).then((r) => { if (!matchedCount(r)) run.lost = true; }).catch(() => { /* unknown: the lease decides */ });
+      }, this.settings.heartbeatMs);
       heartbeatTimer.unref?.();
       
       const controls = {
@@ -518,20 +660,25 @@ class PersistentVideoGenerationQueue {
           if (typeof currentStep === 'string' && currentStep.trim()) {
             patch.currentStep = currentStep.trim();
           }
-          // Between steps: a job that was cancelled (or ended by another path) stops here instead of going on.
+          // Between steps: a job that was cancelled (or ended by another path), or whose lease this worker lost (re-queued
+          // to another worker, or handed back at shutdown), stops here instead of going on.
+          if (run.lost) throw new JobCancelledError(jobId);
           const current = await this.model.findOne({ jobId }).lean();
           if (current && current.status !== 'processing') throw new JobCancelledError(jobId);
+          if (current && ((current.workerId || null) !== owner.workerId || (owner.attempts !== undefined && current.attempts !== owner.attempts))) { run.lost = true; throw new JobCancelledError(jobId); }
+          patch.leaseUntil = new Date(this.now() + this.settings.leaseMs);
           if (stepMetadata && typeof stepMetadata === 'object') {
             // Merge nested metadata objects
             patch.metadata = { ...(current?.metadata || {}), ...stepMetadata };
           }
           let wrote = null;
-          try { wrote = await this._updateIfProcessing(jobId, patch); } catch (err) { logger.error(`⚠️ Failed to update job ${jobId}:`, err.message); return; }
-          if (!wrote) throw new JobCancelledError(jobId);
+          try { wrote = await this._updateIfProcessing(jobId, patch, owner); } catch (err) { logger.error(`⚠️ Failed to update job ${jobId}:`, err.message); return; }
+          if (!wrote) { run.lost = true; throw new JobCancelledError(jobId); }
         },
         isCancelled: async () => {
+          if (run.lost) return true;
           const current = await this.model.findOne({ jobId }).lean();
-          return Boolean(current && current.status !== 'processing');
+          return Boolean(current && (current.status !== 'processing' || (current.workerId || null) !== owner.workerId));
         },
         log: async (message) => await this._pushLog(jobId, message)
       };
@@ -547,21 +694,24 @@ class PersistentVideoGenerationQueue {
       // into a delivered video.
       let completed = null;
       try {
-        completed = await this._updateIfProcessing(jobId, {
+        completed = run.lost ? null : await this._updateIfProcessing(jobId, {
           status: 'completed',
           progress: 100,
           currentStep: 'completed',
-          completedAt: new Date(),
+          completedAt: new Date(this.now()),
+          leaseUntil: null,
           result,
           error: null
-        });
+        }, owner);
       } catch (err) {
         logger.error(`⚠️ Failed to complete job ${jobId}:`, err.message);
       }
       if (!completed) {
-        await this._pushLog(jobId, `Finished after the job was cancelled or stopped: the result was discarded.`);
+        if (run.lost) this.stats.lostRuns += 1;
+        await this._pushLog(jobId, `Finished after the job was cancelled, stopped or handed to another worker: the result was discarded.`);
         return;
       }
+      this.stats.completed += 1;
       await this._pushLog(jobId, `Successfully completed job execution [${jobType}]`);
 
       if (jobType === 'create_video_pipeline' || jobType === 'merge_video') {
@@ -618,8 +768,10 @@ class PersistentVideoGenerationQueue {
       }
     } catch (error) {
       if (error instanceof JobCancelledError) {
-        // Cancelled (and refunded) by the user, or ended by another path: nothing more to do and nothing to refund here.
-        await this._pushLog(jobId, 'Stopped: the job was cancelled.');
+        // Cancelled (and refunded) by the user, ended by another path, or this worker lost the job: nothing more to do and
+        // nothing to refund here (whoever ended or re-queued the job owns it now).
+        if (run.lost) this.stats.lostRuns += 1;
+        await this._pushLog(jobId, run.lost ? 'Stopped: this worker no longer holds the job (re-queued, handed back or ended elsewhere).' : 'Stopped: the job was cancelled.');
         return;
       }
       logger.error(`❌ Video job ${jobId} failed:`, error);
@@ -635,9 +787,11 @@ class PersistentVideoGenerationQueue {
           message: error?.message || 'Video generation job failed',
           stack: process.env.NODE_ENV === 'development' ? (error?.stack || null) : null
         },
-        log: `FAILED: ${error?.message || error}`
+        log: `FAILED: ${error?.message || error}`,
+        extraFilter: owner
       });
       if (!won) return;
+      this.stats.failed += 1;
 
       try {
         const Draft = this.draftModel || require('../models/Draft');
@@ -655,39 +809,229 @@ class PersistentVideoGenerationQueue {
     }
   }
 
+  /**
+   * Claims jobs for THIS worker's free slots (E9 stage A): per pool (image, video) at most the pool's slots run here at
+   * once, whatever other workers run, so capacity grows with worker tasks. A global ceiling (JOB_GLOBAL_CEILING, one
+   * count) stays as a safety net. One drain at a time per process; a trigger during a drain runs one more pass.
+   */
   async _drainQueue() {
-    try {
-      // Find count of currently processing jobs in database
-      const activeCount = await this.model.countDocuments({ status: 'processing' });
-      if (activeCount >= this.concurrency) return;
-
-      const capacity = this.concurrency - activeCount;
-      
-      // Fetch and lock jobs using findOneAndUpdate to ensure thread safety
-      for (let i = 0; i < capacity; i++) {
-        const nextJob = await this.model.findOneAndUpdate(
-          { status: 'queued' },
-          { 
-            $set: { 
-              status: 'processing',
-              startedAt: new Date(),
-              updatedAt: new Date()
-            },
-            $inc: { attempts: 1 }
-          },
-          { sort: { createdAt: 1 }, new: true }
-        );
-
-        if (!nextJob) break; // No more queued jobs
-
-        // Run the job in the background (non-blocking)
-        this._runJob(nextJob.toObject()).catch((err) => {
-          logger.error(`⚠️ Error launching job ${nextJob.jobId}:`, err.message);
-        });
+    if (this.stopping) return 0;
+    if (this._draining) { this._drainAgain = true; return this._draining; }
+    this._draining = (async () => {
+      let started = 0;
+      try {
+        do {
+          this._drainAgain = false;
+          started += await this._drainOnce();
+        } while (this._drainAgain && !this.stopping);
+      } catch (err) {
+        logger.error('⚠️ Persistent Queue drain loop failed:', err.message);
+      } finally {
+        this._draining = null;
       }
-    } catch (err) {
-      logger.error('⚠️ Persistent Queue drain loop failed:', err.message);
+      return started;
+    })();
+    return this._draining;
+  }
+
+  _runningIn(pool) {
+    let n = 0;
+    for (const r of this.running.values()) if (r.pool === pool) n += 1;
+    return n;
+  }
+
+  async _drainOnce() {
+    const s = this.settings;
+    let ceilingLeft = Infinity;
+    if (s.globalCeiling > 0) {
+      const total = await this.model.countDocuments({ status: 'processing' });
+      ceilingLeft = s.globalCeiling - total;
+      if (ceilingLeft <= 0) return 0;
     }
+    let started = 0;
+    for (const pool of POOLS) {
+      if (this.stopping) break;
+      const free = Math.min(s.slots[pool] - this._runningIn(pool), ceilingLeft);
+      if (free <= 0) continue;
+      const n = await this._claimFair(pool, free);
+      started += n;
+      ceilingLeft -= n;
+      if (ceilingLeft <= 0) break;
+    }
+    return started;
+  }
+
+  /** Running jobs per account among `userIds` (all workers): one aggregate. */
+  async _activeByUser(userIds) {
+    const out = new Map();
+    if (!userIds.length) return out;
+    if (typeof this.model.aggregate === 'function') {
+      const rows = (await this.model.aggregate([
+        { $match: { status: 'processing', userId: { $in: userIds } } },
+        { $group: { _id: '$userId', n: { $sum: 1 } } }
+      ])) || [];
+      for (const r of rows) out.set(String(r._id), Number(r.n) || 0);
+      return out;
+    }
+    for (const u of userIds) out.set(String(u), await this.model.countDocuments({ status: 'processing', userId: u }));
+    return out;
+  }
+
+  /**
+   * Fair claim for one pool: among the oldest waiting jobs, the account with the fewest running jobs goes first (oldest
+   * first on a tie), and an account at JOB_PER_USER_RUNNING is skipped: a simple round-robin by account, so one account
+   * with many jobs cannot take every slot. Each claim is one atomic conditional update; a row another worker took (or a
+   * job cancelled meanwhile) is simply skipped.
+   */
+  async _claimFair(pool, free) {
+    const poolFilter = pool === 'video' ? { pool: { $in: ['video', null] } } : { pool };
+    const candidates = (await this.model.find({ status: 'queued', ...poolFilter })
+      .sort({ createdAt: 1 }).limit(CANDIDATES).select({ jobId: 1, userId: 1, createdAt: 1 }).lean()) || [];
+    if (!candidates.length) return 0;
+    const seen = new Map();
+    for (const c of candidates) if (c.userId) seen.set(String(c.userId), c.userId);
+    const active = await this._activeByUser([...seen.values()]);
+    const cap = this.settings.perUserRunning;
+    const remaining = candidates.slice();
+    let started = 0;
+    while (started < free && remaining.length && !this.stopping) {
+      let best = -1;
+      let bestN = Infinity;
+      for (let i = 0; i < remaining.length; i += 1) {
+        const c = remaining[i];
+        const n = c.userId ? (active.get(String(c.userId)) || 0) : 0;
+        if (c.userId && n >= cap) continue;
+        if (n < bestN) { best = i; bestN = n; } // strict: the oldest wins a tie (candidates are oldest first)
+      }
+      if (best < 0) break;
+      const [c] = remaining.splice(best, 1);
+      const claimed = await this._claim(c.jobId, pool);
+      if (!claimed) continue;
+      if (c.userId) active.set(String(c.userId), (active.get(String(c.userId)) || 0) + 1);
+      started += 1;
+      this._start(claimed);
+    }
+    return started;
+  }
+
+  /** queued -> processing for THIS worker, with a lease; null when another worker took it or it was cancelled meanwhile. */
+  async _claim(jobId, pool) {
+    const at = this.now();
+    return this.model.findOneAndUpdate(
+      { jobId, status: 'queued' },
+      {
+        $set: { status: 'processing', workerId: this.workerId, leaseUntil: new Date(at + this.settings.leaseMs), pool, startedAt: new Date(at), updatedAt: new Date(at) },
+        $inc: { attempts: 1 }
+      },
+      { new: true }
+    ).lean();
+  }
+
+  _start(job) {
+    const doc = typeof job.toObject === 'function' ? job.toObject() : job;
+    this.running.set(doc.jobId, { pool: doc.pool || poolFor(doc.metadata?.jobType), attempt: doc.attempts, lost: false });
+    this.stats.claims += 1;
+    // Run the job in the background (non-blocking); when it ends, its slot is free for the next claim.
+    this._runJob(doc)
+      .catch((err) => { logger.error(`⚠️ Error launching job ${doc.jobId}:`, err.message); })
+      .finally(() => {
+        this.running.delete(doc.jobId);
+        if (!this.stopping) this._drainQueue().catch(() => null);
+      });
+  }
+
+  /**
+   * Graceful stop (SIGTERM): claim nothing more, wait up to `graceMs` for running jobs, then hand back each job still
+   * running here: retry-safe ones go back to 'queued' (the attempt is not counted; at most MAX_RELEASES hand-backs per
+   * job), the others are failed and refunded once (the old restart rule, now at once). Each write is conditional on this
+   * worker and attempt; the handler of a handed-back job stops at its next step and its result is discarded.
+   */
+  async shutdown({ graceMs = this.settings.shutdownGraceMs } = {}) {
+    this.stopping = true;
+    for (const t of [this.workerTimer, this.recoveryTimer, this.gcTimer]) if (t) clearInterval(t);
+    this.workerTimer = null; this.recoveryTimer = null; this.gcTimer = null;
+    const deadline = this.now() + Math.max(0, graceMs);
+    while (this.running.size && this.now() < deadline) await this.sleep(Math.min(250, Math.max(1, deadline - this.now())));
+    const finished = this.running.size === 0;
+    let released = 0;
+    let failed = 0;
+    for (const [jobId, run] of [...this.running]) {
+      run.lost = true;
+      const mine = { jobId, status: 'processing', workerId: this.workerId, ...(Number.isFinite(run.attempt) ? { attempts: run.attempt } : {}) };
+      let job = null;
+      try { job = await this.model.findOne(mine).lean(); } catch (_) { job = null; }
+      if (!job) continue;
+      const at = new Date(this.now());
+      if (this._retrySafe(job) && (Number(job.releases) || 0) < MAX_RELEASES) {
+        let back = null;
+        try {
+          back = await this.model.findOneAndUpdate(mine, {
+            $set: { status: 'queued', workerId: null, leaseUntil: null, currentStep: 'retrying', updatedAt: at },
+            $inc: { attempts: -1, releases: 1 },
+            $push: { logs: { $each: [`[${at.toISOString()}] The server running this job is stopping: handed back to the queue (nothing is charged again).`], $slice: -200 } }
+          }, { new: true }).lean();
+        } catch (err) { logger.error(`⚠️ Failed to hand back job ${jobId}:`, err.message); }
+        if (back) { released += 1; this.stats.released += 1; }
+      } else {
+        const won = await this._failIfProcessing(job, {
+          currentStep: 'stale_recovery_failed',
+          error: { message: 'The server restarted while this job was running. Press Retry to try again.', stack: null },
+          log: 'The server stopped while this job was running. Marked failed — retries are manual only.',
+          extraFilter: { workerId: this.workerId, ...(Number.isFinite(run.attempt) ? { attempts: run.attempt } : {}) }
+        });
+        if (won) {
+          failed += 1;
+          await this._markDraftFailed(jobId, 'This video stopped. Please try again.');
+          await this._refundJob(won, 'was interrupted by a server restart');
+        }
+      }
+    }
+    if (released || failed) logger.info(`Persistent Queue: shutdown handed back ${released} job(s), failed and refunded ${failed}.`);
+    return { finished, released, failed };
+  }
+
+  /** Numbers for the staff queue metrics (bounded: two aggregates over the open rows, one small find). */
+  async metrics() {
+    const now = this.now();
+    const byType = {};
+    const byPool = { image: { queued: 0, running: 0 }, video: { queued: 0, running: 0 } };
+    const rows = (await this.model.aggregate([
+      { $match: { status: { $in: ['queued', 'processing'] } } },
+      { $group: { _id: { type: '$metadata.jobType', pool: '$pool', status: '$status' }, n: { $sum: 1 }, oldest: { $min: '$createdAt' } } }
+    ])) || [];
+    let oldestQueued = null;
+    for (const r of rows) {
+      const type = String(r._id?.type || 'unknown');
+      const pool = r._id?.pool === 'image' ? 'image' : 'video';
+      const key = r._id?.status === 'queued' ? 'queued' : 'running';
+      byType[type] = byType[type] || { queued: 0, running: 0 };
+      byType[type][key] += Number(r.n) || 0;
+      byPool[pool][key] += Number(r.n) || 0;
+      if (key === 'queued' && r.oldest && (!oldestQueued || new Date(r.oldest) < oldestQueued)) oldestQueued = new Date(r.oldest);
+    }
+    const workers = (await this.model.aggregate([
+      { $match: { status: 'processing' } },
+      { $group: { _id: '$workerId', n: { $sum: 1 } } }
+    ])) || [];
+    const runningByWorker = {};
+    for (const w of workers) runningByWorker[String(w._id || 'older code')] = Number(w.n) || 0;
+    const local = { image: this._runningIn('image'), video: this._runningIn('video') };
+    return {
+      queueDepth: byPool.image.queued + byPool.video.queued,
+      running: byPool.image.running + byPool.video.running,
+      oldestQueuedAgeSeconds: oldestQueued ? Math.max(0, Math.round((now - oldestQueued.getTime()) / 1000)) : 0,
+      byType,
+      byPool,
+      runningByWorker,
+      thisWorker: {
+        workerId: this.workerId,
+        consumers: this.runsJobsHere,
+        stopping: this.stopping,
+        slots: { ...this.settings.slots, cpu: this.settings.cpu },
+        slotsInUse: local,
+        ...this.stats
+      }
+    };
   }
 
   _publicView(job) {
@@ -721,5 +1065,8 @@ const videoGenerationQueue = new PersistentVideoGenerationQueue();
 module.exports = {
   PersistentVideoGenerationQueue,
   JobCancelledError,
-  videoGenerationQueue
+  videoGenerationQueue,
+  poolFor,
+  RETRY_SAFE_TYPES,
+  MAX_RELEASES
 };
