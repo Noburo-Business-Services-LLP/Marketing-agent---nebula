@@ -114,7 +114,7 @@ class PersistentVideoGenerationQueue {
     this.stopping = false;
     this._draining = null;
     this._drainAgain = false;
-    this.stats = { claims: 0, completed: 0, failed: 0, leaseRequeues: 0, leaseFailures: 0, released: 0, lostRuns: 0 };
+    this.stats = { claims: 0, completed: 0, failed: 0, leaseRequeues: 0, leaseFailures: 0, released: 0, lostRuns: 0, capHandBacks: 0 };
     this.draftModel = draftModel || null;
     // Injectable for tests; the real ones load on first use.
     this.model = model || VideoJob;
@@ -905,11 +905,39 @@ class PersistentVideoGenerationQueue {
       const [c] = remaining.splice(best, 1);
       const claimed = await this._claim(c.jobId, pool);
       if (!claimed) continue;
+      // The count above was read before the claim: workers draining at the same moment each saw room. Re-count now
+      // that this claim is in; above the cap the job goes back to the queue (D74 item 4) and the account is skipped here.
+      if (c.userId && await this._overCap(claimed)) { active.set(String(c.userId), cap); continue; }
       if (c.userId) active.set(String(c.userId), (active.get(String(c.userId)) || 0) + 1);
       started += 1;
       this._start(claimed);
     }
     return started;
+  }
+
+  /**
+   * After a successful claim: is this account now above JOB_PER_USER_RUNNING (this claim included)? Then hand the job back
+   * (queued, no worker, the attempt not counted), only while it is still this worker's claim, and answer true (do not
+   * start it). Any database error answers false: the cap is soft, a job is never stranded by a failed hand-back.
+   */
+  async _overCap(claimed) {
+    const cap = this.settings.perUserRunning;
+    if (!claimed || !claimed.userId || !(cap > 0)) return false;
+    try {
+      const n = await this.model.countDocuments({ status: 'processing', userId: claimed.userId });
+      if (n <= cap) return false;
+      const at = new Date(this.now());
+      const back = await this.model.findOneAndUpdate(
+        { jobId: claimed.jobId, status: 'processing', workerId: this.workerId, attempts: claimed.attempts },
+        { $set: { status: 'queued', workerId: null, leaseUntil: null, updatedAt: at }, $inc: { attempts: -1 } },
+        { new: true }
+      ).lean();
+      if (back) this.stats.capHandBacks += 1;
+      return true; // handed back, or no longer ours: either way this worker does not run it
+    } catch (err) {
+      logger.error(`⚠️ Per-account cap re-count failed for job ${claimed.jobId}:`, err.message);
+      return false;
+    }
   }
 
   /** queued -> processing for THIS worker, with a lease; null when another worker took it or it was cancelled meanwhile. */

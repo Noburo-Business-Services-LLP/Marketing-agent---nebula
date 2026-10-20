@@ -440,3 +440,53 @@ test('SIGTERM helper: a process without consumers does nothing; a consumer stops
   assert.deepStrictEqual(seen.sort(), [['image', 1234], ['video', 1234]]);
   assert.deepStrictEqual(r, { video: { finished: true }, image: { finished: true } });
 });
+
+// ---- D74 review fixes (items 4 to 7) ----
+
+test('D74 item 4: 3 workers draining at the same moment never START more than the per-account cap for one account (the claim is re-counted and handed back)', async () => {
+  const w = world({ workers: 3, settings: { slots: { video: 2 }, perUserRunning: 2 } });
+  let inFlight = 0; let peak = 0; const done = [];
+  w.qs.forEach((q) => q.registerHandler('create_video_pipeline', async (payload) => {
+    inFlight += 1; peak = Math.max(peak, inFlight);
+    await settle(8);
+    inFlight -= 1; done.push(payload.n);
+    return { videoUrl: 'https://cdn/v.mp4' };
+  }));
+  await quiet(async () => {
+    for (let i = 0; i < 6; i += 1) await w.charged(w.qs[0], 'solo');
+    // all three drain at once, over and over, until the account's 6 jobs are done
+    for (let round = 0; round < 60 && done.length < 6; round += 1) { await Promise.all(w.qs.map((q) => q._drainQueue())); await settle(12); }
+    await settle(80);
+  });
+  assert.strictEqual(done.length, 6, 'every job still runs');
+  assert.ok(peak <= 2, `at most 2 of one account at once, peak was ${peak}`);
+  const sample = w.model.docs.filter((d) => d.status === 'processing').length;
+  assert.strictEqual(sample, 0);
+  assert.ok(w.model.docs.every((d) => d.attempts === 1), 'a hand-back does not count as an attempt');
+  w.stop();
+});
+
+test('D74 item 4: a claim above the cap is handed back conditionally (only if still ours): back to queued, attempt not counted', async () => {
+  const w = world({ workers: 2, settings: { slots: { video: 2 }, perUserRunning: 1 } });
+  const started = [];
+  w.qs.forEach((q) => q.registerHandler('create_video_pipeline', async (payload) => { started.push(payload.n); await new Promise(() => {}); }));
+  await quiet(async () => {
+    for (let i = 0; i < 3; i += 1) await w.charged(w.qs[0], 'solo');
+    // worker 2 already holds one running job of the account: worker 1's claim finds count 2 > cap 1
+    w.model.docs[0].status = 'processing'; w.model.docs[0].workerId = 'w2'; w.model.docs[0].attempts = 1; w.model.docs[0].leaseUntil = new Date(w.clock.t + 60000);
+    const claimed = await w.qs[0]._claim(w.model.docs[1].jobId, 'video');
+    assert.ok(claimed);
+    assert.strictEqual(await w.qs[0]._overCap(claimed), true);
+    assert.strictEqual(w.model.docs[1].status, 'queued');
+    assert.strictEqual(w.model.docs[1].workerId, null);
+    assert.strictEqual(w.model.docs[1].attempts, 0);
+    // a job that is no longer ours is not touched by the hand-back
+    const c2 = await w.qs[0]._claim(w.model.docs[2].jobId, 'video');
+    w.model.docs[2].workerId = 'w2'; // lease sweep gave it away
+    await w.qs[0]._overCap(c2);
+    assert.strictEqual(w.model.docs[2].status, 'processing');
+    assert.strictEqual(w.model.docs[2].workerId, 'w2');
+  });
+  assert.deepStrictEqual(started, []);
+  w.stop();
+});
