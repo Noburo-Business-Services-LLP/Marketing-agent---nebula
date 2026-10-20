@@ -72,7 +72,7 @@ async function main() {
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 20000 });
   if (mongoose.connection.name !== DEV_DB) throw new Error(`Refusing: database is ${mongoose.connection.name}, not ${DEV_DB}`);
   const db = mongoose.connection.db;
-  if (process.argv.includes('cleanup')) { console.log('removed', await cleanup(db)); return; }
+  if (process.argv.includes('cleanup')) { console.log('removed', await cleanup(db)); await mongoose.disconnect(); return; }
   await cleanup(db);
 
   const User = require('../models/User');
