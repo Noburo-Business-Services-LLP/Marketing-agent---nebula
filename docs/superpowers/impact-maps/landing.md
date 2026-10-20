@@ -2,6 +2,37 @@
 
 Written 2026-10-20 before building, per the ledger rule 3. Owner request (ledger, LANDING PAGE AND WEBSITE): "make landing page and website sexy like Higgsfield and Pollo: proof-first galleries of real results, What you can make, Built for cards, glow bands, FAQ, wordmark footer, phone mock; same copy for the separate website". Direction: `docs/superpowers/specs/2026-10-18-visual-refresh-and-photoshoot-design.md` section 2b. Brand rules: `docs/superpowers/ops/tile-system.md`.
 
+## Positioning v2 (2026-10-21, supersedes the "month of posts" framing)
+
+Owner feedback (ledger, LANDING PAGE AND WEBSITE, 2026-10-21): the page talked about posts everywhere; Nebulaa runs the whole marketing from one place, and the customer approves. New positioning line: **Nebulaa runs your whole marketing from one place, and you stay in charge: nothing goes out until you approve it.** No "autopilot" (approval is required, so it would mislead), no promised results.
+
+Headline options (none leans on "posts"):
+1. **Chosen: "Nebulaa runs your marketing. You have the final word."** Names the whole job in four plain words, then answers the first worry of an owner (control) in the same breath; short enough for two lines on a phone.
+2. "From knowing your customers to learning what works, your marketing in one place." Shows the span of the loop, but it is long and explains more than it promises; better as a section line.
+3. "One place for your brand's marketing, planned, made and improved every month." Concrete verbs and a monthly rhythm that suits owners who budget by the month; weaker on the control point and on the "runs it for you" idea.
+
+Page order from v2 (section details below are updated where they changed): nav, hero, **How Nebulaa runs your marketing** (the eight-stage loop, `#how`) with the **Building a community** block, **You stay in charge** (approval band), examples, what you can make (`#make`), built for, free Blueprint (stage one), plans, questions (12), closing, footer.
+
+### The eight-stage loop (`components/landing/LoopSection.tsx`, words in `LOOP`)
+- Layout: from 1024 px two rows of four with equal heights; stages 5 to 8 run right to left, so the cards sit on a dashed gold loop track (behind the cards, seen in the gaps), a gold arrow disc in each gap, and stage 8 points up to stage 1. Below 1024 px one column (max 640 px on a tablet) with a compact card (art left, title, then the two sentences) and a down arrow between cards. Under the list: "Then the loop starts again, with what Nebulaa learned."
+- Stages (title, art): 1 Understand your business (`BlueprintArt`), 2 Know your market and customers (`PlanPeopleArt`), 3 Watch your competitors, chip "Add-on" (`CompetitorsArt`), 4 Plan: a roadmap for the next 90 days and a monthly content calendar (`CalendarArt`), 5 Create: posts, carousels, campaigns, LinkedIn posts and short videos; "Product photoshoots are coming soon" (`CampaignArt`), 6 Review, schedule and publish, chip "Publish add-on" (`ReviewQueueArt`), 7 Engage, chip "Inbox add-on", replies drafted for approval, `// CONFIRM AFTER INBOX TEST`; with `INBOX_LINES_VISIBLE = false` the card stays (so the loop keeps eight places) with the chip "Coming soon" and its `soonText` (`InboxArt`), 8 Learn and improve: results per platform, top posts, What Nebulaa learned (`MemoryArt`). No new art file.
+- Building a community (`COMMUNITY`): "People come back to brands that keep showing up." Three points: show up regularly (plan and calendar), answer people (Inbox add-on, drafted for approval, `// CONFIRM AFTER INBOX TEST`, hidden by `INBOX_LINES_VISIBLE`), learn what your audience likes (results and What Nebulaa learned). Written as help, never as a promise of followers; no "always present" line exists, and a test bans such phrases.
+
+### Other v2 copy changes (all in `frontend/constants/landingCopy.ts`)
+- Hero eyebrow "Marketing for Indian small businesses"; line "Nebulaa gets to know your business, your customers and your market. It plans your month, makes the content and learns from every result for the next round. You check everything before it goes out."; second button "See how it works" (`#how`); promise "Nothing goes out until you approve it."; phone chips "On your calendar", "Made in your style".
+- Approval band eyebrow "You stay in charge". Examples "Content for every kind of business." What you can make "Every kind of content your brand needs, in one place." with a line. Built for cards rewritten (art: `SinglePostArt`, `ProductArt`, `PlanMapArt`, `BrandAssetsArt`). Blueprint eyebrow "Stage one is free" and a landing line (`BLUEPRINT_INTRO`); the rest stays from `BLUEPRINT_COPY.landing`. Plans line says "marketing tools" and "content". Closing "Hand Nebulaa your marketing." Page title "Nebulaa: your marketing, run from one place, with you in charge".
+- FAQ grows to 12 (two columns of six): new "Is this only for social media posts?", "Do I stay in control?", "What does Nebulaa learn about my business?", "Can it track my competitors?" (add-on, pages you confirm, public posts only); the eight earlier answers are kept.
+
+Not claimed, on purpose: a 30, 60 and 90 day split (the plan shows "The next 90 days" in phases, so the page says "a roadmap for the next 90 days"); automatic or always-on replies; community or follower growth; autopilot.
+
+Ready-to-paste Open Graph tags for v2 (replace the ones in "SEO basics" when `index.html` is edited):
+
+```html
+<meta name="description" content="Nebulaa gets to know your business and customers, plans your month, makes the content and learns from the results. You approve everything before it goes out." />
+<meta property="og:title" content="Nebulaa: your marketing, run from one place, with you in charge" />
+<meta property="og:description" content="Understand, plan, create, publish and learn from one place. Nothing goes out until you approve it." />
+```
+
 ## Audience and the one job of the page
 - Audience: Indian small business owners (shops, cafes, salons, clinics, hotels, D2C brands, local services) and small agencies, mostly on a phone, often arriving from a shared link or an ad. Not technical. Price sensitive.
 - The one job: get the visitor to press **Start for ₹{Starter price}** (sign up, then choose a plan). Everything on the page shows what they will get (proof first), how safe it is (nothing goes out without approval) and what it costs (plans from config).
@@ -31,7 +62,7 @@ Every word below lives in `frontend/constants/landingCopy.ts`. Prices and allowa
 - Links: What you can make (`#make`), How it works (`#how`), Free Blueprint (`#blueprint`, from `BLUEPRINT_COPY`), Plans (`#plans`), Questions (`#faq`).
 - Buttons: "Sign in" (`/login`), "Start for ₹{999}" (`/login?mode=signup`).
 
-### 1. Hero (glow band 1)
+### 1. Hero (glow band 1) (words replaced in v2, see Positioning v2)
 - Layout: two columns from 960 px (text left, phone mock right), stacked on a phone (text, then the phone at 260 px wide). Background: the cream base with two soft gold and amber radial glows and a faint grain, scoped to the hero.
 - Eyebrow: "Social media for Indian small businesses"
 - Headline: "A month of posts," then, in the gold italic serif: "made for your business."
@@ -61,7 +92,7 @@ Every word below lives in `frontend/constants/landingCopy.ts`. Prices and allowa
 - Headline: "Nothing goes out until you approve it."
 - Points: "You see every post first": "Captions, pictures and videos wait in Review and approve. Change the words, make it again or delete it." / "You choose when it goes out": "Approve a post and it is scheduled for its planned day, or post it now. Publishing needs the Publish and schedule add-on." / "Replies wait for you too": "With the Inbox add-on, replies to comments and messages are drafted for you to read, change and approve." (`// CONFIRM AFTER INBOX TEST`)
 
-### 5. How it works (`#how`): the seven real steps
+### 5. How it works (`#how`): the seven real steps (replaced in v2 by the eight-stage loop above)
 - Layout: a grid of four columns from 1024 px: steps 1 to 4, then steps 5 to 7 and a gold "Start with step one" card, so both rows are full. Two columns on a tablet (four full rows), one on a phone. Numbered gold badges; add-on steps carry an "Add-on" chip.
 - Eyebrow: "How it works"; Headline: "Plan, create, approve, publish, learn."
 - Steps: 1 "Tell us about your business" (questions, website and social pages, free Brand Growth Blueprint). 2 "Get your plan" (ideal customer and a simple strategy, in My plan). 3 "Posts and videos every week" (made for you and laid out on your calendar). 4 "Review and approve" (check on your phone, change, approve). 5 "Publish and schedule", add-on (connect accounts, post now or on the day you pick). 6 "Reply from one inbox", add-on (one list, each reply drafted for you to approve; `// CONFIRM AFTER INBOX TEST`). 7 "Learn what works" (reach, engagement and new followers for your posts; Nebulaa keeps notes on what works for your business; competitor insights as an add-on).
@@ -143,6 +174,7 @@ The app is a single page app with one static `index.html` (title "Nebulaa - Your
 Every customer-facing word is in `frontend/constants/landingCopy.ts` (sections in page order; Inbox lines carry `inbox: true`). The website copy document `docs/superpowers/ops/website-copy-workflow.md` is regenerated from that file by hand (copy the sections in order and fill the braces from the plans answer); a note at its top says so.
 
 ## Tests
+- v2: the seven-steps test is now the eight-stage loop test (titles in order, two short sentences and a drawn piece each, add-ons marked, the loop closes); a positioning test keeps "posts" out of the hero headline, the hero line, the closing and the page title and bans autopilot and promised results; the FAQ test checks the twelve answers; the Inbox test counts five marked entries and bans "always present" wording.
 - `tests/landing.test.mjs` (rewritten): forbidden words over all landing files (credits, trial, 7 days, worth, exclamation marks, em dashes, vendor names); every sentence about replies says drafted or approve; every Inbox line is marked in the copy file; seven steps; plan order Starter, Growth, Agency; the snapshot equals the catalogue rebuilt from `apiCosts.js` and `config/plans.js`; the add-on line never shows the server's "automatic replies" label; the voice audit over the landing files is clean; computed contrast for the text over the hero glow, the gold card and the closing band; the six cover tiles use the six photo slots; the landing keeps `LegalLinks`, the sign-up and sign-in targets and the Blueprint path.
 - `tests/quarks-wording.test.mjs` landing block: reads the snapshot instead of typed card text.
 - Run: `node --test tests/*.test.mjs`, `npx tsc --noEmit`, `npm run lint`, brand and voice audits, art budget, `node scripts/visual-audit/gen-layer-lists.mjs`, the contrast audit on the `landing` route, `npx vite build` (landing chunk size).
