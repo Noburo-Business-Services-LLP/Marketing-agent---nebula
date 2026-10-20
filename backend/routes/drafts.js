@@ -16,6 +16,7 @@ const Draft = require('../models/Draft');
 const Campaign = require('../models/Campaign');
 const User = require('../models/User');
 const { publishCampaignToSocial } = require('../services/campaignPublisher');
+const publishClaims = require('../services/publishClaim');
 const { handlePublishError } = require('../utils/publishErrorHandler');
 const { buildPrompt } = require('../services/promptRegistry');
 const { buildBrandMemoryBlock } = require('../services/brandMemory');
@@ -267,6 +268,8 @@ router.post('/:id/schedule', protect, requireFeature('schedule'), async (req, re
 
 // 6. POST /:id/publish - Publish draft now
 router.post('/:id/publish', protect, requireFeature('publish'), async (req, res) => {
+  let claimToken = null;
+  let claimedId = null;
   try {
     const userId = req.user.userId || req.user.id;
     const draft = await Draft.findOne({ _id: req.params.id, userId });
@@ -283,6 +286,13 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
       draft.platforms = req.body.platforms;
     }
 
+    // One post is sent by one run at a time (services/publishClaim.js): if the scheduler (or a second press) is
+    // already sending this campaign, answer plainly before touching the campaign.
+    const alreadySending = { status: 409, json: { success: false, message: 'This post is already being sent.' } };
+    if (draft.campaignId && (await publishClaims.hasLiveClaim(Campaign, draft.campaignId))) {
+      return res.status(alreadySending.status).json(alreadySending.json);
+    }
+
     // Create or update campaign record in status 'posted' or 'active'
     const campaign = await upsertCampaignFromDraft(draft, userId, 'active');
 
@@ -297,40 +307,53 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
       });
     }
 
+    // The atomic claim: only the winner sends. The final write below is conditional on still holding it.
+    const claimed = await publishClaims.claim(Campaign, campaign._id, { statuses: ['active'], by: 'publish-now' });
+    if (!claimed.claimed) return res.status(alreadySending.status).json(alreadySending.json);
+    claimToken = claimed.token;
+    claimedId = campaign._id;
+
     // Publish campaign using existing publisher service
     console.log(`[Draft Publish] Publishing campaign ${campaign._id} to social networks.`);
     const result = await publishCampaignToSocial(campaign);
 
     if (result.success) {
-      campaign.status = 'posted';
-      campaign.publishedAt = new Date();
-      campaign.socialPostId = result.postId || campaign.socialPostId;
-      campaign.socialPostIds = {
-        ...(campaign.socialPostIds || {}),
-        ...(result.platformPostIds || {})
-      };
-      campaign.facebookPostId = result.platformPostIds?.facebook || campaign.facebookPostId || null;
-      campaign.instagramPostId = result.platformPostIds?.instagram || campaign.instagramPostId || null;
-      campaign.publishResult = result.data;
-      campaign.lastPublishError = null;
-      campaign.ayrshareStatus = 'success';
-      await campaign.save();
+      const recorded = await publishClaims.finish(Campaign, campaign._id, claimToken, {
+        status: 'posted',
+        publishedAt: new Date(),
+        socialPostId: result.postId || campaign.socialPostId,
+        socialPostIds: { ...(campaign.socialPostIds || {}), ...(result.platformPostIds || {}) },
+        facebookPostId: result.platformPostIds?.facebook || campaign.facebookPostId || null,
+        instagramPostId: result.platformPostIds?.instagram || campaign.instagramPostId || null,
+        publishResult: result.data,
+        lastPublishError: null,
+        ayrshareStatus: 'success'
+      });
+      claimToken = null;
+      if (!recorded) console.warn(`[Draft Publish] Campaign ${campaign._id} was sent but its claim was lost; the current holder records the result.`);
 
-      draft.status = 'published';
-      draft.campaignId = campaign._id;
-      await draft.save();
+      // Idempotent: a draft that is already published is not written again.
+      if (draft.status !== 'published' || String(draft.campaignId) !== String(campaign._id)) {
+        draft.status = 'published';
+        draft.campaignId = campaign._id;
+        await draft.save();
+      }
 
       res.status(200).json({ success: true, draft, publishResult: result });
     } else {
-      campaign.status = 'draft';
-      campaign.lastPublishError = result.error;
-      campaign.ayrshareStatus = 'error';
-      await campaign.save();
+      await publishClaims.fail(Campaign, campaign._id, claimToken, {
+        status: 'draft',
+        lastPublishError: result.error,
+        ayrshareStatus: 'error'
+      });
+      claimToken = null;
 
       res.status(400).json({ ...handlePublishError(result.error), draft });
     }
   } catch (error) {
     console.error('Publish draft error:', error);
+    // Nothing was recorded: give the claim back so a retry is possible (a no-op when the claim was already used).
+    if (claimToken) { try { await publishClaims.release(Campaign, claimedId, claimToken); } catch (_) { /* never masks the error */ } }
     res.status(500).json({ ...handlePublishError(error), draft: null });
   }
 });

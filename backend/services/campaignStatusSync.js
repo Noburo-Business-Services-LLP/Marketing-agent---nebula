@@ -1,4 +1,5 @@
 'use strict';
+const publishClaims = require('./publishClaim');
 /**
  * Status sync for posts scheduled ON Ayrshare (load-test week 1). These checks used to run inside GET /api/campaigns,
  * one live Ayrshare call per past-due post, every time the list was opened. They now run here, in the background:
@@ -144,11 +145,24 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
 
             if (campaignLooksLikeInstagramVideo) {
               console.log(`[Instagram Retry] Rebuilding failed scheduled Instagram video payload for campaign ${campaign._id}.`);
-              const freshRetryRes = await publishCampaignToSocial(campaign);
+              // The one place the sync sends a post: it takes the same per-campaign claim as the scheduler and
+              // "Post now" (services/publishClaim.js), so a rebuild cannot collide with either.
+              const claimed = await publishClaims.claim(Campaign, campaign._id, {
+                statuses: ['scheduled'], extraFilter: { socialPostId: campaign.socialPostId }, now, by: 'sync'
+              });
+              if (!claimed.claimed) return 'changed';
+              let freshRetryRes;
+              try {
+                freshRetryRes = await publishCampaignToSocial(campaign);
+              } catch (sendError) {
+                await publishClaims.release(Campaign, campaign._id, claimed.token);
+                throw sendError;
+              }
               const pendingId = freshRetryRes?.postId || campaign.socialPostId;
+              if (!freshRetryRes?.success) await publishClaims.release(Campaign, campaign._id, claimed.token);
               if (freshRetryRes?.success) {
                 const nextRetryCount = retryCount + 1;
-                if (!(await setIfStill({
+                if (!(await publishClaims.finish(Campaign, campaign._id, claimed.token, {
                     status: 'posted',
                     publishedAt: now,
                     socialPostId: pendingId,
@@ -162,7 +176,7 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
                       retryRequestedAt: now.toISOString(),
                       retryCount: nextRetryCount
                     }
-                }))) return 'changed';
+                }, { status: 'scheduled' }))) return 'changed';
 
                 campaign.status = 'posted';
                 campaign.publishedAt = now;
