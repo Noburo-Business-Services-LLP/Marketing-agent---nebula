@@ -87,7 +87,10 @@ class JobCancelledError extends Error {
 }
 
 class PersistentVideoGenerationQueue {
-  constructor({ concurrency = DEFAULT_CONCURRENCY, jobTtlMs = DEFAULT_JOB_TTL_MS, model, draftModel, refund, chargeProof, alertOwner } = {}) {
+  constructor({ concurrency = DEFAULT_CONCURRENCY, jobTtlMs = DEFAULT_JOB_TTL_MS, model, draftModel, refund, chargeProof, alertOwner, runsJobsHere } = {}) {
+    // A web-only task (RUN_BACKGROUND=0) only stores the job; the worker's drain loop claims it (atomic queued ->
+    // processing). Everywhere else enqueue starts the drain at once, as before.
+    this.runsJobsHere = typeof runsJobsHere === 'boolean' ? runsJobsHere : require('./backgroundRole').runsBackground();
     this.draftModel = draftModel || null;
     // Injectable for tests; the real ones load on first use.
     this.model = model || VideoJob;
@@ -128,7 +131,9 @@ class PersistentVideoGenerationQueue {
     // constant Mongoose query allocations. enqueue() triggers immediate drain
     // anyway, so this interval is only a safety net for missed triggers.
     // 15s = 8x fewer queries, no user-visible latency impact.
-    const drainIntervalMs = Number(process.env.VIDEO_QUEUE_DRAIN_INTERVAL_MS) || 15000;
+    // On the worker of a web/worker split nothing triggers a drain at enqueue (the job was stored by a web task), so
+    // the safety net is the only way in: 5 s there, so a video starts within about 5 s.
+    const drainIntervalMs = Number(process.env.VIDEO_QUEUE_DRAIN_INTERVAL_MS) || (require('./backgroundRole').isSplit() ? 5000 : 15000);
     this.workerTimer = setInterval(() => {
       this._drainQueue().catch((err) => {
         console.error('⚠️ Persistent Queue drain error:', err.message);
@@ -360,10 +365,12 @@ class PersistentVideoGenerationQueue {
       metadata: { jobType, ...metadata }
     });
 
-    // Proactively trigger the drain loop
-    this._drainQueue().catch((err) => {
-      console.error('⚠️ Persistent Queue drain trigger error:', err.message);
-    });
+    // Proactively trigger the drain loop (only in a process that runs jobs: a web-only task leaves it to the worker)
+    if (this.runsJobsHere) {
+      this._drainQueue().catch((err) => {
+        console.error('⚠️ Persistent Queue drain trigger error:', err.message);
+      });
+    }
 
     return this._publicView(job.toObject());
   }

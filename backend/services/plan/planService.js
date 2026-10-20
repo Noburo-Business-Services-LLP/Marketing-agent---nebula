@@ -177,6 +177,9 @@ function maybeStartFirstPlanSafe(userId, { service, log = (m) => console.warn(m)
 }
 
 // Boot and the scheduler tick call these. Never throw.
-const reapOnBoot = () => shared().reapStalePlanRuns({ all: true });
+// Single process: after a restart every open run is dead (they run live in this process), so all are ended. In a
+// web/worker split (RUN_BACKGROUND set) web tasks are running plans while the worker starts, so only stale runs
+// (no heartbeat for LIMITS.STALE_MS) are ended; the scheduler tick does the same afterwards.
+const reapOnBoot = ({ env = process.env } = {}) => shared().reapStalePlanRuns({ all: !require('../backgroundRole').isSplit(env) });
 
 module.exports = { createPlanService, defaultDeps, maybeStartFirstPlan, maybeStartFirstPlanSafe, reapOnBoot };

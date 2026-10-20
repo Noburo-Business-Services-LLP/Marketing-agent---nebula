@@ -652,6 +652,187 @@ const validateProductionEnvironment = async () => {
   console.log('🏥 Environment Health Checks Completed.\n');
 };
 
+// ============================================
+// Background jobs (schedulers, sweeps, queue consumers, loops). EVERY starter goes in here: a web-only task
+// (RUN_BACKGROUND=0) never calls this, the worker (RUN_BACKGROUND=1) and the single task (not set) call it once after
+// MongoDB is connected. Guard test: tests/runBackground.test.js. docs/superpowers/ops/ecs-web-worker.md
+// ============================================
+const backgroundRole = require('./services/backgroundRole');
+
+function startBackgroundJobs() {
+  // Start persistent video generation queue worker
+  try {
+    const { videoGenerationQueue } = require('./services/videoGenerationQueue');
+    videoGenerationQueue.startWorker();
+  } catch (queueError) {
+    console.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
+  }
+
+  // Start notification scheduler for campaign reminders
+  try {
+    notificationScheduler.start();
+  } catch (schedulerError) {
+    console.warn('⚠️  Notification scheduler failed to start:', schedulerError.message);
+  }
+
+  // Start analytics snapshot scheduler (every 12 hours)
+  try {
+    snapshotScheduler.start();
+  } catch (schedulerError) {
+    console.warn('⚠️  Snapshot scheduler failed to start:', schedulerError.message);
+  }
+
+  // Start campaign scheduler for due scheduled posts
+  try {
+    startCampaignScheduler();
+  } catch (schedulerError) {
+    console.warn('Campaign scheduler failed to start:', schedulerError.message);
+  }
+
+  // Posts scheduled on Ayrshare whose time has passed: ask Ayrshare whether they went out (bounded, single runner,
+  // every 5 minutes; this used to run inside GET /api/campaigns). Off with ENABLE_CAMPAIGN_STATUS_SYNC=off
+  try {
+    require('./services/campaignStatusSync').startCampaignStatusSync();
+  } catch (schedulerError) {
+    console.warn('Campaign status sync failed to start:', schedulerError.message);
+  }
+
+  // Start Gravity Smart Calendar scheduler for approved auto mode
+  try {
+    startContentCalendarScheduler();
+  } catch (schedulerError) {
+    console.warn('Content calendar scheduler failed to start:', schedulerError.message);
+  }
+
+  // Pick up photoshoots a restart left half-made (off with ENABLE_PHOTOSHOOT_RESUME=off)
+  try {
+    require('./services/photoshoot').startPhotoshootResume();
+  } catch (schedulerError) {
+    console.warn('Photoshoot resume failed to start:', schedulerError.message);
+  }
+
+  // Close Videos a restart left processing (refunding only what was charged) and finish interrupted refunds
+  // (off with ENABLE_STUDIO_VIDEO_SWEEP=off)
+  try {
+    require('./routes/studioVideos').startStudioVideoSweep();
+  } catch (schedulerError) {
+    console.warn('Videos sweep failed to start:', schedulerError.message);
+  }
+
+  // Close Home drafts a restart left open (refunding their Quarks) and retry refunds that did not land
+  // (off with ENABLE_HOME_DRAFTS_SWEEP=off)
+  try {
+    require('./services/homeDrafts').startHomeDraftsSweep();
+  } catch (schedulerError) {
+    console.warn('Home drafts sweep failed to start:', schedulerError.message);
+  }
+
+  // Remove items that have been in the Bin for more than 14 days, with their stored files (off with ENABLE_BIN_PURGE=off)
+  try {
+    require('./services/binPurge').startBinPurge();
+  } catch (schedulerError) {
+    console.warn('Bin purge failed to start:', schedulerError.message);
+  }
+
+  // Pick up weekly posts a restart left half-made (off with ENABLE_WEEK_RECOVERY=off)
+  try {
+    require('./services/week/weekRecovery').startWeekRecovery();
+  } catch (schedulerError) {
+    console.warn('Weekly post recovery failed to start:', schedulerError.message);
+  }
+
+  // Start automatic performance-tracking scheduler (24h/3d/7d/2w/1m checks)
+  try {
+    startPerformanceTrackerScheduler();
+  } catch (schedulerError) {
+    console.warn('Performance tracker scheduler failed to start:', schedulerError.message);
+  }
+
+  // Monthly invoices for managed clients who have automatic invoices on (hourly check)
+  try {
+    require('./services/billingScheduler').startBillingScheduler();
+  } catch (schedulerError) {
+    console.warn('Billing scheduler failed to start:', schedulerError.message);
+  }
+
+  // Owner is emailed once when social profiles reach the alert level (counted from our own accounts, checked hourly)
+  try {
+    const watch = require('./services/ayrshareProfileWatch');
+    const run = () => watch.check({ User: require('./models/User'), alert: watch.opsAlert(require('./services/opsAlerts')), store: watch.modelStore(require('./models/OpsState')) })
+      .catch((e) => console.warn('Profile watch failed:', e.message));
+    setTimeout(run, 60 * 1000).unref();
+    setInterval(run, 60 * 60 * 1000).unref();
+  } catch (watchError) {
+    console.warn('Profile watch failed to start:', watchError.message);
+  }
+
+  // Accounts that asked to be deleted are erased once their 14 days are over
+  try {
+    require('./services/accountDeletion').startAccountPurge();
+  } catch (schedulerError) {
+    console.warn('Account purge failed to start:', schedulerError.message);
+  }
+
+  // A reminder email three days before each monthly plan charge
+  try {
+    require('./services/renewalReminders').startRenewalReminders();
+  } catch (schedulerError) {
+    console.warn('Renewal reminders failed to start:', schedulerError.message);
+  }
+
+  // Drafts left "creating" by a restart or a lost connection are closed, and their Quarks returned
+  try {
+    require('./services/staleDrafts').startStaleDraftReaper();
+  } catch (reaperError) {
+    console.warn('Unfinished-draft cleanup failed to start:', reaperError.message);
+  }
+
+  // Plan runs a restart interrupted are ended (all of them in a single process; only stale ones in a web/worker split).
+  try {
+    require('./services/plan/planService').reapOnBoot()
+      .then((r) => { if (r && r.reaped) console.log(`[plan] ended ${r.reaped} plan run(s) a restart interrupted`); })
+      .catch((e) => console.warn('[plan] could not end interrupted plan runs:', e && e.message));
+  } catch (reapError) {
+    console.warn('Plan run cleanup failed to start:', reapError.message);
+  }
+
+  // Weekly competitor snapshots: capped scraper reads. OFF unless ENABLE_COMPETITOR_TRACKER is exactly "on" (the owner sets it in the production secret)
+  try {
+    require('./services/competitors/tracker').startCompetitorTracker();
+  } catch (schedulerError) {
+    console.warn('Competitor tracker failed to start:', schedulerError.message);
+  }
+
+  // Weekly comment scoring (a small model reads each account's own comments and messages). OFF unless ENABLE_LISTENING is exactly "on"
+  try {
+    require('./services/listening/scorer').startListeningScorer();
+  } catch (schedulerError) {
+    console.warn('Comment scoring failed to start:', schedulerError.message);
+  }
+
+  // The plan each paying account gets from its profile: monthly refresh, retries for a failed first plan
+  try {
+    require('./services/plan/planScheduler').startPlanScheduler();
+  } catch (schedulerError) {
+    console.warn('Plan scheduler failed to start:', schedulerError.message);
+  }
+
+  // What Nebulaa learned: daily bounded refresh from the six sources plus change triggers (code only, no model call;
+  // on by default, off with ENABLE_MEMORY_REFRESH=off)
+  try {
+    require('./services/brandMemory/runner').startBrandMemoryJob();
+  } catch (schedulerError) {
+    console.warn('Brand memory refresh failed to start:', schedulerError.message);
+  }
+
+  // Start weekly AI memory distillation scheduler
+  try {
+    startMemoryDistillationScheduler();
+  } catch (schedulerError) {
+    console.warn('Memory distillation scheduler failed to start:', schedulerError.message);
+  }
+}
+
 // Database connection and server start
 const PORT = process.env.PORT || 5000;
 
@@ -685,177 +866,10 @@ const startServer = async () => {
       }
     }
 
-    // Start persistent video generation queue worker
-    try {
-      const { videoGenerationQueue } = require('./services/videoGenerationQueue');
-      videoGenerationQueue.startWorker();
-    } catch (queueError) {
-      console.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
-    }
-
-    // Start notification scheduler for campaign reminders
-    try {
-      notificationScheduler.start();
-    } catch (schedulerError) {
-      console.warn('⚠️  Notification scheduler failed to start:', schedulerError.message);
-    }
-
-    // Start analytics snapshot scheduler (every 12 hours)
-    try {
-      snapshotScheduler.start();
-    } catch (schedulerError) {
-      console.warn('⚠️  Snapshot scheduler failed to start:', schedulerError.message);
-    }
-
-    // Start campaign scheduler for due scheduled posts
-    try {
-      startCampaignScheduler();
-    } catch (schedulerError) {
-      console.warn('Campaign scheduler failed to start:', schedulerError.message);
-    }
-
-    // Posts scheduled on Ayrshare whose time has passed: ask Ayrshare whether they went out (bounded, single runner,
-    // every 5 minutes; this used to run inside GET /api/campaigns). Off with ENABLE_CAMPAIGN_STATUS_SYNC=off
-    try {
-      require('./services/campaignStatusSync').startCampaignStatusSync();
-    } catch (schedulerError) {
-      console.warn('Campaign status sync failed to start:', schedulerError.message);
-    }
-
-    // Start Gravity Smart Calendar scheduler for approved auto mode
-    try {
-      startContentCalendarScheduler();
-    } catch (schedulerError) {
-      console.warn('Content calendar scheduler failed to start:', schedulerError.message);
-    }
-
-    // Pick up photoshoots a restart left half-made (off with ENABLE_PHOTOSHOOT_RESUME=off)
-    try {
-      require('./services/photoshoot').startPhotoshootResume();
-    } catch (schedulerError) {
-      console.warn('Photoshoot resume failed to start:', schedulerError.message);
-    }
-
-    // Close Videos a restart left processing (refunding only what was charged) and finish interrupted refunds
-    // (off with ENABLE_STUDIO_VIDEO_SWEEP=off)
-    try {
-      require('./routes/studioVideos').startStudioVideoSweep();
-    } catch (schedulerError) {
-      console.warn('Videos sweep failed to start:', schedulerError.message);
-    }
-
-    // Close Home drafts a restart left open (refunding their Quarks) and retry refunds that did not land
-    // (off with ENABLE_HOME_DRAFTS_SWEEP=off)
-    try {
-      require('./services/homeDrafts').startHomeDraftsSweep();
-    } catch (schedulerError) {
-      console.warn('Home drafts sweep failed to start:', schedulerError.message);
-    }
-
-    // Remove items that have been in the Bin for more than 14 days, with their stored files (off with ENABLE_BIN_PURGE=off)
-    try {
-      require('./services/binPurge').startBinPurge();
-    } catch (schedulerError) {
-      console.warn('Bin purge failed to start:', schedulerError.message);
-    }
-
-    // Pick up weekly posts a restart left half-made (off with ENABLE_WEEK_RECOVERY=off)
-    try {
-      require('./services/week/weekRecovery').startWeekRecovery();
-    } catch (schedulerError) {
-      console.warn('Weekly post recovery failed to start:', schedulerError.message);
-    }
-
-    // Start automatic performance-tracking scheduler (24h/3d/7d/2w/1m checks)
-    try {
-      startPerformanceTrackerScheduler();
-    } catch (schedulerError) {
-      console.warn('Performance tracker scheduler failed to start:', schedulerError.message);
-    }
-
-    // Monthly invoices for managed clients who have automatic invoices on (hourly check)
-    try {
-      require('./services/billingScheduler').startBillingScheduler();
-    } catch (schedulerError) {
-      console.warn('Billing scheduler failed to start:', schedulerError.message);
-    }
-
-    // Owner is emailed once when social profiles reach the alert level (counted from our own accounts, checked hourly)
-    try {
-      const watch = require('./services/ayrshareProfileWatch');
-      const run = () => watch.check({ User: require('./models/User'), alert: watch.opsAlert(require('./services/opsAlerts')), store: watch.modelStore(require('./models/OpsState')) })
-        .catch((e) => console.warn('Profile watch failed:', e.message));
-      setTimeout(run, 60 * 1000).unref();
-      setInterval(run, 60 * 60 * 1000).unref();
-    } catch (watchError) {
-      console.warn('Profile watch failed to start:', watchError.message);
-    }
-
-    // Accounts that asked to be deleted are erased once their 14 days are over
-    try {
-      require('./services/accountDeletion').startAccountPurge();
-    } catch (schedulerError) {
-      console.warn('Account purge failed to start:', schedulerError.message);
-    }
-
-    // A reminder email three days before each monthly plan charge
-    try {
-      require('./services/renewalReminders').startRenewalReminders();
-    } catch (schedulerError) {
-      console.warn('Renewal reminders failed to start:', schedulerError.message);
-    }
-
-    // Drafts left "creating" by a restart or a lost connection are closed, and their Quarks returned
-    try {
-      require('./services/staleDrafts').startStaleDraftReaper();
-    } catch (reaperError) {
-      console.warn('Unfinished-draft cleanup failed to start:', reaperError.message);
-    }
-
-    // The plan runs live in this process, so after a restart every queued or processing one is dead: end them now.
-    try {
-      require('./services/plan/planService').reapOnBoot()
-        .then((r) => { if (r && r.reaped) console.log(`[plan] ended ${r.reaped} plan run(s) a restart interrupted`); })
-        .catch((e) => console.warn('[plan] could not end interrupted plan runs:', e && e.message));
-    } catch (reapError) {
-      console.warn('Plan run cleanup failed to start:', reapError.message);
-    }
-
-    // Weekly competitor snapshots: capped scraper reads. OFF unless ENABLE_COMPETITOR_TRACKER is exactly "on" (the owner sets it in the production secret)
-    try {
-      require('./services/competitors/tracker').startCompetitorTracker();
-    } catch (schedulerError) {
-      console.warn('Competitor tracker failed to start:', schedulerError.message);
-    }
-
-    // Weekly comment scoring (a small model reads each account's own comments and messages). OFF unless ENABLE_LISTENING is exactly "on"
-    try {
-      require('./services/listening/scorer').startListeningScorer();
-    } catch (schedulerError) {
-      console.warn('Comment scoring failed to start:', schedulerError.message);
-    }
-
-    // The plan each paying account gets from its profile: monthly refresh, retries for a failed first plan
-    try {
-      require('./services/plan/planScheduler').startPlanScheduler();
-    } catch (schedulerError) {
-      console.warn('Plan scheduler failed to start:', schedulerError.message);
-    }
-
-    // What Nebulaa learned: daily bounded refresh from the six sources plus change triggers (code only, no model call;
-    // on by default, off with ENABLE_MEMORY_REFRESH=off)
-    try {
-      require('./services/brandMemory/runner').startBrandMemoryJob();
-    } catch (schedulerError) {
-      console.warn('Brand memory refresh failed to start:', schedulerError.message);
-    }
-
-    // Start weekly AI memory distillation scheduler
-    try {
-      startMemoryDistillationScheduler();
-    } catch (schedulerError) {
-      console.warn('Memory distillation scheduler failed to start:', schedulerError.message);
-    }
+    // Schedulers, sweeps, queue consumers and loops: only where background jobs run (RUN_BACKGROUND, default on).
+    // A web-only task (RUN_BACKGROUND=0) serves every request and leaves this work to the worker task.
+    console.log(backgroundRole.describe());
+    if (backgroundRole.runsBackground()) startBackgroundJobs();
 
     // Initialize OTP email service
     try {
