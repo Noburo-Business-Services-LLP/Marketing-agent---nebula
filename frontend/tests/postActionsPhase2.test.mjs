@@ -3,9 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { schedulable, scheduleTimes, scheduleSummary, defaultGapDays, platformsOf } from '../utils/scheduleAll.ts';
-import { studioVideoActionKeys, studioAgainQuarks, photoActionKeys, photoMakeAgainConfirm, studioDeleteConfirm, MEDIA_ORDER } from '../utils/itemActions.ts';
+import { studioVideoActionKeys, studioAgainQuarks, photoActionKeys, photoMakeAgainConfirm, studioDeleteConfirm, MEDIA_ORDER, libraryVideoActionKeys } from '../utils/itemActions.ts';
 import { draftByCampaign, campaignIdOf } from '../utils/calendarPosts.ts';
-import { fromStudioVideo, libraryTileActions, SOURCE_WORD } from '../utils/library.ts';
+import { fromStudioVideo, SOURCE_WORD } from '../utils/library.ts';
 import { postActionsFor } from '../utils/postActions.ts';
 
 const IMG = 'https://res.cloudinary.com/x/image/upload/a.jpg';
@@ -83,16 +83,16 @@ test('the calendar finds the post behind each entry, whether the campaign link i
   assert.equal(draftByCampaign(undefined).size, 0);
 });
 
-test('studio videos join the Library as video tiles with Open, Download and Make again', () => {
+test('studio videos join the Library as video tiles with Download, Make again and Delete', () => {
   const v = fromStudioVideo({ id: 'v1', status: 'completed', title: 'Diwali box', videoUrl: 'https://res.cloudinary.com/x/video/upload/v.mp4', concept: 'A box opens', clips: 2, platforms: ['Instagram'], createdAt: '2026-10-18T10:00:00Z' });
   assert.equal(v.source, 'studio');
   assert.equal(v.kind, 'video');
   assert.equal(v.status, 'ready');
   assert.equal(v.clips, 2);
   assert.match(v.thumbnailUrl, /so_1/);
-  assert.deepEqual(libraryTileActions(v), ['open', 'download', 'again']);
+  assert.deepEqual(libraryVideoActionKeys(v), ['download', 'makeAgain', 'delete']);
   assert.equal(SOURCE_WORD.studio, 'Video');
   assert.equal(fromStudioVideo({ id: 'v2', status: 'processing' }).status, 'creating');
-  assert.deepEqual(libraryTileActions(fromStudioVideo({ id: 'v3', status: 'failed' })), ['open', 'again']);
+  assert.deepEqual(libraryVideoActionKeys(fromStudioVideo({ id: 'v3', status: 'failed' })), ['makeAgain', 'delete']);
   assert.equal(fromStudioVideo({}), null);
 });

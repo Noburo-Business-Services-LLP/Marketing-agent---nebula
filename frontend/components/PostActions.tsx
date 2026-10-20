@@ -134,9 +134,13 @@ const PostActions: React.FC<PostActionsProps> = ({
     if (a.key === 'schedule') { setNote(null); setScheduling(true); return; }
     if (a.key === 'download') {
       const pics = picturesOf(draft);
-      const video = String(draft?.creative?.videoUrl || '');
+      // A reel or video post is downloaded as its video, never as a picture.
+      const isVideo = ['reel', 'video'].includes(String(draft?.sourceType || draft?.contentType || '').toLowerCase());
+      const own = String(draft?.imageUrl || '');
+      const video = String(draft?.creative?.videoUrl || '') || (isVideo && /\.(mp4|webm|mov|m4v)(\?|$)|\/video\/upload\//i.test(own) ? own : '');
       try {
-        if (pics.length > 1) await downloadAll(pics, name);
+        if (isVideo && video) window.open(video, '_blank', 'noopener');
+        else if (pics.length > 1) await downloadAll(pics, name);
         else if (pics[0]) await downloadImage(pics[0], name);
         else if (video) window.open(video, '_blank', 'noopener');
       } catch { say('The download did not start. Please try again.', 'error'); }

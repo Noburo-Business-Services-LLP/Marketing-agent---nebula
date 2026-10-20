@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, RotateCcw, Trash2, X } from 'lucide-react';
+import { BookmarkMinus, Download, Eye, Film, Image as ImageIcon, Loader2, Pencil, Play, RotateCcw, Trash2, Wand2, X } from 'lucide-react';
 import { GravityButton } from '../components/gravity';
-import { useConfirm } from '../context/ConfirmContext';
 import GenerationTimer from '../components/GenerationTimer';
 import HeroShare from '../components/HeroShare';
 import HeroEdit from '../components/HeroEdit';
@@ -11,13 +10,18 @@ import { orderForViewing } from '../utils/postOrder';
 import PlatformIcon from '../components/PlatformIcon';
 import { draftsAPI, videoGenerationAPI, heroVideoAPI, photoshootAPI, studioVideosAPI, DraftCounts } from '../services/api';
 import PostActions, { PostNotice, PostNoticeValue } from '../components/PostActions';
+import ItemActions, { ItemAction } from '../components/ItemActions';
+import { usePostAccess } from '../hooks/usePostAccess';
+import { downloadImage } from '../utils/download';
+import { setPrefill } from '../utils/prefill';
+import { MEDIA_LABELS, PHOTO_HINTS, STUDIO_HINTS, libraryVideoActionKeys, photoActionKeys, photoDeleteConfirm, studioDeleteConfirm } from '../utils/itemActions';
 import { useQuarkCosts } from '../hooks/useQuarkCosts';
-import { binDaysLeft, BIN_DAYS } from '../utils/postActions';
+import { binDaysLeft, BIN_DAYS, REASONS } from '../utils/postActions';
 import { platformLabel } from '../utils/platforms';
 import {
   LibraryItem, LibraryFilters, LibraryView, DEFAULT_FILTERS, STATUS_WORD, LIBRARY_VIEWS,
   fromPostDraft, fromVideoDraft, fromHeroJob, fromPhotoshootPhoto, fromStudioVideo, applyFilters, inView, defaultView, statusWordOf,
-  SOURCE_WORD, libraryTileActions,
+  SOURCE_WORD,
 } from '../utils/library';
 import '../components/library/library.css';
 import PageHeader from '../components/PageHeader';
@@ -38,7 +42,6 @@ const fmtDate = (t: number) => (t ? new Date(t).toLocaleDateString(undefined, { 
 /** Everything you have made, images and videos together, in views: Needs approval, Approved, Scheduled, Posted, All, Archived, Bin. */
 const Library: React.FC<{ user?: User | null }> = ({ user }) => {
   const navigate = useNavigate();
-  const confirmDialog = useConfirm();
   const quarkCosts = useQuarkCosts();
   const [params, setParams] = useSearchParams();
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -149,32 +152,70 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
     else setOpen(i);
   };
 
-  const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState('');
-  const canRemove = (i: LibraryItem) => i.source === 'hero' || i.source === 'video-draft' || i.source === 'reel' || i.source === 'studio';
+  const access = usePostAccess();
   // A video from the Videos page is made again there: its plan opens again and the price shows before anything is made.
   const makeVideoAgain = (i: LibraryItem) => navigate(`/reels?again=${encodeURIComponent(i.id)}`);
   const studioQuarks = (i: LibraryItem) => Math.round((quarkCosts.studio_video || 0) * (i.clips || 1));
-  const remove = async (i: LibraryItem) => {
-    if (removing) return;
-    const ok = i.source === 'reel'
-      ? await confirmDialog(`It stays in the Bin for ${BIN_DAYS} days, so you can restore it. After that it is removed for good.`, { title: 'Move this to the Bin?', confirmLabel: 'Move to the Bin', danger: true })
-      : await confirmDialog(i.source === 'hero' || i.source === 'studio' ? 'This removes the video for good. Quarks already spent are not returned.' : 'This removes it and its files. This cannot be undone.', { title: `Delete "${i.title}"?`, confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
-    setRemoving(true); setRemoveError('');
+  const tellError = (text: string) => { setRemoveError(text); setNotice({ text, tone: 'error' }); };
+  const afterDelete = (text: string) => { setOpen(null); setRemoveError(''); setNotice({ text, tone: 'ok' }); refresh(); };
+  // Videos from the older tools and from the Videos page are deleted for good on the server (no Bin there); the
+  // question is asked by ItemActions before this runs.
+  const deleteVideo = async (i: LibraryItem) => {
     try {
-      const r: any = i.source === 'hero' ? await heroVideoAPI.remove(i.id) : i.source === 'video-draft' ? await videoGenerationAPI.deleteDraft(i.id) : i.source === 'studio' ? await studioVideosAPI.remove(i.id) : await draftsAPI.deleteDraft(i.id);
+      const r: any = i.source === 'hero' ? await heroVideoAPI.remove(i.id) : i.source === 'video-draft' ? await videoGenerationAPI.deleteDraft(i.id) : await studioVideosAPI.remove(i.id);
       if (r && r.success === false) throw new Error(r.message || 'We could not delete this.');
-      setOpen(null); refresh();
-    } catch (e: any) {
-      setRemoveError(e?.message || 'We could not delete this. Please try again.');
-    } finally { setRemoving(false); }
+      afterDelete('Deleted.');
+    } catch (e: any) { tellError(e?.message || 'We could not delete this. Please try again.'); }
+  };
+  const photoIndexOf = (i: LibraryItem) => (Number.isInteger(i.photoIndex) ? (i.photoIndex as number) : 0);
+  const removePhotoFromLibrary = async (i: LibraryItem) => {
+    try {
+      const r: any = await photoshootAPI.setInLibrary(i.jobId || '', photoIndexOf(i), false);
+      if (r && r.success === false) throw new Error(r.message || 'We could not change that just now.');
+      setOpen(null); setNotice({ text: 'Taken out of your Library. It stays in its photoshoot.', tone: 'ok' }); refresh();
+    } catch (e: any) { tellError(e?.message || 'We could not change that just now. Please try again.'); }
+  };
+  const deletePhoto = async (i: LibraryItem) => {
+    try {
+      const r: any = await photoshootAPI.deletePhoto(i.jobId || '', photoIndexOf(i));
+      if (r && r.success === false) throw new Error(r.message || 'We could not delete that photo.');
+      afterDelete('Photo deleted.');
+    } catch (e: any) { tellError(e?.message || 'We could not delete that photo. Please try again.'); }
+  };
+  const photoToCreate = (i: LibraryItem) => {
+    setPrefill('carousel', { mode: 'single', topic: '', source: 'home', photo: { name: i.title || 'Photoshoot photo', imageUrl: i.mediaUrl } });
+    navigate('/campaigns');
+  };
+
+  /** The shared item buttons (components/ItemActions.tsx) for a tile or panel that is not a post: videos and photos. */
+  const itemActionsFor = (i: LibraryItem): ItemAction[] => {
+    if (i.source === 'photoshoot') {
+      return photoActionKeys({ hasPhoto: Boolean(i.mediaUrl), inLibrary: true, canRedo: false, canDelete: Boolean(i.jobId) }).map((k): ItemAction => {
+        if (k === 'useInCreate') return { key: k, label: MEDIA_LABELS.useInCreate, hint: 'Make a post with this photo.', icon: Wand2, onRun: () => photoToCreate(i) };
+        if (k === 'download') return { key: k, label: MEDIA_LABELS.download, hint: 'Save the photo to your device.', icon: Download, primary: true, onRun: () => downloadImage(i.mediaUrl, i.title || 'photo') };
+        if (k === 'deletePhoto') return { key: k, label: MEDIA_LABELS.deletePhoto, hint: PHOTO_HINTS.deletePhoto, icon: Trash2, danger: true, confirm: photoDeleteConfirm(), onRun: () => deletePhoto(i) };
+        return { key: 'remove', label: MEDIA_LABELS.remove, hint: PHOTO_HINTS.remove, icon: BookmarkMinus, onRun: () => removePhotoFromLibrary(i) };
+      });
+    }
+    return libraryVideoActionKeys(i).map((k): ItemAction => {
+      if (k === 'download') return { key: k, label: MEDIA_LABELS.download, hint: STUDIO_HINTS.download, icon: Download, primary: true, onRun: () => { window.open(i.mediaUrl, '_blank', 'noopener'); } };
+      if (k === 'edit' || k === 'open') return { key: k, label: k === 'edit' ? MEDIA_LABELS.edit : MEDIA_LABELS.open, hint: k === 'edit' ? 'Change the clips, words or music.' : 'Open it where it was made.', icon: k === 'edit' ? Pencil : Eye, onRun: () => goEdit(i) };
+      if (k === 'makeAgain') { const q = studioQuarks(i); return { key: k, label: MEDIA_LABELS.makeAgain, hint: STUDIO_HINTS.makeAgain(q), icon: RotateCcw, quarks: q || undefined, primary: i.status === 'failed', onRun: () => makeVideoAgain(i) }; }
+      return {
+        key: 'delete', label: MEDIA_LABELS.delete, hint: STUDIO_HINTS.delete, icon: Trash2, danger: true,
+        confirm: i.source === 'video-draft' ? { title: `Delete "${i.title}"?`, message: 'This removes it and its files. This cannot be undone.', confirmLabel: 'Delete', danger: true } : studioDeleteConfirm(i.title),
+        onRun: () => deleteVideo(i),
+      };
+    });
   };
 
   // Make again redraws a post's picture: the same price as Review and approve shows (0 for campaign posts).
   const makeAgainQuarks = (d: any) => (d?.contentType === 'campaign' ? 0 : (quarkCosts.image_generated || 0));
-  // Posts and images get the shared post actions and the post sheet; videos and photos keep their own panel for now.
+  // Posts and images get the shared post actions and the post sheet. Reels from the plan are post drafts too: same
+  // actions on the tile and in the panel, but their panel plays the video. Other videos and photos use ItemActions.
   const isPost = (i: LibraryItem) => i.source === 'post' && Boolean(i.raw);
+  const isReel = (i: LibraryItem) => i.source === 'reel' && Boolean(i.raw);
   const listLoading = view === 'bin' ? binLoading : loading;
   const needs = countFor('needsApproval');
 
@@ -253,8 +294,8 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
       ) : (
         <ul className="nb-lib-grid" data-testid="library-grid">
           {shown.map((i) => {
-            const actions = libraryTileActions(i);
-            const post = isPost(i);
+            const items = isPost(i) || isReel(i) ? [] : itemActionsFor(i);
+            const post = isPost(i) || isReel(i);
             const word = statusWordOf(i);
             const daysLeft = i.status === 'binned' ? binDaysLeft(i.raw?.binnedAt) : 0;
             return (
@@ -287,22 +328,15 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
                         variant="compact"
                         label={i.title}
                         makeAgainQuarks={makeAgainQuarks(i.raw)}
-                        onEdit={() => setOpen(i)}
+                        onEdit={() => (isReel(i) ? goEdit(i) : setOpen(i))}
                         archiveVia={i.raw?.contentCalendarId && i.raw?.calendarDay ? 'reject' : 'archive'}
                         onMessage={(text, tone, to) => setNotice(text ? { text, tone, to } : null)}
                         onChanged={() => refresh()}
                       />
                     </div>
-                  ) : actions.length > 0 ? (
+                  ) : items.length > 0 ? (
                     <div className="nb-lib-foot">
-                      <div className="nb-pa" data-variant="compact">
-                        <div className="nb-pa-row">
-                          {actions.includes('open') && <button type="button" className="nb-pa-btn" data-primary="true" onClick={() => setOpen(i)} aria-label={`Open ${i.title}`}><Eye className="nb-pa-ico" aria-hidden="true" /><span className="nb-pa-word">Open</span></button>}
-                          {actions.includes('edit') && <button type="button" className="nb-pa-btn" onClick={() => goEdit(i)} aria-label={`Edit ${i.title}`} title="Edit"><Pencil className="nb-pa-ico" aria-hidden="true" /></button>}
-                          {actions.includes('download') && <a className="nb-pa-btn" href={i.mediaUrl} download target="_blank" rel="noreferrer" aria-label={`Download ${i.title}`} title="Download"><Download className="nb-pa-ico" aria-hidden="true" /></a>}
-                          {actions.includes('again') && <button type="button" className="nb-pa-btn" onClick={() => makeVideoAgain(i)} aria-label={`Make ${i.title} again`} title="Make again: the plan opens on the Videos page, with the price"><RotateCcw className="nb-pa-ico" aria-hidden="true" /></button>}
-                        </div>
-                      </div>
+                      <ItemActions items={items} variant="compact" name={i.title} />
                     </div>
                   ) : <div className="nb-lib-foot" aria-hidden="true"><span className="nb-lib-foot-wait">{i.status === 'creating' ? 'Being made' : ''}</span></div>}
                 </article>
@@ -342,26 +376,30 @@ const Library: React.FC<{ user?: User | null }> = ({ user }) => {
                 <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--gv-text-tertiary)]">{open.kind === 'video' ? 'Video' : 'Image'} · {STATUS_WORD[open.status]}</p>
                 <h2 className="text-[18px] font-semibold text-[var(--gv-text-primary)]">{open.title}</h2>
               </div>
-              <button type="button" onClick={() => setOpen(null)} aria-label="Close" className="p-1.5 rounded-md text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => { setOpen(null); setRemoveError(''); }} aria-label="Close" className="p-1.5 rounded-md text-[var(--gv-text-tertiary)] hover:text-[var(--gv-text-primary)]"><X className="w-5 h-5" /></button>
             </div>
             {open.mediaUrl ? (open.kind === 'video'
               ? <video src={open.mediaUrl} controls playsInline className="w-full max-h-[55vh] rounded-xl bg-black" />
               : <img src={open.mediaUrl} alt={open.title} className="w-full max-h-[55vh] object-contain rounded-xl bg-[var(--gv-border-subtle)]" />)
               : <p className="text-[13px] text-[var(--gv-text-secondary)]">This one has no finished file yet.</p>}
             {open.caption && <p className="text-[13.5px] text-[var(--gv-text-secondary)] whitespace-pre-wrap">{open.caption}</p>}
-            <div className="flex flex-wrap items-center gap-4">
-              {open.mediaUrl && <a href={open.mediaUrl} download target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-accent-text)] hover:underline"><Download className="w-4 h-4" />Download</a>}
-              {open.source === 'studio' ? <GravityButton variant="ghost" onClick={() => makeVideoAgain(open)}><RotateCcw className="w-4 h-4" />Make again{studioQuarks(open) ? <span className="nb-pa-price">{studioQuarks(open).toLocaleString('en-IN')} Quarks</span> : null}</GravityButton>
-                : open.source !== 'hero' && <GravityButton variant="ghost" onClick={() => goEdit(open)}>{open.status === 'draft' ? 'Edit' : 'Open'}</GravityButton>}
-              {canRemove(open) && (
-                <button type="button" onClick={() => remove(open)} disabled={removing} className="ml-auto inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--gv-coral-text)] disabled:opacity-60">
-                  {removing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}Delete
-                </button>
-              )}
-            </div>
+            {isReel(open) ? (
+              <PostActions
+                draft={open.raw}
+                variant="row"
+                label={open.title}
+                onEdit={() => goEdit(open)}
+                archiveVia={open.raw?.contentCalendarId && open.raw?.calendarDay ? 'reject' : 'archive'}
+                onChanged={(c) => { if (c.moved) setOpen(null); refresh(); }}
+              />
+            ) : (
+              <ItemActions items={itemActionsFor(open)} variant="row" name={open.title} />
+            )}
             {removeError && <p role="alert" className="text-[13px] text-[var(--gv-text-primary)]">{removeError}</p>}
             {open.source === 'hero' && open.mediaUrl && <HeroEdit key={`edit-${open.id}`} jobId={open.id} current={open.finish} onUpdated={(url) => { setOpen((o) => (o ? { ...o, mediaUrl: url } : o)); load(true); }} />}
-            {open.source === 'hero' && open.mediaUrl && <HeroShare key={open.id} jobId={open.id} onPosted={() => load(true)} />}
+            {open.source === 'hero' && open.mediaUrl && (access.publish === 'upgrade' || access.publish === 'addon'
+              ? <p className="text-[13px] text-[var(--gv-text-secondary)] pt-2 border-t border-[var(--gv-border-subtle)]">{access.publish === 'upgrade' ? REASONS.paidPlan : REASONS.addon} to post or schedule this video. You can still download it.</p>
+              : <HeroShare key={open.id} jobId={open.id} onPosted={() => load(true)} />)}
           </div>
         </div>
       )}

@@ -5061,6 +5061,9 @@ export const photoshootAPI = {
     apiCall(`/photoshoot/jobs/${encodeURIComponent(id)}/photos/${index}/redo`, { method: 'POST', body: JSON.stringify({ key }) }, true),
   setInLibrary: async (id: string, index: number, inLibrary: boolean): Promise<{ success: boolean; inLibrary?: boolean }> =>
     apiCall(`/photoshoot/jobs/${encodeURIComponent(id)}/photos/${index}`, { method: 'PATCH', body: JSON.stringify({ inLibrary }) }, true),
+  /** Deletes ONE finished photo for good (the server refuses while its photoshoot is still being made). */
+  deletePhoto: async (id: string, index: number): Promise<{ success: boolean; deleted?: boolean; message?: string }> =>
+    apiCall(`/photoshoot/jobs/${encodeURIComponent(id)}/photos/${index}`, { method: 'DELETE' }, true),
   library: async (): Promise<{ success: boolean; photos: Array<{ jobId: string; index: number; url: string; kind: string; pack: string; packTitle: string; scene: string; product: string; aspectRatio: string; createdAt: string }> }> =>
     apiCall('/photoshoot/library', {}, true),
   upload: async (name: string, imageData: string): Promise<{ success: boolean; product?: PhotoshootProduct; message?: string }> =>

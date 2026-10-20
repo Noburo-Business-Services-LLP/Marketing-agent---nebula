@@ -38,6 +38,8 @@ export interface LibraryItem {
   binnedAt?: number;
   /** videos from the Videos page: how many 10 second parts (its Make again price) */
   clips?: number;
+  /** Photoshoot photos: the photo's number inside its photoshoot (id is jobId-index) */
+  photoIndex?: number;
 }
 
 const ms = (v: any): number => {
@@ -141,7 +143,7 @@ export function fromPhotoshootPhoto(p: any): LibraryItem | null {
   return {
     id: `${p.jobId}-${p.index}`, kind: 'image', source: 'photoshoot', title, status: 'ready',
     thumbnailUrl: String(p.url), mediaUrl: String(p.url), caption: text(p.packTitle, 80) ? `Photoshoot: ${text(p.packTitle, 80)}` : 'Photoshoot',
-    platforms: [], createdAt: ms(p.createdAt), jobId: String(p.jobId),
+    platforms: [], createdAt: ms(p.createdAt), jobId: String(p.jobId), photoIndex: p.index,
   };
 }
 
@@ -211,16 +213,3 @@ export function inView(i: Pick<LibraryItem, 'status' | 'needsApproval'>, view: L
 export const SOURCE_WORD: Record<LibrarySource, string> = {
   post: 'Post', reel: 'Reel from your plan', 'video-draft': 'Video', hero: 'Video', photoshoot: 'Photoshoot', studio: 'Video',
 };
-
-export type LibraryAction = 'open' | 'edit' | 'download' | 'again';
-
-/** The actions a tile offers on hover and focus. Nothing while it is still being made. */
-export function libraryTileActions(i: Pick<LibraryItem, 'status' | 'mediaUrl' | 'source'>): LibraryAction[] {
-  if (i.status === 'creating') return [];
-  const out: LibraryAction[] = ['open'];
-  if ((i.status === 'draft' || i.status === 'failed') && i.source !== 'studio') out.push('edit');
-  if (i.mediaUrl && i.source !== 'post') out.push('download');
-  // Videos from the Videos page are made again there (their plan opens again; the price shows before making).
-  if (i.source === 'studio') out.push('again');
-  return out;
-}

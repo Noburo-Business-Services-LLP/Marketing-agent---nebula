@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { BookmarkMinus, BookmarkPlus, Camera, Check, Download, ImagePlus, Loader2, RefreshCw, Sparkles, Wand2 } from 'lucide-react';
+import { BookmarkMinus, BookmarkPlus, Camera, Check, Download, ImagePlus, Loader2, RefreshCw, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import ItemActions, { ItemAction } from '../components/ItemActions';
-import { MEDIA_LABELS, photoActionKeys, photoMakeAgainConfirm } from '../utils/itemActions';
+import { MEDIA_LABELS, PHOTO_HINTS, photoActionKeys, photoDeleteConfirm, photoMakeAgainConfirm } from '../utils/itemActions';
 import { downloadImage } from '../utils/download';
 import CoverTile from '../components/CoverTile';
 import { PackProductArt, PackMarketplaceArt, PackFestivalArt, PackLifestyleArt, PackFlatLayArt, PackWhiteArt } from '../components/art/packs';
@@ -143,6 +143,21 @@ const Photoshoot: React.FC = () => {
     catch (e: any) { setPhotoError(messageOf(e, 'We could not change that just now. Please try again.')); }
   };
 
+  // Deletes the photo you are looking at for good (a new version or the first one). The job is read again, so the page
+  // shows what is left: an older version or the first photo when a new version was deleted.
+  const deletePhoto = async (jobId: string, index: number) => {
+    setPhotoError('');
+    try {
+      const r = await photoshootAPI.deletePhoto(jobId, index);
+      if (r && r.success === false) throw new Error(r.message || 'We could not delete that photo. Please try again.');
+      if (job) {
+        const fresh = await photoshootAPI.get(job.id);
+        if (fresh && fresh.job) setJob(fresh.job);
+        photoshootAPI.list().then((l) => setRecent(l.jobs || [])).catch(() => undefined);
+      }
+    } catch (e: any) { setPhotoError(messageOf(e, 'We could not delete that photo. Please try again.')); }
+  };
+
   const openInCreate = (url: string, product: string) => {
     setPrefill('carousel', { mode: 'single', topic: product ? `A post about ${product}` : '', source: 'home', photo: { name: product || 'Photoshoot photo', imageUrl: url } });
     navigate('/campaigns');
@@ -168,14 +183,15 @@ const Photoshoot: React.FC = () => {
 
   // The same buttons, order and style as a post (components/ItemActions.tsx): Use in Create, Download, Make again (with
   // its price, asked first), Save to Library or Remove from Library. Photos are ingredients: no Schedule or Post now.
-  const photoActions = (p: PhotoshootPhoto, shown: { url: string; inLibrary: boolean; id: string; idx: number; version: boolean }, canRedo: boolean): ItemAction[] =>
-    photoActionKeys({ hasPhoto: Boolean(shown.url), inLibrary: shown.inLibrary, canRedo }).map((k): ItemAction => {
+  const photoActions = (p: PhotoshootPhoto, shown: { url: string; inLibrary: boolean; id: string; idx: number; version: boolean }, canRedo: boolean, canDelete: boolean): ItemAction[] =>
+    photoActionKeys({ hasPhoto: Boolean(shown.url), inLibrary: shown.inLibrary, canRedo, canDelete }).map((k): ItemAction => {
       const n = p.index + 1;
       if (k === 'useInCreate') return { key: k, label: MEDIA_LABELS.useInCreate, hint: 'Make a post with this photo.', icon: Wand2, primary: true, onRun: () => openInCreate(shown.url, p.product) };
       if (k === 'download') return { key: k, label: MEDIA_LABELS.download, hint: 'Save the photo to your device.', icon: Download, pin: true, onRun: () => downloadImage(shown.url, `${p.product || 'photo'} ${n}`) };
       if (k === 'makeAgain') return { key: k, label: MEDIA_LABELS.makeAgain, hint: 'Make a new version of this photo. The one you have stays.', icon: RefreshCw, quarks: perPhoto || undefined, primary: !shown.url, disabled: busyJob, reason: busyJob ? 'Wait for the photos being made' : '', confirm: photoMakeAgainConfirm(perPhoto), onRun: () => redo(p) };
-      if (k === 'save') return { key: k, label: MEDIA_LABELS.save, hint: 'Keep this photo in your Library.', icon: BookmarkPlus, onRun: () => toggleLibrary(shown.id, shown.idx, true, shown.version) };
-      return { key: k, label: 'Remove from Library', hint: 'Take this photo out of your Library. It stays in this photoshoot.', icon: BookmarkMinus, onRun: () => toggleLibrary(shown.id, shown.idx, false, shown.version) };
+      if (k === 'save') return { key: k, label: MEDIA_LABELS.save, hint: PHOTO_HINTS.save, icon: BookmarkPlus, onRun: () => toggleLibrary(shown.id, shown.idx, true, shown.version) };
+      if (k === 'deletePhoto') return { key: k, label: MEDIA_LABELS.deletePhoto, hint: PHOTO_HINTS.deletePhoto, icon: Trash2, danger: true, confirm: photoDeleteConfirm(), onRun: () => deletePhoto(shown.id, shown.idx) };
+      return { key: k, label: MEDIA_LABELS.remove, hint: PHOTO_HINTS.remove, icon: BookmarkMinus, onRun: () => toggleLibrary(shown.id, shown.idx, false, shown.version) };
     });
 
   const priceOf = (q: number) => priceLine(q, costs, postsOnly);
@@ -358,7 +374,7 @@ const Photoshoot: React.FC = () => {
                     {v.failed && !v.running && <span className="nb-ps-meta">The new version could not be made. You were not charged for it.</span>}
                     {(() => {
                       const canRedo = isFinished(job) && !v.running && opts.entitled !== false && opts.enabled !== false;
-                      const items = photoActions(p, shown, canRedo);
+                      const items = photoActions(p, shown, canRedo, isFinished(job));
                       return items.length
                         ? <ItemActions items={items} variant="compact" name={`photo ${p.index + 1}`} className="nb-ps-photo-actions nb-pa-tight nb-pa-stack" />
                         : <span className="nb-ps-photo-wait-line">{v.running || p.status === 'making' ? 'Being made' : p.status === 'failed' ? 'Not made' : 'Waiting its turn'}</span>;

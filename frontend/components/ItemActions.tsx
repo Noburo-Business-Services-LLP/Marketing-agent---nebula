@@ -51,8 +51,9 @@ const ItemActions: React.FC<{ items: ItemAction[]; variant?: 'row' | 'compact'; 
     try { await a.onRun(); } finally { setBusy(''); }
   };
 
-  const main = items.find((a) => a.primary) || items.find((a) => !a.danger && !a.disabled);
-  const buttons = variant === 'compact' ? items.filter((a) => a === main || (a.pin && !a.danger)) : items.filter((a) => !a.danger);
+  // When Delete is all there is (a video that did not finish), it is the one button instead of hiding in "More".
+  const main = items.find((a) => a.primary) || items.find((a) => !a.danger && !a.disabled) || (items.every((a) => a.danger) ? items[0] : undefined);
+  const buttons = variant === 'compact' ? items.filter((a) => a === main || (a.pin && !a.danger)) : items.filter((a) => !a.danger || a === main);
   const inMenu = items.filter((a) => !buttons.includes(a));
 
   return (

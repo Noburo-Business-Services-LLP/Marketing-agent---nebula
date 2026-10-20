@@ -192,7 +192,8 @@
     for (var i = 0; i < count; i += 1) {
       var st = status === 'failed' ? 'failed' : status === 'partial' && i === 2 ? 'failed' : i < done || (status === 'partial' && i > 2 && i <= done) ? 'done' : i === done && status === 'running' ? 'making' : 'waiting';
       if (status === 'partial') st = i === 2 ? 'failed' : 'done';
-      photos.push({ index: i, scene: 's' + i, sceneLabel: labels[i % labels.length], product: 'Butter croissant', status: st, url: st === 'done' ? PS_IMG[i % 4] : '', inLibrary: st === 'done' && i !== 1 });
+      if (psGone[i]) continue;
+      photos.push({ index: i, scene: 's' + i, sceneLabel: labels[i % labels.length], product: 'Butter croissant', status: st, url: st === 'done' ? PS_IMG[i % 4] : '', inLibrary: st === 'done' && i !== 1 && !psOutOfLib[i] });
     }
     var failed = photos.filter(function (p) { return p.status === 'failed'; }).length;
     return {
@@ -258,6 +259,14 @@
     { id: 'sv-2', status: 'completed', title: 'Sourdough morning', concept: 'A baker scores a loaf and slides it into the oven, then the golden loaf comes out.', spokenLine: '', style: 'behind-the-scenes', language: 'none', voice: 'female', aspectRatio: '9:16', videoUrl: '/audit-missing/sourdough.mp4', clips: 2, clipsDone: 2, platforms: ['instagram', 'facebook'], parts: [{ beats: ['Scoring the loaf'], spokenLine: '' }, { beats: ['The loaf comes out'], spokenLine: '' }], transition: 'fade', subtitles: false, logo: false, endLine: '', notice: '', seconds: 20, parent: null, change: '', quarks: 322, error: '', createdAt: iso(-2), completedAt: iso(-2) },
     { id: 'sv-3', status: 'failed', title: 'Cake decorating', concept: 'Icing a birthday cake.', spokenLine: '', style: 'behind-the-scenes', language: 'english', voice: 'female', aspectRatio: '9:16', videoUrl: '', clips: 1, clipsDone: 0, platforms: [], parts: [], transition: 'fade', subtitles: false, logo: false, endLine: '', notice: '', seconds: 10, parent: null, change: '', quarks: 161, error: 'The video could not be made. Your Quarks were returned.', createdAt: iso(-3), completedAt: null }
   ];
+  // Library video drafts and reels (only on the Library page, so other screens' counts stay as they were): two reels from the
+  // plan (one ready, one in the Bin) are post drafts; Hero videos and a step-by-step draft come from their own lists.
+  var libVideos = location.hash.indexOf('#/library') === 0;
+  if (libVideos) {
+    drafts.push(Object.assign(draft(9, 'completed', 'reel', IMG1), { origin: 'automation', title: 'Reel: Saturday bake along', imageUrl: '', mediaUrl: '', creative: { type: 'video', videoUrl: '/audit-missing/reel.mp4' }, generationProgress: { jobId: 'audit-reel-job-1' }, calendarDay: 6, plannedDate: iso(6) }));
+    drafts.push(Object.assign(draft(10, 'binned', 'reel', IMG2), { origin: 'manual', title: 'Reel: Old festival teaser', imageUrl: '', mediaUrl: '', creative: { type: 'video', videoUrl: '/audit-missing/reel2.mp4' }, binnedAt: iso(-2), binnedFrom: 'draft' }));
+  }
+  var psGone = {}; var psOutOfLib = {};
   var draftById = function (c) { var id = decodeURIComponent(c.path.split('/')[2] || ''); for (var i = 0; i < drafts.length; i++) if (drafts[i]._id === id) return drafts[i]; return null; };
   var isAutomation = function (d) { return d.origin === 'automation' || (!d.origin && (d.contentCalendarId || typeof d.calendarDay === 'number')); };
   var draftCounts = function () {
@@ -1168,8 +1177,22 @@
       });
     })()],
     ['GET', /^\/hero-video\/styles/, ok({ styles: [] })],
-    ['GET', /^\/hero-video\/jobs/, ok({ jobs: [] })],
-    ['GET', /^\/video-generation\/drafts/, ok({ drafts: [] })],
+    ['GET', /^\/hero-video\/jobs/, function () {
+      if (!libVideos) return ok({ jobs: [] });
+      return ok({ jobs: [
+        { jobId: 'hero-1', status: 'completed', createdAt: iso(-1), videoUrl: '/audit-missing/hero1.mp4', thumbnailUrl: IMG3, title: 'Sourdough sunrise film', prompt: 'A baker at dawn', finish: {} },
+        { jobId: 'hero-2', status: 'failed', createdAt: iso(-2), title: 'Festival hamper film' }
+      ] });
+    }],
+    ['DELETE', /^\/hero-video\/jobs\/[^/]+$/, ok({})],
+    ['DELETE', /^\/video-generation\/draft\/[^/]+$/, ok({})],
+    ['GET', /^\/video-generation\/drafts/, function () {
+      if (!libVideos) return ok({ drafts: [] });
+      return ok({ drafts: [
+        { jobId: 'vd-1', status: 'created', title: 'Weekend offers video', finalVideoUrl: '/audit-missing/vd1.mp4', thumbnailUrl: IMG2, content: { caption: 'Weekend offers' }, platform: { selectedPlatforms: ['instagram'] }, createdAt: iso(-1) },
+        { jobId: 'vd-2', status: 'draft', title: 'Cake story draft', createdAt: iso(-3) }
+      ] });
+    }],
     ['GET', /^\/video-generation\//, ok({ items: [], images: [] })],
     // ---- Competitor tracking (Stage 4): the "What your competitors did" card, the list, and saving a handle ----
     ['GET', /^\/competitors\/insights/, function () {
@@ -1238,9 +1261,13 @@
     }],
     ['POST', /^\/photoshoot\/jobs$/, function () { PS_TICKS = 0; return { __status: 202, body: { success: true, job: psJob('running', { done: 0 }) } }; }],
     ['POST', /^\/photoshoot\/jobs\/[^/]+\/photos\/\d+\/redo$/, function () { return { __status: 202, body: { success: true, job: psJob('running', { id: 'ps-redo', count: 1, done: 0 }) } }; }],
-    ['PATCH', /^\/photoshoot\/jobs\/[^/]+\/photos\/\d+$/, function (req) { var on = true; try { on = JSON.parse(req.body || '{}').inLibrary !== false; } catch (e) { on = true; } return ok({ inLibrary: on }); }],
+    ['PATCH', /^\/photoshoot\/jobs\/[^/]+\/photos\/\d+$/, function (req) { var on = true; try { on = JSON.parse(req.body || '{}').inLibrary !== false; } catch (e) { on = true; } psOutOfLib[Number(req.path.split('/')[5])] = !on; return ok({ inLibrary: on }); }],
+    ['DELETE', /^\/photoshoot\/jobs\/[^/]+\/photos\/\d+$/, function (req) {
+      if (PSSTATE === 'running') return { __status: 409, body: { success: false, message: 'This photoshoot is still being made. You can delete its photos once it has finished.' } };
+      psGone[Number(req.path.split('/')[5])] = true; return ok({ deleted: true });
+    }],
     ['GET', /^\/photoshoot\/library$/, function () {
-      return ok({ photos: [0, 1, 2, 3].map(function (i) { return { jobId: 'ps-j1', index: i, url: PS_IMG[i % PS_IMG.length], kind: 'pack', pack: 'product', packTitle: 'Product photoshoot', scene: ['Studio light', 'Hero angle', 'On a surface', 'Close detail'][i], product: 'Butter croissant', aspectRatio: '1:1', createdAt: iso(-1) }; }) });
+      return ok({ photos: [0, 1, 2, 3].filter(function (i) { return !psGone[i] && !psOutOfLib[i]; }).map(function (i) { return { jobId: 'ps-j1', index: i, url: PS_IMG[i % PS_IMG.length], kind: 'pack', pack: 'product', packTitle: 'Product photoshoot', scene: ['Studio light', 'Hero angle', 'On a surface', 'Close detail'][i], product: 'Butter croissant', aspectRatio: '1:1', createdAt: iso(-1) }; }) });
     }],
     ['POST', /^\/photoshoot\/upload$/, function () { return { __status: 201, body: { success: true, product: { id: 'ps-new', name: 'New product', hasPhoto: true, thumbnail: PS_IMG[5] } } }; }],
     // ---- Social listening (Stage 5): the "What people say about you" card on My plan and the Inbox page ----

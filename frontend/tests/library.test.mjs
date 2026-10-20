@@ -67,7 +67,6 @@ test('a carousel uses its first rendered slide as the cover and reports how many
   assert.equal(c.slideTotal, 3);
 });
 
-import { readFileSync } from 'node:fs';
 test('Library: one row of views (tabs with counts) and one compact filter row with accessible groups', () => {
   const src = readFileSync(new URL('../pages/Library.tsx', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../components/library/library.css', import.meta.url), 'utf8');
@@ -84,18 +83,59 @@ test('Library: one row of views (tabs with counts) and one compact filter row wi
   assert.ok(!/h-9 px-4 rounded-full/.test(src));
 });
 
-import { SOURCE_WORD, libraryTileActions, STATUS_WORD as STATUS_WORDS } from '../utils/library.ts';
+import { SOURCE_WORD, STATUS_WORD as STATUS_WORDS } from '../utils/library.ts';
+import { libraryVideoActionKeys, MEDIA_LABELS, photoActionKeys, PHOTO_HINTS, photoDeleteConfirm } from '../utils/itemActions.ts';
+import { fromPhotoshootPhoto } from '../utils/library.ts';
+import { readFileSync } from 'node:fs';
 
 test('every source and status has words for its chip', () => {
   ['post', 'reel', 'video-draft', 'hero', 'photoshoot'].forEach((s) => assert.ok(SOURCE_WORD[s]));
   ['creating', 'draft', 'ready', 'approved', 'scheduled', 'posted', 'archived', 'binned', 'failed'].forEach((s) => assert.ok(STATUS_WORDS[s]));
 });
 
-test('tile actions: none while creating, edit for drafts and failed, download only with a file and not for posts', () => {
-  assert.deepEqual(libraryTileActions({ status: 'creating', mediaUrl: 'https://x/y.mp4', source: 'hero' }), []);
-  assert.deepEqual(libraryTileActions({ status: 'draft', mediaUrl: '', source: 'post' }), ['open', 'edit']);
-  assert.deepEqual(libraryTileActions({ status: 'ready', mediaUrl: 'https://x/y.mp4', source: 'hero' }), ['open', 'download']);
-  assert.deepEqual(libraryTileActions({ status: 'posted', mediaUrl: 'https://x/y.jpg', source: 'post' }), ['open']);
+test('video tiles use the shared actions: Download, Open or Edit, Make again where it exists, Delete; nothing while creating', () => {
+  assert.deepEqual(libraryVideoActionKeys({ status: 'creating', mediaUrl: 'https://x/y.mp4', source: 'hero' }), []);
+  // Hero: no Bin or Archive and no make-again route on the server, so only Download and Delete.
+  assert.deepEqual(libraryVideoActionKeys({ status: 'ready', mediaUrl: 'https://x/y.mp4', source: 'hero' }), ['download', 'delete']);
+  assert.deepEqual(libraryVideoActionKeys({ status: 'failed', mediaUrl: '', source: 'hero' }), ['delete']);
+  assert.deepEqual(libraryVideoActionKeys({ status: 'draft', mediaUrl: '', source: 'video-draft' }), ['edit', 'delete']);
+  assert.deepEqual(libraryVideoActionKeys({ status: 'ready', mediaUrl: 'https://x/y.mp4', source: 'video-draft' }), ['download', 'open', 'delete']);
+  assert.deepEqual(libraryVideoActionKeys({ status: 'ready', mediaUrl: 'https://x/y.mp4', source: 'studio' }), ['download', 'makeAgain', 'delete']);
+  // Posts and reels are post drafts: they get the post actions, never these.
+  assert.deepEqual(libraryVideoActionKeys({ status: 'draft', mediaUrl: 'https://x/y.mp4', source: 'reel' }), []);
+  assert.deepEqual(libraryVideoActionKeys({ status: 'draft', mediaUrl: 'https://x/y.jpg', source: 'post' }), []);
+  assert.deepEqual(libraryVideoActionKeys(null), []);
+});
+
+test('the Library page gives reels the post actions and every other tile the shared item actions', () => {
+  const page = readFileSync(new URL('../pages/Library.tsx', import.meta.url), 'utf8');
+  assert.match(page, /const post = isPost\(i\) \|\| isReel\(i\)/, 'reels get PostActions on the tile');
+  assert.match(page, /<ItemActions items=\{items\} variant="compact"/);
+  assert.match(page, /<ItemActions items=\{itemActionsFor\(open\)\} variant="row"/);
+  assert.match(page, /isReel\(open\) \? \(\s*<PostActions/);
+  assert.doesNotMatch(page, /libraryTileActions/, 'the old footer buttons are gone');
+  assert.doesNotMatch(page, /confirmDialog\(/, 'questions are asked by the shared buttons');
+  // Posting a Hero video is gated like posts: locked with the same words on a free plan or without the add-on.
+  assert.match(page, /access\.publish === 'upgrade' \|\| access\.publish === 'addon'/);
+});
+
+test('photos: Remove from Library and Delete photo are two different words with two different hints', () => {
+  assert.equal(MEDIA_LABELS.remove, 'Remove from Library');
+  assert.equal(MEDIA_LABELS.deletePhoto, 'Delete photo');
+  assert.notEqual(PHOTO_HINTS.remove, PHOTO_HINTS.deletePhoto);
+  assert.match(PHOTO_HINTS.remove, /stays in its photoshoot/);
+  assert.match(PHOTO_HINTS.deletePhoto, /for good/);
+  assert.deepEqual(photoActionKeys({ hasPhoto: true, inLibrary: true, canRedo: false, canDelete: true }), ['useInCreate', 'download', 'remove', 'deletePhoto']);
+  assert.deepEqual(photoActionKeys({ hasPhoto: true, inLibrary: true, canRedo: true, canDelete: true }), ['useInCreate', 'download', 'makeAgain', 'remove', 'deletePhoto']);
+  assert.deepEqual(photoActionKeys({ hasPhoto: true, inLibrary: true, canRedo: false }), ['useInCreate', 'download', 'remove'], 'no delete unless the photoshoot is finished');
+  assert.deepEqual(photoActionKeys({ hasPhoto: false, inLibrary: false, canRedo: true, canDelete: true }), ['makeAgain'], 'nothing to delete without a photo');
+  const c = photoDeleteConfirm();
+  assert.equal(c.danger, true);
+  assert.match(c.message, /for good/); assert.match(c.message, /not returned/); assert.match(c.message, /Remove from Library/);
+  const tile = fromPhotoshootPhoto({ jobId: 'j1', index: 3, url: 'https://res.cloudinary.com/x/image/upload/a.png', product: 'Cake', scene: 'Hero angle', packTitle: 'Product', createdAt: '2026-10-19T00:00:00Z' });
+  assert.equal(tile.photoIndex, 3); assert.equal(tile.jobId, 'j1');
+  const ps = readFileSync(new URL('../pages/Photoshoot.tsx', import.meta.url), 'utf8');
+  assert.match(ps, /photoshootAPI\.deletePhoto\(/); assert.match(ps, /photoDeleteConfirm\(\)/);
 });
 
 test('post cards keep one size in a flowing grid: no widened last card, no search box, no source dropdown', () => {
