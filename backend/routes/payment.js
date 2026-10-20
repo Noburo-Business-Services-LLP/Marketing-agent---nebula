@@ -187,6 +187,7 @@ function createPaymentRouter(deps = {}) {
     no_agency_plan: 'the Agency plan is not active',
     slot_conflict: 'the account changed while the payment was being applied',
     slot_ended: 'the extra client subscription had already ended',
+    duplicate_plan: 'another plan subscription was already active',
     amount_mismatch: 'the amount paid does not match the price'
   };
   async function recordRefusal(user, record, paymentId, paidPaise, reason) {
@@ -245,6 +246,7 @@ function createPaymentRouter(deps = {}) {
     at_limit: `We received your payment, but your account already has the most clients (${AGENCY.maxClients}), so the extra client could not be added. Our team has been told and will contact you about a refund.`,
     slot_ended: 'We received your payment, but this extra client subscription had already ended, so nothing was added. Our team has been told and will contact you about a refund.',
     slot_conflict: 'We received your payment, but could not add the extra client just now. Our team has been told and will contact you.',
+    duplicate_plan: 'We received your payment, but you already have an active plan, so this second plan was not started and its subscription was cancelled. Our team has been told and will contact you about a refund.',
     amount_mismatch: 'We received your payment, but the amount did not match the price of this plan, so it was not applied. Our team has been told and will refund or fix it.',
     amount_unconfirmed: 'We are still confirming your payment. It will show on your account shortly. If it does not, our team will sort it out.'
   };
@@ -266,6 +268,12 @@ function createPaymentRouter(deps = {}) {
       const refusal = slotRefusal(user, firstCycle);
       if (refusal) return refuseSlot(user, record, paymentId, refusal, paidPaise);
       gate = slotGate(record, firstCycle);
+    }
+    // A first payment for a plan while another plan subscription is already active (two checkouts open at once) must
+    // not give a second allowance: refuse it, record it for a refund, and stop the new subscription from billing.
+    if (record.kind === 'plan' && !alreadyApplied && record.active !== true
+        && storedSubscriptions(user).some((s) => s.kind === 'plan' && s.active === true && s.subscriptionId !== record.subscriptionId)) {
+      return refuseSlot(user, record, paymentId, 'duplicate_plan', paidPaise);
     }
     // A new month starts: last month's allowance ends now, so the new one replaces it instead of piling on. The
     // expiry is part of the same guarded update as the grant (never a separate step), so a verify and a webhook for
@@ -444,6 +452,31 @@ function createPaymentRouter(deps = {}) {
           return res.status(400).json({ success: false, message: 'You have already used this coupon' });
         }
         appliedCoupon = coupon;
+      }
+
+      // A plan checkout opened in the last 30 minutes and never paid is reused instead of creating another one, so two
+      // open checkouts cannot both be paid. Only when no coupon is involved on either side and Razorpay still says it is unpaid.
+      if (!appliedCoupon) {
+        const cutoff = Date.now() - 30 * 60 * 1000;
+        const open = storedSubscriptions(user).filter((s) => s.kind === 'plan' && s.key === planId && s.active !== true && !s.ended
+          && s.createdAt && new Date(s.createdAt).getTime() >= cutoff
+          && !(user.payments || []).some((p) => p && p.subscriptionId === s.subscriptionId))
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+        if (open) {
+          let entity = null;
+          try { entity = await rz().subscriptions.fetch(open.subscriptionId); } catch (_) { entity = null; }
+          if (entity && entity.status === 'created' && recordMatches(user, open, entity) && !(entity.notes && entity.notes.couponCode)) {
+            return res.json({
+              success: true,
+              subscription_id: open.subscriptionId,
+              key: env().RAZORPAY_KEY_ID,
+              amount: quote.chargePaise,
+              gstPaise: quote.gstPaise,
+              plan: { id: planId, tier: planId, quarks: quote.quarks },
+              prefill: prefillOf(user)
+            });
+          }
+        }
       }
 
       const razorpayPlanId = await getOrCreateRazorpayPlan('plan', planId);
@@ -625,6 +658,34 @@ function createPaymentRouter(deps = {}) {
     }
   });
 
+  // The webhook twin of /verify for Quark top-ups (order.paid, or payment.captured of a top-up order). The signature has
+  // already been checked. The owner comes from the order notes we wrote at create-order, the amount must be exactly the
+  // pack price, and the same idempotent applyCharge runs, so verify and webhook can both arrive and credit only once.
+  async function applyTopupEvent(payload) {
+    const payment = payload && payload.payment && payload.payment.entity;
+    const order = payload && payload.order && payload.order.entity;
+    const notesOf = (e) => (e && e.notes && typeof e.notes === 'object' && !Array.isArray(e.notes) ? e.notes : {});
+    const notes = notesOf(order).kind === 'topup' ? notesOf(order) : notesOf(payment);
+    if (notes.kind !== 'topup' || !payment || !payment.id) return;
+    const orderId = (order && order.id) || payment.order_id;
+    if (!orderId || (order && payment.order_id && order.id !== payment.order_id)) return;
+    const user = notes.userId ? await User.findById(String(notes.userId)) : null;
+    if (!user) {
+      console.warn(`Top-up webhook for order ${orderId} names an unknown account: not applied`);
+      alert('payment', `top-up payment ${payment.id} (order ${orderId}) names an unknown account: refund or fix it`);
+      return;
+    }
+    const pack = bp.findTopupPack(Number(notes.packInr));
+    const paid = Number(payment.amount);
+    const record = { kind: 'topup', key: pack ? pack.inr : undefined, orderId, subscriptionId: orderId };
+    if (!pack || paid !== chargePaise(pack.inr) || (order && order.amount !== undefined && Number(order.amount) !== paid)) {
+      console.warn(`Top-up webhook payment ${payment.id} has an unexpected amount: not applied`);
+      await recordRefusal(user, record, payment.id, paid, 'amount_mismatch');
+      return;
+    }
+    await applyCharge(user, { kind: 'topup', key: pack.inr, orderId }, { paymentId: payment.id, paidPaise: paid });
+  }
+
   /**
    * POST /api/payment/webhook
    * Razorpay webhook: monthly charges and subscription endings.
@@ -646,7 +707,11 @@ function createPaymentRouter(deps = {}) {
       const { event: eventName, payload } = JSON.parse(req.body.toString());
       const subscription = payload?.subscription?.entity;
       const payment = payload?.payment?.entity;
-      if (!subscription?.id) return res.json({ success: true });
+      if (!subscription?.id) {
+        // A top-up paid while the browser was closed: the order events carry no subscription. Anything else is ignored.
+        if (eventName === 'order.paid' || eventName === 'payment.captured') await applyTopupEvent(payload);
+        return res.json({ success: true });
+      }
 
       const user = await User.findOne({ 'plan.subscriptions.subscriptionId': subscription.id });
       if (!user) return res.json({ success: true });
