@@ -1,0 +1,8 @@
+/* Tailwind, built at build time (tailwind.config.js, postcss.config.js). Imported FIRST in index.tsx.
+   Cascade order is the one the Play CDN produced: the page <style> in index.html (tokens, the override layer with
+   LIGHT SEMANTICS) comes BEFORE these utilities, exactly as before (the CDN appended its sheet after it), and each
+   component's own .css comes after them. The override layer wins by specificity (body.gravity-shell ...), not by
+   order, so nothing in it changes. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

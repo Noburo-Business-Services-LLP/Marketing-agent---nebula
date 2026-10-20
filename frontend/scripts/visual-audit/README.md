@@ -10,7 +10,7 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
 | `contrast-audit.js` | Body of an async function run inside the page. Returns `{ route, checked, failureCount, failures[], unknown[], disabled[], placeholders[], gradientText[], unparsedColors[], ... }`. The header comment explains exactly how backgrounds and text colours are measured and what is skipped. |
 | `unknown-signoff.json` | Items the audit cannot measure that a person has checked by eye (see the gate). Starts empty. |
 | `mock-session.js` | Fake session + stub for `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, and the in-page runner (`__auditRoute`, `__auditRun`, `__auditStart`, `__auditShot`). |
-| `vite.audit.config.mjs` | Vite config that injects `mock-session.js` before the app boots, binds 127.0.0.1:3100, removes the backend proxy and writes results to disk. |
+| `vite.audit.config.mjs` | Vite config that injects `mock-session.js` before the app boots, binds 127.0.0.1:3100, removes the backend proxy, writes results to disk and runs Tailwind with the fixture pages added to its `content`. |
 | `blueprint-fixture.json` | A completed Blueprint (the backend test fixtures run through `assembleBlueprint`, with a fake inline-SVG logo). The audit server injects it as `window.__AUDIT_BLUEPRINT_FIXTURE`; the stub returns it for `GET /api/blueprint/audit-done`. |
 | `routes.json` | Every route in `frontend/App.tsx`, with the session mode it needs and the tab to click. |
 | `summarize.mjs` | Turns the saved results into the Markdown report and a compact JSON summary; `--compare` gives a before/after table. |
@@ -35,9 +35,12 @@ plan). The baseline report is `docs/superpowers/specs/assets/nebulaa-contrast-ba
   page replaced) if it ever runs on `localhost`. Never use ports 3000 or 5000 (the config refuses them).
 - The audit config reads no `.env` (empty `envDir`) and defines `process.env.API_KEY` /
   `GEMINI_API_KEY` as empty strings, so no key can be inlined into the served code.
-- Not stubbed (they are `<script>`/`<link>`/`<img>` tags, part of the app as built): Tailwind
-  CDN, Google Fonts, esm.sh (import map), Razorpay `checkout.js` (which loads `api.razorpay.com` /
-  `cdn.razorpay.com`; its `sendBeacon` log call is blocked). No user data goes to them.
+- Not stubbed (they are `<script>`/`<link>`/`<img>` tags, part of the app as built): Google
+  Fonts, Razorpay `checkout.js` (which loads `api.razorpay.com` / `cdn.razorpay.com`; its
+  `sendBeacon` log call is blocked). No user data goes to them. Tailwind is no longer a CDN
+  script (2026-10-20, D67): it is built by PostCSS in the dev server like in `vite build`
+  (`frontend/tailwind.config.js`); the audit config adds the fixture pages to its `content` and
+  `/__layer-fixtures` links `/index.css`, so the audit needs no outside host for styles.
 - The fake token is `audit-fake-token`. No real credentials, no `.env`, no database.
 
 ## Run it

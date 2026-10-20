@@ -10,8 +10,8 @@
  *       the hard-coded http://localhost:5000 in a few pages) gets canned JSON from ROUTES below.
  *     - Same-origin non-API requests (Vite modules, /assets, /favicon.png) go to the dev server.
  *     - Every other host is refused locally (status 503, logged in window.__AUDIT.blocked);
- *       nothing is sent. Script/link/img tags (Tailwind CDN, Google Fonts, esm.sh, Razorpay
- *       checkout.js) are not fetch/XHR and load as the app normally does.
+ *       nothing is sent. Script/link/img tags (Google Fonts, Razorpay checkout.js;
+ *       Tailwind is built by the dev server since D67) are not fetch/XHR and load as the app normally does.
  *     - Writes (POST/PUT/PATCH/DELETE) never leave the page either; they get a canned
  *       "audit stub" answer.
  *  3. Logs every intercepted call in window.__AUDIT.log (method, url, matched route).

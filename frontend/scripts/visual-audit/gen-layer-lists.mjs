@@ -27,11 +27,14 @@ const END = '      /* ---- end LIGHT SEMANTICS ---- */\n';
 
 // ---- source scan --------------------------------------------------------------------------------
 const SKIP = /(^|\/)(node_modules|dist|scripts|tests|public)(\/|$)/;
+// Tool configs are not page source: tailwind.config.js lists the theme colours as quoted hex, which would otherwise
+// read as inline background colours the pages use.
+const SKIP_FILE = /^[^/]*\.config\.(js|mjs|cjs|ts)$/;
 function walk(dir, out = []) {
   for (const f of readdirSync(dir)) {
     const p = join(dir, f);
     const rel = relative(frontend, p);
-    if (SKIP.test(rel)) continue;
+    if (SKIP.test(rel) || SKIP_FILE.test(rel)) continue;
     const st = statSync(p);
     if (st.isDirectory()) walk(p, out);
     else if (/\.(tsx|ts|jsx|js)$/.test(f)) out.push(p);
@@ -88,7 +91,7 @@ function decide(label, stops) {
   return choice;
 }
 // Tailwind v3 default palette (fixed values) plus the app's own `nebula` / `gravity` colours from
-// the tailwind.config in index.html. Every named background colour the source uses must be here;
+// frontend/tailwind.config.js. Every named background colour the source uses must be here;
 // --check fails on an unknown one so new colour classes cannot slip in unclassified.
 const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 const PAL = Object.fromEntries(Object.entries({

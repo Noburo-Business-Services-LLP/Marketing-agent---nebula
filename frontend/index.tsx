@@ -1,6 +1,12 @@
+// Tailwind first, so every component's own .css (imported through App) comes after the utilities: the order the
+// Play CDN produced (see index.css).
+import './index.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { enableFontStylesheet } from './utils/fontStyles';
+
+enableFontStylesheet();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

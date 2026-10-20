@@ -19,9 +19,11 @@ async function withServer(app, fn) {
 
 test('the policy covers what the app loads and keeps the dangerous defaults shut', () => {
   const v = cspHeaderValue();
-  for (const host of ['https://checkout.razorpay.com', 'https://api.razorpay.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://cdn.tailwindcss.com', 'https://esm.sh', 'https://res.cloudinary.com', 'https://challenges.cloudflare.com']) {
+  for (const host of ['https://checkout.razorpay.com', 'https://api.razorpay.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://res.cloudinary.com', 'https://challenges.cloudflare.com']) {
     assert.ok(v.includes(host), host);
   }
+  // Tailwind is built at build time and the esm.sh import map is gone (D67): neither host may come back.
+  for (const host of ['cdn.tailwindcss.com', 'esm.sh']) assert.ok(!v.includes(host), host);
   assert.deepStrictEqual(DIRECTIVES['object-src'], ["'none'"]);
   assert.ok(DIRECTIVES['style-src'].includes("'unsafe-inline'"));
   assert.match(v, /report-uri \/api\/csp-report/);

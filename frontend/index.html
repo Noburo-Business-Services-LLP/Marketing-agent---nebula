@@ -6,68 +6,12 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Nebulaa - Your marketing, done for you</title>
-    <!-- The page connects to the style and font hosts early, so their downloads start sooner. -->
-    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
+    <!-- The page connects to the font hosts early, so their downloads start sooner. Styles (Tailwind) are built at build time and come with the bundle (index.css). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Tailwind CSS via Play CDN. It builds the styles in the browser, so it must run before the first paint (see docs/superpowers/ops/frontend-performance.md). -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Fonts load without blocking the first paint (display=swap shows text in the fallback font until they arrive). -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Noto+Sans+Tamil:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'" />
+    <!-- Fonts load without blocking the first paint: media="print" until the stylesheet has loaded, then index.tsx switches it to all (no inline script, for the Content-Security-Policy). display=swap shows text in the fallback font until they arrive. -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Noto+Sans+Tamil:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap" media="print" id="nb-font-styles" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Noto+Sans+Tamil:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap" /></noscript>
-    <script>
-      // Configure tailwind when it loads
-      function configureTailwind() {
-        if (typeof tailwind !== 'undefined' && tailwind.config) {
-          tailwind.config = {
-            darkMode: 'class',
-            theme: {
-              extend: {
-                colors: {
-                  nebula: {
-                    dark: '#070A12',
-                    gold: '#ffcc29',
-                    silver: '#ededed',
-                  },
-                  // Gravity design system (v2 redesign)
-                  gravity: {
-                    bg:       '#0A0A0A',  // app background — deep warm black
-                    sidebar:  '#111111',  // slightly lifted sidebar
-                    surface:  '#151515',  // card / panel surface
-                    surface2: '#1A1A1A',  // elevated card
-                    border:   'rgba(255,255,255,0.06)',
-                    borderStrong: 'rgba(255,255,255,0.10)',
-                    gold:     '#F5A623',  // primary accent
-                    goldSoft: 'rgba(245,166,35,0.15)',
-                    text:     '#F5F4F1',  // warm off-white
-                    textMuted:'rgba(255,255,255,0.55)',
-                    textDim:  'rgba(255,255,255,0.35)',
-                    success:  '#4ADE80',
-                    info:     '#60A5FA',
-                  }
-                },
-                fontFamily: {
-                  serif: ['"Playfair Display"', 'Georgia', 'serif'],
-                  sans: ['"Plus Jakarta Sans"', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-                }
-              }
-            }
-          };
-          return true;
-        }
-        return false;
-      }
-      
-      // Retry configuration
-      var configRetries = 0;
-      function tryConfigureTailwind() {
-        if (!configureTailwind() && configRetries < 100) {
-          configRetries++;
-          setTimeout(tryConfigureTailwind, 50);
-        }
-      }
-      tryConfigureTailwind();
-    </script>
     <style>
       body {
         font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -186,8 +130,8 @@
       }
       /* ============================================================
          TILES AND THE SIGNATURE GLOW (components/Tile.tsx, TileGrid.tsx, DarkPanel.tsx)
-         Plain CSS on purpose: nothing here is compiled in the browser by the Tailwind CDN, so tiles
-         add no style work at start-up. Accent colours match utils/tiles.ts (a test keeps them equal).
+         Plain CSS on purpose (from when Tailwind was compiled in the browser; it is built at build time
+         now, tailwind.config.js), so tiles add no style work at start-up. Accent colours match utils/tiles.ts (a test keeps them equal).
          Motion (hover lift and glow) only runs when the visitor has not asked for reduced motion.
          ============================================================ */
       .nb-tile-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
@@ -1805,18 +1749,6 @@
         .igLabel { color: rgba(255,255,255,0.9); background: none; animation: none; }
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "recharts": "https://esm.sh/recharts@^3.5.1",
-    "react/": "https://esm.sh/react@^19.2.1/",
-    "react": "https://esm.sh/react@^19.2.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.560.0",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1"
-  }
-}
-</script>
 </head>
   <body>
     <div id="root"></div>    <script type="module" src="/index.tsx"></script>

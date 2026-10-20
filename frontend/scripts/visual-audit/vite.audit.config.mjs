@@ -8,11 +8,16 @@
 //  - removes the /api, /audio and /generated-media proxy to the backend and answers those
 //    paths itself with 503 (a backstop: the in-page stub already answers them);
 //  - inlines mock-session.js as the very first element of <head>, so the fake session and the
-//    fetch/XHR/WebSocket stub are installed before Tailwind and before the app boots.
+//    fetch/XHR/WebSocket stub are installed before the app boots;
+//  - runs Tailwind (built at build time since 2026-10-20, frontend/tailwind.config.js) with the static fixture pages
+//    added to its content, so /__layer-fixtures gets the classes it uses without adding them to the production build.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
 import baseConfig from '../../vite.config.ts';
+import tailwindConfig from '../../tailwind.config.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontendDir = resolve(here, '../..');
@@ -30,6 +35,20 @@ export default async (env) => {
     // env files come from an empty directory and the keys are defined as empty strings.
     envDir: resolve(here, 'no-env'),
     define: { 'process.env.API_KEY': '""', 'process.env.GEMINI_API_KEY': '""' },
+    css: {
+      postcss: {
+        plugins: [
+          tailwindcss({
+            ...tailwindConfig,
+            content: {
+              relative: false,
+              files: [...tailwindConfig.content.files.map((f) => resolve(frontendDir, f)), resolve(here, 'layer-fixtures*.html')],
+            },
+          }),
+          autoprefixer(),
+        ],
+      },
+    },
     server: {
       host: '127.0.0.1',
       port: PORT,
@@ -74,9 +93,10 @@ export default async (env) => {
               res.end(JSON.stringify({ ok: true }));
             });
           });
-          // /__layer-fixtures: a static page with the real index.html <head> (Tailwind CDN, fonts, the
-          // override layer, the mock session) and a fixture body inside body.gravity-shell. Audit
-          // server only: it is not part of the app bundle and never in a production build.
+          // /__layer-fixtures: a static page with the real index.html <head> (fonts, the override layer, the
+          // mock session), the Tailwind sheet (/index.css, the same file the app imports first) and a fixture
+          // body inside body.gravity-shell. Audit server only: it is not part of the app bundle and never in a
+          // production build. The app script is left out (the body is replaced), so the sheet is linked here.
           server.middlewares.use(async (req, res, next) => {
             const url = req.url || '';
             const fx = url.match(/^\/__layer-fixtures(-gaps)?(\?|$)/);
@@ -84,7 +104,11 @@ export default async (env) => {
             try {
               const index = readFileSync(resolve(frontendDir, 'index.html'), 'utf8');
               const body = readFileSync(resolve(here, fx[1] ? 'layer-fixtures-gaps.html' : 'layer-fixtures.html'), 'utf8');
-              const page = index.replace(/<body>[\s\S]*<\/body>/, `<body class="gravity-shell">\n<div id="root">\n${body}\n</div>\n</body>`);
+              const page = index
+                .replace('</head>', '<link rel="stylesheet" href="/index.css" />\n</head>')
+                // The app script (index.tsx) switches the font stylesheet on; this page has no app script.
+                .replace(' media="print" id="nb-font-styles"', ' id="nb-font-styles"')
+                .replace(/<body>[\s\S]*<\/body>/, `<body class="gravity-shell">\n<div id="root">\n${body}\n</div>\n</body>`);
               const html = await server.transformIndexHtml(url, page);
               res.setHeader('Content-Type', 'text/html');
               res.end(html);
