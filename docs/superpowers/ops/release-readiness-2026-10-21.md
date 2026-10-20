@@ -42,12 +42,10 @@ Documents that disagree (I picked the safer one each time, and say so where it m
 ### 2.1 Check the database disk first (5 minutes)
 Why: the Atlas cluster already blocked all writes once because the disk filled (2026-09-03), and production, demo and dev share that cluster. New collections arrive with this release.
 Do: Atlas console, open the cluster, read the Storage / Disk usage chart. The only figure I can find is "61% disk" in `staff-pages-performance.md`, which is old. **CHECK:** today's percentage. Rule I suggest: above about 80%, do not release until you have freed or added space.
-Worked if: you can write down today's percentage.
 
 ### 2.2 Make a backup note (Atlas)
 Why: if something corrupts data you want a known restore point.
 Do: Atlas console, Backup, take an on-demand snapshot and write the time down. **CHECK:** the documents do not say your cluster tier; on-demand snapshots need a paid tier (M10 or above). If your tier has none, write down that there is no snapshot and decide whether to go ahead.
-Worked if: a snapshot shows "Completed" (or you have written down that none exists).
 
 ### 2.3 Set `HASH_PEPPER` (the server will NOT start without it)
 Why: it keys the one-way hashes kept after account deletion and the sign-in lock records. In production the server refuses to boot without it (at least 32 characters). Pick it once and keep it: lookups try the pepper and `JWT_SECRET` only (D52), so changing it later loses older deletion records.
