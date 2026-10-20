@@ -31,3 +31,13 @@ Thumbs.db
 backend/vertex-ai-key.json
 *.json.bak
 backend/scripts/simulate-competitor-fetch.js
+
+# Tool output and one-off work folders (hardening G6): never committed
+.scannerwork/
+scratch/
+qa-reports/out/
+coverage/
+backend/temp/
+backend/downloads/
+backend/designed-pdf-test-output/
+frontend/test_log.txt
