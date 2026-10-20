@@ -6,7 +6,7 @@
  *  - credential: ONLY the routes that take a password or a code (sign-in, sign-up, sending and checking codes,
  *    password reset and change). Two buckets: per address AND account (20 per 15 minutes; an office behind one
  *    address no longer shares one bucket) and a per-address safety cap across accounts (100). Session checks such as
- *    /auth/me and sign-out are never counted. The account lock after 5 wrong passwords still applies on top.
+ *    /auth/me and sign-out are never counted. The sign-in lockout (email + address, services/loginGuard.js) applies on top.
  *  - social: per signed-in user (300 per 15 minutes) plus a per-address safety cap (1000), instead of 30 per address.
  *  - ai: unchanged, per address.
  * Counters: RATE_LIMIT_STORE (memory by default; `mongo` shares them across every task, `redis` when REDIS_URL is set).

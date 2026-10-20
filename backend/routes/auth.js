@@ -25,6 +25,7 @@ const answerBusy = (res, error) => {
 const CODE_SENT = 'If an account exists, we have sent a code.';
 const CODE_FAILED = 'That code did not work. Check it, or request a new code.';
 const LOGIN_FAILED = 'Invalid email or password. Please try again.';
+const loginGuard = () => require('../services/loginGuard').sharedLoginGuard();
 const passwordHashing = require('../services/passwordHash');
 let dummyOtpHash = null;
 let dummyPasswordHash = null;
@@ -940,6 +941,16 @@ router.post('/login', [
 ], async (req, res) => {
   try {
     const { email, password } = req.body;
+    const attempt = { email: email.toLowerCase(), ip: req.ip, challengeToken: req.body.challengeToken };
+
+    // Lockout per email + address with an escalating wait, and a per-account ceiling that never shuts the owner out
+    // of a place they signed in from before (B4, services/loginGuard.js). Checked before the password, so a try that
+    // is too early is not a free guess; the same for an email with or without an account.
+    const gate = await loginGuard().check(attempt);
+    if (!gate.allowed) {
+      if (gate.retryAfter) res.set('Retry-After', String(gate.retryAfter));
+      return res.status(429).json({ success: false, message: gate.message, retryAfter: gate.retryAfter, ...(gate.challengeRequired ? { challengeRequired: true } : {}) });
+    }
 
     // Find user and include password for comparison
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
@@ -947,16 +958,8 @@ router.post('/login', [
     if (!user) {
       // The same hashing work as a real check, so the time does not say "no account" (B3).
       await passwordHashing.compare(String(password), await dummyPassword());
+      await loginGuard().fail(attempt);
       return res.status(401).json({ success: false, message: LOGIN_FAILED });
-    }
-
-    // Check if account is locked
-    if (user.lockUntil && user.lockUntil > Date.now()) {
-      const minsLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      return res.status(423).json({
-        success: false,
-        message: `Account locked due to too many failed attempts. Try again in ${minsLeft} minute(s).`
-      });
     }
 
     // Check password
@@ -969,26 +972,12 @@ router.post('/login', [
       });
     }
     if (!isPasswordValid) {
-      // Increment failed attempts
-      const attempts = (user.failedLoginAttempts || 0) + 1;
-      const update = { failedLoginAttempts: attempts };
-
-      // Lock account after 5 failed attempts for 30 minutes
-      if (attempts >= 5) {
-        update.lockUntil = new Date(Date.now() + 30 * 60 * 1000);
-        update.failedLoginAttempts = 0;
-        await User.findByIdAndUpdate(user._id, update);
-        return res.status(423).json({
-          success: false,
-          message: 'Account locked due to too many failed attempts. Try again in 30 minutes.'
-        });
-      }
-
-      await User.findByIdAndUpdate(user._id, update);
+      await loginGuard().fail({ ...attempt, user });
       return res.status(401).json({ success: false, message: LOGIN_FAILED });
     }
+    await loginGuard().success(attempt);
 
-    // Reset failed attempts on successful login
+    // The old account-wide lock (failedLoginAttempts / lockUntil) is no longer used; clear what it left behind.
     if (user.failedLoginAttempts > 0 || user.lockUntil) {
       await User.findByIdAndUpdate(user._id, { failedLoginAttempts: 0, lockUntil: null });
     }
