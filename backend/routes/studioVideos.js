@@ -379,11 +379,24 @@ async function settleUnstarted(doc) {
   try {
     const p = await quarkBuckets.chargeProof(String(doc._id), { userId: String(doc.user), payerId: doc.payer ? String(doc.payer) : '' });
     if (!p.spend) { await StudioVideo.deleteOne({ _id: doc._id }); return; }
-    await fail(doc, 'The video could not be started. Your Quarks were returned. Please try again.');
+    // Only an unclaimed row: if a worker already holds it (the queue flip landed but its reply was lost) the live run owns it.
+    await fail(doc, 'The video could not be started. Your Quarks were returned. Please try again.', { workerId: null });
   } catch (e) { console.error('[videos] could not settle an unstarted video', String(doc._id), e.message); }
 }
 
 const consumer = () => require('../services/studioVideoConsumer');
+
+/**
+ * A charged consumer-path request threw after the queue flip may have landed (a lost reply). Re-reads the row: when it is
+ * queued or a worker already holds it, the video was accepted, so the caller answers 202 with it and must NOT refund.
+ * Returns the row, or null when it was not accepted (or cannot be read: then settleUnstarted's unclaimed-only fail applies).
+ */
+async function acceptedAfterLostReply(doc) {
+  try {
+    const row = await StudioVideo.findOne({ _id: doc._id }).lean();
+    return row && (row.status === 'queued' || row.workerId) ? row : null;
+  } catch (_) { return null; }
+}
 
 /**
  * Consumer path: the charge landed, so the row (created 'processing' with no worker, which no consumer claims) becomes
@@ -512,7 +525,7 @@ function partsFrom(b, clips) {
 }
 
 router.post('/create', protect, async (req, res) => {
-  let doc = null; let charged = false; let launched = false; let holding = false; let userId = '';
+  let doc = null; let charged = false; let launched = false; let holding = false; let userId = ''; let viaConsumer = false;
   const release = () => { if (holding) { holding = false; creating.delete(userId); } };
   try {
     userId = userIdOf(req);
@@ -542,7 +555,7 @@ router.post('/create', protect, async (req, res) => {
     const prompts = parts.map((p, k) => sv.assemblePrompt({ ...base, beats: p.beats, spokenLine: p.spokenLine, continuation: k > 0 }));
     const total = clips * COST();
     // ENABLE_STUDIO_VIDEO_CONSUMER (E9 B1): the row carries what a consumer needs and is queued after the charge.
-    const viaConsumer = consumer().enabled();
+    viaConsumer = consumer().enabled();
     doc = await StudioVideo.create({
       user: userId, title: sv.clip(b.title, 60) || 'My video', idea: sv.clip(b.idea, 1200), concept,
       spokenLine: parts.map((p) => p.spokenLine).filter(Boolean).join(' ').slice(0, 1200), style, language, voice, aspectRatio, clips, clipsDone: 0,
@@ -577,9 +590,17 @@ router.post('/create', protect, async (req, res) => {
     });
   } catch (e) {
     console.error('[videos] create failed:', e.message);
-    // A record may exist without a started job: remove it if nothing was charged, else close it with a proven refund.
-    if (doc && !launched) await settleUnstarted(doc);
-    if (!res.headersSent) res.status(500).json({ success: false, message: 'We could not start the video. Please try again.' });
+    // Charged and the queue flip may have landed with its reply lost: the video is accepted, so answer success.
+    const kept = charged && viaConsumer && doc && !launched ? await acceptedAfterLostReply(doc) : null;
+    if (kept) {
+      launched = true;
+      if (!res.headersSent) res.status(202).json({ success: true, video: shape(kept) });
+      try { consumer().studioVideoConsumer.kick(); } catch (_) { /* a consumer finds it within seconds */ }
+    } else {
+      // A record may exist without a started job: remove it if nothing was charged, else close it with a proven refund.
+      if (doc && !launched) await settleUnstarted(doc);
+      if (!res.headersSent) res.status(500).json({ success: false, message: 'We could not start the video. Please try again.' });
+    }
   } finally { release(); }
 });
 
@@ -671,7 +692,7 @@ router.post('/reference/approve', protect, async (req, res) => {
 });
 
 router.post('/:id/change', protect, async (req, res) => {
-  let doc = null; let launched = false;
+  let doc = null; let launched = false; let charged = false; let viaConsumer = false;
   try {
     const userId = userIdOf(req);
     if (!allowed('create', userId, 30)) return res.status(429).json({ success: false, message: 'Please wait a little before making another change.' });
@@ -681,7 +702,7 @@ router.post('/:id/change', protect, async (req, res) => {
     const base = await StudioVideo.findOne({ _id: req.params.id, user: userId, status: 'completed' });
     if (!base || !base.videoUrl) return res.status(404).json({ success: false, message: 'That video is not ready yet.' });
     if ((base.clips || 1) > 1 && (base.seconds || 0) > STUDIO_CLIP_SECONDS) return res.status(400).json({ success: false, message: 'Changes are available for 10-second videos. For a longer video, make a new version.' });
-    const viaConsumer = consumer().enabled();
+    viaConsumer = consumer().enabled();
     doc = await StudioVideo.create({
       user: userId, title: base.title, idea: base.idea, concept: base.concept, spokenLine: base.spokenLine, style: base.style,
       language: base.language, voice: base.voice || 'female', platforms: base.platforms || [], aspectRatio: base.aspectRatio, prompt: instruction, parent: base._id, change: instruction,
@@ -693,6 +714,7 @@ router.post('/:id/change', protect, async (req, res) => {
       doc = null;
       return res.status(403).json({ success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: `A change needs ${priceText(COST())}. Please top up or choose a plan.` });
     }
+    charged = true;
     if (viaConsumer) {
       doc = await queueAfterCharge(doc);
       res.status(202).json({ success: true, video: shape(doc) });
@@ -705,8 +727,15 @@ router.post('/:id/change', protect, async (req, res) => {
     setImmediate(() => run(doc, () => changeWork(base.videoUrl, instruction, base.aspectRatio, { change: (a) => omni.change(a) })));
   } catch (e) {
     console.error('[videos] change failed:', e.message);
-    if (doc && !launched) await settleUnstarted(doc);
-    if (!res.headersSent) res.status(500).json({ success: false, message: 'We could not start the change. Please try again.' });
+    const kept = charged && viaConsumer && doc && !launched ? await acceptedAfterLostReply(doc) : null;
+    if (kept) {
+      launched = true;
+      if (!res.headersSent) res.status(202).json({ success: true, video: shape(kept) });
+      try { consumer().studioVideoConsumer.kick(); } catch (_) { /* a consumer finds it within seconds */ }
+    } else {
+      if (doc && !launched) await settleUnstarted(doc);
+      if (!res.headersSent) res.status(500).json({ success: false, message: 'We could not start the change. Please try again.' });
+    }
   }
 });
 

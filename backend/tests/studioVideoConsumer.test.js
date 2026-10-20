@@ -598,3 +598,83 @@ test('the consumer starts only with the switch on AND job consumers on', () => {
   assert.strictEqual(startStudioVideoConsumer({ env: { ENABLE_STUDIO_VIDEO_CONSUMER: 'on', RUN_BACKGROUND: '0' } }), null, 'web task without consumers');
   assert.strictEqual(startStudioVideoConsumer({ env: { ENABLE_STUDIO_VIDEO_CONSUMER: 'on', RUN_BACKGROUND: '1', RUN_JOB_CONSUMERS: '0' } }), null, 'consumers off');
 });
+
+// ---- money review of B1: lost reply after the queue flip (finding 1) ----
+// The flip to 'queued' lands in Mongo but the call throws (a lost reply). `claimFirst` also lets a worker take the row before the throw.
+function flipLandsThenThrows(w, { claimFirst = false } = {}) {
+  const fou = StudioVideo.findOneAndUpdate;
+  StudioVideo.findOneAndUpdate = (q, u, o) => {
+    if (u.$set && u.$set.status === 'queued' && q.workerId === null) {
+      const d = Object.values(w.docs).find((x) => matches(x, q));
+      apply(d, u);
+      if (claimFirst) Object.assign(d, { status: 'processing', workerId: 'w:B', attempts: 1, leaseUntil: new Date(w.clock.t + 60000) });
+      return { lean: () => q, then: (a, b) => Promise.reject(new Error('network')).then(a, b) };
+    }
+    return fou(q, u, o);
+  };
+  return () => { StudioVideo.findOneAndUpdate = fou; };
+}
+
+test('lost reply after the queue flip, nobody claimed yet: the user gets 202 (not 500), the row stays queued, charged once, no refund', async () => {
+  const w = world(); w.clock = clockAt();
+  const undo = flipLandsThenThrows(w);
+  try {
+    const r = await quiet(() => create(w, {}));
+    undo();
+    assert.strictEqual(r.code, 202);
+    assert.strictEqual(r.body.video.status, 'processing');
+    assert.strictEqual(r.body.video.queued, true);
+    assert.strictEqual(w.docs.v1.status, 'queued');
+    assert.strictEqual(w.refunds.length, 0);
+    assert.strictEqual(w.spends.filter((s) => s.ok).length, 1);
+    await consumer(w, 'A')._drain(); await settle(60);
+    assert.strictEqual(w.docs.v1.status, 'completed', 'a consumer still delivers it');
+    assert.strictEqual(w.spends.filter((s) => s.ok).length, 1, 'no second charge');
+  } finally { undo(); w.restore(); }
+});
+
+test('lost reply after the queue flip, a worker claimed it first: 202, the LIVE claim is not failed, no refund, the run delivers', async () => {
+  const w = world(); w.clock = clockAt();
+  const undo = flipLandsThenThrows(w, { claimFirst: true });
+  try {
+    const r = await quiet(() => create(w, {}));
+    undo();
+    assert.strictEqual(r.code, 202);
+    assert.strictEqual(w.docs.v1.status, 'processing');
+    assert.strictEqual(w.docs.v1.workerId, 'w:B');
+    assert.strictEqual(w.refunds.length, 0);
+  } finally { undo(); w.restore(); }
+});
+
+test('the change route answers a lost queue reply the same way (202, queued, no refund)', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await StudioVideo.create({ user: 'chx', status: 'completed', videoUrl: 'https://cdn.test/base.mp4', clips: 1, seconds: 10, quarks: COST1 });
+    process.env.ENABLE_STUDIO_VIDEO_CONSUMER = 'on';
+    const undo = flipLandsThenThrows(w);
+    try {
+      const res = resp();
+      await quiet(() => handler('/:id/change', 'post')({ user: { userId: 'chx' }, params: { id: 'v1' }, body: { instruction: 'make it evening' } }, res));
+      assert.strictEqual(res.code, 202);
+      assert.strictEqual(w.docs.v2.status, 'queued');
+      assert.strictEqual(w.refunds.length, 0);
+    } finally { undo(); }
+  } finally { w.restore(); }
+});
+
+test('settleUnstarted never fails a row a worker already holds (filter workerId null)', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await StudioVideo.create({ user: 'su1', quarks: COST1, clips: 1, workerId: 'w:B', attempts: 1 });
+    w.spends.push({ ok: true, amount: COST1, meta: { ref: 'v1' } });
+    await route._money.settleUnstarted(w.docs.v1);
+    assert.strictEqual(w.docs.v1.status, 'processing');
+    assert.strictEqual(w.refunds.length, 0);
+    // An unclaimed processing row (the flip never landed) is still failed and refunded.
+    await StudioVideo.create({ user: 'su2', quarks: COST1, clips: 1 });
+    w.spends.push({ ok: true, amount: COST1, meta: { ref: 'v2' } });
+    await route._money.settleUnstarted(w.docs.v2);
+    assert.strictEqual(w.docs.v2.status, 'failed');
+    assert.strictEqual(w.refunds.length, 1);
+  } finally { w.restore(); }
+});
