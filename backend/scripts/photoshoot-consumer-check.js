@@ -331,6 +331,23 @@ async function main() {
       assert.deepStrictEqual(ledger.refunds.filter((x) => x.ref === j.id).map((x) => x.amount), [4 * PER]);
     });
 
+    await check('a charge that lands on a row the stale sweep already closed is claimed for refund exactly once (review S3, real filters)', async () => {
+      const j = await createJob('zzlate');
+      await Zz.updateOne({ _id: j.id }, { $set: { status: 'failed', outcome: 'stale_queued', refunded: true, refundedQuarks: 0, chargedAt: null }, $unset: { inFlight: 1 } });
+      const args = { refundedQuarks: 4 * PER, payerId: j.user, now: new Date() };
+      const got = await Promise.all([repo.claimLateRefund(j.id, args), repo.claimLateRefund(j.id, args), repo.claimLateRefund(j.id, args)]);
+      assert.strictEqual(got.filter(Boolean).length, 1, 'exactly one caller wins');
+      const r = await row(j.id);
+      assert.strictEqual(r.refundedQuarks, 4 * PER);
+      assert.strictEqual(r.refundSettledAt || null, null);
+      assert.strictEqual(await repo.claimLateRefund(j.id, args), null, 'and not again');
+      // a queued, charged row (an accepted job) is never touched
+      const k = await createJob('zzlate2');
+      assert.strictEqual(await repo.claimLateRefund(k.id, args), null);
+      await Zz.updateOne({ _id: j.id }, { $set: { refundSettledAt: new Date() } }); // stands in for the settle sweep (paid in the unit tests)
+      await Zz.updateOne({ _id: k.id }, { $set: { status: 'failed', outcome: 'check_done', refunded: true, refundedQuarks: 0, refundSettledAt: new Date() }, $unset: { inFlight: 1 } });
+    });
+
     await check('every refund went to the wallet that paid, never above its charge; no row left open; nothing reached the network', async () => {
       for (const r of ledger.refunds) {
         const sp = ledger.spends.find((s) => s.ref === r.ref);
