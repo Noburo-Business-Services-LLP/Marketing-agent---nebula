@@ -6,6 +6,7 @@ const { LIMITS, PLAN_RUNS_PER_DAY_MAX } = require('../../config/blueprint');
 const { QUARK_COSTS } = require('../../config/apiCosts');
 const { normaliseInput, emailKey, businessKeysOf } = require('./input');
 const { resolveTier } = require('../../config/entitlements');
+const { settleRefund, SWEEP_AFTER_MS } = require('../refundSettle');
 
 const ACTION = 'blueprint';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -42,6 +43,7 @@ function defaultDeps() {
     deletedBefore: async (email) => !!(await require('../../models/DeletedAccount').exists({ emailHash: { $in: require('../accountDeletion').emailHashes(email) } })),
     deduct: (...a) => require('../../middleware/trialGuard').deductCredits(...a),
     refund: (...a) => require('../../middleware/trialGuard').refundCredits(...a),
+    chargeProof: (...a) => require('../quarkBuckets').chargeProof(...a),
     uploadLogo: async (dataUrl) => {
       const r = await require('../imageUploader').uploadBase64Image(dataUrl, 'nebula-blueprint-logos');
       if (!r || !r.success || !isPublicHttpsUrl(r.url)) throw new Error('upload failed');
@@ -124,23 +126,63 @@ function createBlueprintService(depsIn) {
     ? reply(409, { success: false, alreadyUsed: true, id: ex.blueprintId, message: MSG.used })
     : reply(409, { success: false, alreadyUsed: true, message: MSG.usedOther }));
 
-  // Refund at most once: the flag is claimed atomically BEFORE refunding; a failed refund releases the claim.
-  async function refundOnce(doc) {
-    const claimed = await Blueprint.findOneAndUpdate(
-      { blueprintId: doc.blueprintId, 'charge.state': 'charged' },
-      { $set: { 'charge.state': 'refunded' } }
+  // Refunds follow one rule (see refundSettle.js): CLAIM into 'refunding' (payer, amount and time recorded in the same
+  // atomic update), PAY with the blueprint id as `ref`, MARK 'refunded'. A crash or a failed payment leaves the row in
+  // 'refunding'; settleStuck (get, the sweep) pays it later, once, and only when chargeProof says nobody has.
+  const refundOk = (res) => !(res && res.success === false);
+  const payRefund = (doc, payerId) => deps.refund(String(doc.userId), ACTION, 1, 'Refund: Brand Growth Blueprint', { ref: doc.blueprintId, ...(payerId ? { payerId } : {}) });
+  const finishRefund = (blueprintId, state) => Blueprint.updateOne({ blueprintId, 'charge.state': 'refunding' }, { $set: { 'charge.state': state } });
+  const claimRefund = (doc, from) => {
+    const c = doc.charge || {};
+    return Blueprint.findOneAndUpdate(
+      { blueprintId: doc.blueprintId, 'charge.state': from },
+      { $set: { 'charge.state': 'refunding', 'charge.refundAt': at(), 'charge.refundQuarks': Number(c.quarks) || QUARK_COSTS[ACTION], 'charge.refundPayer': c.payerId || '', 'charge.refundFrom': from } }
     );
+  };
+
+  async function refundOnce(doc) {
+    const claimed = await claimRefund(doc, 'charged');
     if (!claimed) return false;
     try {
-      const payerId = claimed.charge && claimed.charge.payerId;
-      const res = payerId ? await deps.refund(String(doc.userId), ACTION, 1, 'Refund: Brand Growth Blueprint', { payerId }) : await deps.refund(String(doc.userId), ACTION, 1, 'Refund: Brand Growth Blueprint');
-      if (res && res.success === false) throw new Error(res.error || 'refund returned success:false');
+      const res = await payRefund(doc, claimed.charge && claimed.charge.payerId);
+      if (!refundOk(res)) throw new Error((res && res.error) || 'refund returned success:false');
+      await finishRefund(doc.blueprintId, 'refunded');
       return true;
     } catch (err) {
       console.error(`[blueprint] refund failed for ${doc.blueprintId}:`, err && err.message);
-      try { await Blueprint.findOneAndUpdate({ blueprintId: doc.blueprintId }, { $set: { 'charge.state': 'charged' } }); } catch (_) { /* best effort */ }
-      return false;
+      return false; // stays 'refunding': never released to 'charged' (a refund that landed would then be paid twice)
     }
+  }
+
+  // Decides a claimed row from the proof, then marks it. `held` is the row as it was just claimed or re-held.
+  async function settleHeld(held) {
+    const c = held.charge || {};
+    const out = await settleRefund({
+      ref: held.blueprintId, userId: String(held.userId), quarks: Number(c.refundQuarks) || Number(c.quarks) || QUARK_COSTS[ACTION], payerId: c.refundPayer || c.payerId || '',
+      chargeProof: deps.chargeProof || (async () => { throw new Error('no proof source'); }), alert: deps.alertOwner, label: 'blueprint',
+      quietNoCharge: c.refundFrom === 'pending',
+      pay: async ({ payerId }) => refundOk(await payRefund(held, payerId))
+    });
+    if (out === 'paid' || out === 'already') await finishRefund(held.blueprintId, 'refunded');
+    else if (out === 'nocharge') await finishRefund(held.blueprintId, 'none');
+    else if (out === 'unproven' || out === 'over') await finishRefund(held.blueprintId, 'unproven');
+    return out === 'paid';
+  }
+
+  // A row stuck in 'refunding' for over two minutes. The hold (refundAt moved forward in one conditional update) means
+  // two sweeps or pollers never both pay.
+  async function settleStuck(doc) {
+    const older = new Date(deps.now() - SWEEP_AFTER_MS);
+    const held = await Blueprint.findOneAndUpdate({ blueprintId: doc.blueprintId, 'charge.state': 'refunding', 'charge.refundAt': { $lt: older } }, { $set: { 'charge.refundAt': at() } });
+    return held ? settleHeld(held) : false;
+  }
+
+  // The job ended while its charge was still 'pending': a crash fell between the debit and the record. The ref on the
+  // debit answers whether the customer paid; only a proven, unrefunded charge is paid back.
+  async function settlePending(doc) {
+    if (!(await claimRefund(doc, 'pending'))) return false;
+    const fresh = await Blueprint.findOne({ blueprintId: doc.blueprintId });
+    return fresh ? settleHeld(fresh) : false;
   }
 
   // Ends the job (failed or stopped), releases the free slot and refunds. Only the caller that changes the status
@@ -209,7 +251,7 @@ function createBlueprintService(depsIn) {
     }
 
     let paid = null;
-    try { paid = await deps.deduct(userId, ACTION, 1, 'Brand Growth Blueprint'); } catch (err) {
+    try { paid = await deps.deduct(userId, ACTION, 1, 'Brand Growth Blueprint', { ref: blueprintId }); } catch (err) {
       console.error('[blueprint] deduct failed:', err && err.message);
     }
     if (!paid || paid.success !== true) {
@@ -217,20 +259,23 @@ function createBlueprintService(depsIn) {
       await Blueprint.updateOne({ blueprintId }, { $set: { status: 'failed', step: 'failed', freeSlot: false, 'charge.state': 'none', error: { message: 'no_quarks' }, heartbeatAt: at() } });
       return reply(403, { success: false, creditsExhausted: true, upgradeRequired: true, reason: 'quarks', message: MSG.quarks });
     }
-    // The customer has paid. If recording that fails twice, refund directly: the document is still 'pending', which
-    // refundOnce and the stale poll never touch, so no other path can refund it.
-    const markCharged = () => Blueprint.findOneAndUpdate({ blueprintId }, { $set: { 'charge.state': 'charged', heartbeatAt: at(), ...(paid.workspaceId ? { 'charge.payerId': paid.payerId } : {}) } });
-    try { await markCharged(); } catch (first) {
+    // The customer has paid. If recording that fails twice, refund directly (with the same ref). The row is still
+    // 'pending'; if even that refund fails it stays 'pending' and the stale path settles it from the proof (settlePending).
+    // The write is conditional on 'pending', so it can never overwrite a refund claim.
+    const markCharged = () => Blueprint.findOneAndUpdate({ blueprintId, 'charge.state': 'pending' }, { $set: { 'charge.state': 'charged', heartbeatAt: at(), ...(paid.workspaceId ? { 'charge.payerId': paid.payerId } : {}) } });
+    try {
+      if (!(await markCharged())) return reply(500, { success: false, message: MSG.notStarted }); // already claimed for a refund by the sweep
+    } catch (first) {
       console.error('[blueprint] charge write failed, retrying:', first && first.message);
-      try { await markCharged(); } catch (second) {
+      try { if (!(await markCharged())) return reply(500, { success: false, message: MSG.notStarted }); } catch (second) {
         console.error('[blueprint] charge write failed again, refunding:', second && second.message);
         let refunded = false;
         try {
-          const res = paid.workspaceId ? await deps.refund(String(userId), ACTION, 1, 'Refund: Brand Growth Blueprint', { payerId: paid.payerId }) : await deps.refund(String(userId), ACTION, 1, 'Refund: Brand Growth Blueprint');
+          const res = await deps.refund(String(userId), ACTION, 1, 'Refund: Brand Growth Blueprint', { ref: blueprintId, ...(paid.workspaceId ? { payerId: paid.payerId } : {}) });
           refunded = !(res && res.success === false);
         } catch (err) { console.error('[blueprint] direct refund failed:', err && err.message); }
         try {
-          await Blueprint.updateOne({ blueprintId }, { $set: { status: 'failed', step: 'failed', freeSlot: false, 'charge.state': refunded ? 'refunded' : 'charged', error: { message: MSG.notStarted }, heartbeatAt: at() } });
+          await Blueprint.updateOne({ blueprintId }, { $set: { status: 'failed', step: 'failed', freeSlot: false, 'charge.state': refunded ? 'refunded' : 'pending', error: { message: MSG.notStarted }, heartbeatAt: at() } });
         } catch (_) { /* best effort: the doc may stay pending */ }
         return reply(500, { success: false, message: MSG.notStarted });
       }
@@ -345,20 +390,45 @@ function createBlueprintService(depsIn) {
     }
   }
 
+  // Ends a run that stopped reporting and settles any money still open on it. Every step is guarded, so polling a
+  // Blueprint (or the sweep reaching it) any number of times never pays more than once.
+  async function reconcile(doc) {
+    const key = doc.blueprintId;
+    const reload = async (d) => (await Blueprint.findOne({ blueprintId: key })) || d;
+    if (ACTIVE.includes(doc.status) && deps.now() - new Date(doc.heartbeatAt).getTime() > LIMITS.STALE_MS) {
+      await failAndRefund(doc, MSG.stale);
+      doc = await reload(doc);
+    }
+    const state = doc.charge && doc.charge.state;
+    const ended = doc.status === 'failed' || doc.status === 'stopped';
+    if (ended && state === 'charged') { await refundOnce(doc); doc = await reload(doc); }
+    else if (ended && state === 'pending') { await settlePending(doc); doc = await reload(doc); }
+    else if (state === 'refunding') { await settleStuck(doc); doc = await reload(doc); }
+    return doc;
+  }
+
+  // A bounded pass over refunds a crash or an outage left open: rows stuck in 'refunding' and runs that died with the
+  // charge still 'pending'. Returns how many it looked at.
+  async function sweepUnsettled(limit = 10) {
+    const older = new Date(deps.now() - SWEEP_AFTER_MS);
+    const staleBefore = new Date(deps.now() - LIMITS.STALE_MS);
+    const rows = [];
+    try { rows.push(...(await Blueprint.find({ 'charge.state': 'refunding', 'charge.refundAt': { $lt: older } }).limit(limit).lean())); } catch (_) { /* next pass */ }
+    try { rows.push(...(await Blueprint.find({ 'charge.state': 'pending', heartbeatAt: { $lt: staleBefore } }).limit(limit).lean())); } catch (_) { /* next pass */ }
+    let looked = 0;
+    for (const r of rows.slice(0, limit * 2)) {
+      try { await reconcile(r); looked += 1; } catch (e) { console.error('[blueprint] settle sweep failed:', e && e.message); }
+    }
+    try { looked += await designedService().sweepUnsettled(limit); } catch (e) { console.error('[blueprint] designed settle sweep failed:', e && e.message); }
+    return looked;
+  }
+
   async function get({ userId, id }) {
     const uid = String(userId);
     const key = String(id);
     let doc = await Blueprint.findOne({ blueprintId: key, userId: uid });
     if (!doc || doc.kind === 'plan') return reply(404, { success: false, message: MSG.notFound });
-    if (ACTIVE.includes(doc.status) && deps.now() - new Date(doc.heartbeatAt).getTime() > LIMITS.STALE_MS) {
-      await failAndRefund(doc, MSG.stale);
-      doc = (await Blueprint.findOne({ blueprintId: key, userId: uid })) || doc;
-    }
-    // Self-heal a refund that failed earlier; guarded, so never a double refund.
-    if ((doc.status === 'failed' || doc.status === 'stopped') && doc.charge && doc.charge.state === 'charged') {
-      await refundOnce(doc);
-      doc = (await Blueprint.findOne({ blueprintId: key, userId: uid })) || doc;
-    }
+    doc = (await reconcile(doc)) || doc;
     if (doc.designed && doc.designed.status) {
       // A designed edition that stopped reporting is ended and refunded here, like the Blueprint itself.
       doc = await designedService().reconcile(doc);
@@ -399,7 +469,7 @@ function createBlueprintService(depsIn) {
     return designedService().start(args);
   };
 
-  return { start, startSystem, run, get, list, continueRun, refundOnce, startDesigned };
+  return { start, startSystem, run, get, list, continueRun, refundOnce, startDesigned, sweepUnsettled, reconcile };
 }
 
 module.exports = { createBlueprintService, defaultDeps, publicView, applyLogo, ACTION, MSG };

@@ -32,9 +32,19 @@ const blueprintSchema = new mongoose.Schema(
     qaFlags: { type: [mongoose.Schema.Types.Mixed], default: [] },
     stop: { reason: { type: String }, message: { type: String } },
     error: { message: { type: String } },
+    // The designed (image) edition (services/blueprint/designedService.js): status, pages, its own charge. It was written
+    // by that service but never declared here, and Mongoose drops undeclared paths in strict mode.
+    designed: { type: mongoose.Schema.Types.Mixed },
     charge: {
-      state: { type: String, enum: ['none', 'pending', 'charged', 'refunded'], default: 'none' },
+      // 'refunding' is the claim a refund is paid under (a crash there is finished by the sweep); 'unproven' is a refund
+      // the sweep could not match to a charge, left for a person.
+      state: { type: String, enum: ['none', 'pending', 'charged', 'refunding', 'refunded', 'unproven'], default: 'none' },
       quarks: { type: Number },
+      // Written in the SAME update that claims the refund: who is paid back, how much, since when, and which state it was claimed from.
+      refundAt: { type: Date },
+      refundQuarks: { type: Number },
+      refundPayer: { type: String },
+      refundFrom: { type: String },
       // Set only when an agency client's Blueprint was paid from the agency pool, so a refund goes to the same wallet.
       payerId: { type: String }
     }

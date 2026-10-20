@@ -69,6 +69,17 @@ function makeBlueprintModel() {
   };
 }
 
+// A fake Quark ledger keyed by ref: what quarkBuckets.chargeProof reads. A charge or refund made WITH a ref is visible to it.
+function makeLedger(clock) {
+  const rows = { spend: new Map(), refund: new Map() };
+  return {
+    rows,
+    spend: (ref, payer, quarks) => { if (ref) rows.spend.set(String(ref), { payer: String(payer), quarks }); },
+    refund: (ref) => { if (ref) rows.refund.set(String(ref), true); },
+    proof: async (ref) => ({ spend: rows.spend.get(String(ref)) ? { ...rows.spend.get(String(ref)), workspace: '', source: 'ledger' } : null, refunded: rows.refund.has(String(ref)) })
+  };
+}
+
 const goodResult = () => ({ cover: { businessName: 'Sweet Co' }, pages: [], closing: {} });
 
 // over: any dep to replace; `clock.t` is the fake time in ms.
@@ -76,13 +87,16 @@ function makeDeps(over = {}) {
   const Blueprint = over.Blueprint || makeBlueprintModel();
   const calls = { deduct: [], refund: [], upload: [], discover: 0, directions: 0, build: 0, buildArgs: [], discoverArgs: [] };
   const queued = [];
+  const ledger = makeLedger();
   const clock = { t: Date.parse('2026-10-04T10:00:00Z') };
   let n = 0;
   const deps = {
-    Blueprint, calls, queued, clock,
+    Blueprint, calls, queued, clock, ledger,
+    alerts: [], alertOwner: async (a) => { deps.alerts.push(a); },
+    chargeProof: (ref) => ledger.proof(ref),
     freeBlueprintIsFree: false, // tests of the charge flow use the old charged behaviour; the free path has its own tests
-    deduct: async (...a) => { calls.deduct.push(a); return { success: true, creditsDeducted: 7 }; },
-    refund: async (...a) => { calls.refund.push(a); return { success: true, creditsRefunded: 7 }; },
+    deduct: async (...a) => { calls.deduct.push(a); ledger.spend(a[4] && a[4].ref, a[0], require('../config/apiCosts').QUARK_COSTS.blueprint); return { success: true, creditsDeducted: 7 }; },
+    refund: async (...a) => { calls.refund.push(a); ledger.refund(a[4] && a[4].ref); return { success: true, creditsRefunded: 7 }; },
     uploadLogo: async (d) => { calls.upload.push(d); return 'https://res.cloudinary.com/demo/image/upload/logo.png'; },
     discover: async (a) => { calls.discover += 1; calls.discoverArgs.push(a); return { sheet: clone(sheetFixture), sources: [{ id: 'S1', url: 'https://sweetco.in/', kind: 'website', ok: true }] }; },
     plan: {
@@ -99,4 +113,4 @@ function makeDeps(over = {}) {
   return deps;
 }
 
-module.exports = { makeBlueprintModel, makeDeps, clone, goodResult };
+module.exports = { makeBlueprintModel, makeDeps, makeLedger, clone, goodResult };

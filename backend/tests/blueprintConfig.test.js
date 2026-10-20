@@ -47,6 +47,6 @@ test('Blueprint model has the atomic one-free rules and opens no connection', ()
     assert.equal(hit[1].unique, true);
     assert.deepEqual(hit[1].partialFilterExpression, { freeSlot: true });
   }
-  assert.deepEqual(Blueprint.schema.path('charge.state').enumValues, ['none', 'pending', 'charged', 'refunded']);
+  assert.deepEqual(Blueprint.schema.path('charge.state').enumValues, ['none', 'pending', 'charged', 'refunding', 'refunded', 'unproven']);
   assert.equal(Blueprint.collection.name, 'blueprints');
 });

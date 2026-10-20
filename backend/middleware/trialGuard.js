@@ -63,7 +63,7 @@ const checkTrial = async (req, res, next) => {
  * @param {string} description - Human-readable description
  * @returns {{ success: boolean, creditsRemaining: number, creditsDeducted: number, error?: string }}
  */
-const deductCredits = async (userId, action, count = 1, description = '') => {
+const deductCredits = async (userId, action, count = 1, description = '', opts = {}) => {
   try {
     const cost = CREDIT_COSTS[action];
     if (cost === undefined) {
@@ -81,7 +81,7 @@ const deductCredits = async (userId, action, count = 1, description = '') => {
     // Anything past its date is taken off first, then one atomic step checks the balance and subtracts from the
     // buckets together, so many requests at the same moment cannot all pass the check and overdraw the account.
     await quarkBuckets.settleWallet(userId).catch(() => null);
-    const spent = await quarkBuckets.spend(userId, totalCost, { action, description: description || `${action} x${count}`, units: count });
+    const spent = await quarkBuckets.spend(userId, totalCost, { action, description: description || `${action} x${count}`, units: count, ...(opts && opts.ref ? { ref: String(opts.ref) } : {}) });
     const result = spent.success ? spent.user : null;
 
     if (!result) {
@@ -167,6 +167,8 @@ const requireCredits = (action, countOrFn = 1) => {
  * @param {string} action - Action type that failed (from CREDIT_COSTS)
  * @param {number} count - Number of units to refund
  * @param {string} description - Human-readable description
+ * @param {{ payerId?: string, ref?: string }} opts - payerId: the wallet that was charged. ref: the same ref the charge
+ *   carried; it is written into the history entry (like quarkBuckets.refundTo) so chargeProof(ref) can see this refund.
  * @returns {{ success: boolean, creditsRemaining: number, creditsRefunded: number, error?: string }}
  */
 const refundCredits = async (userId, action, count = 1, description = '', opts = {}) => {
@@ -214,7 +216,8 @@ const refundCredits = async (userId, action, count = 1, description = '', opts =
               action: `${action}_refund`,
               amount: totalRefund,
               description: description || `Refund: ${action} x${count}`,
-              createdAt: new Date()
+              createdAt: new Date(),
+              ...(opts && opts.ref ? { ref: String(opts.ref) } : {})
             }],
             $slice: -100 // Keep only last 100 entries
           }
@@ -229,7 +232,7 @@ const refundCredits = async (userId, action, count = 1, description = '', opts =
     // Other accounts have no ledger row for a refund today and keep it that way; a client refund leaves one so
     // the agency's per-client report nets out correctly.
     if (workspaceId) {
-      quarkBuckets.record({ user: target, workspace: workspaceId, type: 'refund', quarks: totalRefund, balanceAfter: result.credits.balance, action: `${action}_refund` });
+      quarkBuckets.record({ user: target, workspace: workspaceId, type: 'refund', quarks: totalRefund, balanceAfter: result.credits.balance, action: `${action}_refund`, ...(opts && opts.ref ? { ref: String(opts.ref) } : {}) });
     }
 
     return {

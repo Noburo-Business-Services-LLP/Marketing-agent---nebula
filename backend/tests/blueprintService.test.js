@@ -154,29 +154,34 @@ test('replayed run is a no-op; refundOnce twice refunds once', async () => {
   assert.strictEqual(deps.calls.refund.length, 1);
 });
 
-test('a refund that throws leaves the charge retryable and does not throw; a later get retries once', async () => {
+test('a refund that throws leaves the claim in refunding; a poll inside two minutes does not pay, one after it pays once', async () => {
   const { deps, svc, begin, doc } = setup();
   let fail = true;
-  deps.refund = async (...a) => { deps.calls.refund.push(a); if (fail) throw new Error('db down'); return { success: true }; };
+  deps.refund = async (...a) => { deps.calls.refund.push(a); if (fail) throw new Error('db down'); deps.ledger.refund(a[4] && a[4].ref); return { success: true }; };
   deps.plan.build = async () => { throw new Error('x'); };
   await begin(user(), form());
   await quiet(() => deps.drain());
   assert.strictEqual(doc('bp-1').status, 'failed');
-  assert.strictEqual(doc('bp-1').charge.state, 'charged');
+  assert.strictEqual(doc('bp-1').charge.state, 'refunding');
+  assert.strictEqual(doc('bp-1').charge.refundQuarks, QUARK_COSTS.blueprint, 'amount recorded in the claim');
   fail = false;
+  await svc.get({ userId: 'u1', id: 'bp-1' });
+  assert.strictEqual(doc('bp-1').charge.state, 'refunding', 'too soon: left for the sweep');
+  deps.clock.t += 3 * 60 * 1000;
   await svc.get({ userId: 'u1', id: 'bp-1' });
   assert.strictEqual(doc('bp-1').charge.state, 'refunded');
   await svc.get({ userId: 'u1', id: 'bp-1' });
   assert.strictEqual(deps.calls.refund.length, 2); // one failed attempt, one success, none after
+  assert.strictEqual(deps.calls.refund[1][4].ref, 'bp-1', 'the refund carries the blueprint id as ref');
 });
 
-test('refund returning success false is also retryable', async () => {
+test('refund returning success false stays claimed (refunding) for the sweep', async () => {
   const { deps, begin, doc } = setup();
   deps.refund = async (...a) => { deps.calls.refund.push(a); return { success: false, error: 'nope' }; };
   deps.plan.build = async () => { throw new Error('x'); };
   await begin(user(), form());
   await quiet(() => deps.drain());
-  assert.strictEqual(doc('bp-1').charge.state, 'charged');
+  assert.strictEqual(doc('bp-1').charge.state, 'refunding');
 });
 
 test('not enough Quarks: 403, document failed, slot free, no refund; a later start works', async () => {
@@ -288,12 +293,14 @@ test('get: a stale processing job is failed and refunded, a fresh one is untouch
 test('get: a stale queued job that was never charged is failed with no refund', async () => {
   const { deps, svc, begin, doc } = setup();
   await begin(user(), form());
+  deps.ledger.rows.spend.clear(); // the debit never landed
   await deps.Blueprint.updateOne({ blueprintId: 'bp-1' }, { $set: { 'charge.state': 'pending' } });
   deps.clock.t += 9 * 60 * 1000;
   const r = await svc.get({ userId: 'u1', id: 'bp-1' });
   assert.strictEqual(r.json.status, 'failed');
   assert.strictEqual(deps.calls.refund.length, 0);
-  assert.strictEqual(doc('bp-1').charge.state, 'pending');
+  assert.strictEqual(doc('bp-1').charge.state, 'none', 'no proof of a debit: nothing is owed and nothing is flagged');
+  assert.strictEqual(deps.alerts.length, 0);
   assert.strictEqual(r.json.refunded, false);
 });
 
@@ -611,4 +618,142 @@ test('a customer Blueprint list does not show plan runs', async () => {
   const l = await svc.list({ userId: 'u1' });
   assert.strictEqual(l.json.blueprints.length, 1);
   assert.strictEqual(l.json.blueprints[0].id, 'bp-1');
+});
+
+// ---- claim-then-pay refunds: a crash between the claim and the payment (D17 / D19 class) ----
+
+async function failedWithClaim(over = {}) {
+  const ctx = setup(over);
+  ctx.deps.plan.build = async () => { throw new Error('x'); };
+  await ctx.begin(user(), form());
+  return ctx;
+}
+
+test('crash between claim and pay: the sweep pays once, to the recorded payer, with the ref; a second sweep changes nothing', async () => {
+  const { deps, svc, begin, doc } = setup({ deduct: null });
+  deps.deduct = async (...a) => { deps.calls.deduct.push(a); deps.ledger.spend(a[4].ref, 'agency9', QUARK_COSTS.blueprint); return { success: true, workspaceId: 'ws1', payerId: 'agency9' }; };
+  deps.plan.build = async () => { throw new Error('x'); };
+  const realRefund = deps.refund;
+  deps.refund = async () => { throw new Error('process died'); };
+  await begin(user(), form());
+  await quiet(() => deps.drain());
+  assert.strictEqual(doc('bp-1').charge.state, 'refunding');
+  assert.strictEqual(doc('bp-1').charge.refundPayer, 'agency9', 'the payer is recorded in the claim');
+  deps.refund = realRefund;
+  assert.strictEqual(await svc.sweepUnsettled(), 0, 'inside two minutes nothing is touched');
+  deps.clock.t += 3 * 60 * 1000;
+  await svc.sweepUnsettled();
+  assert.strictEqual(doc('bp-1').charge.state, 'refunded');
+  assert.strictEqual(deps.calls.refund.length, 1);
+  assert.deepStrictEqual(deps.calls.refund[0][4], { ref: 'bp-1', payerId: 'agency9' });
+  await svc.sweepUnsettled();
+  await svc.get({ userId: 'u1', id: 'bp-1' });
+  assert.strictEqual(deps.calls.refund.length, 1);
+});
+
+test('a refund that landed but reported failure is only marked by the sweep, never paid twice', async () => {
+  const { deps, svc, begin, doc } = setup();
+  deps.refund = async (...a) => { deps.calls.refund.push(a); deps.ledger.refund(a[4].ref); throw new Error('timeout after the credit'); };
+  deps.plan.build = async () => { throw new Error('x'); };
+  await begin(user(), form());
+  await quiet(() => deps.drain());
+  deps.clock.t += 3 * 60 * 1000;
+  await svc.sweepUnsettled();
+  assert.strictEqual(doc('bp-1').charge.state, 'refunded');
+  assert.strictEqual(deps.calls.refund.length, 1);
+});
+
+test('no refund without proof of the charge: the sweep pays nothing, flags it unproven and alerts', async () => {
+  const { deps, svc, begin, doc } = setup();
+  deps.refund = async (...a) => { deps.calls.refund.push(a); throw new Error('process died'); };
+  deps.plan.build = async () => { throw new Error('x'); };
+  await begin(user(), form());
+  await quiet(() => deps.drain());
+  deps.ledger.rows.spend.clear();
+  deps.refund = async (...a) => { deps.calls.refund.push(a); return { success: true }; };
+  deps.clock.t += 3 * 60 * 1000;
+  await quiet(() => svc.sweepUnsettled());
+  assert.strictEqual(deps.calls.refund.length, 1, 'only the first, crashed attempt');
+  assert.strictEqual(doc('bp-1').charge.state, 'unproven');
+  assert.strictEqual(deps.alerts.length, 1);
+});
+
+test('never more than the proven spend', async () => {
+  const { deps, svc, begin, doc } = setup();
+  deps.refund = async (...a) => { deps.calls.refund.push(a); throw new Error('process died'); };
+  deps.plan.build = async () => { throw new Error('x'); };
+  await begin(user(), form());
+  await quiet(() => deps.drain());
+  deps.ledger.rows.spend.set('bp-1', { payer: 'u1', quarks: 1 });
+  deps.refund = async (...a) => { deps.calls.refund.push(a); return { success: true }; };
+  deps.clock.t += 3 * 60 * 1000;
+  await quiet(() => svc.sweepUnsettled());
+  assert.strictEqual(deps.calls.refund.length, 1);
+  assert.strictEqual(doc('bp-1').charge.state, 'unproven');
+});
+
+test('a sweep whose refund fails again alerts and leaves it claimed, held for another two minutes', async () => {
+  const { deps, svc, begin, doc } = setup();
+  deps.refund = async (...a) => { deps.calls.refund.push(a); throw new Error('down'); };
+  deps.plan.build = async () => { throw new Error('x'); };
+  await begin(user(), form());
+  await quiet(() => deps.drain());
+  deps.clock.t += 3 * 60 * 1000;
+  await quiet(() => svc.sweepUnsettled());
+  assert.strictEqual(doc('bp-1').charge.state, 'refunding');
+  assert.strictEqual(deps.alerts.length, 1);
+  assert.strictEqual(deps.calls.refund.length, 2);
+  await quiet(() => svc.sweepUnsettled());
+  assert.strictEqual(deps.calls.refund.length, 2, 'held: not retried inside two minutes');
+});
+
+// ---- crash between the charge and the mark (item 5) ----
+
+test('start charges WITH the blueprint id as ref', async () => {
+  const { deps, begin } = setup();
+  await begin(user(), form());
+  assert.deepStrictEqual(deps.calls.deduct[0][4], { ref: 'bp-1' });
+});
+
+test('crash between charge and mark: the stale poll refunds once because the proof shows a spend and no refund', async () => {
+  const { deps, svc, begin, doc } = setup();
+  const real = deps.Blueprint.findOneAndUpdate;
+  deps.Blueprint.findOneAndUpdate = (filter, update) => (filter['charge.state'] === 'pending' && update.$set['charge.state'] === 'charged' ? new Promise(() => {}) : real(filter, update)); // the process dies here
+  begin(user(), form()); // never settles
+  await new Promise((r) => setImmediate(r));
+  deps.Blueprint.findOneAndUpdate = real;
+  assert.strictEqual(doc('bp-1').status, 'queued');
+  assert.strictEqual(doc('bp-1').charge.state, 'pending');
+  assert.strictEqual(deps.calls.deduct.length, 1);
+  deps.clock.t += 10 * 60 * 1000;
+  const r = await svc.get({ userId: 'u1', id: 'bp-1' });
+  assert.strictEqual(r.json.status, 'failed');
+  assert.strictEqual(doc('bp-1').charge.state, 'refunded');
+  assert.strictEqual(deps.calls.refund.length, 1);
+  assert.strictEqual(deps.calls.refund[0][4].ref, 'bp-1');
+  await svc.get({ userId: 'u1', id: 'bp-1' });
+  assert.strictEqual(deps.calls.refund.length, 1);
+});
+
+test('crash between charge and mark, found by the sweep without anyone polling', async () => {
+  const { deps, svc, begin, doc } = setup();
+  const real = deps.Blueprint.findOneAndUpdate;
+  deps.Blueprint.findOneAndUpdate = (filter, update) => (filter['charge.state'] === 'pending' && update.$set['charge.state'] === 'charged' ? new Promise(() => {}) : real(filter, update));
+  begin(user(), form());
+  await new Promise((r) => setImmediate(r));
+  deps.Blueprint.findOneAndUpdate = real;
+  deps.clock.t += 10 * 60 * 1000;
+  await svc.sweepUnsettled();
+  assert.strictEqual(doc('bp-1').charge.state, 'refunded');
+  assert.strictEqual(deps.calls.refund.length, 1);
+});
+
+test('a pending charge whose spend was already refunded is not refunded again', async () => {
+  const { deps, svc, begin, doc } = setup();
+  await begin(user(), form());
+  await deps.Blueprint.updateOne({ blueprintId: 'bp-1' }, { $set: { 'charge.state': 'pending', status: 'failed' } });
+  deps.ledger.refund('bp-1');
+  await svc.get({ userId: 'u1', id: 'bp-1' });
+  assert.strictEqual(deps.calls.refund.length, 0);
+  assert.strictEqual(doc('bp-1').charge.state, 'refunded');
 });

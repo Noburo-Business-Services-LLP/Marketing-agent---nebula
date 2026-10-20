@@ -14,10 +14,12 @@ function makeStore(doc) {
     const cur = get(k);
     if (v && typeof v === 'object' && '$exists' in v) return (cur !== undefined) === v.$exists;
     if (v && typeof v === 'object' && '$in' in v) return v.$in.includes(cur);
+    if (v && typeof v === 'object' && '$lt' in v) return cur != null && new Date(cur).getTime() < new Date(v.$lt).getTime();
     return cur === v || (v === null && cur == null);
   });
   return {
     findOne: async (q) => (matches(q) ? doc : null),
+    find: (q) => { const rows = matches(q) ? [doc] : []; const c = { limit: () => c, lean: async () => rows }; return c; },
     findOneAndUpdate: async (q, u) => { if (!matches(q)) return null; Object.entries(u.$set || {}).forEach(([k, v]) => set(k, v)); return doc; },
     updateOne: async (q, u) => { if (!matches(q)) return; Object.entries(u.$set || {}).forEach(([k, v]) => set(k, v)); Object.keys(u.$unset || {}).forEach((k) => { delete doc[k]; }); },
   };
@@ -205,3 +207,98 @@ test('a run that stopped reporting is ended and refunded', async () => {
   await svc.reconcile(doc);
   assert.equal(doc.designed.status, 'failed'); assert.equal(calls.refund, 1);
 });
+
+// ---- claim-then-pay refund (D17 / D19 class) ----
+
+function ledgerDeps(doc, over = {}) {
+  const clock = { t: Date.now() };
+  const spends = new Map(); const refunds = new Set(); const paid = []; const alerts = [];
+  const { deps, calls, queue } = makeDeps(doc, {
+    now: () => clock.t,
+    deduct: async (u, a, n, d, o) => { calls.deduct += 1; if (o && o.ref) spends.set(o.ref, { payer: 'agency9', quarks: QUARK_COSTS.blueprint_pdf }); return { success: true, payerId: 'agency9', workspaceId: 'ws1' }; },
+    refund: async (u, a, n, d, o) => { calls.refund += 1; paid.push({ u, o }); if (o && o.ref) refunds.add(o.ref); return { success: true }; },
+    chargeProof: async (ref) => ({ spend: spends.get(ref) || null, refunded: refunds.has(ref) }),
+    alertOwner: async (x) => { alerts.push(x); },
+    ...over,
+  });
+  return { deps, calls, queue, clock, spends, refunds, paid, alerts };
+}
+
+test('the charge carries a ref and records the payer; the refund goes to that payer with that ref', async () => {
+  const doc = completedDoc();
+  const t = ledgerDeps(doc, { generateImage: async () => ({ success: false }) });
+  const svc = createDesignedService(t.deps);
+  await svc.start({ userId: 'u1', id: 'b1' });
+  assert.match(doc.designed.charge.ref, /^b1:pdf:\d+$/);
+  assert.equal(doc.designed.charge.payerId, 'agency9');
+  await t.queue[0]();
+  assert.equal(doc.designed.charge.state, 'refunded');
+  assert.deepEqual(t.paid[0].o, { ref: doc.designed.charge.ref, payerId: 'agency9' });
+});
+
+test('crash between claim and pay: the sweep pays once to the recorded payer, a second sweep changes nothing', async () => {
+  const doc = completedDoc();
+  let die = true;
+  const t = ledgerDeps(doc, { generateImage: async () => ({ success: false }) });
+  const realRefund = t.deps.refund;
+  t.deps.refund = async (...a) => { if (die) throw new Error('process died'); return realRefund(...a); };
+  const svc = createDesignedService(t.deps);
+  await svc.start({ userId: 'u1', id: 'b1' });
+  await quietly(() => t.queue[0]());
+  assert.equal(doc.designed.charge.state, 'refunding');
+  assert.equal(doc.designed.charge.refundPayer, 'agency9');
+  die = false;
+  assert.equal(await svc.sweepUnsettled(), 0, 'inside two minutes nothing happens');
+  t.clock.t += 3 * 60 * 1000;
+  assert.equal(await svc.sweepUnsettled(), 1);
+  assert.equal(doc.designed.charge.state, 'refunded');
+  assert.equal(t.calls.refund, 1);
+  await svc.sweepUnsettled(); await svc.reconcile(doc);
+  assert.equal(t.calls.refund, 1);
+});
+
+test('no refund without proof: the sweep flags it unproven and alerts', async () => {
+  const doc = completedDoc();
+  const t = ledgerDeps(doc, { generateImage: async () => ({ success: false }) });
+  const real = t.deps.refund;
+  t.deps.refund = async () => { throw new Error('process died'); };
+  const svc = createDesignedService(t.deps);
+  await svc.start({ userId: 'u1', id: 'b1' });
+  await quietly(() => t.queue[0]());
+  t.spends.clear(); t.deps.refund = real;
+  t.clock.t += 3 * 60 * 1000;
+  await quietly(() => svc.sweepUnsettled());
+  assert.equal(t.calls.refund, 0);
+  assert.equal(doc.designed.charge.state, 'unproven');
+  assert.equal(t.alerts.length, 1);
+});
+
+test('crash between the debit and the record: the stale edition is refunded from the proof, once', async () => {
+  const doc = completedDoc();
+  const t = ledgerDeps(doc);
+  const svc = createDesignedService(t.deps);
+  doc.designed = { status: 'queued', startedAt: new Date(t.clock.t), heartbeatAt: new Date(t.clock.t), charge: { state: 'pending', quarks: QUARK_COSTS.blueprint_pdf, ref: 'b1:pdf:1' }, pages: [] };
+  t.spends.set('b1:pdf:1', { payer: 'agency9', quarks: QUARK_COSTS.blueprint_pdf });
+  t.clock.t += 60 * 60 * 1000;
+  await svc.reconcile(doc);
+  assert.equal(doc.designed.status, 'failed');
+  assert.equal(doc.designed.charge.state, 'refunded');
+  assert.equal(t.calls.refund, 1);
+  assert.deepEqual(t.paid[0].o, { ref: 'b1:pdf:1', payerId: 'agency9' });
+  await svc.reconcile(doc);
+  assert.equal(t.calls.refund, 1);
+});
+
+test('crash before the debit landed: the stale pending edition owes nothing and flags nothing', async () => {
+  const doc = completedDoc();
+  const t = ledgerDeps(doc);
+  const svc = createDesignedService(t.deps);
+  doc.designed = { status: 'queued', startedAt: new Date(t.clock.t), heartbeatAt: new Date(t.clock.t), charge: { state: 'pending', quarks: QUARK_COSTS.blueprint_pdf, ref: 'b1:pdf:2' }, pages: [] };
+  t.clock.t += 60 * 60 * 1000;
+  await svc.reconcile(doc);
+  assert.equal(t.calls.refund, 0);
+  assert.equal(doc.designed.charge.state, 'none');
+  assert.equal(t.alerts.length, 0);
+});
+
+async function quietly(fn) { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } }
