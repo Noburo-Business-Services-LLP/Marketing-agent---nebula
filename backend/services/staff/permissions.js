@@ -25,7 +25,8 @@ const TABLE = {
   manage_coupons:     [true, false, false],
   manage_ai_switches: [true, false, false],
   export_csv:         [true, false, false],
-  view_activity_all:  [true, true, false]
+  view_activity_all:  [true, true, false],
+  run_jobs:           [true, true, false]  // run background jobs by hand (the reminder scheduler)
 };
 const ACTIONS = Object.keys(TABLE);
 // Actions a CSM may take only on clients assigned to them.

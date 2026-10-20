@@ -40,7 +40,8 @@ test('the table matches the spec', () => {
     manage_coupons:     [true, false, false],
     manage_ai_switches: [true, false, false],
     export_csv:         [true, false, false],
-    view_activity_all:  [true, true, false]
+    view_activity_all:  [true, true, false],
+    run_jobs:           [true, true, false]
   };
   for (const [action, [o, a, c]] of Object.entries(expect)) {
     assert.strictEqual(p.can(owner, action), o, `owner ${action}`);

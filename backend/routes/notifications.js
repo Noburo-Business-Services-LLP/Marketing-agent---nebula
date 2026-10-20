@@ -10,6 +10,9 @@ const router = express.Router();
 const { protect, protectCached } = require('../middleware/auth');
 const Notification = require('../models/Notification');
 const notificationScheduler = require('../services/notificationScheduler');
+// The manual triggers below run the reminder scheduler by hand: Nebulaa staff only (owner, admin). Customers get their
+// campaign reminders from the scheduler every minute; nothing they use needs these.
+const staffOnly = require('../middleware/requireStaff')('run_jobs');
 
 /**
  * GET /api/notifications
@@ -200,7 +203,7 @@ router.delete('/', protect, async (req, res) => {
  * POST /api/notifications/test
  * Send a test notification (for testing purposes)
  */
-router.post('/test', protect, async (req, res) => {
+router.post('/test', protect, staffOnly, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const { campaignId } = req.body;
@@ -222,7 +225,7 @@ router.post('/test', protect, async (req, res) => {
  * POST /api/notifications/process
  * Force process all scheduled campaigns and create/send pending notifications
  */
-router.post('/process', protect, async (req, res) => {
+router.post('/process', protect, staffOnly, async (req, res) => {
   try {
     console.log('🔄 Manually triggering notification processing...');
     await notificationScheduler.processScheduledCampaigns();
@@ -253,7 +256,7 @@ router.post('/process', protect, async (req, res) => {
  * POST /api/notifications/test
  * Create a test notification for popup testing
  */
-router.post('/test', protect, async (req, res) => {
+router.post('/test', protect, staffOnly, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const { minutesLeft = 15, campaignName = 'Test Campaign' } = req.body;
@@ -302,7 +305,7 @@ router.post('/test', protect, async (req, res) => {
  * POST /api/notifications/check-now
  * Force check all scheduled campaigns and send notifications NOW
  */
-router.post('/check-now', protect, async (req, res) => {
+router.post('/check-now', protect, staffOnly, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
     const Campaign = require('../models/Campaign');
@@ -449,4 +452,5 @@ router.post('/check-now', protect, async (req, res) => {
   }
 });
 
+router.staffOnly = staffOnly;
 module.exports = router;
