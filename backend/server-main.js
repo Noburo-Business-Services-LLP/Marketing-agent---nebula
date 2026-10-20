@@ -806,6 +806,14 @@ const startServer = async () => {
       console.warn('Photoshoot resume failed to start:', schedulerError.message);
     }
 
+    // Close Videos a restart left processing (refunding only what was charged) and finish interrupted refunds
+    // (off with ENABLE_STUDIO_VIDEO_SWEEP=off)
+    try {
+      require('./routes/studioVideos').startStudioVideoSweep();
+    } catch (schedulerError) {
+      console.warn('Videos sweep failed to start:', schedulerError.message);
+    }
+
     // Close Home drafts a restart left open (refunding their Quarks) and retry refunds that did not land
     // (off with ENABLE_HOME_DRAFTS_SWEEP=off)
     try {
