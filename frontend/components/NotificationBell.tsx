@@ -32,12 +32,19 @@ const NotificationBell: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Latest values for the 30 second timer, which is set up once and so cannot read state directly.
+  const unreadRef = useRef(0);
+  const notificationsRef = useRef<any[]>([]);
+
+  useEffect(() => { unreadRef.current = unreadCount; }, [unreadCount]);
+  useEffect(() => { notificationsRef.current = notifications; }, [notifications]);
 
   // Fetch notifications
   const fetchNotifications = async () => {
     try {
-      const res = await apiService.getNotifications({ limit: 10 });
-      setNotifications(res.notifications);
+      // Asks for the same list as the reminder pop-up (limit 20), so both are served by one request; the bell shows the newest 10.
+      const res = await apiService.getNotifications({ limit: 20 });
+      setNotifications(res.notifications.slice(0, 10));
       setUnreadCount(res.unreadCount);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
@@ -66,18 +73,22 @@ const NotificationBell: React.FC = () => {
     }
   };
 
-  // Fetch unread count periodically
+  // Fetch unread count periodically. The effect runs once; it used to depend on the count, so the first answer
+  // restarted it and the whole list was fetched a second time (and again for every change of the count).
   useEffect(() => {
     fetchNotifications();
 
     // Poll for new notifications every 30 seconds
     const interval = setInterval(async () => {
+      if (document.hidden) return;
       try {
         const count = await apiService.getUnreadNotificationCount();
+        const before = unreadRef.current;
+        unreadRef.current = count;
         setUnreadCount(count);
 
         // If there are new unread notifications, show browser notification
-        if (count > unreadCount && count > 0) {
+        if (count > before && count > 0) {
           showBrowserNotification();
           fetchNotifications();
         }
@@ -87,12 +98,12 @@ const NotificationBell: React.FC = () => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [unreadCount]);
+  }, []);
 
   // Show browser notification
   const showBrowserNotification = () => {
     if ('Notification' in window && Notification.permission === 'granted') {
-      const latestUnread = notifications.find(n => !n.readAt);
+      const latestUnread = notificationsRef.current.find((n: any) => !n.readAt);
       if (latestUnread) {
         new Notification('Campaign Reminder', {
           body: latestUnread.message,

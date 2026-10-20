@@ -1,5 +1,6 @@
 import { AuthResponse, BusinessProfile, Campaign, ContentCalendar, ContentCalendarItem, DashboardData, SocialConnection, User, Draft, PlanView, PlanRefreshReply, WeekResponse, WeekWriteResponse, CompetitorInsightsResponse, ListeningResponse, SetupResponse, HomeSummaryResponse } from '../types';
 import { apiErrorFrom } from '../utils/plans';
+import { isShareableRead, shareInflight } from '../utils/inflight';
 import { agencyErrorMessage, mergeActing } from '../utils/agency';
 import { serverRejectedSession } from '../utils/sessionErrors';
 import type { BlueprintView } from '../utils/blueprint';
@@ -105,8 +106,19 @@ async function safeReadJson(response: Response): Promise<any> {
   }
 }
 
-// Generic API call function with real backend integration
-async function apiCall<T>(
+// Generic API call function with real backend integration.
+// Two identical reads that start while the first is still running share one request (utils/inflight.ts).
+function apiCall<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  requiresAuth: boolean = false
+): Promise<T> {
+  if (!isShareableRead(options)) return apiCallNow<T>(endpoint, options, requiresAuth);
+  const who = requiresAuth ? (getToken() || '') : '';
+  return shareInflight<T>(`${who}|${endpoint}`, () => apiCallNow<T>(endpoint, options, requiresAuth));
+}
+
+async function apiCallNow<T>(
   endpoint: string,
   options: RequestInit = {},
   requiresAuth: boolean = false

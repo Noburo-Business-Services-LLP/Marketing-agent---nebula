@@ -61,7 +61,7 @@ const CampaignReminderPopup: React.FC = () => {
   useEffect(() => {
     checkForReminders();
     
-    const interval = setInterval(checkForReminders, 30000); // Check every 30 seconds
+    const interval = setInterval(() => { if (!document.hidden) checkForReminders(); }, 30000); // Check every 30 seconds
     
     return () => clearInterval(interval);
   }, [checkForReminders]);
