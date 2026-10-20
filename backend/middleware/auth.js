@@ -11,9 +11,10 @@ function demoModeActive() {
 const isDemoMode = demoModeActive();
 
 // Generate JWT Token
-const generateToken = (userId) => {
+// `tokenVersion` is the account's current version (User.tokenVersion): a password change raises it and ends older sessions.
+const generateToken = (userId, tokenVersion = 0) => {
   return jwt.sign(
-    { id: userId },
+    { id: userId, tv: Number(tokenVersion) || 0 },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
@@ -44,7 +45,15 @@ function _agencyPassProblem(owner, workspace) {
  * or '' when the token is still good. Used by `protect` for the normal API, and by the live inbox stream and socket hub,
  * which would otherwise keep a revoked pass working for hours.
  */
+const SESSION_ENDED = 'Your password was changed, so this session has ended. Please sign in again.';
+/** A session token (not an agency or CSM pass) older than the account's token version: a password change since. */
+function _sessionEnded(decoded, user) {
+  if (!decoded || decoded.actingCsm || decoded.actingAgency) return false;
+  return (Number(decoded.tv) || 0) < (Number(user && user.tokenVersion) || 0);
+}
+
 async function _tokenProblem(decoded, user, { UserModel = User } = {}) {
+  if (_sessionEnded(decoded, user)) return SESSION_ENDED;
   if (user.deletion && user.deletion.status === 'pending') return 'This account is set to be deleted.';
   if (decoded && decoded.actingCsm) {
     const { canActFor } = require('../services/csmAccess');
@@ -109,6 +118,9 @@ const createProtect = ({ UserModel = User, demoMode = isDemoMode } = {}) => asyn
         message: 'Your account has been deactivated. Please contact support.'
       });
     }
+
+    // The password was changed after this token was issued: this session has ended.
+    if (_sessionEnded(decoded, user)) return res.status(401).json({ success: false, sessionEnded: true, message: SESSION_ENDED });
 
     // An account waiting to be deleted can only see its own status, undo the deletion, or sign out.
     if (user.deletion && user.deletion.status === 'pending' && !_allowedWhileDeleting(req.originalUrl)) {
@@ -175,7 +187,7 @@ const protect = createProtect();
 const authCache = require('../services/authCache');
 
 /** What the checks in `protect` read from the account itself (plus the names /me shows for a pass). */
-const AUTH_FIELDS = 'email firstName lastName isActive isVerified deletion.status deletion.purgeAfter agency.ownerId agency.frozen staffRole isCsm assignedCsm';
+const AUTH_FIELDS = 'email firstName lastName isActive isVerified deletion.status deletion.purgeAfter agency.ownerId agency.frozen staffRole isCsm assignedCsm tokenVersion';
 const CSM_FIELDS = 'isCsm staffRole isActive firstName lastName email';
 const OWNER_FIELDS = 'isActive plan subscription.status agency.ownerId deletion.status firstName lastName email';
 
@@ -231,7 +243,10 @@ const createProtectCached = ({ UserModel = User, cache = authCache.sharedAuthCac
       }
       const { user, csm, owner } = state;
 
-      // From here on: the same checks, in the same order, with the same answers as `protect`.
+      // From here on: the same checks, in the same order, with the same answers as `protect`. The version is checked
+      // against the cached account on every request (the cache key is the same for an old and a new token), and a
+      // password change is a write to the user, which clears its cached state at once (services/authCacheHooks.js).
+      if (_sessionEnded(decoded, user)) return res.status(401).json({ success: false, sessionEnded: true, message: SESSION_ENDED });
       if (user.deletion && user.deletion.status === 'pending' && !_allowedWhileDeleting(req.originalUrl)) {
         return res.status(423).json({ success: false, code: 'deletion_pending', purgeAfter: user.deletion.purgeAfter, message: 'This account is set to be deleted. Sign in and choose Restore if you want to keep it.' });
       }
@@ -314,7 +329,7 @@ const optionalAuth = async (req, res, next) => {
 
     // Check if user still exists
     const user = await User.findById(decoded.id);
-    if (user && user.isActive) {
+    if (user && user.isActive && !_sessionEnded(decoded, user)) {
       req.user = user;
     } else {
       req.user = null;

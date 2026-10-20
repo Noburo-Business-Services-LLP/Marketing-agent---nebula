@@ -863,7 +863,7 @@ router.post('/verify-otp', [
     await user.save({ validateBeforeSave: false });
 
     // Generate fresh token
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.tokenVersion);
 
     console.log(`✅ Email verified: ${email}`);
 
@@ -1121,7 +1121,7 @@ router.post('/login', [
     }
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.tokenVersion);
 
     // Update last login
     user.lastLoginAt = new Date();
@@ -1527,7 +1527,7 @@ router.put('/change-password', protect, [
     await user.save();
 
     // Generate new token
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.tokenVersion);
 
     res.status(200).json({
       success: true,

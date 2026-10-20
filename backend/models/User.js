@@ -437,6 +437,9 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  // Session tokens carry this number (`tv`); a password change raises it, so every older session is refused
+  // (middleware/auth.js). Tokens issued before it existed carry none and count as 0.
+  tokenVersion: { type: Number, default: 0 },
   failedLoginAttempts: {
     type: Number,
     default: 0
@@ -467,6 +470,8 @@ userSchema.pre('init', function (doc) {
 userSchema.pre('save', async function (next) {
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
+  // A changed password (not a new account) ends every other session: their tokens carry the old version.
+  if (!this.isNew) this.tokenVersion = (Number(this.tokenVersion) || 0) + 1;
 
   // Cost from BCRYPT_ROUNDS (default 11), on the thread pool, at most 3 at once (services/passwordHash.js)
   this.password = await passwordHash.hash(this.password);
