@@ -63,6 +63,7 @@ function world({ charges, perScene = false, status = 'processing', jobType = 'ge
   const job = () => model.docs[0];
   return { q, model, calls, ledger, alerts, drafts, job };
 }
+const run2 = (w, type, handler) => { w.q.registerHandler(type, handler); return w.q._runJob(JSON.parse(JSON.stringify(w.job()))); };
 const run = (w, handler) => { w.q.registerHandler('generate_content', handler); return w.q._runJob(JSON.parse(JSON.stringify(w.job()))); };
 
 test('cancel: ONE conditional update ends the job and claims the refund; every charge is refunded once, with its ref, to its payer', async () => {
@@ -227,15 +228,42 @@ test('never more than the proven spend', async () => {
   assert.strictEqual(w.job().refundState, 'unproven');
 });
 
-test('a per-scene job (charged scene by scene) cancels with no refund claim; a job with no charge record keeps the one legacy refund', async () => {
+test('a per-scene job (charged scene by scene) cancels with no refund claim; a job with no charge record refunds NOTHING (D74: no proof, no refund)', async () => {
   const per = world({ charges: null, perScene: true });
   await quiet(() => per.q.cancelJob('j1', 'u1'));
   assert.strictEqual(per.job().status, 'cancelled');
   assert.strictEqual(per.calls.refund.length, 0);
   assert.strictEqual(per.job().refundState, undefined);
-  const legacy = world({ charges: null });
-  await quiet(() => legacy.q.cancelJob('j1', 'u1'));
-  assert.deepStrictEqual(legacy.calls.refund.map((r) => [r.action, r.count, r.opts.ref]), [['campaign_full', 1, 'j1:legacy']]);
+  const none = world({ charges: null });
+  await quiet(() => none.q.cancelJob('j1', 'u1'));
+  assert.strictEqual(none.calls.refund.length, 0, 'no flat guess any more');
+  assert.strictEqual(none.job().refundState, undefined);
+});
+
+test('D74 item 1: a failing merge (no charge recorded) refunds nothing: no minting of Quarks with a bad clip URL', async () => {
+  const w = world({ charges: null, jobType: 'merge_video' });
+  await quiet(() => run2(w, 'merge_video', async () => { throw new Error('Unsupported clip source'); }));
+  assert.strictEqual(w.job().status, 'failed');
+  assert.strictEqual(w.calls.refund.length, 0);
+  assert.strictEqual(w.job().refundState, undefined);
+  // the lost-lease and stale sweeps pay nothing either
+  const lost = world({ charges: null, jobType: 'merge_video' });
+  lost.job().updatedAt = new Date(Date.now() - 60 * 60 * 1000);
+  await quiet(() => lost.q.recoverStaleJobs());
+  assert.strictEqual(lost.job().status, 'failed');
+  assert.strictEqual(lost.calls.refund.length, 0);
+  assert.deepStrictEqual(w.q._refundPlan({ userId: 'u1', jobId: 'x', metadata: {} }), []);
+});
+
+test('D74 item 1: a calendar reel failure refunds exactly its recorded charge, once, to the recorded payer', async () => {
+  const charges = [{ action: 'campaign_full', count: 1, ref: 'calreel:abc', payerId: 'agency9' }];
+  const w = world({ charges, jobType: 'create_video_pipeline' });
+  await quiet(() => run2(w, 'create_video_pipeline', async () => { throw new Error('fal exploded'); }));
+  assert.strictEqual(w.job().status, 'failed');
+  assert.deepStrictEqual(w.calls.refund.map((r) => [r.action, r.count, r.opts.ref, r.opts.payerId]), [['campaign_full', 1, 'calreel:abc', 'agency9']]);
+  await quiet(() => w.q.sweepRefunds());
+  await quiet(() => w.q.cancelJob('j1', 'u1'));
+  assert.strictEqual(w.calls.refund.length, 1, 'still once');
 });
 
 test('stale recovery and a late failure never both refund; recovery leaves a job that moved on', async () => {

@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 // A malformed id is a plain 400 before any query runs (middleware/validateObjectId.js).
 require('../middleware/validateObjectId').applyObjectIdParams(router, ['id', 'itemId']);
@@ -277,9 +278,18 @@ router.post('/items/:itemId/auto-generate', protect, L.heavyAi, async (req, res)
   const userId = req.user?._id ? String(req.user._id) : (req.user?.id ? String(req.user.id) : null);
   if (!userId) return res.status(401).json({ success: false, message: 'Authentication required' });
 
+  // Charged before the job exists; the charge (with its ref and payer) is recorded on the job at enqueue time so a
+  // failure or cancel refunds exactly it (D74: no recorded charge, no refund). Only a failure BEFORE the job exists refunds here.
+  const d = depsFor();
+  const charge = d.deductCredits || deductCredits;
+  const refund = d.refundCredits || refundCredits;
+  const queue = d.videoGenerationQueue || videoGenerationQueue;
   let creditsTaken = false;
+  let chargeRef = '';
+  let chargePayerId = '';
   try {
-    const calendar = await getCurrentCalendar(req.user._id);
+    const CC = d.ContentCalendar || ContentCalendar;
+    const calendar = await CC.findOne({ userId: req.user._id, month: calendarMonth() }).sort({ createdAt: -1 });
     if (!calendar) return res.status(404).json({ success: false, message: 'Content calendar not found' });
 
     const item = findItem(calendar, req.params.itemId);
@@ -303,7 +313,7 @@ router.post('/items/:itemId/auto-generate', protect, L.heavyAi, async (req, res)
       });
     }
 
-    const user = await User.findById(req.user._id);
+    const user = await (d.User || User).findById(req.user._id);
     const profile = user?.businessProfile || {};
     const language = String(calendar.language || profile.language || 'English').trim();
 
@@ -325,7 +335,8 @@ router.post('/items/:itemId/auto-generate', protect, L.heavyAi, async (req, res)
       calendarDay: item.day
     };
 
-    const creditResult = await deductCredits(userId, 'campaign_full', 1, `Smart Calendar reel — day ${item.day}`);
+    chargeRef = `calreel:${crypto.randomUUID()}`;
+    const creditResult = await charge(userId, 'campaign_full', 1, `Smart Calendar reel — day ${item.day}`, { ref: chargeRef });
     if (!creditResult.success) {
       return res.status(403).json({
         success: false,
@@ -334,22 +345,25 @@ router.post('/items/:itemId/auto-generate', protect, L.heavyAi, async (req, res)
       });
     }
     creditsTaken = true;
+    chargePayerId = creditResult.payerId ? String(creditResult.payerId) : '';
 
     const baseUrl = String(process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
-    const queued = await videoGenerationQueue.enqueue({
+    const queued = await queue.enqueue({
       userId,
       jobType: 'create_video_pipeline',
       payload: {
         payload,
         user: { _id: req.user?._id, id: req.user?.id, businessProfile: profile },
         baseUrl
-      }
+      },
+      metadata: { quarkCharge: [{ action: 'campaign_full', count: 1, ref: chargeRef, payerId: chargePayerId }] }
     });
+    creditsTaken = false; // the job owns the refund from here
 
     // Mirror /createVideo: seed the Draft so the wizard has something to
     // resume against before the pipeline writes its first real stage.
     try {
-      const Draft = require('../models/Draft');
+      const Draft = d.Draft || require('../models/Draft');
       await Draft.findOneAndUpdate(
         { 'generationProgress.jobId': queued.jobId, userId: String(userId) },
         {
@@ -386,7 +400,7 @@ router.post('/items/:itemId/auto-generate', protect, L.heavyAi, async (req, res)
   } catch (error) {
     if (creditsTaken) {
       try {
-        await refundCredits(userId, 'campaign_full', 1, 'Refund: Smart Calendar reel enqueue failed');
+        await refund(userId, 'campaign_full', 1, 'Refund: Smart Calendar reel enqueue failed', { ref: chargeRef, ...(chargePayerId ? { payerId: chargePayerId } : {}) });
       } catch (refundErr) {
         console.error('[calendar auto-generate] refund failed:', refundErr.message);
       }

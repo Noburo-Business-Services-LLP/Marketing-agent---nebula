@@ -236,8 +236,9 @@ class PersistentVideoGenerationQueue {
   /**
    * What a job was charged, as the refunds to pay: one entry per charge with the ref that charge carried (so the Quark
    * ledger and chargeProof see both), the wallet that paid when it was recorded, and the amount. A per-scene job
-   * charged each scene itself (and refunds that scene itself), so it has nothing to refund here. A job with no charge
-   * record at all gets the old flat guess (legacy), under its own ref.
+   * charged each scene itself (and refunds that scene itself), so it has nothing to refund here. A job with NO charge
+   * record refunds nothing (D74): the old flat "campaign_full x1" guess let a free job (/mergeVideo) mint Quarks when it
+   * failed. Every route that charges for a job records the charge in metadata.quarkCharge at enqueue time.
    */
   _refundPlan(job = {}) {
     if (!job || !job.userId) return [];
@@ -245,8 +246,7 @@ class PersistentVideoGenerationQueue {
     if (Array.isArray(charges) && charges.length) {
       return charges.map((c, i) => ({ action: c.action, count: c.count, ref: String(c.ref || `${job.jobId}:${i}`), payerId: c.payerId ? String(c.payerId) : '' }));
     }
-    if (job.metadata?.perSceneCharging) return [];
-    return [{ action: 'campaign_full', count: 1, ref: `${job.jobId}:legacy`, payerId: '' }];
+    return [];
   }
 
   async _payEntry(job, e, why, payerId = e.payerId) {
