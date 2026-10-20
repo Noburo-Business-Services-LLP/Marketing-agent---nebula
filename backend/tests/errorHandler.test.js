@@ -37,7 +37,7 @@ test('a Mongoose validation error is the caller\'s mistake: 400 with a plain mes
 test('broken JSON is a 400, too large is a 413, a bad id is a 400, anything else is a plain 500', async () => {
   let r = await call(appThrowing(null), { body: '{"a":' });
   assert.strictEqual(r.status, 400);
-  assert.strictEqual(r.json.message, 'That request is not valid.');
+  assert.strictEqual(r.json.message, 'Invalid JSON');
 
   r = await call(appThrowing(null), { body: JSON.stringify({ a: 'x'.repeat(5000) }) });
   assert.strictEqual(r.status, 413);
