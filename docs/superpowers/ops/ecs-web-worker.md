@@ -2,6 +2,8 @@
 
 Why: the tester's load test (`/Users/dineshkannaa/Downloads/Generation flow.txt`) showed one Node process tops out around 130 to 145 requests a second and that the 10+ background schedulers, queues and ffmpeg share that process with customer requests. The plan: run the same backend image as two ECS services, `web` (customer requests, 2 to 6 tasks behind the load balancer) and `worker` (every background job, exactly 1 task, not behind the load balancer). Decisions D31 to D38 in `docs/superpowers/DECISIONS-LOG-2026-10-20.md`.
 
+**Update E9 stage A (2026-10-20, `generation-parallelism.md`):** generation jobs are now claimed per worker with leases, so the worker service may run MORE than one task: each task runs its own slots (`PROVIDER_SLOTS_IMAGE`/`_VIDEO`, `CPU_SLOTS`) and the scheduler ticks stay leased (one runs each tick). New switches `RUN_JOB_CONSUMERS` and `RUN_SCHEDULERS` (both default to `RUN_BACKGROUND`): the worker service sets `RUN_JOB_CONSUMERS=1`; extra worker tasks may set `RUN_SCHEDULERS=0`. Keep the worker at exactly 1 task until this code is released and the first deploy is checked; then raise it.
+
 Nothing here changes how today's single backend task behaves until the owner sets the new variables. Phase 1 is code (done on `nebulaa-redesign`, not released). Phase 2 is AWS console/CLI work for the owner. Phase 3 is the re-test.
 
 ## Phase 1: what the code does now
@@ -23,7 +25,7 @@ Release scripts: `deploy-ecs-release.sh` now also switches the worker service to
 
 | Work | How it is consumed today | Web task with `RUN_BACKGROUND=0` |
 |------|--------------------------|----------------------------------|
-| Old step-by-step video queue (`videoGenerationQueue`, Mongo `VideoJob`) | Persistent; drained at enqueue and every 15 s; atomic claim queued -> processing | Stores the job and does NOT drain; the worker claims it (its drain runs every 5 s in a split). Nothing dropped. See the disk caveat below. |
+| Old step-by-step video queue (`videoGenerationQueue`, Mongo `VideoJob`) | Persistent; drained at enqueue and every 15 s; atomic claim queued -> processing with this worker's id and a lease (E9: per-worker slots, fair order, a lost worker's job re-queued or refunded) | Stores the job and does NOT drain (unless `RUN_JOB_CONSUMERS=1`); a consumer claims it (its drain runs every 5 s in a split). Nothing dropped. See the disk caveat below. |
 | Campaign image jobs (async regenerate) | Was in-process memory (lost on restart, 404 from another task) | Stored in Mongo; worker claims; status from any task. (The web app calls this route in its direct, non-queued form today, which runs in the request as before.) |
 | Drafts picture redo, weekly calendar items (`backgroundQueue`, in-process list; state in `Draft` documents) | Runs in the process that received the request, one at a time | Unchanged: runs in that web task; nothing dropped. Lost on a task stop; the worker's stale-draft reaper closes it after 20 minutes and returns the Quarks. Next step if needed: persist-and-claim like image jobs. |
 | Videos (Omni studio chain), Photoshoot runner, Hero, Blueprint and plan runs (`blueprint/runner` lanes), Home drafts, weekly posts | Started by the request in that process (setImmediate / in-process lanes); state and leases in Mongo | Unchanged: run in the web task that accepted them (they still use that task's CPU, including ffmpeg for Videos finishing). Each has a lease or heartbeat, and the worker's sweeps (`startStudioVideoSweep`, `startPhotoshootResume`, `startHomeDraftsSweep`, `startWeekRecovery` + refund recovery, plan scheduler) close or take over only stale work, so a running job on a web task is never ended by the worker. Concurrency caps (Blueprint 2, plan 1, one Video create per account) are per task. Moving these to the worker is the next step (persist-and-claim). |
@@ -66,7 +68,11 @@ Run the normal release. With no new variable set the backend behaves exactly as 
 | `MONGO_MIN_POOL_SIZE` | `2` | `2` | |
 | `AUTH_CACHE` | `on` (default) | `on` | 15 s staleness across tasks accepted (D26) |
 | `SHUTDOWN_DRAIN_MS` | `110000` | `20000` | web: let long requests (campaign generation holds a request 1 to 6 minutes) finish within stopTimeout |
-| `IMAGE_JOB_CONCURRENCY` | (unused) | `2` | raise only to what the image provider quota allows |
+| `RUN_JOB_CONSUMERS` | not set (off with `RUN_BACKGROUND=0`) | `1` | the generation queues run here (E9, `generation-parallelism.md`) |
+| `RUN_SCHEDULERS` | not set | not set (on); `0` on extra consumer-only workers | the schedulers and sweeps |
+| `PROVIDER_SLOTS_IMAGE` / `PROVIDER_SLOTS_VIDEO` | (unused) | `2` / `2` | per worker task; raise only to what the provider account limits allow (workers x slots) |
+| `CPU_SLOTS` | (unused) | `2` on 2 vCPU | ffmpeg at once per worker |
+| `IMAGE_JOB_CONCURRENCY` | (unused) | not set | older name of `PROVIDER_SLOTS_IMAGE`, still honoured |
 | `VIDEO_QUEUE_DRAIN_INTERVAL_MS` | (unused) | not set (5 s in a split) | |
 | `REDIS_URL` | not set | not set | only if you later add ElastiCache AND install the optional packages |
 
@@ -101,11 +107,14 @@ Make `worker-td.json` from it: change `family` to `prod-nebulaa-gravity-worker`,
       "stopTimeout": 30,
       "environment": [
         { "name": "RUN_BACKGROUND", "value": "1" },
+        { "name": "RUN_JOB_CONSUMERS", "value": "1" },
+        { "name": "PROVIDER_SLOTS_IMAGE", "value": "2" },
+        { "name": "PROVIDER_SLOTS_VIDEO", "value": "2" },
+        { "name": "CPU_SLOTS", "value": "2" },
         { "name": "RATE_LIMIT_STORE", "value": "mongo" },
         { "name": "TRUST_PROXY_HOPS", "value": "1" },
         { "name": "MONGO_MAX_POOL_SIZE", "value": "20" },
         { "name": "MONGO_MIN_POOL_SIZE", "value": "2" },
-        { "name": "IMAGE_JOB_CONCURRENCY", "value": "2" },
         { "name": "SHUTDOWN_DRAIN_MS", "value": "20000" }
       ],
       "secrets": "<same as backend-td.json>",
@@ -137,7 +146,7 @@ aws ecs create-service --cluster stratschool-prod-cluster --service-name prod-ne
   --network-configuration "awsvpcConfiguration={subnets=[<same private subnets as the backend service>],securityGroups=[<backend security group>],assignPublicIp=<same as backend>}"
 ```
 
-(`minimumHealthyPercent=0` and `maximumPercent=100`: the old worker stops before the new one starts, so two workers never run at once. No autoscaling on this service.)
+(`minimumHealthyPercent=0` and `maximumPercent=100`: the old worker stops before the new one starts. No autoscaling on this service yet. After the E9 code is released two workers at once are safe (claims and leases); a later step can scale the worker on the `Nebulaa/Queue` metrics, see `generation-parallelism.md`. On SIGTERM a worker hands its running jobs back within `SHUTDOWN_DRAIN_MS` - 5 s; for long videos raise the worker's `stopTimeout` to 120 and `SHUTDOWN_DRAIN_MS` to 110000.)
 
 ### Step 5: the target group (web)
 In EC2 > Target groups > the backend target group: Health checks > path **`/api/ready`**, healthy threshold 2, unhealthy 2, interval 15 s, timeout 5 s. Attributes > **Deregistration delay 120 s** (matches `stopTimeout` 120 and `SHUTDOWN_DRAIN_MS` 110000: the ALB stops new requests, open ones finish). Keep stickiness off (nothing needs it now: limits, OAuth state and image jobs are shared).
