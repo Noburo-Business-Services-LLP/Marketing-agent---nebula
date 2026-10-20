@@ -2,7 +2,9 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 let io = null;
+let crossTask = false; // true once the Redis adapter is on: SSE events are also sent to the other tasks
 const memorySubscribers = new Map();
+const SSE_EVENT = 'nebula:sse';
 
 function roomForUser(userId) {
   return `user:${String(userId)}`;
@@ -44,6 +46,12 @@ function initializeSocketHub(server, corsOrigins = []) {
 
     io.use(socketAuth);
 
+    // Other tasks forward Inbox live-stream (SSE) events for browsers connected here (only with the Redis adapter).
+    io.on(SSE_EVENT, (userKey, eventName, payload) => deliverLocal(userKey, eventName, payload));
+    require('./socketAdapter').attachRedisAdapter(io)
+      .then((r) => { crossTask = !!(r && r.mode === 'redis'); })
+      .catch(() => { crossTask = false; });
+
     io.on('connection', (socket) => {
       if (socket.userId) {
         socket.join(roomForUser(socket.userId));
@@ -66,9 +74,16 @@ function emitToUser(userId, eventName, payload) {
 
   if (io) {
     io.to(roomForUser(userKey)).emit(eventName, payload);
+    if (crossTask) {
+      try { io.serverSideEmit(SSE_EVENT, userKey, eventName, payload); } catch (_) { }
+    }
   }
 
-  const subscribers = memorySubscribers.get(userKey);
+  deliverLocal(userKey, eventName, payload);
+}
+
+function deliverLocal(userKey, eventName, payload) {
+  const subscribers = memorySubscribers.get(String(userKey || ''));
   if (subscribers) {
     for (const send of subscribers) {
       try {
@@ -96,7 +111,11 @@ function isSocketReady() {
   return Boolean(io);
 }
 
+/** Tests only: put a fake Socket.IO server in place. */
+function _setIoForTest(fake, { crossTask: ct = false } = {}) { io = fake; crossTask = ct; }
+
 module.exports = {
+  _setIoForTest,
   initializeSocketHub,
   socketAuth,
   emitToUser,
