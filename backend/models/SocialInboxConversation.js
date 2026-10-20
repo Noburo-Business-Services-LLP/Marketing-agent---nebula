@@ -48,6 +48,9 @@ const socialInboxConversationSchema = new mongoose.Schema({
   engagementScore: { type: Number, default: 0 },
   messageTypes: { type: [String], default: [] },
   unreadCount: { type: Number, default: 1 },
+  // Counters claimed atomically: model drafts in the current hour, and automatic replies on the current day.
+  draftWindow: { start: { type: Date, default: null }, count: { type: Number, default: 0 } },
+  autoReplyClaim: { day: { type: String, default: '' }, count: { type: Number, default: 0 } },
   webhookRegistered: { type: Boolean, default: false },
   lastSyncedAt: { type: Date, default: null },
   messages: { type: [socialInboxMessageSchema], default: [] }

@@ -139,7 +139,7 @@ export function reviewsState(res?: { connected?: boolean; loadFailed?: boolean; 
 }
 
 /** Drafted for this message, or general replies to start from (the writing service was not available). */
-export const suggestionsHeading = (source?: string | null): string => (source === 'general' ? 'Quick replies to start from' : 'Suggested replies');
+export const suggestionsHeading = (source?: string | null): string => (source === 'paused' ? 'Draft paused for now. Quick replies to start from' : source === 'general' ? 'Quick replies to start from' : 'Suggested replies');
 
 /** The welcome list on an empty inbox: what will show up here. */
 export const WHAT_WILL_APPEAR = [

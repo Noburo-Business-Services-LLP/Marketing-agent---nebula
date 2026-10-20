@@ -38,6 +38,8 @@ stub('models/User', User);
 stub('models/SocialInboxConversation', Conversation);
 stub('models/SocialInboxMessage', Message);
 stub('models/AutoReplySettings', Settings);
+stub('models/SocialInboxDraftDay', makeModel(() => ({ count: 0 })));
+stub('services/spendGuard', { check: async () => ({ ok: true }), record: async () => {} });
 // No AI by default (the general replies are used). Tests of automatic sending set a drafted reply, because a general
 // reply is held for approval and never sent on its own (inboxHonesty.test.js).
 let llm = async () => { throw new Error('no AI in tests'); };

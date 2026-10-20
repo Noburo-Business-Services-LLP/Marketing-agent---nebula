@@ -18,6 +18,7 @@ function matchValue(actual, cond) {
       if (op === '$in') return v.some((x) => same(x, actual));
       if (op === '$gte') return actual >= v;
       if (op === '$lt') return actual < v;
+      if (op === '$ne') return !same(actual, v);
       if (op === '$exists') return (actual !== undefined) === v;
       if (op === '$not') return !matchValue(actual, v);
       return false;

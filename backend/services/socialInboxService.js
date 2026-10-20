@@ -9,6 +9,8 @@ const { dispatchReply, isReplyPlatform, REPLY_PLATFORMS, NOT_AVAILABLE_YET } = r
 const { liveUpdatesOf } = require('./inboxWebhook');
 const { hasGoogleProfile } = require('./googleReviews');
 
+const inboxLimits = require('../config/socialInbox');
+
 const NOT_AVAILABLE_MESSAGE = NOT_AVAILABLE_YET;
 const SAFE_RULE_TYPES = ['contains', 'sentiment', 'messageType', 'platform'];
 const MAX_AUTO_SEND_ATTEMPTS = 1;
@@ -356,6 +358,97 @@ function isAutoReplyEnabled(settings, event) {
     Boolean(settings.channels?.[getChannelKey(event.messageType)]);
 }
 
+
+// ---- Limits on model drafts and automatic replies (see config/socialInbox.js) ----
+// Required when used, so a test can replace them.
+const draftDayModel = () => require('../models/SocialInboxDraftDay');
+const spendGuard = () => require('./spendGuard');
+
+const IST_OFFSET_MS = 5.5 * 3600000;
+const indiaDay = (now = new Date()) => new Date(now.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+const localDay = (now = new Date()) => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+const isDuplicateKey = (error) => Boolean(error && (error.code === 11000 || /E11000|duplicate key/i.test(error.message || '')));
+
+/** Claim one draft for the account on this India day. The cap is inside the update, so simultaneous messages cannot both pass. */
+async function claimAccountDraft(userId, now = new Date(), cap = inboxLimits.DRAFTS_PER_ACCOUNT_PER_DAY) {
+  const DraftDay = draftDayModel();
+  const day = indiaDay(now);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const claimed = await DraftDay.findOneAndUpdate({ userId, day, count: { $lt: cap } }, { $inc: { count: 1 } }, { new: true });
+    if (claimed) return true;
+    if (await DraftDay.findOne({ userId, day })) return false; // the row exists and is at the cap
+    try {
+      await DraftDay.create({ userId, day, count: 1 });
+      return true;
+    } catch (error) {
+      if (!isDuplicateKey(error)) throw error; // another message made the row first: claim against it
+    }
+  }
+  return false;
+}
+
+/** Claim one draft for the conversation in the current hour (a window that starts at its first draft). Same atomic idea. */
+async function claimConversationDraft(conversationId, now = new Date(), cap = inboxLimits.DRAFTS_PER_CONVERSATION_PER_HOUR) {
+  const hourAgo = new Date(now.getTime() - 3600000);
+  // Two rounds: when several messages arrive together, one opens the window and the rest claim against it.
+  for (let round = 0; round < 2; round += 1) {
+    const within = await SocialInboxConversation.findOneAndUpdate(
+      { _id: conversationId, 'draftWindow.start': { $gte: hourAgo }, 'draftWindow.count': { $lt: cap } },
+      { $inc: { 'draftWindow.count': 1 } },
+      { new: true }
+    );
+    if (within) return true;
+    const fresh = await SocialInboxConversation.findOneAndUpdate(
+      { _id: conversationId, 'draftWindow.start': { $not: { $gte: hourAgo } } },
+      { $set: { draftWindow: { start: now, count: 1 } } },
+      { new: true }
+    );
+    if (fresh) return true;
+  }
+  return false;
+}
+
+/** Claim one automatic reply for the conversation today. Failed attempts keep counting. */
+async function claimAutoReply(conversationId, max, now = new Date()) {
+  if (!(max > 0)) return false;
+  const day = localDay(now);
+  for (let round = 0; round < 2; round += 1) {
+    const within = await SocialInboxConversation.findOneAndUpdate(
+      { _id: conversationId, 'autoReplyClaim.day': day, 'autoReplyClaim.count': { $lt: max } },
+      { $inc: { 'autoReplyClaim.count': 1 } },
+      { new: true }
+    );
+    if (within) return true;
+    const fresh = await SocialInboxConversation.findOneAndUpdate(
+      { _id: conversationId, 'autoReplyClaim.day': { $ne: day } },
+      { $set: { autoReplyClaim: { day, count: 1 } } },
+      { new: true }
+    );
+    if (fresh) return true;
+  }
+  return false;
+}
+
+/** Whether a model draft may be made for this message: the spend guard, then the two caps. */
+async function mayDraft({ userId, conversation, now = new Date() }) {
+  const guard = spendGuard();
+  const allowed = await guard.check(inboxLimits.SPEND_ACTION);
+  if (!allowed || allowed.ok === false) return false;
+  if (!(await claimAccountDraft(userId, now))) return false;
+  if (!(await claimConversationDraft(conversation._id, now))) return false;
+  return true;
+}
+
+function pausedDraft() {
+  return {
+    paused: true,
+    recommendedReply: '',
+    suggestedReplies: [],
+    reason: inboxLimits.DRAFT_PAUSED_NOTE,
+    source: 'paused'
+  };
+}
+
 async function countAutoRepliesToday(conversationId) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -424,6 +517,7 @@ Rules:
       maxTokens: 1400
     });
 
+    await spendGuard().record(inboxLimits.SPEND_ACTION, 1);
     const suggestedReplies = Array.isArray(result.suggestedReplies)
       ? result.suggestedReplies.map(v => String(v || '').trim()).filter(Boolean).slice(0, 3)
       : [];
@@ -462,7 +556,7 @@ async function decideAutomation({ settings, event, insights, conversation }) {
     const todayCount = conversation?._id ? await countAutoRepliesToday(conversation._id) : 0;
     const max = Number(settings.guardrails?.maxAutoRepliesPerConversationPerDay || 3);
     if (todayCount >= max) return { action: 'needs_approval', reason: 'Daily auto-reply limit reached' };
-    return { action: 'auto_reply', reason: 'Fully automatic mode' };
+    return { action: 'auto_reply', reason: 'Fully automatic mode', capPerDay: max };
   }
   if (settings.automationMode === 'approval_required') return { action: 'needs_approval', reason: 'Approval required mode' };
   return { action: 'suggest_only', reason: 'Suggested replies mode' };
@@ -596,20 +690,27 @@ async function ingestEvent(eventInput) {
   if (!duplicate) {
     const user = await User.findById(event.userId);
     const settings = await getSettings(event.userId);
-    aiResult = await generateAIReply({ user, conversation, message, settings, insights });
-    let decision = await decideAutomation({ settings, event, insights, conversation });
+    const drafting = await mayDraft({ userId: event.userId, conversation });
+    aiResult = drafting ? await generateAIReply({ user, conversation, message, settings, insights }) : pausedDraft();
+    let decision = aiResult.paused
+      ? { action: 'suggest_only', reason: inboxLimits.DRAFT_PAUSED_NOTE }
+      : await decideAutomation({ settings, event, insights, conversation });
     // A general reply (the writing service was unavailable) is never sent on its own: it waits for the owner.
     if (decision.action === 'auto_reply' && aiResult.source !== 'ai') {
       decision = { action: 'needs_approval', reason: FALLBACK_HOLD_REASON };
     }
+    // The daily limit is claimed in one step, so two messages arriving together cannot both get through.
+    if (decision.action === 'auto_reply' && decision.capPerDay !== undefined && !(await claimAutoReply(conversation._id, decision.capPerDay))) {
+      decision = { action: 'needs_approval', reason: 'Daily auto-reply limit reached' };
+    }
     message.ai = {
       suggestedReplies: aiResult.suggestedReplies,
       autoReplyCandidate: aiResult.recommendedReply,
-      autoReplyStatus: decision.action === 'auto_reply' ? 'suggested' : decision.action === 'needs_approval' ? 'pending_approval' : decision.action === 'skip' ? 'skipped' : 'suggested',
+      autoReplyStatus: aiResult.paused ? 'paused' : decision.action === 'auto_reply' ? 'suggested' : decision.action === 'needs_approval' ? 'pending_approval' : decision.action === 'skip' ? 'skipped' : 'suggested',
       autoReplyReason: decision.reason,
       sendAttempts: 0,
       generatedAt: new Date(),
-      draftSource: aiResult.source === 'ai' ? 'ai' : 'fallback'
+      draftSource: aiResult.paused ? '' : aiResult.source === 'ai' ? 'ai' : 'fallback'
     };
     await message.save();
 
@@ -912,7 +1013,7 @@ async function getConversationThread(userId, conversationId) {
   const stored = latestInbound.ai?.suggestedReplies?.length ? latestInbound.ai.suggestedReplies : null;
   const aiSuggestions = stored || insights.suggestions;
   // Drafted for this message, or the general replies (none stored, or stored while the writing service was unavailable).
-  const suggestionsSource = stored && latestInbound.ai?.draftSource !== 'fallback' ? 'drafted' : 'general';
+  const suggestionsSource = latestInbound.ai?.autoReplyStatus === 'paused' ? 'paused' : stored && latestInbound.ai?.draftSource !== 'fallback' ? 'drafted' : 'general';
 
   return {
     conversation,
@@ -1061,6 +1162,9 @@ function toMessageDTO(message, conversation) {
 }
 
 module.exports = {
+  claimAutoReply,
+  claimAccountDraft,
+  claimConversationDraft,
   priorityFilter,
   normalizePlatform,
   normalizeMessageType,

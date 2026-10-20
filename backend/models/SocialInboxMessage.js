@@ -56,7 +56,7 @@ const socialInboxMessageSchema = new mongoose.Schema({
     autoReplyCandidate: { type: String, default: '' },
     autoReplyStatus: {
       type: String,
-      enum: ['none', 'suggested', 'pending_approval', 'sending', 'sent', 'failed', 'skipped'],
+      enum: ['none', 'suggested', 'pending_approval', 'sending', 'sent', 'failed', 'skipped', 'paused'],
       default: 'none'
     },
     autoReplyReason: { type: String, default: '' },

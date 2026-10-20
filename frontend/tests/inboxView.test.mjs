@@ -113,6 +113,7 @@ test('suggestions say whether they were drafted for this message', () => {
   assert.equal(suggestionsHeading('drafted'), 'Suggested replies');
   assert.equal(suggestionsHeading('general'), 'Quick replies to start from');
   assert.equal(suggestionsHeading(undefined), 'Suggested replies');
+  assert.equal(suggestionsHeading('paused'), 'Draft paused for now. Quick replies to start from');
 });
 
 test('what will appear lists three things in plain words', () => {

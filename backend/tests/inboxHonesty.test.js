@@ -35,6 +35,8 @@ stub('models/User', User);
 stub('models/SocialInboxConversation', Conversation);
 stub('models/SocialInboxMessage', Message);
 stub('models/AutoReplySettings', Settings);
+stub('models/SocialInboxDraftDay', makeModel(() => ({ count: 0 })));
+stub('services/spendGuard', { check: async () => ({ ok: true }), record: async () => {} });
 stub('services/llmRouter', { generateWithLLM: async (args) => { calls.llm.push(args); return llm(args); } });
 stub('services/socketHub', { emitToUser: () => {}, addSseSubscriber: () => () => {}, isSocketReady: () => false });
 stub('services/socialMediaAPI', {
