@@ -317,7 +317,7 @@ let anyone lock a named person out). Keyed by the TYPED email, whether or not it
 
 ### Password policy and admin bootstrap (B10, D54)
 - New passwords (sign-up, change-password, reset-password): at least 10 characters, a letter and a number, not in
-  `backend/data/common-passwords.txt` (about 300 very common passwords written from published lists, compared without
+  `backend/data/common-passwords.txt` (268 very common passwords written from published lists, compared without
   case, read once into a Set: a curated short list, NOT an exhaustive 10k list), not the email's name. Friendly
   messages (`backend/utils/passwordPolicy.js`). Existing accounts keep signing in with their current password.
 - `/api/admin/login` and `/make-owner` (the one-time first-Owner door with `ADMIN_EMAIL` / `ADMIN_PASSWORD`): 404 unless

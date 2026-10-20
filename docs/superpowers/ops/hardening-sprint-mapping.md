@@ -19,7 +19,7 @@ Source: `/Users/dineshkannaa/Downloads/NEBULAA HARDE.txt` (written for a Windows
 | B5 `tokenVersion` | done earlier (logout-all and jti denylist not built) | D46 |
 | B6 strict bearer | done | `utils/bearer.js`, D53 |
 | B7 demo bypass and boot fail-fast | done | `utils/bootEnv.js`, D53 |
-| B10 password policy and admin bootstrap | done (curated ~300 list, not 10k; staff MFA not built) | `utils/passwordPolicy.js`, D54 |
+| B10 password policy and admin bootstrap | done (curated 268-entry list, not 10k; staff MFA not built) | `utils/passwordPolicy.js`, D54 |
 | B8 fast protect | done in a smaller safe form (`protectCached` on 6 GETs) | D26 |
 | B9 cookie sessions behind a flag | TODO (big) | |
 | C1 limits.js, C2 route table, C3 internal triggers | RUNNING | |
