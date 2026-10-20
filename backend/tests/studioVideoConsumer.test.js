@@ -58,7 +58,7 @@ function world({ balance = 10000 } = {}) {
   const keys = ['create', 'countDocuments', 'deleteOne', 'updateOne', 'findOneAndUpdate', 'findOne', 'find', 'aggregate', 'findById'];
   const orig = {};
   for (const k of keys) orig[k] = StudioVideo[k];
-  const o2 = { uf: User.findById, proof: quarkBuckets.chargeProof, spend: quarkBuckets.spend, settle: quarkBuckets.settleWallet, refund: quarkBuckets.refundTo, guard: spendGuard.check };
+  const o2 = { uf: User.findById, proof: quarkBuckets.chargeProof, spend: quarkBuckets.spend, settle: quarkBuckets.settleWallet, refund: quarkBuckets.refundTo, guard: spendGuard.check, rec: spendGuard.record };
   const all = () => Object.values(w.docs);
   StudioVideo.create = async (d) => {
     const id = `v${++w.nextId}`;
@@ -95,6 +95,8 @@ function world({ balance = 10000 } = {}) {
   quarkBuckets.spend = async (u, amount, meta) => { const rec = { amount, meta, ok: false }; w.spends.push(rec); if (w.balance < amount) return { success: false }; w.balance -= amount; rec.ok = true; return { success: true, payerId: 'payer1' }; };
   quarkBuckets.refundTo = async (u, amount, meta) => { await tick(); w.refunds.push({ amount, meta, user: u }); w.balance += amount; return { ok: true }; };
   spendGuard.check = async () => ({ ok: true });
+  w.recorded = [];
+  spendGuard.record = async (action, units) => { w.recorded.push([action, units]); return null; };
 
   // Fake Omni: each call is recorded; a gate can hold a call (a hung or slow provider).
   let clip = 0;
@@ -119,7 +121,7 @@ function world({ balance = 10000 } = {}) {
   });
   w.restore = () => {
     for (const k of keys) StudioVideo[k] = orig[k];
-    User.findById = o2.uf; quarkBuckets.chargeProof = o2.proof; quarkBuckets.spend = o2.spend; quarkBuckets.settleWallet = o2.settle; quarkBuckets.refundTo = o2.refund; spendGuard.check = o2.guard;
+    User.findById = o2.uf; quarkBuckets.chargeProof = o2.proof; quarkBuckets.spend = o2.spend; quarkBuckets.settleWallet = o2.settle; quarkBuckets.refundTo = o2.refund; spendGuard.check = o2.guard; spendGuard.record = o2.rec;
     for (const k of Object.keys(route._io)) delete route._io[k];
     delete process.env.ENABLE_STUDIO_VIDEO_CONSUMER;
   };
@@ -945,5 +947,67 @@ test('keepClip where the write did NOT land and the call threw: the upload is de
     assert.strictEqual(w.docs.v1.status, 'completed');
     assert.ok(w.discarded.length >= 1);
     assert.strictEqual(w.refunds.length, 0);
+  } finally { w.restore(); }
+});
+
+// ---- money review of B1: spend ceiling for re-runs (finding 5) ----
+test('a first run records no extra spend (the charge already covered it); clips made again after a lost lease are each recorded as one studio_video unit', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, parts3, 'sp1');
+    w.hang = (x) => /Two\./.test(x.prompt) && !w.hungOnce && (w.hungOnce = true);
+    const a = consumer(w, 'A'); await a._drain(); await settle(60);
+    assert.deepStrictEqual(w.recorded, [], 'first run: nothing extra');
+    w.clock.t += 81000;
+    const b = consumer(w, 'B'); await b.sweepLeases(); await b._drain(); await settle(80);
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.deepStrictEqual(w.recorded, [['studio_video', 1], ['studio_video', 1]], 'clips 2 and 3 were asked for again');
+  } finally { w.restore(); }
+});
+
+test('a hand-back after SIGTERM and a resume with an unreadable stored clip record the clips made again; so does a change on a later run', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, parts3, 'sp2');
+    w.hang = (x) => /Two\./.test(x.prompt) && !w.hungOnce && (w.hungOnce = true);
+    const a = consumer(w, 'A'); await a._drain(); await settle(60);
+    await a.shutdown({ graceMs: 0 });
+    assert.strictEqual(w.docs.v1.releases, 1);
+    w.stored.clear(); // the stored clip cannot be read back: clip 1 is made again too
+    await consumer(w, 'B')._drain(); await settle(80);
+    assert.strictEqual(w.docs.v1.status, 'completed');
+    assert.strictEqual(w.recorded.length, 3, 'clips 1, 2 and 3');
+    // a change on its second run
+    await StudioVideo.create({ user: 'sp3', quarks: COST1, clips: 1, status: 'queued', queuedAt: new Date(), attempts: 0, releases: 1, work: { kind: 'change', baseUrl: 'https://cdn.test/b.mp4', instruction: 'evening' } });
+    w.spends.push({ ok: true, amount: COST1, meta: { ref: 'v2' } });
+    const safeFetch = require('../services/safeFetch'); const orig = safeFetch.safeFetchBuffer;
+    safeFetch.safeFetchBuffer = async () => ({ buffer: Buffer.from('base') });
+    try { w.recorded.length = 0; await consumer(w, 'C')._drain(); await settle(60); } finally { safeFetch.safeFetchBuffer = orig; }
+    assert.strictEqual(w.docs.v2.status, 'completed');
+    assert.deepStrictEqual(w.recorded, [['studio_video', 1]]);
+  } finally { w.restore(); }
+});
+
+test('the consumer claims nothing while the Videos ceiling or switch says stop; the row waits and the 30-minute close refunds it', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, {}, 'sp4');
+    spendGuard.check = async (a) => (a === 'studio_video' ? { ok: false, reason: 'daily_cap' } : { ok: true });
+    const a = consumer(w, 'A');
+    assert.strictEqual(await a._drain(), 0);
+    await settle(20);
+    assert.strictEqual(w.docs.v1.status, 'queued');
+    assert.strictEqual(w.gen.length, 0);
+    assert.strictEqual(a.stats.spendHolds, 1);
+    w.docs.v1.queuedAt = new Date(Date.now() - 31 * 60 * 1000);
+    await route.sweep();
+    assert.strictEqual(w.docs.v1.status, 'failed');
+    assert.strictEqual(w.refunds.length, 1);
+    // Back under the ceiling: claims resume.
+    spendGuard.check = async () => ({ ok: true });
+    await create(w, {}, 'sp5');
+    assert.strictEqual(await a._drain(), 1);
+    await settle(60);
+    assert.strictEqual(w.docs.v2.status, 'completed');
   } finally { w.restore(); }
 });

@@ -425,8 +425,13 @@ async function queueAfterCharge(doc) {
  * Runs a video a consumer claimed (services/studioVideoConsumer.js). `ctl` = { owner: { workerId, attempts }, check(),
  * lose(), leaseEnd(), cpu(fn), finishing() }. Every write is conditional on the claim; a run that lost it stops quietly.
  */
-async function runClaimed(doc, ctl, io = testIo) {
+async function runClaimed(doc, ctl, ioIn = testIo) {
   const w = doc.work || {};
+  // A row that was claimed before (a lost lease, a SIGTERM hand-back) asks Omni again for clips an earlier run may already
+  // have paid for: each such call is recorded as one studio_video unit in the spend guard, so the daily ceiling sees it.
+  const again = (Number(doc.attempts) || 0) > 1 || (Number(doc.releases) || 0) > 0;
+  const counted = (fn) => (again ? async (a) => { try { await spendGuard.record('studio_video', 1); } catch (_) { /* best effort */ } return fn(a); } : fn);
+  const io = { ...ioIn, generate: counted(ioIn.generate || ((a) => omni.generate(a))), change: counted(ioIn.change || ((a) => omni.change(a))) };
   if (w.kind === 'change') return run(doc, () => changeWork(w.baseUrl, w.instruction, doc.aspectRatio, io), io, null, ctl);
   const refs = Array.isArray(doc.references) ? doc.references : [];
   const loadRefs = async () => (await Promise.all(refs.map((r) => toRef(r.url)))).filter(Boolean);
@@ -436,7 +441,7 @@ async function runClaimed(doc, ctl, io = testIo) {
   const prompts = Array.isArray(w.prompts) ? w.prompts : [];
   if (!prompts.length) return fail(doc, 'The video could not be made this time. Your Quarks were returned. Please try again.', ctl.owner);
   if (prompts.length === 1) {
-    return run(doc, async () => (io.generate || ((a) => omni.generate(a)))({ prompt: prompts[0], references: io.loadRefs ? await io.loadRefs() : await loadRefs(), aspectRatio: doc.aspectRatio }), io, finish, ctl);
+    return run(doc, async () => io.generate({ prompt: prompts[0], references: io.loadRefs ? await io.loadRefs() : await loadRefs(), aspectRatio: doc.aspectRatio }), io, finish, ctl);
   }
   return runChain(doc, { prompts, aspectRatio: doc.aspectRatio, loadRefs, transition: doc.transition || 'fade', finish }, io, ctl);
 }

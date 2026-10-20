@@ -46,7 +46,7 @@ class RunLostError extends Error {
 }
 
 class StudioVideoConsumer {
-  constructor({ model, settings, workerId, now, sleep, leaseLock, runner, closeLost, dropClips, cpu, drainIntervalMs, alert } = {}) {
+  constructor({ model, settings, workerId, now, sleep, leaseLock, runner, closeLost, dropClips, cpu, drainIntervalMs, alert, spend } = {}) {
     this._model = model || null;
     this._settings = settings || null;
     this.workerId = workerId || newWorkerId();
@@ -57,6 +57,7 @@ class StudioVideoConsumer {
     this.closeLost = closeLost || ((row, message, filter) => require('../routes/studioVideos')._money.fail(row, message, filter));
     this.dropClips = dropClips || ((urls) => require('../routes/studioVideos').dropClips(urls));
     this._cpu = cpu || null;
+    this._spend = spend || null;
     this.alert = alert || ((text) => { try { require('./opsAlerts').recordFailure('studio_video', text); } catch (_) { /* best effort */ } });
     this.drainIntervalMs = drainIntervalMs || Number(process.env.STUDIO_VIDEO_DRAIN_INTERVAL_MS) || 5000;
     this.running = new Map(); // String(_id) -> { attempt, lost, stage: 'generating' | 'finishing' }
@@ -65,12 +66,13 @@ class StudioVideoConsumer {
     this._draining = null;
     this._drainAgain = false;
     this.timers = [];
-    this.stats = { claims: 0, finished: 0, lostRuns: 0, leaseRequeues: 0, leaseFailures: 0, released: 0, shutdownFailed: 0, capHandBacks: 0 };
+    this.stats = { claims: 0, finished: 0, lostRuns: 0, leaseRequeues: 0, leaseFailures: 0, released: 0, shutdownFailed: 0, capHandBacks: 0, spendHolds: 0 };
   }
 
   get model() { return this._model || require('../models/StudioVideo'); }
   get settings() { return this._settings || require('../config/jobSlots').jobSlots(); }
   get leaseLock() { return this._leaseLock || require('./leaseLock'); }
+  get spend() { return this._spend || require('./spendGuard'); }
   get cpu() { return this._cpu || require('./cpuSlots').cpuSlots(); }
   get omniSlots() { const s = this.settings.slots || {}; return Math.max(1, Number(s.omni) || 2); }
 
@@ -120,8 +122,18 @@ class StudioVideoConsumer {
     return this._draining;
   }
 
+  /** The daily AI spend ceiling or the staff switch for Videos says stop: claim nothing (the row waits; the 30-minute close refunds it). */
+  async _spendOk() {
+    try {
+      const g = await this.spend.check('studio_video');
+      if (g && g.ok === false) { this.stats.spendHolds += 1; return false; }
+    } catch (_) { /* the guard never blocks on its own failure */ }
+    return true;
+  }
+
   async _drainOnce() {
     const s = this.settings;
+    if (!(await this._spendOk())) return 0;
     let ceilingLeft = Infinity;
     if (s.globalCeiling > 0) {
       const total = await this.model.countDocuments({ status: 'processing' });
