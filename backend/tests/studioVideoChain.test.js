@@ -201,10 +201,11 @@ const flush = () => new Promise((r) => setTimeout(r, 30));
 // A small Mongo-style matcher for the filters the route uses: equality, $ne, $lt, $in.
 const matches = (d, q) => Object.entries(q).every(([k, c]) => {
   const v = d[k];
+  if (c === null) return v === null || v === undefined; // Mongo: null also matches a missing field
   if (c && typeof c === 'object' && !(c instanceof Date) && !Array.isArray(c)) {
     if ('$ne' in c && String(v === undefined ? '' : v) === String(c.$ne)) return false;
     if ('$lt' in c && !(v < c.$lt)) return false;
-    if ('$in' in c && !c.$in.includes(v)) return false;
+    if ('$in' in c && !c.$in.some((x) => (x === null ? v === null || v === undefined : x === v))) return false;
     return true;
   }
   return String(v) === String(c);

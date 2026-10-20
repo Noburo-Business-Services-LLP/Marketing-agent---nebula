@@ -678,3 +678,70 @@ test('settleUnstarted never fails a row a worker already holds (filter workerId 
     assert.strictEqual(w.refunds.length, 1);
   } finally { w.restore(); }
 });
+
+// ---- money review of B1: stale closes close only the claim they read (finding 2) ----
+// Reads the stale row, then (before the close writes) a consumer re-claims it: the close must match nothing.
+async function staleThenReclaimed(w, runIt) {
+  await create(w, {}, 'sc1');
+  const a = consumer(w, 'A'); w.hang = () => true; await a._drain(); await settle();
+  w.docs.v1.startedAt = new Date(Date.now() - 16 * 60 * 1000);
+  const find = StudioVideo.find;
+  StudioVideo.find = (q) => {
+    const rows = find(q);
+    const hooked = { sort: () => hooked, limit: () => hooked, lean: () => hooked, select: () => hooked, then: (x, y) => rows.then((r) => {
+      // the re-claim lands right after the read: another worker, attempt 2, fresh start
+      if (w.docs.v1.status === 'processing') Object.assign(w.docs.v1, { workerId: 'w:B', attempts: 2, startedAt: new Date() });
+      return r;
+    }).then(x, y) };
+    return hooked;
+  };
+  try { await quiet(() => runIt()); } finally { StudioVideo.find = find; }
+}
+
+test('studio sweep: a re-claim between the read and the close is not failed', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await staleThenReclaimed(w, () => route.sweep());
+    assert.strictEqual(w.docs.v1.status, 'processing');
+    assert.strictEqual(w.docs.v1.workerId, 'w:B');
+    assert.strictEqual(w.refunds.length, 0);
+  } finally { w.restore(); }
+});
+
+test('GET / (list): a re-claim between the read and the close is not failed', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await staleThenReclaimed(w, async () => { await handler('/', 'get')({ user: { userId: 'sc1' } }, resp()); });
+    assert.strictEqual(w.docs.v1.status, 'processing');
+    assert.strictEqual(w.refunds.length, 0);
+  } finally { w.restore(); }
+});
+
+test('GET /:id: a re-claim between the read and the close is not failed', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await create(w, {}, 'sc2');
+    const a = consumer(w, 'A'); w.hang = () => true; await a._drain(); await settle();
+    w.docs.v1.startedAt = new Date(Date.now() - 16 * 60 * 1000);
+    const findOne = StudioVideo.findOne;
+    StudioVideo.findOne = (q) => {
+      const rows = findOne(q);
+      return { then: (x, y) => rows.then((r) => { Object.assign(w.docs.v1, { workerId: 'w:B', attempts: 2, startedAt: new Date() }); return r; }).then(x, y) };
+    };
+    try { await quiet(() => handler('/:id', 'get')({ user: { userId: 'sc2' }, params: { id: 'v1' } }, resp())); } finally { StudioVideo.findOne = findOne; }
+    assert.strictEqual(w.docs.v1.status, 'processing');
+    assert.strictEqual(w.refunds.length, 0);
+  } finally { w.restore(); }
+});
+
+test('a stale in-process row (no worker, attempts 0 or missing) is still closed and refunded once', async () => {
+  const w = world(); w.clock = clockAt();
+  try {
+    await StudioVideo.create({ user: 'old', quarks: COST1, clips: 1, startedAt: new Date(Date.now() - 16 * 60 * 1000) });
+    w.spends.push({ ok: true, amount: COST1, meta: { ref: 'v1' } });
+    delete w.docs.v1.attempts; // a row written before the field existed
+    await quiet(() => route.sweep());
+    assert.strictEqual(w.docs.v1.status, 'failed');
+    assert.strictEqual(w.refunds.length, 1);
+  } finally { w.restore(); }
+});

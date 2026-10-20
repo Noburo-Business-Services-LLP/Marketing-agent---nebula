@@ -746,8 +746,16 @@ const queuedSince = (v) => new Date(v.queuedAt || v.createdAt || v.startedAt).ge
 const isStale = (v, now = Date.now()) => (v.status === 'processing' && now - new Date(v.startedAt).getTime() > staleMs(v))
   || (v.status === 'queued' && now - queuedSince(v) > queuedMaxMs());
 const STALE_REASON = 'The video took too long and was stopped. Your Quarks were returned. Please try again.';
-/** Closes a lost video (refund only with proof). A queued one is closed only while it is still queued. */
-const closeStale = (v) => fail(v, STALE_REASON, v.status === 'queued' ? { status: 'queued' } : null);
+/**
+ * The claim a stale close read: a queued row only while still queued; a processing row only while it is still the same run
+ * (start time, worker, attempt), so a consumer re-claim between the read and the write is never failed. attempts 0 also
+ * matches a row written before the field existed.
+ */
+const staleFilter = (v) => (v.status === 'queued'
+  ? { status: 'queued' }
+  : { startedAt: v.startedAt ?? null, workerId: v.workerId ?? null, attempts: Number(v.attempts) > 0 ? Number(v.attempts) : { $in: [0, null] } });
+/** Closes a lost video (refund only with proof), only the claim that was read. */
+const closeStale = (v) => fail(v, STALE_REASON, staleFilter(v));
 
 router.get('/', protect, async (req, res) => {
   const userId = userIdOf(req);
@@ -787,7 +795,7 @@ async function sweep({ limit = 25, now = Date.now() } = {}) {
   let closed = 0; let paid = 0;
   const lost = await StudioVideo.find({ status: 'processing', startedAt: { $lt: new Date(now - STALE_MS) } }).sort({ startedAt: 1 }).limit(limit * 2).lean();
   for (const v of lost.filter((x) => isStale(x, now)).slice(0, limit)) {
-    try { await fail(v, STALE_REASON); closed += 1; } catch (e) { console.error('[videos] sweep close failed:', e.message); }
+    try { await closeStale(v); closed += 1; } catch (e) { console.error('[videos] sweep close failed:', e.message); }
   }
   // Queued videos nobody claimed (consumer path, E9 B1): closed only while still queued, refunded with proof.
   const waiting = await StudioVideo.find({ status: 'queued', queuedAt: { $lt: new Date(now - queuedMaxMs()) } }).sort({ queuedAt: 1 }).limit(limit).lean();
