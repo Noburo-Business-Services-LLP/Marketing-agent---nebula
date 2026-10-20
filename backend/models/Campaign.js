@@ -190,6 +190,11 @@ const campaignSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Per-campaign publish claim (services/publishClaim.js, D107): who is sending this post and until when. Not a status.
+  publishClaim: {
+    type: new mongoose.Schema({ by: String, at: Date, until: Date }, { _id: false }),
+    default: undefined
+  },
   // Which tiered performance checkpoints (see services/performanceTracker.js)
   // have already run for this post. Prevents re-checking the same window
   // twice and lets the tracker know when it's done (5 entries = stop).

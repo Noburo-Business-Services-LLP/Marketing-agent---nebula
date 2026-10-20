@@ -6,6 +6,7 @@ const { publishCampaignToSocial } = require('./campaignPublisher');
 const { getPostStatus } = require('./socialMediaAPI');
 const { computeNextRecurringStartDate } = require('../utils/scheduling');
 const { learnCampaignPublish } = require('./aiCampaignLearning');
+const publishClaims = require('./publishClaim');
 
 function isEnabled() {
   return String(process.env.ENABLE_CAMPAIGN_SCHEDULER || 'true').toLowerCase() !== 'false';
@@ -235,6 +236,7 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
     .limit(limit);
 
   for (const campaign of dueCampaigns) {
+    let token = null;
     try {
       if (!(await linkedDraftAllowsPosting(campaign))) {
         // Take it out of the schedule (only if still scheduled) so it is not picked up again.
@@ -242,6 +244,14 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
         console.warn(`[Campaign Scheduler] Skipped campaign ${campaign._id}: its post is binned, archived or not approved.`);
         continue;
       }
+      // One atomic claim per campaign before anything is sent (services/publishClaim.js): a lease lost mid-tick, a
+      // second server or "Post now" cannot send the same post twice. The loser skips; the next tick looks again.
+      const claimed = await publishClaims.claim(Campaign, campaign._id, { statuses: ['scheduled'], now, by: 'scheduler' });
+      if (!claimed.claimed) {
+        console.warn(`[Campaign Scheduler] Skipped campaign ${campaign._id}: already being sent by another run.`);
+        continue;
+      }
+      token = claimed.token;
       const result = await publishCampaignToSocial(campaign);
       const nextRecurring = computeNextRecurringStartDate(campaign, { now });
 
@@ -307,7 +317,12 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
           update.status = 'posted';
         }
 
-        const updatedCampaign = await Campaign.findByIdAndUpdate(campaign._id, { $set: update }, { new: true });
+        // Conditional on still holding the claim: a holder whose claim was taken over records nothing.
+        if (!(await publishClaims.finish(Campaign, campaign._id, token, update))) {
+          console.warn(`[Campaign Scheduler] Campaign ${campaign._id} was sent but its claim was lost; the current holder records the result.`);
+          continue;
+        }
+        const updatedCampaign = { ...(campaign.toObject ? campaign.toObject() : campaign), ...update };
         // A repeating campaign keeps going, so its Draft stays scheduled; a one-off is done, so the Draft is posted.
         if (!nextRecurring) {
           try {
@@ -344,14 +359,15 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
           update.status = 'posted';
         }
 
-        const updatedCampaign = await Campaign.findByIdAndUpdate(campaign._id, { $set: update }, { new: true });
+        if (!(await publishClaims.finish(Campaign, campaign._id, token, update))) continue;
+        const updatedCampaign = { ...(campaign.toObject ? campaign.toObject() : campaign), ...update };
         await learnCampaignPublish(updatedCampaign || campaign, update.publishResult);
         continue;
       }
 
-      await applyPublishFailure(campaign, result.error || result.message || 'Failed to publish', result);
+      await applyPublishFailure(campaign, result.error || result.message || 'Failed to publish', result, token);
     } catch (e) {
-      await applyPublishFailure(campaign, e.message || 'Failed to publish', null);
+      await applyPublishFailure(campaign, e.message || 'Failed to publish', null, token);
     }
   }
 }
@@ -361,7 +377,7 @@ async function processDueCampaigns({ now = new Date(), limit = 20 } = {}) {
 // per-post-error that will NEVER succeed on retry — mark the campaign as failed
 // so the scheduler stops picking it up. This prevents the retry loops that
 // caused our Ayrshare post-error suspension.
-async function applyPublishFailure(campaign, errorMessage, result) {
+async function applyPublishFailure(campaign, errorMessage, result, token = null) {
   const MAX_PUBLISH_ATTEMPTS = Number(process.env.CAMPAIGN_MAX_PUBLISH_ATTEMPTS || 3);
   const nextCount = (Number(campaign.publishFailureCount) || 0) + 1;
   const isTerminalError = /\[156\]|not linked/i.test(String(errorMessage || ''));
@@ -381,7 +397,9 @@ async function applyPublishFailure(campaign, errorMessage, result) {
       `${nextCount} failure(s)${isTerminalError ? ' (terminal error)' : ''}. Last error: ${String(errorMessage).slice(0, 200)}`
     );
   }
-  await Campaign.findByIdAndUpdate(campaign._id, { $set: update });
+  // With a claim, the failure is written (and the claim cleared, so a retry can claim) only while the claim is held.
+  if (token) await publishClaims.fail(Campaign, campaign._id, token, update);
+  else await Campaign.findByIdAndUpdate(campaign._id, { $set: update });
 }
 
 function startCampaignScheduler({ intervalMs = 30_000, logger = require('../utils/logger') } = {}) {

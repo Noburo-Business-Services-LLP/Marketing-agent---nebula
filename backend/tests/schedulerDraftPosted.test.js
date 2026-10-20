@@ -30,8 +30,12 @@ Campaign.find = () => {
   const p = Promise.resolve(campaigns.filter((c) => c.status === 'scheduled'));
   p.select = () => p; p.sort = () => p; p.limit = () => p; return p;
 };
+// The claim and the conditional writes go through the shared in-memory Campaign fake (same rows as `campaigns`).
+const { fakeClaimCampaigns } = require('./helpers/fakeClaimCampaigns');
+const claimFake = () => fakeClaimCampaigns(campaigns);
 Campaign.findByIdAndUpdate = async (id, u) => { const c = campaigns.find((x) => x._id === id); Object.assign(c, u.$set); return c; };
-Campaign.updateOne = async (q, u) => { const c = campaigns.find((x) => x._id === q._id && x.status === q.status); if (c) Object.assign(c, u.$set); };
+Campaign.updateOne = (...a) => claimFake().updateOne(...a);
+Campaign.findOneAndUpdate = (...a) => claimFake().findOneAndUpdate(...a);
 User.findById = () => ({ select: async () => ({ ayrshare: { profileKey: 'k' } }) });
 Draft.findOne = (q) => { const d = drafts.find((x) => x.campaignId === q.campaignId); const p = Promise.resolve(d ? { ...d } : null); p.select = () => p; p.lean = () => p; return p; };
 Draft.updateOne = async (q, u) => {
