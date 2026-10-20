@@ -17,6 +17,51 @@ const answerBusy = (res, error) => {
   res.status(503).json({ success: false, message: HASH_BUSY_MESSAGE });
   return true;
 };
+
+// Account enumeration (B3, docs/superpowers/ops/security-hardening.md section 9): the code and reset routes answer the
+// same status and body whether or not the email has an account, and do the same hashing work in both branches (a
+// dummy hash when there is no account), so neither the answer nor its time tells them apart. Storing and sending the
+// code happen after the answer. Sign-up keeps "already exists" on purpose (decision D47).
+const CODE_SENT = 'If an account exists, we have sent a code.';
+const CODE_FAILED = 'That code did not work. Check it, or request a new code.';
+const LOGIN_FAILED = 'Invalid email or password. Please try again.';
+const passwordHashing = require('../services/passwordHash');
+let dummyOtpHash = null;
+let dummyPasswordHash = null;
+/** A real bcrypt hash at the code cost, made once: compared against when there is no account or no usable code. */
+const dummyOtp = () => (dummyOtpHash = dummyOtpHash || otpService.hashOTP('000000'));
+/** A real bcrypt hash at the password cost, made once: compared against when the email has no account. */
+const dummyPassword = () => (dummyPasswordHash = dummyPasswordHash || passwordHashing.hash(`no-account-${Date.now()}`));
+const otpCodeFields = '+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt';
+const OTP_GAP_MS = 60000;
+
+/** Hashes a fresh code in every case; stores and mails it (after the answer) only when `deliver` is true. */
+async function issueCodeQuietly({ user, email, deliver, label }) {
+  const otp = otpService.generateOTP();
+  const hashed = await otpService.hashOTP(otp);
+  if (!deliver || !user) return;
+  user.otp = { code: hashed, expiresAt: new Date(Date.now() + 10 * 60 * 1000), attempts: 0, lastSentAt: new Date() };
+  setImmediate(() => {
+    Promise.resolve()
+      .then(() => user.save({ validateBeforeSave: false }))
+      .then(() => otpService.sendOTP(email, otp, user.firstName))
+      .then(() => console.log(`📧 ${label} code sent`))
+      .catch((e) => console.error(`${label} code could not be sent:`, e && e.message));
+  });
+}
+const sentRecently = (user) => Boolean(user && user.otp && user.otp.lastSentAt && Date.now() - new Date(user.otp.lastSentAt).getTime() < OTP_GAP_MS);
+
+/**
+ * Checks a code with the same work for every case. `usable` is the account's code when it exists, is not expired and
+ * has tries left; otherwise a dummy hash is compared and the answer is "no". Returns { ok, wrongOnRealCode }; the
+ * caller counts a wrong try only on a real code.
+ */
+async function checkCodeEvenly(user, otp, { requireUnverified = false } = {}) {
+  const c = user && user.otp;
+  const usable = Boolean(user && (!requireUnverified || !user.isVerified) && c && c.code && new Date() <= new Date(c.expiresAt) && (c.attempts || 0) < 5);
+  const match = await otpService.verifyOTP(otp, usable ? c.code : await dummyOtp());
+  return { ok: usable && match, wrongOnRealCode: usable && !match };
+}
 const { newAccountPlan } = require('../config/entitlements');
 const rateLimit = require('../services/rateLimitStore').rateLimit;
 const { signupGuard, publicConfig, canonicalEmail, MSG: SIGNUP_MSG } = require('../services/signupGuard');
@@ -723,55 +768,10 @@ router.post('/send-otp', [
 ], async (req, res) => {
   try {
     const { email } = req.body;
-
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt');
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'No account found with this email.'
-      });
-    }
-
-    if (user.isVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is already verified.'
-      });
-    }
-
-    // Rate limit: 1 OTP per 60 seconds
-    if (user.otp?.lastSentAt) {
-      const timeSinceLastSend = Date.now() - new Date(user.otp.lastSentAt).getTime();
-      if (timeSinceLastSend < 60000) {
-        const waitSeconds = Math.ceil((60000 - timeSinceLastSend) / 1000);
-        return res.status(429).json({
-          success: false,
-          message: `Please wait ${waitSeconds} seconds before requesting a new code.`,
-          retryAfter: waitSeconds
-        });
-      }
-    }
-
-    // Generate new OTP
-    const otp = otpService.generateOTP();
-    const hashedOtp = await otpService.hashOTP(otp);
-
-    user.otp = {
-      code: hashedOtp,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      attempts: 0,
-      lastSentAt: new Date()
-    };
-    await user.save({ validateBeforeSave: false });
-
-    // Send email
-    await otpService.sendOTP(email, otp, user.firstName);
-
-    res.status(200).json({
-      success: true,
-      message: 'Verification code sent to your email.'
-    });
+    const user = await User.findOne({ email: email.toLowerCase() }).select(otpCodeFields);
+    // Only an unverified account gets a code, at most one a minute; every other case gets the same answer (B3).
+    await issueCodeQuietly({ user, email, deliver: Boolean(user && !user.isVerified && !sentRecently(user)), label: 'Verification' });
+    res.status(200).json({ success: true, message: CODE_SENT });
   } catch (error) {
     if (answerBusy(res, error)) return;
     console.error('Send OTP error:', error);
@@ -799,62 +799,13 @@ router.post('/verify-otp', [
   try {
     const { email, otp } = req.body;
 
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt');
+    const user = await User.findOne({ email: email.toLowerCase() }).select(otpCodeFields);
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'No account found with this email.'
-      });
-    }
-
-    if (user.isVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is already verified.'
-      });
-    }
-
-    // Check if OTP exists
-    if (!user.otp?.code) {
-      return res.status(400).json({
-        success: false,
-        message: 'No verification code found. Please request a new one.'
-      });
-    }
-
-    // Check if OTP expired
-    if (new Date() > new Date(user.otp.expiresAt)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Verification code has expired. Please request a new one.',
-        expired: true
-      });
-    }
-
-    // Check max attempts (5 attempts max)
-    if (user.otp.attempts >= 5) {
-      return res.status(429).json({
-        success: false,
-        message: 'Too many failed attempts. Please request a new code.',
-        maxAttempts: true
-      });
-    }
-
-    // Verify OTP
-    const isValid = await otpService.verifyOTP(otp, user.otp.code);
-
-    if (!isValid) {
-      // Increment attempts
-      user.otp.attempts = (user.otp.attempts || 0) + 1;
-      await user.save({ validateBeforeSave: false });
-
-      const remaining = 5 - user.otp.attempts;
-      return res.status(400).json({
-        success: false,
-        message: `Invalid code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`,
-        attemptsRemaining: remaining
-      });
+    // No account, already verified, no code, expired, five wrong tries or a wrong code: one answer for all (B3).
+    const { ok, wrongOnRealCode } = await checkCodeEvenly(user, otp, { requireUnverified: true });
+    if (!ok) {
+      if (wrongOnRealCode) await User.updateOne({ _id: user._id }, { $inc: { 'otp.attempts': 1 } });
+      return res.status(400).json({ success: false, message: CODE_FAILED });
     }
 
     // OTP is valid — mark user as verified and clear OTP data
@@ -895,36 +846,10 @@ router.post('/forgot-password', [
 ], async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt');
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'No account found with this email.' });
-    }
-
-    // Rate limit: 1 OTP per 60 seconds
-    if (user.otp?.lastSentAt) {
-      const timeSinceLastSend = Date.now() - new Date(user.otp.lastSentAt).getTime();
-      if (timeSinceLastSend < 60000) {
-        const waitSeconds = Math.ceil((60000 - timeSinceLastSend) / 1000);
-        return res.status(429).json({ success: false, message: `Please wait ${waitSeconds} seconds before requesting a new code.`, retryAfter: waitSeconds });
-      }
-    }
-
-    const otp = otpService.generateOTP();
-    const hashedOtp = await otpService.hashOTP(otp);
-
-    user.otp = {
-      code: hashedOtp,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      attempts: 0,
-      lastSentAt: new Date()
-    };
-    await user.save({ validateBeforeSave: false });
-
-    await otpService.sendOTP(email, otp, user.firstName);
-
-    console.log(`📧 Password reset OTP sent to ${email}`);
-    res.status(200).json({ success: true, message: 'Reset code sent to your email.' });
+    const user = await User.findOne({ email: email.toLowerCase() }).select(otpCodeFields);
+    // Any account gets a reset code, at most one a minute; no account gets the same answer and no email (B3).
+    await issueCodeQuietly({ user, email, deliver: Boolean(user && !sentRecently(user)), label: 'Password reset' });
+    res.status(200).json({ success: true, message: CODE_SENT });
   } catch (error) {
     if (answerBusy(res, error)) return;
     console.error('Forgot password error:', error);
@@ -942,19 +867,13 @@ router.post('/verify-reset-otp', [
 ], async (req, res) => {
   try {
     const { email, otp } = req.body;
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt');
+    const user = await User.findOne({ email: email.toLowerCase() }).select(otpCodeFields);
 
-    if (!user) return res.status(404).json({ success: false, message: 'No account found.' });
-    if (!user.otp?.code) return res.status(400).json({ success: false, message: 'No reset code found. Please request a new one.' });
-    if (new Date() > new Date(user.otp.expiresAt)) return res.status(400).json({ success: false, message: 'Code has expired. Please request a new one.' });
-    if (user.otp.attempts >= 5) return res.status(429).json({ success: false, message: 'Too many failed attempts. Please request a new code.' });
-
-    const isValid = await otpService.verifyOTP(otp, user.otp.code);
-    if (!isValid) {
-      user.otp.attempts = (user.otp.attempts || 0) + 1;
-      await user.save({ validateBeforeSave: false });
-      const remaining = 5 - user.otp.attempts;
-      return res.status(400).json({ success: false, message: `Invalid code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.` });
+    // No account, no code, expired, five wrong tries or a wrong code: one answer for all (B3).
+    const { ok, wrongOnRealCode } = await checkCodeEvenly(user, otp);
+    if (!ok) {
+      if (wrongOnRealCode) await User.updateOne({ _id: user._id }, { $inc: { 'otp.attempts': 1 } });
+      return res.status(400).json({ success: false, message: CODE_FAILED });
     }
 
     // OTP valid — don't clear it yet, we need it for the reset step
@@ -979,18 +898,12 @@ router.post('/reset-password', [
     const { email, otp, newPassword } = req.body;
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password +otp.code +otp.expiresAt +otp.attempts');
 
-    if (!user) return res.status(404).json({ success: false, message: 'No account found.' });
-    if (!user.otp?.code) return res.status(400).json({ success: false, message: 'No reset code found. Please start over.' });
-    if (new Date() > new Date(user.otp.expiresAt)) return res.status(400).json({ success: false, message: 'Code has expired. Please start over.' });
-
-    // Guessing the code here counts like guessing it anywhere else: five wrong tries and the code is dead.
-    if ((user.otp.attempts || 0) >= 5) return res.status(429).json({ success: false, message: 'Too many failed attempts. Please request a new code.' });
-
-    // Re-verify OTP to prevent bypassing
-    const isValid = await otpService.verifyOTP(otp, user.otp.code);
-    if (!isValid) {
-      await User.updateOne({ _id: user._id }, { $inc: { 'otp.attempts': 1 } });
-      return res.status(400).json({ success: false, message: 'Invalid code. Please start over.' });
+    // Re-verify the code (guessing it here counts like anywhere else: five wrong tries and it is dead). No account, no
+    // code, expired, too many tries or a wrong code: one answer for all (B3).
+    const { ok, wrongOnRealCode } = await checkCodeEvenly(user, otp);
+    if (!ok) {
+      if (wrongOnRealCode) await User.updateOne({ _id: user._id }, { $inc: { 'otp.attempts': 1 } });
+      return res.status(400).json({ success: false, message: CODE_FAILED });
     }
 
     // Update password (pre-save hook will hash it)
@@ -1032,10 +945,9 @@ router.post('/login', [
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
 
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password. Please try again.'
-      });
+      // The same hashing work as a real check, so the time does not say "no account" (B3).
+      await passwordHashing.compare(String(password), await dummyPassword());
+      return res.status(401).json({ success: false, message: LOGIN_FAILED });
     }
 
     // Check if account is locked
@@ -1047,16 +959,15 @@ router.post('/login', [
       });
     }
 
-    // Check if account is active
-    if (!user.isActive) {
+    // Check password
+    const isPasswordValid = await user.comparePassword(password);
+    if (isPasswordValid && !user.isActive) {
+      // Said only to someone who knows the password: without it a deactivated account looks like any other.
       return res.status(401).json({
         success: false,
         message: 'Your account has been deactivated. Please contact support.'
       });
     }
-
-    // Check password
-    const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       // Increment failed attempts
       const attempts = (user.failedLoginAttempts || 0) + 1;
@@ -1074,10 +985,7 @@ router.post('/login', [
       }
 
       await User.findByIdAndUpdate(user._id, update);
-      return res.status(401).json({
-        success: false,
-        message: `Invalid email or password. ${5 - attempts} attempt(s) remaining.`
-      });
+      return res.status(401).json({ success: false, message: LOGIN_FAILED });
     }
 
     // Reset failed attempts on successful login
