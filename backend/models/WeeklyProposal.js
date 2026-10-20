@@ -20,7 +20,15 @@ const itemSchema = new mongoose.Schema({
   // True while the post's charge stands, so a post picked up again after a crash is never charged twice.
   charged: { type: Boolean, default: false },
   // The wallet that was charged, so a refund goes back to the same one.
-  chargedTo: { type: String, default: null }
+  chargedTo: { type: String, default: null },
+  // The ref the charge carried (so chargeProof can see it and its refund).
+  chargeRef: { type: String, default: null },
+  // A refund is CLAIMED ('refunding') in the same update that clears `charged`, recording who is paid back, how much and
+  // since when; it is marked 'refunded' once paid. A claim stuck for over two minutes is paid by the sweep, from the proof.
+  refundState: { type: String, enum: ['refunding', 'refunded', 'unproven', null], default: null },
+  refundAt: { type: Date, default: null },
+  refundQuarks: { type: Number, default: null },
+  refundPayer: { type: String, default: null }
 }, { _id: false });
 
 const weeklyProposalSchema = new mongoose.Schema({

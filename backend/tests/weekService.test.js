@@ -4,11 +4,13 @@ const assert = require('node:assert');
 const { createWeekService } = require('../services/week/weekService');
 
 const NOW = new Date('2026-10-17T06:00:00Z');
+const quiet = async (fn) => { const e = console.error; console.error = () => {}; try { return await fn(); } finally { console.error = e; } };
 // Approve only claims; this also makes the approved posts, as the route's follow-up does.
 const ar = async (svc, extra = {}) => { const a = await svc.approve({ user: user(), now: NOW, ...extra }); const r = await svc.runApprovedPosts({ user: user(), now: NOW }); return { ...a, proposal: r.proposal || a.proposal }; };
 const user = (extra = {}) => ({ _id: 'u1', isActive: true, onboardingCompleted: true, plan: { tier: 'starter' }, businessProfile: { name: 'Sweet Co', website: 'a.in', description: 'Custom cakes baked to order', targetAudience: 'Families' }, ...extra });
 function world({ pool = 2000, genFails = false, deductOk = true, refundOk = true } = {}) {
   const store = new Map(); const log = { deduct: [], refund: [], generate: [], alerts: [] };
+  const ledger = { spends: new Map(), refunds: new Set() };
   const deps = {
     costs: { post: 11, carousel: 60, video: 161 },
     pool: async () => pool,
@@ -24,11 +26,15 @@ function world({ pool = 2000, genFails = false, deductOk = true, refundOk = true
       findOpen: async (userId, fromWeek) => [...store.values()].filter((d) => String(d.userId) === String(userId) && d.weekStart >= fromWeek && d.items.some((i) => ['approved', 'making'].includes(i.status))),
       settleItem: async (q, itemId, token, patch) => { const d = store.get(`${q.userId}:${q.weekStart}`); const it = d && d.items.find((i) => i.id === itemId); if (!it || it.status !== 'making' || new Date(it.makingAt).getTime() !== new Date(token).getTime()) return false; Object.assign(it, patch); return true; },
       flipCharged: async (q, itemId, token, from, to, extra = {}) => { if (log.flipFails && to === true && from === false) throw new Error('db down'); const d = store.get(`${q.userId}:${q.weekStart}`); const it = d && d.items.find((i) => i.id === itemId); if (!it || it.status !== 'making' || new Date(it.makingAt).getTime() !== new Date(token).getTime() || !!it.charged !== from) return false; it.charged = to; Object.assign(it, extra); return true; },
+      setRefundState: async (q, itemId, from, to) => { const d = store.get(`${q.userId}:${q.weekStart}`); const it = d && d.items.find((i) => i.id === itemId); if (!it || it.refundState !== from) return false; it.refundState = to; return true; },
+      claimRefund: async (q, itemId, before, at) => { const d = store.get(`${q.userId}:${q.weekStart}`); const it = d && d.items.find((i) => i.id === itemId); if (!it || it.refundState !== 'refunding' || !(new Date(it.refundAt) < before)) return null; const copy = { ...it }; it.refundAt = at; return copy; },
+      findRefunding: async (before) => [...store.values()].flatMap((d) => d.items.filter((i) => i.refundState === 'refunding' && new Date(i.refundAt) < before).map((i) => ({ userId: String(d.userId), weekStart: d.weekStart, itemId: i.id }))),
       setItem: async (q, itemId, patch) => { const d = store.get(`${q.userId}:${q.weekStart}`); Object.assign(d.items.find((i) => i.id === itemId), patch); },
       setStatus: async (q, status) => { store.get(`${q.userId}:${q.weekStart}`).status = status; }
     },
-    deduct: async (id, action, n, why) => { log.deduct.push([id, action]); return { success: deductOk, payerId: 'payer1' }; },
-    refund: async (id, action, n, why, opts) => { log.refund.push([id, action, opts]); return { success: refundOk }; },
+    deduct: async (id, action, n, why, opts) => { log.deduct.push([id, action, opts]); if (deductOk && opts && opts.ref) ledger.spends.set(opts.ref, { payer: 'payer1', quarks: 11 }); return { success: deductOk, payerId: 'payer1' }; },
+    refund: async (id, action, n, why, opts) => { log.refund.push([id, action, opts]); if (refundOk && opts && opts.ref) ledger.refunds.add(opts.ref); return { success: refundOk }; },
+    chargeProof: async (ref) => ({ spend: ledger.spends.get(ref) || null, refunded: ledger.refunds.has(ref) }),
     spendCheck: async () => (log.busy ? { ok: false } : { ok: true }),
     alertOwner: async (a) => { log.alerts.push(a); },
     generate: async (cal, item) => { log.generate.push(item._id || item.calendarItemId); if (genFails) throw new Error('image failed'); return { draftId: 'd' + log.generate.length }; },
@@ -36,7 +42,7 @@ function world({ pool = 2000, genFails = false, deductOk = true, refundOk = true
     markFirstApproval: async (id, at) => { if (!log.firstApproval) log.firstApproval = at; log.firstApprovalCalls = (log.firstApprovalCalls || 0) + 1; },
     now: () => NOW
   };
-  return { svc: createWeekService(deps), log, store, deps };
+  return { svc: createWeekService(deps), log, store, deps, ledger };
 }
 
 test('the week is proposed once and the same document comes back the second time', async () => {
@@ -269,15 +275,80 @@ test('weekCosts is built only from the price list', () => {
 
 const posts = (w) => [...w.store.values()][0].items.filter((i) => i.kind === 'post');
 
-test('I1: a refund that fails keeps the charge, fails the post as refund_failed, alerts the owner, and a retry is not charged again', async () => {
+test('I1: a refund that fails stays claimed (refunding, payer and amount recorded), fails the post as refund_failed, alerts the owner, and a retry is neither charged again nor made', async () => {
   const w = world({ genFails: true, refundOk: false });
   await w.svc.getOrCreate({ user: user(), now: NOW });
   await ar(w.svc);
-  assert.ok(posts(w).every((i) => i.charged === true && i.status === 'failed' && i.error === 'refund_failed'));
+  assert.ok(posts(w).every((i) => i.charged === false && i.refundState === 'refunding' && i.refundPayer === 'payer1' && i.refundQuarks === 11 && i.status === 'failed' && i.error === 'refund_failed'));
   assert.strictEqual(w.log.alerts.length, 2);
   assert.strictEqual(w.log.deduct.length, 2);
   await ar(w.svc);
-  assert.strictEqual(w.log.deduct.length, 2, 'a post already paid for is not charged again');
+  assert.strictEqual(w.log.deduct.length, 2, 'not charged again over an unsettled refund');
+  assert.strictEqual(w.log.generate.length, 2, 'and not made again');
+});
+
+test('crash between the claim and the payment: the sweep pays once, to the recorded payer, with the ref; a second sweep and a second recovery change nothing', async () => {
+  const w = world({ genFails: true });
+  const realRefund = w.deps.refund;
+  w.deps.refund = async () => { throw new Error('process died'); };
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  await quiet(() => ar(w.svc));
+  assert.ok(posts(w).every((i) => i.refundState === 'refunding'));
+  w.deps.refund = realRefund;
+  assert.strictEqual(await w.svc.sweepRefunds({}), 0, 'inside two minutes nothing is touched');
+  const later = new Date(NOW.getTime() + 3 * 60000);
+  w.deps.now = () => later;
+  assert.strictEqual(await w.svc.sweepRefunds({}), 2);
+  assert.ok(posts(w).every((i) => i.refundState === 'refunded'));
+  assert.strictEqual(w.log.refund.length, 2);
+  assert.ok(w.log.refund.every((r) => r[2].payerId === 'payer1' && /^week:u1:2026-10-12:/.test(r[2].ref)));
+  assert.strictEqual(await w.svc.sweepRefunds({}), 0);
+  await w.svc.recoverOpenWeeks({ now: later });
+  assert.strictEqual(w.log.refund.length, 2);
+});
+
+test('a refund that landed but reported failure is only marked by the sweep, never paid twice', async () => {
+  const w = world({ genFails: true });
+  w.deps.refund = async (id, action, n, why, opts) => { w.log.refund.push([id, action, opts]); w.ledger.refunds.add(opts.ref); throw new Error('timeout after the credit'); };
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  await quiet(() => ar(w.svc));
+  w.deps.now = () => new Date(NOW.getTime() + 3 * 60000);
+  await w.svc.sweepRefunds({});
+  assert.ok(posts(w).every((i) => i.refundState === 'refunded'));
+  assert.strictEqual(w.log.refund.length, 2, 'only the attempts made before the sweep');
+});
+
+test('no refund without proof of the charge: the sweep pays nothing, flags it unproven and alerts', async () => {
+  const w = world({ genFails: true });
+  w.deps.refund = async () => { throw new Error('process died'); };
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  await quiet(() => ar(w.svc));
+  w.ledger.spends.clear();
+  w.deps.refund = async (id, action, n, why, opts) => { w.log.refund.push([id, action, opts]); return { success: true }; };
+  w.deps.now = () => new Date(NOW.getTime() + 3 * 60000);
+  const alertsBefore = w.log.alerts.length;
+  await quiet(() => w.svc.sweepRefunds({}));
+  assert.strictEqual(w.log.refund.length, 0);
+  assert.ok(posts(w).every((i) => i.refundState === 'unproven'));
+  assert.ok(w.log.alerts.length > alertsBefore);
+});
+
+test('the charge carries a ref that is stored on the post and used by the refund', async () => {
+  const w = world({ genFails: true });
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  await ar(w.svc);
+  assert.ok(w.log.deduct.every((d) => /^week:u1:2026-10-12:/.test(d[2].ref)));
+  assert.ok(posts(w).every((i) => w.log.refund.some((r) => r[2].ref === i.chargeRef) && i.refundState === 'refunded'));
+});
+
+test('a retry after a settled refund is charged again with a new ref', async () => {
+  const w = world({ genFails: true });
+  await w.svc.getOrCreate({ user: user(), now: NOW });
+  await ar(w.svc);
+  await ar(w.svc);
+  assert.strictEqual(w.log.deduct.length, 4);
+  assert.strictEqual(new Set(w.log.deduct.map((d) => d[2].ref)).size, 4);
+  assert.strictEqual(w.log.refund.length, 4);
 });
 
 test('M2: the refund goes to the wallet that was charged', async () => {

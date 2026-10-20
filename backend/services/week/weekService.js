@@ -7,6 +7,7 @@
 const { shouldHavePlan } = require('../plan/planRules');
 const { weekProposal } = require('./weekProposal');
 const { weekStartOf, weekDays, dayOfMonth } = require('./weekMath');
+const { settleRefund, SWEEP_AFTER_MS } = require('../refundSettle');
 
 const DAY_MS = 86400000;
 const SLIDES = 5;   // the carousel screen's default slide count (also the route's default)
@@ -130,6 +131,27 @@ function defaultDeps() {
         ).select('_id').lean();
         return !!r;
       },
+      // Marks a claimed refund paid / unproven: conditional on the claim still being there.
+      setRefundState: async (q, itemId, from, to) => {
+        const r = await model().findOneAndUpdate(
+          { ...key(q), items: { $elemMatch: { id: itemId, refundState: from } } }, { $set: { 'items.$.refundState': to } }
+        ).select('_id').lean();
+        return !!r;
+      },
+      // Holds a refund claim stuck since before `before`: moves its time forward in one conditional update, so two sweeps never both pay.
+      claimRefund: async (q, itemId, before, at) => {
+        const r = await model().findOneAndUpdate(
+          { ...key(q), items: { $elemMatch: { id: itemId, refundState: 'refunding', refundAt: { $lt: before } } } }, { $set: { 'items.$.refundAt': at } }, { new: false }
+        ).lean();
+        return r ? (r.items || []).find((i) => i.id === itemId) || null : null;
+      },
+      // Refund claims stuck since before `before`, oldest first, as { userId, weekStart, itemId }.
+      findRefunding: async (before, limit) => {
+        const docs = await model().find({ items: { $elemMatch: { refundState: 'refunding', refundAt: { $lt: before } } } }).limit(limit).lean();
+        const out = [];
+        for (const d of docs) for (const i of d.items || []) if (i.refundState === 'refunding' && i.refundAt && new Date(i.refundAt) < before) out.push({ userId: String(d.userId), weekStart: d.weekStart, itemId: i.id });
+        return out.slice(0, limit);
+      },
       setItem: async (q, itemId, patch) => {
         const $set = {};
         Object.entries(patch).forEach(([k, v]) => { $set[`items.$[i].${k}`] = v; });
@@ -139,6 +161,7 @@ function defaultDeps() {
     },
     deduct: (...a) => require('../../middleware/trialGuard').deductCredits(...a),
     refund: (...a) => require('../../middleware/trialGuard').refundCredits(...a),
+    chargeProof: (...a) => require('../quarkBuckets').chargeProof(...a),
     // Makes one post and leaves the draft in Review and approve. A calendar row is saved afterwards so the
     // monthly auto-generation does not make the same day again.
     generate: async (calendar, calItem, weekNumber) => {
@@ -248,18 +271,53 @@ function createWeekService(given = {}) {
 
   const isMade = (row) => !!row && (!!row.generatedDraftId || ['generated', 'scheduled', 'published'].includes(String(row.status || '').toLowerCase()));
 
-  // A refund by the owner, at most once: `charged` flips true -> false first, so only one actor can refund. If the
-  // refund itself fails the flag goes back to true (the customer has paid), the post is failed as 'refund_failed' and
-  // the owner is alerted to refund by hand; such a post is never charged again.
+  // A refund by the owner, at most once, under the one claim-then-pay rule (refundSettle.js): `charged` flips true -> false
+  // AND the refund is claimed ('refunding', with the payer, the amount and the time) in ONE conditional update, so only
+  // one actor can refund and a crash right after still leaves everything a sweep needs. Then the refund is paid WITH the
+  // charge's ref (so chargeProof sees it) and the claim is marked 'refunded'. If the payment fails the claim stays: the
+  // post is failed as 'refund_failed', the owner is alerted, and the sweep (or the next attempt at this post) pays it
+  // once, only when chargeProof says nobody has. The post is never charged again until the claim is settled.
+  const postCost = () => (deps.costs && deps.costs.post) || require('../../config/apiCosts').QUARK_COSTS.image_generated;
   async function refundOwned({ q, user, item, token }) {
-    const won = await deps.store.flipCharged(q, item.id, token, true, false);
+    const won = await deps.store.flipCharged(q, item.id, token, true, false, { refundState: 'refunding', refundAt: nowOf(), refundQuarks: postCost(), refundPayer: item.chargedTo || '' });
     if (!won) return { refunded: false, lost: true };
     let r;
-    try { r = await deps.refund(String(user._id), 'image_generated', 1, 'Refund: weekly plan post could not be made', item.chargedTo ? { payerId: item.chargedTo } : {}); } catch (e) { r = { success: false }; }
-    if (r && r.success) return { refunded: true };
-    try { await deps.store.flipCharged(q, item.id, token, false, true); } catch (e) { console.error('[week] could not restore charged flag:', e && e.message); }
+    try { r = await deps.refund(String(user._id), 'image_generated', 1, 'Refund: weekly plan post could not be made', { ref: item.chargeRef || undefined, ...(item.chargedTo ? { payerId: item.chargedTo } : {}) }); } catch (e) { r = { success: false }; }
+    if (r && r.success) {
+      try { await deps.store.setRefundState(q, item.id, 'refunding', 'refunded'); } catch (e) { console.error('[week] could not mark the refund paid (the sweep will):', e && e.message); }
+      return { refunded: true };
+    }
     await alertRefund(user, item, q);
     return { refunded: false, refundFailed: true };
+  }
+
+  // A claim stuck in 'refunding' for over two minutes: held (one conditional update), decided from the proof, marked.
+  // Returns true when nothing is owed any more (paid, already paid, or flagged for a person), false when it is still open.
+  async function settleItemRefund({ q, userId, itemId }) {
+    const older = new Date(nowOf().getTime() - SWEEP_AFTER_MS);
+    const held = deps.store.claimRefund ? await deps.store.claimRefund(q, itemId, older, nowOf()) : null;
+    if (!held) return false;
+    const ref = held.chargeRef || '';
+    const out = await settleRefund({
+      ref, userId: String(userId), quarks: Number(held.refundQuarks) || postCost(), payerId: held.refundPayer || held.chargedTo || '',
+      chargeProof: deps.chargeProof || (async () => { throw new Error('no proof source'); }), alert: deps.alertOwner, label: 'week',
+      pay: async ({ payerId }) => { const r = await deps.refund(String(userId), 'image_generated', 1, 'Refund: weekly plan post could not be made', { ref, ...(payerId ? { payerId } : {}) }); return Boolean(r && r.success); }
+    });
+    if (out === 'paid' || out === 'already') { await deps.store.setRefundState(q, itemId, 'refunding', 'refunded'); return true; }
+    if (out === 'unproven' || out === 'over') { await deps.store.setRefundState(q, itemId, 'refunding', 'unproven'); return true; }
+    return false;
+  }
+
+  // A bounded pass over refund claims a crash or an outage left unpaid.
+  async function sweepRefunds({ limit = 20 } = {}) {
+    if (!deps.store.findRefunding) return 0;
+    const older = new Date(nowOf().getTime() - SWEEP_AFTER_MS);
+    const rows = (await deps.store.findRefunding(older, limit).catch(() => [])) || [];
+    let settled = 0;
+    for (const r of rows) {
+      try { if (await settleItemRefund({ q: { userId: r.userId, weekStart: r.weekStart }, userId: r.userId, itemId: r.itemId })) settled += 1; } catch (e) { console.error('[week] refund sweep failed:', e && e.message); }
+    }
+    return settled;
   }
 
   async function alertRefund(user, item, q) {
@@ -308,20 +366,29 @@ function createWeekService(given = {}) {
     }
 
     // Charged once: a post picked up again after a crash already carries charged: true and is not charged again.
+    // A refund still claimed from an earlier attempt is settled first: charging again over it could lose it.
+    if (item.refundState === 'refunding') {
+      const settled = await settleItemRefund({ q, userId: id, itemId: item.id });
+      if (!settled) return fail('refund_failed');
+      item.refundState = null;
+    }
     if (!item.charged) {
+      // One ref per attempt (an earlier charge that was refunded must not read as this one's refund).
+      const chargeRef = `week:${id}:${q.weekStart}:${item.id}:${item.attempts || 1}`;
       let paid;
-      try { paid = await deps.deduct(id, 'image_generated', 1, 'Weekly plan post'); } catch (e) { paid = { success: false }; }
+      try { paid = await deps.deduct(id, 'image_generated', 1, 'Weekly plan post', { ref: chargeRef }); } catch (e) { paid = { success: false }; }
       if (!paid || !paid.success) return fail('no_pool');
       let stored = false;
-      try { stored = await deps.store.flipCharged(q, item.id, own, false, true, { chargedTo: paid.payerId ? String(paid.payerId) : null }); } catch (e) { stored = false; }
+      try { stored = await deps.store.flipCharged(q, item.id, own, false, true, { chargedTo: paid.payerId ? String(paid.payerId) : null, chargeRef, refundState: null }); } catch (e) { stored = false; }
       if (!stored) {
         // The charge could not be recorded: give it back at once (to the wallet that paid), and fail the post.
         let r;
-        try { r = await deps.refund(id, 'image_generated', 1, 'Refund: weekly plan post charge could not be recorded', paid.payerId ? { payerId: paid.payerId } : {}); } catch (e) { r = { success: false }; }
+        try { r = await deps.refund(id, 'image_generated', 1, 'Refund: weekly plan post charge could not be recorded', { ref: chargeRef, ...(paid.payerId ? { payerId: paid.payerId } : {}) }); } catch (e) { r = { success: false }; }
         if (!(r && r.success)) { await alertRefund(user, item, q); await settle({ status: 'failed', error: 'refund_failed' }); return { ok: false, error: 'refund_failed' }; }
         return fail('charge_not_recorded');
       }
       item.chargedTo = paid.payerId ? String(paid.payerId) : null;
+      item.chargeRef = chargeRef;
     }
 
     const failRefunded = async (error) => {
@@ -457,6 +524,7 @@ function createWeekService(given = {}) {
   // their run, one account at a time. Gated accounts and accounts that no longer qualify are left alone.
   async function recoverOpenWeeks({ limit = 50, now } = {}) {
     const at = nowOf(now);
+    await sweepRefunds({}).catch((e) => console.error('[week] refund sweep failed:', e && e.message));
     const before = new Date(at.getTime() - STALE_MS);
     const fromWeek = weekStartOf(new Date(at.getTime() - 14 * DAY_MS));
     const ids = (await deps.store.findStaleAccounts(before, fromWeek, limit)) || [];
@@ -476,7 +544,7 @@ function createWeekService(given = {}) {
     return { ran, skipped };
   }
 
-  return { getOrCreate, approve, runApprovedPosts, change, skipWeek, makePost, markMade, recoverOpenWeeks };
+  return { getOrCreate, approve, runApprovedPosts, change, skipWeek, makePost, markMade, recoverOpenWeeks, sweepRefunds };
 }
 
 module.exports = { createWeekService, weekCosts, defaultCosts: weekCosts, defaultDeps };
