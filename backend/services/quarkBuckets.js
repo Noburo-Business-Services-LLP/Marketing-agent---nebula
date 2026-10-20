@@ -98,7 +98,7 @@ async function spend(userId, cost, { action = 'spend', description = '', ref = '
   if (workspaceId) Object.assign(filter, agencyRules.CLIENT_PAYER_FILTER);
   const doc = await User.findOneAndUpdate(filter, spendPipeline(amount, entry), { new: true });
   if (!doc) return { success: false, balance: null, spent: 0 };
-  record({ user: workspaceId ? payerId : userId, workspace: workspaceId || undefined, type: 'spend', quarks: -amount, balanceAfter: doc.credits.balance, action, ref });
+  await record({ user: workspaceId ? payerId : userId, workspace: workspaceId || undefined, type: 'spend', quarks: -amount, balanceAfter: doc.credits.balance, action, ref });
   forgetSummary(workspaceId ? payerId : userId, workspaceId);
   // What this cost us, for the daily ceiling and the staff screen. Never blocks the spend.
   try { require('./spendGuard').record(action, units); } catch (_) { /* cost tracking is best effort */ }
@@ -126,7 +126,7 @@ async function refundTo(userId, quarks, { action = 'refund', ref = '', payerId =
   const entry = { action, amount, description: action, createdAt: new Date(), ...(ref ? { ref: String(ref) } : {}) };
   const out = await User.updateOne({ _id: target }, { $inc: { 'credits.balance': amount, 'credits.totalUsed': -amount }, $push: { 'credits.history': { $each: [entry], $slice: -100 } } });
   if (out && out.modifiedCount === 0) return { ok: false, payerId: null };
-  record({ user: target, workspace: workspaceId || undefined, type: 'refund', quarks: amount, action, ref: ref || undefined });
+  await record({ user: target, workspace: workspaceId || undefined, type: 'refund', quarks: amount, action, ref: ref || undefined });
   forgetSummary(target, workspaceId);
   return { ok: true, payerId: String(target) };
 }

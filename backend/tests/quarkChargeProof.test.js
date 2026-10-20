@@ -6,7 +6,7 @@ const assert = require('node:assert');
 
 const users = {};
 const ledger = [];
-const flags = { ledgerFails: false };
+const flags = { ledgerFails: false, ledgerDelay: false };
 const get = (o, p) => p.split('.').reduce((x, k) => (x == null ? undefined : x[k]), o);
 const set = (o, p, v) => { const ks = p.split('.'); let c = o; ks.slice(0, -1).forEach((k) => { c[k] = c[k] || {}; c = c[k]; }); c[ks.at(-1)] = v; };
 const clone = (d) => (d ? JSON.parse(JSON.stringify(d)) : d);
@@ -35,7 +35,7 @@ const UserStub = {
   }
 };
 const LedgerStub = {
-  create: async (row) => { if (flags.ledgerFails) throw new Error('disk full'); ledger.push(row); return row; },
+  create: async (row) => { if (flags.ledgerDelay) await new Promise((r) => setTimeout(r, 20)); if (flags.ledgerFails) throw new Error('disk full'); ledger.push(row); return row; },
   findOne: (q) => chain(ledger.find((r) => r.type === q.type && r.ref === q.ref) || null)
 };
 const reg = (p, exports) => { const f = require.resolve(p); require.cache[f] = { id: f, filename: f, loaded: true, exports }; };
@@ -46,7 +46,7 @@ const qb = require('../services/quarkBuckets');
 const tick = () => new Promise((r) => setImmediate(r));
 function reset(docs) {
   Object.keys(users).forEach((k) => delete users[k]);
-  ledger.length = 0; flags.ledgerFails = false;
+  ledger.length = 0; flags.ledgerFails = false; flags.ledgerDelay = false;
   docs.forEach((d) => { users[d._id] = clone(d); });
 }
 const plain = (id = 'p1', balance = 100) => ({ _id: id, plan: { tier: 'starter' }, credits: { balance, totalUsed: 0, history: [] } });
@@ -120,4 +120,26 @@ test('the Home summary of the payer is forgotten after a spend and after a refun
   await qb.refundTo('p1', 5, { action: 'x_refund', ref: 'c1' });
   assert.strictEqual(cache.get('p1:0'), undefined);
   assert.strictEqual(require('../routes/home').cache, cache, 'the route uses the same cache');
+});
+
+test('spend and refund return only after the ledger row is written, and the debit is already in place', async () => {
+  reset([plain()]);
+  flags.ledgerDelay = true;
+  await qb.spend('p1', 30, { action: 'x', ref: 'w1' });
+  assert.strictEqual(ledger.length, 1, 'ledger row written before spend returned');
+  assert.strictEqual(ledger[0].balanceAfter, 70);
+  await qb.refundTo('p1', 30, { action: 'x_refund', ref: 'w1' });
+  assert.strictEqual(ledger.length, 2, 'refund row written before refund returned');
+  assert.strictEqual(ledger[1].type, 'refund');
+});
+
+test('a failing ledger write does not fail the spend or the refund (awaited, error swallowed)', async () => {
+  reset([plain()]);
+  flags.ledgerFails = true;
+  const warn = console.warn; console.warn = () => {};
+  try {
+    const r = await qb.spend('p1', 30, { action: 'x', ref: 'f1' });
+    assert.strictEqual(r.success, true); assert.strictEqual(r.balance, 70);
+    assert.strictEqual((await qb.refundTo('p1', 30, { action: 'x_refund', ref: 'f1' })).ok, true);
+  } finally { console.warn = warn; }
 });
