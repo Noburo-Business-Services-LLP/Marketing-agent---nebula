@@ -696,21 +696,36 @@ const validateProductionEnvironment = async () => {
 const backgroundRole = require('./services/backgroundRole');
 
 function startBackgroundJobs() {
-  // Start persistent video generation queue worker
-  try {
-    const { videoGenerationQueue } = require('./services/videoGenerationQueue');
-    videoGenerationQueue.startWorker();
-  } catch (queueError) {
-    logger.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
+  // JOB CONSUMERS (RUN_JOB_CONSUMERS, default RUN_BACKGROUND): the generation queues. Safe on every worker task: each
+  // job is claimed by one atomic update with this worker's id and a lease (E9, docs/superpowers/ops/generation-parallelism.md).
+  if (backgroundRole.runsJobConsumers()) {
+    // Start persistent video generation queue worker (per-worker slots PROVIDER_SLOTS_IMAGE / _VIDEO, CPU_SLOTS)
+    try {
+      const { videoGenerationQueue } = require('./services/videoGenerationQueue');
+      videoGenerationQueue.startWorker();
+    } catch (queueError) {
+      logger.warn('⚠️  Video generation queue worker failed to start:', queueError.message);
+    }
+
+    // Campaign image jobs stored by any task (async regenerate): claimed and run here, PROVIDER_SLOTS_IMAGE at once
+    // (default 2), per account 2 running and 5 waiting. Off with ENABLE_IMAGE_JOB_RUNNER=off
+    try {
+      require('./services/imageJobQueue').startImageJobRunner();
+    } catch (queueError) {
+      logger.warn('Image job runner failed to start:', queueError.message);
+    }
+
+    // Queue numbers to CloudWatch: OFF unless QUEUE_METRICS_CLOUDWATCH=on
+    try {
+      require('./services/queueMetricsEmitter').startQueueMetricsEmitter();
+    } catch (metricsError) {
+      logger.warn('Queue metrics emitter failed to start:', metricsError.message);
+    }
   }
 
-  // Campaign image jobs stored by any task (async regenerate): claimed and run here, IMAGE_JOB_CONCURRENCY at once
-  // (default 2), per account 2 running and 5 waiting. Off with ENABLE_IMAGE_JOB_RUNNER=off
-  try {
-    require('./services/imageJobQueue').startImageJobRunner();
-  } catch (queueError) {
-    logger.warn('Image job runner failed to start:', queueError.message);
-  }
+  // SCHEDULERS (RUN_SCHEDULERS, default RUN_BACKGROUND): everything below. Every tick takes a lease, so several worker
+  // tasks may run them; a task can still opt out (a consumer-only worker).
+  if (!backgroundRole.runsSchedulers()) return;
 
   // Start notification scheduler for campaign reminders
   try {
@@ -909,7 +924,7 @@ const startServer = async () => {
     // Schedulers, sweeps, queue consumers and loops: only where background jobs run (RUN_BACKGROUND, default on).
     // A web-only task (RUN_BACKGROUND=0) serves every request and leaves this work to the worker task.
     logger.info(backgroundRole.describe());
-    if (backgroundRole.runsBackground()) startBackgroundJobs();
+    if (backgroundRole.runsBackground() || backgroundRole.runsJobConsumers()) startBackgroundJobs();
 
     // Initialize OTP email service
     try {
@@ -977,7 +992,10 @@ process.on('SIGTERM', () => {
   const drainMs = shutdownDrainMs();
   logger.info(`SIGTERM received: finishing open requests (at most ${Math.round(drainMs / 1000)} s), then stopping.`);
   health.markShuttingDown();
-  const stop = () => mongoose.connection.close().catch(() => {}).finally(() => process.exit(0));
+  // Job consumers stop claiming at once, let running jobs finish within JOB_SHUTDOWN_GRACE_MS (default drain - 5 s),
+  // then hand back (or fail and refund) what is still running, BEFORE the database connection closes.
+  const jobsStopped = require('./services/jobConsumersShutdown').stopJobConsumers().catch((e) => logger.warn('Job consumers did not stop cleanly:', e && e.message));
+  const stop = () => jobsStopped.then(() => mongoose.connection.close()).catch(() => {}).finally(() => process.exit(0));
   setTimeout(() => process.exit(0), drainMs).unref();
   if (httpServer) httpServer.close(stop); else stop();
 });

@@ -37,11 +37,13 @@ const STARTERS = {
   // reviewed allowlist
   'videoGenerationQueue.startWorker()': 'services/videoGenerationQueue.js',
   'startImageJobRunner()': 'services/imageJobQueue.js',
+  'startQueueMetricsEmitter()': 'services/queueMetricsEmitter.js',
   'reapOnBoot()': 'services/plan/planService.js'
 };
 
 const ALLOW = {
-  'videoGenerationQueue.startWorker()': 'a queue consumer, not a timer job: every job is taken by one atomic queued->processing update, refunds are claimed in the same write; several workers are meant to be safe',
+  'videoGenerationQueue.startWorker()': 'a queue consumer, not a timer job: every job is claimed by one atomic queued->processing update with this worker id and a per-job lease, refunds are claimed in the same write; its expired-lease sweep runs through the lease helper; several workers are meant to be safe',
+  'startQueueMetricsEmitter()': 'off by default; only pushes queue counts to CloudWatch from each consumer (no send, charge or refund), so every worker reporting is intended',
   'startImageJobRunner()': 'a queue consumer: each job is claimed by an atomic update with its own per-job lease (LEASE_MS) and heartbeat',
   'reapOnBoot()': 'one run at boot, not a timer; in a split deployment it only ends runs that are stale by heartbeat/age, and ending a run twice is a no-op'
 };

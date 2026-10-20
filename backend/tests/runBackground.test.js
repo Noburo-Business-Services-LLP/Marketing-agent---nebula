@@ -32,7 +32,7 @@ test('role: default on, 0/off means web only, set either way means split', () =>
 
 test('server-main: the gate calls startBackgroundJobs only when background jobs run, and logs the role once', () => {
   const src = read('server-main.js');
-  assert.match(src, /logger\.info\(backgroundRole\.describe\(\)\);\s*\n\s*if \(backgroundRole\.runsBackground\(\)\) startBackgroundJobs\(\);/);
+  assert.match(src, /logger\.info\(backgroundRole\.describe\(\)\);\s*\n\s*if \(backgroundRole\.runsBackground\(\) \|\| backgroundRole\.runsJobConsumers\(\)\) startBackgroundJobs\(\);/);
   assert.strictEqual((src.match(/startBackgroundJobs\(\)/g) || []).length, 2, 'defined once and called once');
 });
 
@@ -44,7 +44,7 @@ test('server-main: every starter is inside startBackgroundJobs, none outside', (
     'startHomeDraftsSweep()', 'startBinPurge()', 'startWeekRecovery()', 'startPerformanceTrackerScheduler()', 'startBillingScheduler()',
     'setInterval(run, 60 * 60 * 1000)', 'startAccountPurge()', 'startRenewalReminders()', 'startStaleDraftReaper()', 'reapOnBoot()',
     'startCompetitorTracker()', 'startListeningScorer()', 'startPlanScheduler()', 'startBrandMemoryJob()', 'startMemoryDistillationScheduler()',
-    'startImageJobRunner()'
+    'startImageJobRunner()', 'startQueueMetricsEmitter()'
   ];
   for (const call of expected) assert.ok(body.includes(call), `inside the gate: ${call}`);
   // Outside the gate: no setInterval, no start...() other than the server itself, no .start() other than the memory
@@ -105,4 +105,33 @@ test('SIGTERM drain: SHUTDOWN_DRAIN_MS, default 20 s, at most 115 s (below the 1
   assert.match(src, /process\.env\.SHUTDOWN_DRAIN_MS/);
   assert.match(src, /Math\.max\(1000, Math\.min\(115000, n\)\) : 20000/);
   assert.match(src, /setTimeout\(\(\) => process\.exit\(0\), drainMs\)\.unref\(\)/);
+});
+
+test('RUN_JOB_CONSUMERS and RUN_SCHEDULERS default to RUN_BACKGROUND and can each be set on their own (E9)', () => {
+  const both = (env) => [role.runsJobConsumers(env), role.runsSchedulers(env)];
+  assert.deepStrictEqual(both({}), [true, true], 'single process: both');
+  assert.deepStrictEqual(both({ RUN_BACKGROUND: '0' }), [false, false], 'web: neither');
+  assert.deepStrictEqual(both({ RUN_BACKGROUND: '1' }), [true, true], 'worker: both');
+  assert.deepStrictEqual(both({ RUN_BACKGROUND: '1', RUN_SCHEDULERS: '0' }), [true, false], 'consumer-only worker');
+  assert.deepStrictEqual(both({ RUN_BACKGROUND: '1', RUN_JOB_CONSUMERS: 'off' }), [false, true], 'scheduler-only worker');
+  assert.deepStrictEqual(both({ RUN_BACKGROUND: '0', RUN_JOB_CONSUMERS: '1' }), [true, false], 'a web task that also consumes');
+  assert.deepStrictEqual(both({ RUN_JOB_CONSUMERS: ' ' }), [true, true], 'blank = default');
+  assert.match(role.describe({ RUN_BACKGROUND: '1', RUN_SCHEDULERS: '0' }), /job consumers on, schedulers off/);
+});
+
+test('server-main: consumers start first under RUN_JOB_CONSUMERS, every scheduler sits after the RUN_SCHEDULERS return (E9)', () => {
+  const { body } = gatedBody(read('server-main.js'));
+  const consumers = body.indexOf('if (backgroundRole.runsJobConsumers()) {');
+  const schedulers = body.indexOf('if (!backgroundRole.runsSchedulers()) return;');
+  assert.ok(consumers > 0 && schedulers > consumers, 'consumer block, then the schedulers gate');
+  for (const c of ['videoGenerationQueue.startWorker()', 'startImageJobRunner()', 'startQueueMetricsEmitter()']) {
+    const at = body.indexOf(c);
+    assert.ok(at > consumers && at < schedulers, `${c} is a consumer`);
+  }
+  for (const c of ['notificationScheduler.start()', 'startCampaignScheduler()', 'startPhotoshootResume()', 'startStudioVideoSweep()', 'startMemoryDistillationScheduler()']) {
+    assert.ok(body.indexOf(c) > schedulers, `${c} is a scheduler`);
+  }
+  const src = read('server-main.js');
+  assert.match(src, /stopJobConsumers\(\)/, 'SIGTERM stops the consumers');
+  assert.ok(src.indexOf('stopJobConsumers()') < src.indexOf("jobsStopped.then(() => mongoose.connection.close())"), 'before the database closes');
 });

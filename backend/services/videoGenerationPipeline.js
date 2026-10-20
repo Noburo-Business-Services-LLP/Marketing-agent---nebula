@@ -304,7 +304,13 @@ async function downloadToFile(url, outputPath) {
   throw lastError || new Error('Download failed');
 }
 
+// At most CPU_SLOTS ffmpeg processes at once in this process (services/cpuSlots.js, E9): a job holding its provider
+// result waits here for a slot instead of oversubscribing the cores.
 function runFfmpeg(args = [], options = {}) {
+  return require('./cpuSlots').cpuSlots().run(() => runFfmpegNow(args, options));
+}
+
+function runFfmpegNow(args = [], options = {}) {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) {
       return reject(new Error('ffmpeg is not available (install ffmpeg-static or ffmpeg on PATH)'));
@@ -317,7 +323,7 @@ function runFfmpeg(args = [], options = {}) {
     // Global cap on CPU thread allocation to prevent server freezes/CPU starvation
     const finalArgs = [...args];
     if (!finalArgs.includes('-threads')) {
-      finalArgs.unshift('-threads', '2');
+      finalArgs.unshift('-threads', String(require('../config/jobSlots').jobSlots().ffmpegThreads));
     }
 
     const proc = spawn(ffmpegPath, finalArgs, { windowsHide: true });
