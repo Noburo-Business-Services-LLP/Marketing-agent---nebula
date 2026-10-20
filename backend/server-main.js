@@ -216,10 +216,11 @@ app.use(cors({
 const limits = createRateLimits();
 const aiLimiter = limits.ai;
 
-// Health check endpoint (exempt from rate limiting)
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
-});
+// Health (the load balancer's path, exempt from rate limiting): 200 only when MongoDB is connected and answers a ping
+// (kept 5 s), 503 when it is not or while the task shuts down. /api/ready is the readiness probe. services/healthCheck.js
+const health = require('./services/healthCheck').createHealth();
+app.get('/api/health', health.health);
+app.get('/api/ready', health.ready);
 
 // More detailed health check for debugging production 502s (does not expose secrets)
 app.get('/api/health/details', (req, res) => {
@@ -255,6 +256,11 @@ app.get('/api/health/details', (req, res) => {
   return res.status(200).json({
     status: 'ok',
     checks: {
+      // The address the request limits see (trust proxy = TRUST_PROXY_HOPS): check it is your own, not the load balancer's.
+      client: {
+        ip: req.ip,
+        forwardedHops: String(req.headers['x-forwarded-for'] || '').split(',').filter((x) => x.trim()).length
+      },
       mongo: {
         readyState: mongoState,
         state: mongoStates[mongoState] || 'unknown'
@@ -865,6 +871,7 @@ const startServer = async () => {
     }
   });
 
+  httpServer = server;
   initializeSocketHub(server, allowedOrigins);
 
   // Memory leak hunting — logs heap + handles every 5 min as [MEM] in stdout.
@@ -892,8 +899,19 @@ mongoose.connection.on('error', (err) => {
   console.error('MongoDB connection error:', err);
 });
 
-// Graceful shutdown
+// Graceful shutdown. ECS stops a task with SIGTERM: health and ready answer 503 at once (the load balancer stops sending
+// new requests), the server stops accepting connections, and the process ends when open requests finish (at most 20 s).
+let httpServer = null;
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received: finishing open requests, then stopping.');
+  health.markShuttingDown();
+  const stop = () => mongoose.connection.close().catch(() => {}).finally(() => process.exit(0));
+  setTimeout(() => process.exit(0), 20000).unref();
+  if (httpServer) httpServer.close(stop); else stop();
+});
+
 process.on('SIGINT', async () => {
+  health.markShuttingDown();
   console.log('\nShutting down gracefully...');
   notificationScheduler.stop();
   snapshotScheduler.stop();
