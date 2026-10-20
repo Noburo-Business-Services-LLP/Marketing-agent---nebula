@@ -3279,14 +3279,18 @@ router.post('/generateImages', protect, checkTrial, videoAiWriteLimiter, async (
 });
 
 router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, jobCap('video'), async (req, res) => {
-  // Declared out here so the catch block can refund — same pattern as
-  // /generate-image-bg in routes/drafts.js. Only covers the synchronous
-  // path's failures; the async/queued path (off unless VIDEO_STEP_ASYNC is
-  // explicitly set) doesn't refund on a later job failure yet — a known,
-  // smaller gap left for a follow-up rather than reworking the queue's
-  // failure handling here.
+  // Declared out here so the catch block can refund, only for a charge no job holds yet (the synchronous path, or a
+  // failure before the job exists). A queued job records its own charge (metadata.quarkCharge) and refunds it itself.
   let creditsDeductedCount = 0;
   let creditUserId = null;
+  let creditRef = '';
+  let creditPayerId = '';
+  const d = router.testDeps || {};
+  const charge = d.deductCredits || deductCredits;
+  const refund = d.refundCredits || refundCredits;
+  const queue = d.videoGenerationQueue || videoGenerationQueue;
+  const loadDraft = d.loadDraftForUser || loadDraftForUser;
+  const saveDraft = d.updateDraft || updateDraft;
   try {
     const { jobId, sceneData } = req.body || {};
     if (!jobId) {
@@ -3295,7 +3299,7 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, jobCap('
 
     const userId = toUserId(req.user);
     creditUserId = userId;
-    const draft = await loadDraftForUser(jobId, userId);
+    const draft = await loadDraft(jobId, userId);
     const sourceScenes = sanitizeSceneData(
       sceneData ||
       draft?.images?.sceneData ||
@@ -3308,10 +3312,36 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, jobCap('
       return res.status(400).json({ success: false, message: 'Scene images are required before clip generation' });
     }
 
+    const shouldQueue =
+      req.body?.async === true ||
+      String(req.query?.async || '').toLowerCase() === 'true' ||
+      String(process.env.VIDEO_STEP_ASYNC || '').toLowerCase() === 'true';
+
+    // Cache guard BEFORE the charge: a repeat click (or a second tab) gets the running job back and pays nothing.
+    if (shouldQueue) {
+      const existingJobId = draft?.jobs?.clips?.queueJobId;
+      if (existingJobId) {
+        const existingJob = await queue.getJob(existingJobId, userId);
+        if (existingJob && ['queued', 'processing'].includes(existingJob.status)) {
+          return res.status(202).json({
+            success: true,
+            message: 'Clip generation queued',
+            alreadyRunning: true,
+            draftJobId: jobId,
+            queueJobId: existingJob.jobId,
+            status: existingJob.status,
+            progress: existingJob.progress,
+            currentStep: existingJob.currentStep
+          });
+        }
+      }
+    }
+
     // Regenerating all clips re-runs one real Kling call per scene — this
     // used to be free (the same gap fixed for post/campaign Regenerate in
-    // routes/drafts.js).
-    const creditResult = await deductCredits(userId, 'video_scene_clip', sourceScenes.length, 'Regenerate all scene clips');
+    // routes/drafts.js). The charge carries a ref so a failure or cancel refunds exactly it.
+    creditRef = `clips:${crypto.randomUUID()}`;
+    const creditResult = await charge(userId, 'video_scene_clip', sourceScenes.length, 'Regenerate all scene clips', { ref: creditRef });
     if (!creditResult.success) {
       return res.status(403).json({
         success: false,
@@ -3320,49 +3350,35 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, jobCap('
       });
     }
     creditsDeductedCount = sourceScenes.length;
-
-    const shouldQueue =
-      req.body?.async === true ||
-      String(req.query?.async || '').toLowerCase() === 'true' ||
-      String(process.env.VIDEO_STEP_ASYNC || '').toLowerCase() === 'true';
+    creditPayerId = creditResult.payerId ? String(creditResult.payerId) : '';
 
     if (shouldQueue) {
       const baseUrl = reqBaseUrl(req);
-      
-      // Cache guard: Check if an active queue job already exists for this draft step
-      const existingJobId = draft?.jobs?.clips?.queueJobId;
-      let queued;
-      if (existingJobId) {
-        const existingJob = await videoGenerationQueue.getJob(existingJobId, userId);
-        if (existingJob && ['queued', 'processing'].includes(existingJob.status)) {
-          queued = existingJob;
-        }
-      }
-
-      if (!queued) {
-        queued = await videoGenerationQueue.enqueue({
+      const queued = await queue.enqueue({
+        userId,
+        jobType: 'generate_clips',
+        payload: {
+          jobId,
           userId,
-          jobType: 'generate_clips',
-          payload: {
-            jobId,
-            userId,
-            sourceScenes,
-            baseUrl
-          }
-        });
+          sourceScenes,
+          baseUrl
+        },
+        // What was deducted above (ref and wallet), so a failure, lost worker or cancel refunds exactly this, once.
+        metadata: { quarkCharge: [{ action: 'video_scene_clip', count: sourceScenes.length, ref: creditRef, payerId: creditPayerId }] }
+      });
+      creditsDeductedCount = 0; // the job owns the refund from here
 
-        await updateDraft(jobId, userId, (current) => ({
-          ...current,
-          jobs: {
-            ...(current.jobs || {}),
-            clips: {
-              queueJobId: queued.jobId,
-              status: queued.status,
-              queuedAt: new Date().toISOString()
-            }
+      await saveDraft(jobId, userId, (current) => ({
+        ...current,
+        jobs: {
+          ...(current.jobs || {}),
+          clips: {
+            queueJobId: queued.jobId,
+            status: queued.status,
+            queuedAt: new Date().toISOString()
           }
-        }));
-      }
+        }
+      }));
 
       return res.status(202).json({
         success: true,
@@ -3439,7 +3455,7 @@ router.post('/generateClips', protect, checkTrial, videoAiWriteLimiter, jobCap('
     });
   } catch (error) {
     if (creditsDeductedCount > 0 && creditUserId) {
-      await refundCredits(creditUserId, 'video_scene_clip', creditsDeductedCount, 'Refund: clip generation errored').catch(() => {});
+      await refund(creditUserId, 'video_scene_clip', creditsDeductedCount, 'Refund: clip generation errored', { ref: creditRef, ...(creditPayerId ? { payerId: creditPayerId } : {}) }).catch(() => {});
     }
     return responseError(res, error, 'Failed to generate clips');
   }
@@ -4002,5 +4018,7 @@ router.post('/renderMissing', protect, checkTrial, videoAiWriteLimiter, jobCap('
     return responseError(res, error, 'Could not start rendering');
   }
 });
+
+router.testDeps = undefined; // tests put fakes here (generateClips); never set in production
 
 module.exports = router;
