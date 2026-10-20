@@ -1,6 +1,6 @@
 # Parallel generation jobs (tester task E9), stage A: how it works and how to run it
 
-Impact map: `docs/superpowers/impact-maps/generation-parallelism.md`. Decisions D68 to D72 in `docs/superpowers/DECISIONS-LOG-2026-10-20.md`. Code on `nebulaa-redesign`, NOT released.
+Impact map: `docs/superpowers/impact-maps/generation-parallelism.md`. Decisions D68 to D72, review fixes D74 to D76 in `docs/superpowers/DECISIONS-LOG-2026-10-20.md`. Code on `nebulaa-redesign`, NOT released.
 
 ## What changed (in plain words)
 Before: the step-by-step video queue ran at most 2 jobs at once for ALL customers together, whatever the number of servers, because it counted running jobs across the whole database. Now every worker server runs its own slots (by default 2 picture jobs and 2 video jobs at once), so two worker servers run twice as many. A job is "claimed" by one server with a time-limited lease that the server renews while it works; if the server dies, another one takes the job over after the lease runs out (or refunds it). One account cannot take every slot.
@@ -12,9 +12,9 @@ Stage A covers the persistent video queue (`VideoJob`: create video, clips, merg
 |---|---|---|
 | Slots | `backend/config/jobSlots.js` | Reads the variables below once, validates them (out of range is clamped, not a number falls back, one warning line each). |
 | Claim | `services/videoGenerationQueue.js` `_drainQueue`, `_claimFair`, `_claim` | Per pool (image, video) the worker fills only ITS free slots. The claim is one atomic update `queued -> processing` that writes `workerId`, `leaseUntil` (now + 60 s) and `attempts + 1`. |
-| Fair order | `_claimFair` | Among the 50 oldest waiting jobs of a pool: the account with the fewest running jobs first, oldest first on a tie; an account with `JOB_PER_USER_RUNNING` running is skipped. |
-| Heartbeat | `_runJob` | Every 20 s, and at every progress step, renews the lease, only while the job is still this worker's (same worker id and attempt). If that write matches nothing, the run is "lost": it stops at its next step and its result is thrown away. |
-| Lost workers | `recoverStaleJobs` (+ `_expireLease`), every 30 s through the lease `scheduler:video-jobs:lease-sweep` and once at start | A `processing` job whose lease ran out: a retry-safe job goes back to `queued` (run 2 of 2, nothing charged again); anything else is failed and refunded once (the refund is claimed in the same write, `sweepRefunds` pays leftovers once with proof of the charge). Rows from older code (no worker id) keep the old 5-minute rule. |
+| Fair order | `_claimFair` | One aggregate counts running jobs per account; accounts already at `JOB_PER_USER_RUNNING` are left out of the query (so their waiting rows cannot fill the window), then among the 50 oldest waiting jobs of the others: fewest running first, oldest first on a tie. After each claim the account is re-counted; above the cap the job is handed back to the queue (attempt not counted) and not started (D76). |
+| Heartbeat | `_runJob` | Every 20 s, and at every progress step, renews the lease, only while the job is still this worker's (same worker id and attempt). If that write matches nothing, the run is "lost": it stops at its next step and its result is thrown away. The pipeline (`services/runGate.js`) keeps every progress promise (no unhandled rejection) and checks, together with the queue's `isCancelled()`, before each paid step (scene plan, voice, each picture, each clip, thumbnail): a cancelled, lost or handed-back run pays for nothing more (D74). |
+| Lost workers | `recoverStaleJobs` (+ `_expireLease`), every 30 s through the lease `scheduler:video-jobs:lease-sweep` and once at start | A `processing` job whose lease ran out one heartbeat ago (the margin covers clock differences between servers up to about a minute, D75): a retry-safe job goes back to `queued` (run 2 of 2, nothing charged again); anything else is failed and refunded once (the refund is claimed in the same write, `sweepRefunds` pays leftovers once with proof of the charge). Rows from older code (no worker id) keep the old 5-minute rule. |
 | CPU | `services/cpuSlots.js` around `videoGenerationPipeline.runFfmpeg` | At most `CPU_SLOTS` ffmpeg processes at once per worker; a job waiting for ffmpeg keeps its claim and keeps renewing its lease. |
 | Shutdown | `services/jobConsumersShutdown.js`, `server-main.js` SIGTERM | Claim nothing more, wait up to `JOB_SHUTDOWN_GRACE_MS` for running jobs, then hand back retry-safe ones to the queue (the attempt is not counted) and fail + refund the rest, before the database closes. |
 | Metrics | `GET /api/metrics/queue` (staff with `run_jobs`) | Queue depth per job type and pool, running, oldest waiting age in seconds, running jobs per worker; this server's slots, slots in use, claims, completions, failures, lease re-queues, lease failures, hand-backs, lost runs. Same for campaign image jobs. Counts and server ids only. |
@@ -66,7 +66,7 @@ If a run was interrupted:
 cd backend && node scripts/queue-parallel-check.js cleanup
 ```
 
-Last run (2026-10-20, from the Mac to the dev cluster): 4 PASS, 0 FAIL. 1 worker cleared 12 jobs in 8.9 s, 3 workers in 3.3 s (2.7x, split 5/3/4); a killed worker's 3 jobs were taken over 3.0 s after the kill (lease 2 s in the check): 2 finished on another worker on their second run, the one that may not be re-run was failed and refunded once by two sweeps at the same moment; a provider failure refunded each of 4 charges once.
+Last run (2026-10-20 evening, after the D74 fixes, from the Mac to the dev cluster): 4 PASS, 0 FAIL (twice in a row). 1 worker cleared 12 jobs in 8.3 s, 3 workers in 4.2 s (about 2x; from a laptop the network jitters, 1.5x to 2.7x seen on the same code, so the check's floor is 1.4x; earlier run: 8.9 s and 3.3 s, 2.7x, split 5/3/4); a killed worker's 3 jobs were taken over 3.0 s after the kill (lease 2 s in the check): 2 finished on another worker on their second run, the one that may not be re-run was failed and refunded once by two sweeps at the same moment; a provider failure refunded each of 4 charges once.
 
 ## Stage B (one money flow per session, each with an independent read-only money review before and after)
 1. Videos (Omni) create and finishing onto consumers (keep `chargeProof` and the studio sweep).
@@ -78,7 +78,19 @@ Last run (2026-10-20, from the Mac to the dev cluster): 4 PASS, 0 FAIL. 1 worker
 
 ## Known limits (not removed in stage A)
 - A worker that is alive but lost its lease (database unreachable longer than the lease) keeps its provider call running until its next step while a second worker re-runs the job: at most one extra provider call (our cost); the late result is discarded.
-- The per-account claim cap is soft across workers (at most workers - 1 over at the same instant); the entry cap (429) is the hard one.
+- The per-account claim cap is re-counted after every claim and handed back when exceeded (D76): more than the cap never RUN. Two workers claiming at the same instant may both hand back, so that job waits one more drain. The entry cap (429) is still the first limit.
 - A retried `create_video_pipeline` makes a new draft folder; the dead run may have left a partial one (not shown to the customer).
 - Old-code servers during a rolling deploy still count all running jobs and may hold back; an old-code server STARTING (rollback) fails every running job once, as before.
-- The older `generate_clips` / `merge_video` routes record no `quarkCharge` (handover 24 "older inline callers"): their failure refund is the old flat legacy guess. Unchanged here; it is in the stage B5 money conversion.
+- A job WITHOUT `metadata.quarkCharge` refunds nothing (D74; the old flat 11-Quark guess is gone). Every paid job type records its charge when it is enqueued:
+
+| Enqueue site | Job type | Charge recorded in `metadata.quarkCharge` |
+|---|---|---|
+| `routes/videoGeneration.js` `/createVideo` | `create_video_pipeline` | `video_base` x1 (`video:<uuid>:base`) and `video_generated` x scenes (`video:<uuid>:scenes`), each with its payer |
+| `routes/contentCalendar.js` `/items/:id/auto-generate` | `create_video_pipeline` | `campaign_full` x1 (`calreel:<uuid>`), payer recorded |
+| `routes/videoGeneration.js` `/generateClips` (async) | `generate_clips` | `video_scene_clip` x scenes (`clips:<uuid>`), payer recorded; a running job for the draft is returned BEFORE any charge |
+| `routes/videoGeneration.js` `/mergeVideo` (async) | `merge_video` | none: the merge is free, so a failure refunds nothing |
+| `routes/videoGeneration.js` `/renderMissing` | `render_missing_scene_images`, `render_missing_clips` | none on the job: `perSceneCharging`, each scene is charged and refunded inside the handler |
+| (no route enqueues it) | `generate_content` | handler registered only; no enqueue site today |
+
+Known gap: two requests at the same instant can both pass the "running job" check before either has stored its job id, and both charge and enqueue (each job refunds its own charge). The route's job cap (`jobCap('video')`) limits it; a persisted per-draft claim belongs to the stage B money conversion.
+- Jobs queued by older code have no recorded charge: if one of those fails after this release it is not refunded automatically (support refunds by hand). Jobs already failed with a refund claim are unaffected.

@@ -863,36 +863,19 @@ class PersistentVideoGenerationQueue {
     return started;
   }
 
-  /** Running jobs per account among `userIds` (all workers): one aggregate. */
-  async _activeByUser(userIds) {
-    const out = new Map();
-    if (!userIds.length) return out;
-    if (typeof this.model.aggregate === 'function') {
-      const rows = (await this.model.aggregate([
-        { $match: { status: 'processing', userId: { $in: userIds } } },
-        { $group: { _id: '$userId', n: { $sum: 1 } } }
-      ])) || [];
-      for (const r of rows) out.set(String(r._id), Number(r.n) || 0);
-      return out;
-    }
-    for (const u of userIds) out.set(String(u), await this.model.countDocuments({ status: 'processing', userId: u }));
-    return out;
-  }
-
-  /** Accounts with JOB_PER_USER_RUNNING or more jobs running now (all workers): one aggregate over the running rows (at most the global ceiling). */
-  async _cappedUsers() {
-    const cap = this.settings.perUserRunning;
-    if (!(cap > 0) || typeof this.model.aggregate !== 'function') return [];
-    try {
-      const rows = (await this.model.aggregate([
-        { $match: { status: 'processing', userId: { $ne: null } } },
-        { $group: { _id: '$userId', n: { $sum: 1 } } }
-      ])) || [];
-      return rows.filter((r) => r._id != null && Number(r.n) >= cap).map((r) => r._id);
-    } catch (err) {
-      logger.error('⚠️ Per-account running count failed (candidates are not narrowed):', err.message);
-      return [];
-    }
+  /**
+   * Running jobs per account (all workers): ONE aggregate over the running rows (at most the global ceiling). Gives both the
+   * per-account counts for the fair order and the accounts already at the cap, which are left out of the candidate query.
+   */
+  async _runningByUser() {
+    const counts = new Map(); // String(userId) -> n
+    const ids = new Map(); // String(userId) -> userId as stored (an ObjectId in MongoDB)
+    const rows = (await this.model.aggregate([
+      { $match: { status: 'processing', userId: { $ne: null } } },
+      { $group: { _id: '$userId', n: { $sum: 1 } } }
+    ])) || [];
+    for (const r of rows) { if (r._id == null) continue; counts.set(String(r._id), Number(r.n) || 0); ids.set(String(r._id), r._id); }
+    return { counts, ids };
   }
 
   /**
@@ -905,15 +888,14 @@ class PersistentVideoGenerationQueue {
     const poolFilter = pool === 'video' ? { pool: { $in: ['video', null] } } : { pool };
     // Accounts already at the cap are left out of the QUERY (D74 item 7): otherwise 50 older waiting rows of capped
     // accounts fill the whole candidate window and every other account waits behind them.
-    const capped = await this._cappedUsers();
+    const cap = this.settings.perUserRunning;
+    const running = await this._runningByUser();
+    const capped = cap > 0 ? [...running.counts].filter(([, n]) => n >= cap).map(([k]) => running.ids.get(k)) : [];
     const notCapped = capped.length ? { userId: { $nin: capped } } : {};
     const candidates = (await this.model.find({ status: 'queued', ...poolFilter, ...notCapped })
       .sort({ createdAt: 1 }).limit(CANDIDATES).select({ jobId: 1, userId: 1, createdAt: 1 }).lean()) || [];
     if (!candidates.length) return 0;
-    const seen = new Map();
-    for (const c of candidates) if (c.userId) seen.set(String(c.userId), c.userId);
-    const active = await this._activeByUser([...seen.values()]);
-    const cap = this.settings.perUserRunning;
+    const active = new Map(running.counts); // the counts read above; the post-claim re-count (_overCap) catches races
     const remaining = candidates.slice();
     let started = 0;
     while (started < free && remaining.length && !this.stopping) {
