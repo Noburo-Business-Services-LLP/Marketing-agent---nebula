@@ -678,7 +678,7 @@ router.get('/elevenlabs-voices', protect, videoJobReadLimiter, async (req, res) 
     });
   } catch (error) {
     console.error('[elevenlabs-voices] error:', error);
-    return res.status(500).json({ success: false, message: error.message || 'Failed to list ElevenLabs voices' });
+    return res.status(500).json({ success: false, message: 'Failed to list ElevenLabs voices' });
   }
 });
 
@@ -727,7 +727,7 @@ router.post('/favourite-audio', protect, videoJobReadLimiter, async (req, res) =
     });
   } catch (error) {
     console.error('[favourite-audio] error:', error);
-    return res.status(500).json({ success: false, message: error.message || 'Failed to toggle favourite audio' });
+    return res.status(500).json({ success: false, message: 'Failed to toggle favourite audio' });
   }
 });
 
@@ -742,7 +742,8 @@ router.get('/favourite-audio', protect, videoJobReadLimiter, async (req, res) =>
       : [];
     return res.json({ success: true, count: list.length, tracks: list });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message || 'Failed to list favourite audio' });
+    console.error('videoGeneration.js request failed:', error && error.message);
+    return res.status(500).json({ success: false, message: 'Failed to list favourite audio' });
   }
 });
 
@@ -779,7 +780,7 @@ router.post('/favourite-voice', protect, videoJobReadLimiter, async (req, res) =
     });
   } catch (error) {
     console.error('[favourite-voice] error:', error);
-    return res.status(500).json({ success: false, message: error.message || 'Failed to toggle favourite voice' });
+    return res.status(500).json({ success: false, message: 'Failed to toggle favourite voice' });
   }
 });
 
@@ -2063,7 +2064,7 @@ router.post('/generateCharacterPreview', protect, checkTrial, videoAiWriteLimite
     res.json({ success: true, imageUrl: typeof imageUrl === 'string' ? imageUrl : imageUrl.imageUrl });
   } catch (error) {
     console.error('Error in /generateCharacterPreview:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to generate character preview' });
+    res.status(500).json({ success: false, message: 'Failed to generate character preview' });
   }
 });
 

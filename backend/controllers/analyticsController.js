@@ -59,6 +59,7 @@ exports.getInfluencerAnalytics = async (req, res) => {
       totals: totals[0] || { likes: 0, views: 0, shares: 0, clicks: 0, engagement: 0, conversions: 0 }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('analyticsController.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 };

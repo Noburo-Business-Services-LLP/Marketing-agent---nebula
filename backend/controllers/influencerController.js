@@ -7,7 +7,8 @@ exports.getInfluencers = async (req, res) => {
     const influencers = await Influencer.find({ userId }).sort({ createdAt: -1 });
     res.json({ success: true, influencers });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('influencerController.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 };
 
@@ -74,6 +75,7 @@ exports.deleteInfluencer = async (req, res) => {
 
     res.json({ success: true, message: 'Influencer deleted' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('influencerController.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 };

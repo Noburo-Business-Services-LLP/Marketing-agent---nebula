@@ -583,7 +583,7 @@ router.post('/:id/generate-ad-image', protect, L.heavyAi, async (req, res) => {
     console.error('Product ad image generation error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Server error generating ad image'
+      message: 'Server error generating ad image'
     });
   }
 });

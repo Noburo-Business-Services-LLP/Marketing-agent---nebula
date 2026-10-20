@@ -10,7 +10,8 @@ exports.getCollaborations = async (req, res) => {
       .sort({ createdAt: -1 });
     res.json({ success: true, collaborations });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('collaborationController.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 };
 
@@ -44,6 +45,7 @@ exports.deleteCollaboration = async (req, res) => {
 
     res.json({ success: true, message: 'Collaboration deleted' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('collaborationController.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 };

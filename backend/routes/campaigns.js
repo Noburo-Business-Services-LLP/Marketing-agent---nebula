@@ -965,7 +965,7 @@ router.get('/', protect, async (req, res) => {
   } catch (error) {
     if (error && error.status === 400) return res.status(400).json({ success: false, message: error.message });
     console.error('Get campaigns error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch campaigns', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch campaigns' });
   }
 });
 
@@ -2234,8 +2234,7 @@ router.get('/reel/options', protect, async (_req, res) => {
     console.error('Reel options error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to load reel generation options',
-      error: error.message
+      message: 'Failed to load reel generation options'
     });
   }
 });
@@ -2400,7 +2399,6 @@ router.post('/reel/generate', protect, checkTrial, requireCredits('campaign_full
     return res.status(500).json({
       success: false,
       message: 'Failed to generate AI reel',
-      error: error.message,
       details: error?.details || null
     });
   }
@@ -2422,7 +2420,7 @@ router.get('/:id', protect, async (req, res) => {
     res.json({ success: true, campaign });
   } catch (error) {
     console.error('Get campaign error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch campaign', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch campaign' });
   }
 });
 
@@ -2454,7 +2452,7 @@ router.post('/upload-audio', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Upload audio error:', error);
-    res.status(500).json({ success: false, message: 'Failed to upload audio', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to upload audio' });
   }
 });
 
@@ -2571,7 +2569,7 @@ router.post('/', protect, requireFeatureWhen('schedule', wantsScheduling), async
     res.status(201).json({ success: true, campaign });
   } catch (error) {
     console.error('Create campaign error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create campaign', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to create campaign' });
   }
 });
 
@@ -2667,7 +2665,7 @@ router.patch('/:id/post-ids', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Manual campaign post ID update error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update campaign post IDs', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to update campaign post IDs' });
   }
 });
 
@@ -2788,7 +2786,7 @@ router.put('/:id', protect, requireFeatureWhen('schedule', wantsScheduling), asy
     res.json({ success: true, campaign });
   } catch (error) {
     console.error('Update campaign error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update campaign', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to update campaign' });
   }
 });
 
@@ -2847,7 +2845,7 @@ router.delete('/:id', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Delete campaign error:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete campaign', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to delete campaign' });
   }
 });
 
@@ -4084,16 +4082,17 @@ router.post('/:id/publish', protect, requireFeature('publish'), async (req, res)
     } catch (_) {}
 
     if (isMongoTimeoutOrSelectionError(error)) {
+      console.error('campaigns.js request failed:', error && error.message);
       return res.status(503).json({
         success: false,
-        message: 'MongoDB connection timed out. Please try again in a few seconds.',
-        error: error.message || 'MongoDB timeout'
+        message: 'MongoDB connection timed out. Please try again in a few seconds.'
       });
     }
 
+    console.error('campaigns.js request failed:', error && error.message);
     res.status(500).json({
       ...handlePublishError(error),
-      error: error.message
+      message: 'Something went wrong. Please try again.'
     });
   }
 });
@@ -4455,7 +4454,7 @@ Return ONLY valid JSON (no markdown, no code blocks):
 
   } catch (error) {
     console.error('Generate campaign posts error:', error);
-    res.status(500).json({ success: false, message: 'Failed to generate posts', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to generate posts' });
   } finally {
     const userId = req.user?.userId || req.user?.id;
     if (hasGenerationLock && userId && generationLockSignature) {
@@ -4504,8 +4503,7 @@ router.post('/regenerate-post-image', protect, checkTrial, requireCredits('image
     console.error('Regenerate post image error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to regenerate image',
-      error: error.message
+      message: 'Failed to regenerate image'
     });
   }
 });
@@ -4529,8 +4527,7 @@ router.get('/image-jobs/:jobId', protect, async (req, res) => {
     console.error('Get campaign image job error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch image job',
-      error: error.message
+      message: 'Failed to fetch image job'
     });
   }
 });
@@ -4950,8 +4947,7 @@ Return ONLY the caption text with hashtags. No JSON, no explanations.`;
     console.error('Generate caption error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Failed to generate caption', 
-      error: error.message 
+      message: 'Failed to generate caption' 
     });
   }
 });
@@ -5093,8 +5089,7 @@ router.post('/process-aspect-ratio', protect, async (req, res) => {
     console.error('Process aspect ratio error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Failed to process image', 
-      error: error.message 
+      message: 'Failed to process image' 
     });
   }
 });
@@ -5327,8 +5322,7 @@ router.post('/template-poster', protect, checkTrial, requireCredits('image_gener
     console.error('Template poster generation error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Failed to generate poster', 
-      error: error.message 
+      message: 'Failed to generate poster' 
     });
   }
 });
@@ -5411,8 +5405,7 @@ router.post('/template-poster/edit', protect, checkTrial, requireCredits('image_
     console.error('Template poster edit error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Failed to edit poster', 
-      error: error.message 
+      message: 'Failed to edit poster' 
     });
   }
 });
@@ -5535,8 +5528,7 @@ router.post('/template-poster/from-reference', protect, checkTrial, requireCredi
     console.error('Error generating poster from reference:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Failed to generate poster from reference', 
-      error: error.message 
+      message: 'Failed to generate poster from reference' 
     });
   }
 });
@@ -5657,8 +5649,7 @@ router.post('/template-poster/batch', protect, checkTrial, requireCredits('image
     console.error('Batch poster generation error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Batch generation failed', 
-      error: error.message 
+      message: 'Batch generation failed' 
     });
   }
 });

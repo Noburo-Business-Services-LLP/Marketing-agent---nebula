@@ -61,7 +61,7 @@ router.post('/regenerate-image', protect, L.heavyAi, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Refine image error:', error.message);
-    res.status(500).json({ success: false, error: error.message || 'Failed to refine image' });
+    res.status(500).json({ success: false, message: 'Failed to refine image' });
   }
 });
 
@@ -86,7 +86,7 @@ router.post('/generate', protect, L.heavyAi, async (req, res) => {
     });
   } catch (error) {
     console.error('Content generate error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -107,7 +107,7 @@ router.post('/modify', protect, L.heavyAi, async (req, res) => {
     });
   } catch (error) {
     console.error('Content modify error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -237,7 +237,7 @@ router.post('/localize-campaign', protect, L.heavyAi, async (req, res) => {
     return res.json({ success: true, ...formatLocalizedResult(localized, region, language) });
   } catch (error) {
     console.error('Localize campaign error:', error.message);
-    return res.status(500).json({ success: false, error: error.message || 'Failed to localize campaign content' });
+    return res.status(500).json({ success: false, message: 'Failed to localize campaign content' });
   }
 });
 
@@ -332,7 +332,7 @@ router.post('/image-audio-to-video', protect, L.heavyAi, async (req, res) => {
     console.error('❌ [VIDEO COMPOSITION ERROR]', error.message);
     return res.status(500).json({
       success: false,
-      error: error.message || 'Failed to compose video',
+      message: 'Failed to compose video',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
@@ -435,7 +435,7 @@ router.post('/:draftId/compliance-check', protect, L.lightAi, async (req, res) =
     });
   } catch (error) {
     console.error('Compliance check error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 });
 

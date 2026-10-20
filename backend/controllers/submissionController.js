@@ -31,7 +31,8 @@ exports.getSubmissions = async (req, res) => {
       .sort({ createdAt: -1 });
     res.json({ success: true, submissions });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('submissionController.js request failed:', error && error.message);
+    res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 };
 
@@ -49,7 +50,8 @@ async function updateApproval(req, res, status) {
     await Collaboration.findByIdAndUpdate(submission.collaborationId, { status });
     return res.json({ success: true, submission });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    console.error('submissionController.js request failed:', error && error.message);
+    return res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
   }
 }
 

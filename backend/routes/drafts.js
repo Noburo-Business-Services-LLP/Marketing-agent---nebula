@@ -65,7 +65,7 @@ router.post('/save', protect, async (req, res) => {
     res.status(201).json({ success: true, draft });
   } catch (error) {
     console.error('Save draft error:', error);
-    res.status(500).json({ success: false, message: 'Failed to save draft', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to save draft' });
   }
 });
 
@@ -98,7 +98,7 @@ router.get('/', protect, async (req, res) => {
   } catch (error) {
     if (error && error.status === 400) return res.status(400).json({ success: false, message: error.message });
     console.error('Get drafts error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch drafts', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch drafts' });
   }
 });
 
@@ -127,7 +127,7 @@ router.get('/:id', protect, async (req, res) => {
     res.status(200).json({ success: true, draft });
   } catch (error) {
     console.error('Get draft by ID error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch draft', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch draft' });
   }
 });
 
@@ -176,7 +176,7 @@ router.put('/:id', protect, async (req, res) => {
     res.status(200).json({ success: true, draft });
   } catch (error) {
     console.error('Update draft error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update draft', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to update draft' });
   }
 });
 
@@ -258,7 +258,7 @@ router.post('/:id/schedule', protect, requireFeature('schedule'), async (req, re
     res.status(200).json({ success: true, draft });
   } catch (error) {
     console.error('Schedule draft error:', error);
-    res.status(500).json({ success: false, message: 'Failed to schedule draft', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to schedule draft' });
   }
 });
 
@@ -396,7 +396,7 @@ router.post('/:id/reject', protect, async (req, res) => {
     res.status(200).json({ success: true, message: 'Draft rejected successfully' });
   } catch (error) {
     console.error('Reject draft error:', error);
-    res.status(500).json({ success: false, message: 'Failed to reject draft', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to reject draft' });
   }
 });
 
@@ -461,7 +461,7 @@ router.post('/:id/regenerate', protect, L.heavyAi, async (req, res) => {
     res.status(200).json({ success: true, message: 'Regeneration started in background' });
   } catch (error) {
     console.error('Regenerate draft error:', error);
-    res.status(500).json({ success: false, message: 'Failed to trigger draft regeneration', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to trigger draft regeneration' });
   }
 });
 
@@ -561,7 +561,7 @@ router.post('/upload-media', protect, L.upload, singleMedia, async (req, res) =>
     res.status(201).json({ success: true, draft, mediaUrl, mediaType: isVideo ? 'video' : 'image' });
   } catch (error) {
     console.error('Upload media error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to upload media' });
+    res.status(500).json({ success: false, message: 'Failed to upload media' });
   } finally {
     if (tempPath) { try { await require('fs').promises.unlink(tempPath); } catch {} }
   }
@@ -608,7 +608,7 @@ router.post('/:id/apply-logo', protect, L.lightAi, async (req, res) => {
     res.json({ success: true, draft, imageUrl: result.url });
   } catch (error) {
     console.error('Apply logo error:', error);
-    res.status(500).json({ success: false, message: 'Failed to apply logo', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to apply logo' });
   }
 });
 
@@ -668,7 +668,7 @@ router.post('/generate-linkedin-post', protect, L.heavyAi, checkTrial, async (re
         console.error('⚠️ Failed to refund Quarks after LinkedIn post generation error:', refundErr.message);
       }
     }
-    res.status(500).json({ success: false, message: 'Failed to generate LinkedIn post', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to generate LinkedIn post' });
   }
 });
 
@@ -782,7 +782,7 @@ router.post('/generate-image-bg', protect, L.heavyAi, checkTrial, async (req, re
         console.error('⚠️ Failed to refund Quarks after enqueuing error:', refundErr.message);
       }
     }
-    res.status(500).json({ success: false, message: 'Failed to queue image generation', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to queue image generation' });
   }
 });
 
@@ -848,7 +848,7 @@ router.post('/:id/retry-image', protect, L.heavyAi, async (req, res) => {
         console.error('⚠️ Failed to refund Quarks after retry-image error:', refundErr.message);
       }
     }
-    res.status(500).json({ success: false, message: 'Failed to retry image generation', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to retry image generation' });
   }
 });
 
@@ -895,7 +895,7 @@ router.post('/:id/edit-image', protect, L.heavyAi, checkTrial, async (req, res) 
     res.status(200).json({ success: true, draft, creditsRemaining: creditResult.creditsRemaining });
   } catch (error) {
     console.error('Edit image error:', error);
-    res.status(500).json({ success: false, message: 'Failed to edit image', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to edit image' });
   }
 });
 
