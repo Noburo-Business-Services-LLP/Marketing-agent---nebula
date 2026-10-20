@@ -17,5 +17,9 @@ test('auth, payment and admin routes only get the small body limit', () => {
 });
 
 test('server errors never show the raw message to the customer', () => {
-  assert.ok(/status >= 500\s*\?\s*'Something went wrong\. Please try again\.'/.test(src));
+  // The handler moved to middleware/errorHandler.js (its behaviour is tested in errorHandler.test.js).
+  assert.ok(/require\('\.\/middleware\/errorHandler'\)\.errorHandler/.test(src));
+  const handler = fs.readFileSync(path.join(__dirname, '..', 'middleware', 'errorHandler.js'), 'utf8');
+  assert.ok(/if \(status >= 500\) return SERVER_MESSAGE;/.test(handler));
+  assert.ok(/SERVER_MESSAGE = 'Something went wrong\. Please try again\.'/.test(handler));
 });

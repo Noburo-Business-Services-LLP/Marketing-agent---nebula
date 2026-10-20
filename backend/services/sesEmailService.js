@@ -4,6 +4,7 @@
  * Handles sending campaign reminder emails via Amazon SES
  */
 
+const { escapeHtml: esc } = require('../utils/escapeHtml');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 class SESEmailService {
@@ -87,13 +88,13 @@ class SESEmailService {
         <div class="time-badge">${minutesBefore} minutes</div>
       </div>
       
-      <h2 style="margin: 20px 0 10px 0;">📢 ${campaignName}</h2>
+      <h2 style="margin: 20px 0 10px 0;">📢 ${esc(campaignName)}</h2>
       
-      <p><strong>Scheduled Time:</strong> ${scheduledTime}</p>
+      <p><strong>Scheduled Time:</strong> ${esc(scheduledTime)}</p>
       
       <div class="platforms">
         <strong>Platforms:</strong>
-        ${platforms.map(p => `<span class="platform-tag">${p}</span>`).join('')}
+        ${(platforms || []).map(p => `<span class="platform-tag">${esc(p)}</span>`).join('')}
       </div>
       
       <p style="margin-top: 20px;">Please ensure everything is ready for your campaign launch. Review your content and targeting settings before it goes live.</p>
@@ -200,11 +201,11 @@ Nebulaa - Your AI Marketing Assistant
         <p style="margin: 0; font-weight: bold; color: #166534;">Your campaign is now active and running.</p>
       </div>
       
-      <h2 style="margin: 20px 0 10px 0;">📢 ${campaignName}</h2>
+      <h2 style="margin: 20px 0 10px 0;">📢 ${esc(campaignName)}</h2>
       
       <div class="platforms">
         <strong>Active on:</strong>
-        ${platforms.map(p => `<span class="platform-tag">${p}</span>`).join('')}
+        ${(platforms || []).map(p => `<span class="platform-tag">${esc(p)}</span>`).join('')}
       </div>
       
       <p>Your campaign has started. Monitor your dashboard for real-time performance metrics.</p>

@@ -6,7 +6,6 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 const hpp = require('hpp');
-const sanitizeHtml = require('sanitize-html');
 const path = require('path');
 const fs = require('fs');
 
@@ -348,23 +347,11 @@ app.use(mongoSanitize());
 app.use(hpp());
 
 // ============================================
-// Security: XSS Prevention — sanitize all string inputs
+// XSS: text is stored exactly as typed. There is no global input rewriter any more (it turned "&" into "&amp;",
+// scanned every body before validation and stalled on big ones). Each route validates its own fields; text is escaped
+// where it is shown: React escapes everything on screen, and every HTML email escapes the text it puts in
+// (utils/escapeHtml.js). See docs/superpowers/ops/performance-week1.md.
 // ============================================
-app.use((req, res, next) => {
-  if (req.body) {
-    const sanitize = (obj) => {
-      for (const key in obj) {
-        if (typeof obj[key] === 'string') {
-          obj[key] = sanitizeHtml(obj[key], { allowedTags: [], allowedAttributes: {} });
-        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-          sanitize(obj[key]);
-        }
-      }
-    };
-    sanitize(req.body);
-  }
-  next();
-});
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -580,43 +567,9 @@ app.use((req, res) => {
   });
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-  if (res.headersSent) return next(err);
-
-  // A malformed id in a link or request is the caller's mistake, not a server fault.
-  const status = err?.name === 'CastError' ? 400 : Number(err?.statusCode || err?.status || 500);
-  // The real message goes to the log only. Customers never see raw system errors.
-  const message = status === 413
-    ? 'That file or request is too large.'
-    : status >= 500
-      ? 'Something went wrong. Please try again.'
-      : err?.name === 'CastError' ? 'That request is not valid.' : String(err?.message || 'Request could not be completed.');
-  const isApiRequest = req.path.startsWith('/api');
-
-  console.error('Server Error:', {
-    status,
-    method: req.method,
-    path: req.path,
-    message: String(err?.message || message),
-    stack: err?.stack
-  });
-
-  // Always return JSON for API requests (prevents HTML error pages breaking JSON parsing).
-  if (isApiRequest) {
-    return res.status(status).json({
-      success: false,
-      message,
-      errorCode: status >= 500 ? undefined : (err?.code || err?.name || undefined),
-      error: process.env.NODE_ENV === 'development' ? (err?.stack || String(err)) : undefined
-    });
-  }
-
-  return res.status(status).json({
-    success: false,
-    message
-  });
-});
+// Global error handler: the caller's mistakes are 4xx with plain words (validation 400, too large 413),
+// server faults a plain 500; the real message goes to the log only.
+app.use(require('./middleware/errorHandler').errorHandler);
 
 // ============================================
 // Production Environment Health Validation

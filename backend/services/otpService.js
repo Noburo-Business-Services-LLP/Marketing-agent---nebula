@@ -5,6 +5,7 @@
 const { Resend } = require('resend');
 const crypto = require('crypto');
 const passwordHash = require('./passwordHash');
+const { escapeHtml } = require('../utils/escapeHtml');
 
 class OTPService {
   constructor() {
@@ -76,7 +77,8 @@ class OTPService {
    * Build a branded HTML email template
    */
   _buildEmailTemplate(otp, firstName) {
-    const greeting = firstName ? `Hi ${firstName},` : 'Hi there,';
+    // The name is whatever was typed at sign-up (text is stored as typed), so it is escaped before going into HTML.
+    const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : 'Hi there,';
     
     return `
 <!DOCTYPE html>
