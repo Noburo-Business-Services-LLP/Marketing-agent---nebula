@@ -37,7 +37,8 @@ router.get('/queue', protect, staffOnly, async (req, res) => {
   try {
     const video = await router.queues.video().metrics();
     const image = await router.queues.image().metrics();
-    res.json({ success: true, at: new Date().toISOString(), videoJobs: video, imageJobs: image });
+    const studio = await router.queues.studio().metrics();
+    res.json({ success: true, at: new Date().toISOString(), videoJobs: video, imageJobs: image, studioVideos: studio });
   } catch (err) {
     require('../utils/httpError').fail(res, err, 'Could not read the queue numbers.');
   }
@@ -45,7 +46,8 @@ router.get('/queue', protect, staffOnly, async (req, res) => {
 // Injectable for tests.
 router.queues = {
   video: () => require('../services/videoGenerationQueue').videoGenerationQueue,
-  image: () => require('../services/imageJobQueue').imageJobQueue()
+  image: () => require('../services/imageJobQueue').imageJobQueue(),
+  studio: () => require('../services/studioVideoConsumer').studioVideoConsumer
 };
 
 module.exports = router;

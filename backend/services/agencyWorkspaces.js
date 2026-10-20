@@ -106,7 +106,7 @@ async function runningWork(workspaceId, models, now = Date.now()) {
     ['AI video jobs', 'VideoJob', { userId: id, status: { $in: RUNNING } }],
     ['Hero videos', 'HeroVideoJob', { userId: id, status: { $in: RUNNING } }],
     ['Blueprints', 'Blueprint', { userId: id, $or: [{ status: { $in: RUNNING } }, { 'designed.status': { $in: RUNNING } }] }],
-    ['studio videos', 'StudioVideo', { user: id, status: 'processing' }],
+    ['studio videos', 'StudioVideo', { user: id, status: { $in: RUNNING } }],
     ['pictures and carousels', 'Draft', { userId: id, status: 'processing' }],
     // The scheduler has no "publishing" state of its own: a scheduled post that is due now, or within two minutes, is being published.
     ['posts going out', 'Campaign', {

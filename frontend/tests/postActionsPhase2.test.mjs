@@ -96,3 +96,9 @@ test('studio videos join the Library as video tiles with Download, Make again an
   assert.deepEqual(libraryVideoActionKeys(fromStudioVideo({ id: 'v3', status: 'failed' })), ['makeAgain', 'delete']);
   assert.equal(fromStudioVideo({}), null);
 });
+
+test('a Videos page video still waiting for a worker (raw "queued" from an older server) shows as being made', () => {
+  const item = fromStudioVideo({ id: 'q1', status: 'queued', title: 'Waiting', videoUrl: '' });
+  assert.equal(item.status, 'creating');
+  assert.equal(item.mediaUrl, '');
+});

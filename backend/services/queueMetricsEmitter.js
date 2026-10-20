@@ -3,7 +3,7 @@
  * Optional CloudWatch emitter for the generation queue (E9 stage A, docs/superpowers/ops/generation-parallelism.md).
  * OFF unless QUEUE_METRICS_CLOUDWATCH=on. Every QUEUE_METRICS_INTERVAL_MS (default 30 s, 10 s..300 s) a consumer process
  * pushes namespace `Nebulaa/Queue` (QUEUE_METRICS_NAMESPACE): QueueDepth, OldestQueuedAge (seconds), Running,
- * SlotsInUse and SlotsTotal (this worker), dimension Queue=video|image. Use the Maximum statistic for depth and age
+ * SlotsInUse and SlotsTotal (this worker), dimension Queue=video|image|omni. Use the Maximum statistic for depth and age
  * (every worker reports the same database-wide numbers).
  *
  * The AWS client is `@aws-sdk/client-cloudwatch`, loaded only when the switch is on; it is NOT installed today, so
@@ -16,7 +16,7 @@ function enabled(env = process.env) {
 }
 
 /** The CloudWatch metric data for one snapshot ({ video, image } from the two queues' metrics()). */
-function toMetricData({ video, image } = {}) {
+function toMetricData({ video, image, studio } = {}) {
   const out = [];
   const add = (queue, name, value, unit) => {
     if (!Number.isFinite(Number(value))) return;
@@ -38,6 +38,14 @@ function toMetricData({ video, image } = {}) {
     add('image', 'Running', image.running, 'Count');
     add('image', 'SlotsInUse', image.thisWorker?.slotsInUse, 'Count');
     add('image', 'SlotsTotal', image.thisWorker?.slots, 'Count');
+  }
+  if (studio) {
+    // Videos (Gemini Omni) consumer, E9 stage B1.
+    add('omni', 'QueueDepth', studio.queueDepth, 'Count');
+    add('omni', 'OldestQueuedAge', studio.oldestQueuedAgeSeconds, 'Seconds');
+    add('omni', 'Running', studio.running, 'Count');
+    add('omni', 'SlotsInUse', studio.thisWorker?.slotsInUse?.omni, 'Count');
+    add('omni', 'SlotsTotal', studio.thisWorker?.slots?.omni, 'Count');
   }
   return out;
 }
@@ -74,7 +82,8 @@ function startQueueMetricsEmitter({ env = process.env, collect, send, log = cons
   const sender = send || defaultSender(log);
   const collector = collect || (async () => ({
     video: await require('./videoGenerationQueue').videoGenerationQueue.metrics(),
-    image: await require('./imageJobQueue').imageJobQueue().metrics()
+    image: await require('./imageJobQueue').imageJobQueue().metrics(),
+    studio: await require('./studioVideoConsumer').studioVideoConsumer.metrics()
   }));
   let busy = false;
   const tick = async () => {

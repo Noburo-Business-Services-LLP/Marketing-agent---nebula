@@ -125,7 +125,8 @@ export function fromStudioVideo(v: any): LibraryItem | null {
   if (!v || !v.id) return null;
   const s = String(v.status || '').toLowerCase();
   const media = String(v.videoUrl || '');
-  const status: LibraryStatus = s === 'processing' ? 'creating' : s === 'failed' ? 'failed' : 'ready';
+  // 'queued' (charged, waiting for a worker; only an older server answers it raw, during a deploy) is being made too.
+  const status: LibraryStatus = s === 'processing' || s === 'queued' ? 'creating' : s === 'failed' ? 'failed' : 'ready';
   return {
     id: String(v.id), kind: 'video', source: 'studio',
     title: text(v.title) || 'Video', status,

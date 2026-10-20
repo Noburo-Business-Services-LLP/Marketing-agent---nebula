@@ -213,7 +213,7 @@ test('the running-work check looks at the right states of each collection for th
   await w.runningWork('w1', models, NOW.getTime());
   assert.deepStrictEqual(asked.VideoJob, { userId: 'w1', status: { $in: ['queued', 'processing'] } });
   assert.deepStrictEqual(asked.HeroVideoJob, { userId: 'w1', status: { $in: ['queued', 'processing'] } });
-  assert.deepStrictEqual(asked.StudioVideo, { user: 'w1', status: 'processing' });
+  assert.deepStrictEqual(asked.StudioVideo, { user: 'w1', status: { $in: ['queued', 'processing'] } }); // queued = charged, waiting for a consumer (E9 B1)
   assert.deepStrictEqual(asked.Draft, { userId: 'w1', status: 'processing' });
   assert.deepStrictEqual(asked.Blueprint.$or, [{ status: { $in: ['queued', 'processing'] } }, { 'designed.status': { $in: ['queued', 'processing'] } }]);
   assert.strictEqual(asked.Blueprint.userId, 'w1');

@@ -6,7 +6,8 @@ const mongoose = require('mongoose');
  */
 const studioVideoSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  status: { type: String, enum: ['processing', 'completed', 'failed'], default: 'processing', index: true },
+  // 'queued' only with ENABLE_STUDIO_VIDEO_CONSUMER on (E9 stage B1): charged, waiting for a consumer to claim it.
+  status: { type: String, enum: ['queued', 'processing', 'completed', 'failed'], default: 'processing', index: true },
   title: { type: String, default: '' },
   idea: { type: String, default: '' },
   concept: { type: String, default: '' },
@@ -43,6 +44,17 @@ const studioVideoSchema = new mongoose.Schema({
   // Whose Quarks paid for this video (the agency for a client workspace), so a refund goes back to the same wallet.
   payer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   error: { type: String, default: '' },
+  // Consumer path (services/studioVideoConsumer.js, docs/superpowers/impact-maps/generation-parallelism.md B1): the claim
+  // (worker id, lease end, run number), what the run needs (`work`), and each clip stored as soon as it is made so a
+  // re-run resumes after the last stored clip instead of making (and paying the provider for) it again.
+  workerId: { type: String, default: null },
+  leaseUntil: { type: Date, default: null },
+  attempts: { type: Number, default: 0 },
+  releases: { type: Number, default: 0 },
+  leaseRequeues: { type: Number, default: 0 },
+  queuedAt: { type: Date, default: null },
+  clipUrls: { type: [String], default: [] },
+  work: { type: mongoose.Schema.Types.Mixed, default: null },
   startedAt: { type: Date, default: Date.now },
   completedAt: { type: Date, default: null }
 }, { collection: 'studio_videos', timestamps: true });

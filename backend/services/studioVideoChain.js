@@ -99,15 +99,20 @@ const frameFailure = (e) => (e && e.code === 'NO_FFMPEG' ? NO_FFMPEG : 'The next
  *   io.onClip(done)  called after each clip is made
  * Result: { ok:true, buffer, made, total, message, timing } or { ok:false, made:0, message }.
  * made < total means a shorter video is returned and the caller refunds the rest.
+ * Resuming (the Videos consumer, E9 stage B1; all optional, unused by the in-process path):
+ *   io.made         clips already made and stored by an earlier run, in order: the chain continues after them
+ *   io.beforeClip(k) awaited before clip k is asked for; may throw to stop the run (a lost claim)
+ *   io.afterClip(buffer, k) awaited after clip k is made (stores it); may throw to stop the run
+ * Errors thrown by these two hooks are passed on to the caller (the only exceptions to "never throws").
  */
 async function makeChain({ prompts, references = [], aspectRatio = '9:16', transition = 'fade' }, io = {}) {
   const total = prompts.length;
   const generate = io.generate;
   const frameOf = io.lastFrame || ((b) => lastFrame(b));
   const join = io.concat || ((bufs, ar, tr) => concat(bufs, ar, {}, tr));
-  const made = [];
+  const made = Array.isArray(io.made) ? io.made.slice(0, total) : [];
   let stopMessage = '';
-  for (let k = 0; k < total; k += 1) {
+  for (let k = made.length; k < total; k += 1) {
     let refs = references;
     if (k > 0) {
       try {
@@ -118,6 +123,7 @@ async function makeChain({ prompts, references = [], aspectRatio = '9:16', trans
         break;
       }
     }
+    if (io.beforeClip) await io.beforeClip(k);
     let out = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       out = await generate({ prompt: prompts[k], references: refs, aspectRatio, clip: k + 1 });
@@ -126,6 +132,7 @@ async function makeChain({ prompts, references = [], aspectRatio = '9:16', trans
     }
     if (!out || !out.ok) { stopMessage = (out && out.message) || 'A clip could not be made.'; break; }
     made.push(out.buffer);
+    if (io.afterClip) await io.afterClip(out.buffer, k);
     if (io.onClip) { try { await io.onClip(made.length); } catch (_) { /* progress is best effort */ } }
   }
   if (!made.length) return { ok: false, made: 0, total, message: stopMessage || 'The video could not be made this time.' };

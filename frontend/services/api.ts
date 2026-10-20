@@ -5066,6 +5066,13 @@ export interface StudioVideo {
   transition?: string; subtitles?: boolean; logo?: boolean; endLine?: string;
 }
 export interface StudioPart { beats: string[]; spokenLine: string; }
+/**
+ * A video waiting for a worker (backend E9 stage B1) is being made. The server already answers it as 'processing'; an
+ * older server during a deploy can answer the raw 'queued', so the screens keep polling either way.
+ */
+export function studioMaking<T extends { status?: string }>(v: T): T {
+  return v && (v.status as string) === 'queued' ? { ...v, status: 'processing' } : v;
+}
 export interface StudioConcept { title: string; concept: string; beats: string[]; spokenLine: string; parts?: StudioPart[]; clips?: number; seconds?: number; quarks: number; references: Array<{ kind: string; name: string; url: string }>; }
 export interface StudioChoices { idea: string; style: string; language: string; clips?: number; aspectRatio?: string; who?: string; where?: string; characterIds?: string[]; placeIds?: string[]; productIds?: string[]; }
 export interface StudioOptions {
@@ -5083,9 +5090,14 @@ export const studioVideosAPI = {
     apiCall('/videos/create', { method: 'POST', body: JSON.stringify(c) }, true),
   change: async (id: string, instruction: string): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
     apiCall(`/videos/${encodeURIComponent(id)}/change`, { method: 'POST', body: JSON.stringify({ instruction }) }, true),
-  get: async (id: string): Promise<{ success: boolean; video?: StudioVideo; message?: string }> =>
-    apiCall(`/videos/${encodeURIComponent(id)}`, {}, true),
-  list: async (): Promise<{ success: boolean; videos: StudioVideo[] }> => apiCall('/videos', {}, true),
+  get: async (id: string): Promise<{ success: boolean; video?: StudioVideo; message?: string }> => {
+    const r = (await apiCall(`/videos/${encodeURIComponent(id)}`, {}, true)) as { success: boolean; video?: StudioVideo; message?: string };
+    return r && r.video ? { ...r, video: studioMaking(r.video) } : r;
+  },
+  list: async (): Promise<{ success: boolean; videos: StudioVideo[] }> => {
+    const r = (await apiCall('/videos', {}, true)) as { success: boolean; videos: StudioVideo[] };
+    return r && Array.isArray(r.videos) ? { ...r, videos: r.videos.map(studioMaking) } : r;
+  },
   cast: async (idea: string): Promise<{ success: boolean; cast: Array<{ role: string; description: string }> }> =>
     apiCall('/videos/cast', { method: 'POST', body: JSON.stringify({ idea }) }, true),
   makeReference: async (kind: 'person' | 'place', description: string): Promise<{ success: boolean; url?: string; quarks?: number; message?: string }> =>

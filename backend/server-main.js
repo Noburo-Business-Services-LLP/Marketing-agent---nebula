@@ -715,6 +715,14 @@ function startBackgroundJobs() {
       logger.warn('Image job runner failed to start:', queueError.message);
     }
 
+    // Videos (Gemini Omni) on consumers (E9 stage B1): only with ENABLE_STUDIO_VIDEO_CONSUMER=on (default off: the Videos
+    // flow runs in the web task that took the request). Claims queued videos with a lease, omni slots PROVIDER_SLOTS_OMNI.
+    try {
+      require('./services/studioVideoConsumer').startStudioVideoConsumer();
+    } catch (queueError) {
+      logger.warn('Videos consumer failed to start:', queueError.message);
+    }
+
     // Queue numbers to CloudWatch: OFF unless QUEUE_METRICS_CLOUDWATCH=on
     try {
       require('./services/queueMetricsEmitter').startQueueMetricsEmitter();
