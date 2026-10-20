@@ -40,6 +40,13 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
     Campaign, getPostStatus, retryAyrsharePost, publishCampaignToSocial,
     classifyInstagramPublishFailure, extractFacebookPostIdFromAyrsharePayload, markLinkedDraftPosted
   } = { ...realDeps(), ...deps };
+  // Every write is conditional on the row still being the same scheduled Ayrshare post: the campaign scheduler or the
+  // person may have changed it while Ayrshare was being asked, and their write wins.
+  const stillSame = { _id: campaign._id, status: 'scheduled', socialPostId: campaign.socialPostId };
+  const setIfStill = async (set) => {
+    const r = await Campaign.updateOne(stillSame, { $set: set });
+    return Number(r && (r.modifiedCount !== undefined ? r.modifiedCount : r.nModified)) > 0;
+  };
   try {
     const statusResult = await getPostStatus(campaign.socialPostId, { profileKey });
     
@@ -65,11 +72,9 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
           facebook: resolvedFbIdFromStatus
         };
 
-        await Campaign.findByIdAndUpdate(campaign._id, {
-          $set: {
-            facebookPostId: resolvedFbIdFromStatus,
-            socialPostIds: nextSocialPostIds
-          }
+        await setIfStill({
+          facebookPostId: resolvedFbIdFromStatus,
+          socialPostIds: nextSocialPostIds
         });
 
         campaign.facebookPostId = resolvedFbIdFromStatus;
@@ -78,9 +83,9 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
 
       if (ayrshareStatus === 'success' || ayrshareStatus === 'posted') {
         // Ayrshare confirmed it was actually posted!
-        await Campaign.findByIdAndUpdate(campaign._id, { 
-          $set: { status: 'posted', publishedAt: now, ayrshareStatus: 'success', lastPublishError: null } 
-        });
+        if (!(await setIfStill({ status: 'posted', publishedAt: now, ayrshareStatus: 'success', lastPublishError: null }))) {
+          return 'changed';
+        }
         campaign.status = 'posted';
         campaign.publishedAt = now;
         // The Draft rule of the scheduler (handover 20): a one-off post that went out makes its Draft 'published'.
@@ -88,6 +93,7 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
           console.warn(`- Could not mark draft posted for campaign ${campaign._id}: ${draftError.message}`);
         }
         console.log(`- Confirmed posted: ${campaign.name}`);
+        return 'posted';
       } else if (ayrshareStatus === 'error') {
         const classifiedFailure = classifyInstagramPublishFailure({
           success: false,
@@ -138,8 +144,7 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
               const pendingId = freshRetryRes?.postId || campaign.socialPostId;
               if (freshRetryRes?.success) {
                 const nextRetryCount = retryCount + 1;
-                await Campaign.findByIdAndUpdate(campaign._id, {
-                  $set: {
+                if (!(await setIfStill({
                     status: 'posted',
                     publishedAt: now,
                     socialPostId: pendingId,
@@ -153,8 +158,7 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
                       retryRequestedAt: now.toISOString(),
                       retryCount: nextRetryCount
                     }
-                  }
-                });
+                }))) return 'changed';
 
                 campaign.status = 'posted';
                 campaign.publishedAt = now;
@@ -162,7 +166,7 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
                 campaign.ayrshareStatus = 'success';
                 campaign.lastPublishError = null;
                 console.log(` Rebuilt and published Instagram video payload for ${campaign.name} (${pendingId})`);
-                return;
+                return 'posted';
               }
             }
 
@@ -172,8 +176,7 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
               const nextRetryCount = retryCount + 1;
               const delayMinutes = Math.min(60, 5 * Math.pow(2, Math.max(0, nextRetryCount - 1))); // 5, 10, 20...
               const nextAttemptAt = new Date(now.getTime() + delayMinutes * 60 * 1000);
-              await Campaign.findByIdAndUpdate(campaign._id, {
-                $set: {
+              if (!(await setIfStill({
                   status: 'scheduled',
                   scheduledFor: nextAttemptAt,
                   socialPostId: pendingId,
@@ -186,8 +189,7 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
                     retryRequestedAt: now.toISOString(),
                     retryCount: nextRetryCount
                   }
-                }
-              });
+              }))) return 'changed';
 
               campaign.status = 'scheduled';
               campaign.scheduledFor = nextAttemptAt;
@@ -195,7 +197,7 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
               campaign.ayrshareStatus = 'pending';
               campaign.lastPublishError = null;
               console.log(` Retried failed Instagram post for ${campaign.name} - pending (${pendingId}) (attempt ${nextRetryCount}/${maxRetries}, next check in ~${delayMinutes}m)`);
-              return;
+              return 'retried';
             }
           } catch (retryError) {
             console.warn(`- Retry failed for campaign ${campaign._id}:`, retryError?.message || retryError);
@@ -204,28 +206,29 @@ async function syncPastDueCampaign(campaign, { profileKey, now = new Date(), dep
 
         // If it's transient/ retryable, do NOT revert to draft. Keep scheduled so user can retry later.
         if (canRetry && isInstagramOnly) {
-          await Campaign.findByIdAndUpdate(campaign._id, {
-            $set: { status: 'scheduled', ayrshareStatus: 'error', lastPublishError: failureMessage }
-          });
+          if (!(await setIfStill({ status: 'scheduled', ayrshareStatus: 'error', lastPublishError: failureMessage }))) return 'changed';
           campaign.status = 'scheduled';
           campaign.lastPublishError = failureMessage;
           console.log(`- Instagram transient error persists; keeping scheduled: ${campaign.name}`);
+          return 'kept';
         } else {
-          await Campaign.findByIdAndUpdate(campaign._id, { 
-            $set: { status: 'draft', ayrshareStatus: 'error', lastPublishError: failureMessage } 
-          });
+          if (!(await setIfStill({ status: 'draft', ayrshareStatus: 'error', lastPublishError: failureMessage }))) return 'changed';
           campaign.status = 'draft';
           campaign.lastPublishError = failureMessage;
           console.log(`- Ayrshare post failed: ${campaign.name}`);
+          return 'draft';
         }
       } else {
         // Still scheduled/pending on Ayrshare side - don't change status
         console.log(`- Still pending on Ayrshare: ${campaign.name} (status: ${ayrshareStatus})`);
+        return 'pending';
       }
     }
+    return 'unknown';
   } catch (verifyError) {
     console.warn(`- Could not verify campaign ${campaign._id}:`, verifyError.message);
     // Don't change status if we can't verify
+    return 'error';
   }
 }
 

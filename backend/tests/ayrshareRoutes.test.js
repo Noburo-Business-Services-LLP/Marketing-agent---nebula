@@ -81,7 +81,13 @@ test('every route that calls Ayrshare with a per-user key goes through the guard
   const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   assert.match(read('routes/social.js'), /requireOwnProfileKey\(req\.user\)/);
   const camp = read('routes/campaigns.js');
-  assert.ok((camp.match(/requireOwnProfileKey\(user\)/g) || []).length >= 2);
+  assert.ok((camp.match(/requireOwnProfileKey\(user\)/g) || []).length >= 1);
+  // The past-due status check moved from GET /api/campaigns to the background status sync (load-test week 1): it must
+  // use the same guard, treat a refusal as "no key" and skip that account instead of asking the master profile.
+  const sync = read('services/campaignStatusSync.js');
+  assert.match(sync, /require\('\.\/ayrshareGuard'\)\.requireOwnProfileKey/);
+  assert.match(sync, /try \{ profileKey = requireOwnProfileKey\(user\) \|\| undefined; \} catch \(_\) \{ profileKey = null; \}/);
+  assert.match(sync, /if \(profileKey === null\) \{ out\.skippedNoProfile \+= 1; continue; \}/);
   assert.match(read('routes/analytics.js'), /return requireOwnProfileKey\(user\)/);
   assert.match(read('routes/ads.js'), /requireOwnProfileKey\(user\)/);
 });
