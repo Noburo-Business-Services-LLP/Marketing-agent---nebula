@@ -16,6 +16,8 @@ const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
 const { protect } = require('../middleware/auth');
 // Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
 const L = require('../middleware/limits');
+// SVG and HTML are refused at every upload: mime, name and first bytes must all be a real picture.
+const { rejectUnsafeImage } = require('../services/uploadSafety');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const { readRows, SpreadsheetError } = require('../services/spreadsheetRows');
@@ -269,7 +271,7 @@ router.post('/', protect, validateProduct, async (req, res) => {
 // generation time — but it refetches on every generation and returns null on
 // any failure, so a dead or slow link silently drops the product image from
 // the output. An uploaded image is stored once and always available.
-router.post('/upload-image', protect, L.upload, async (req, res) => {
+router.post('/upload-image', protect, L.upload, rejectUnsafeImage('imageData'), async (req, res) => {
   try {
     const { imageData } = req.body;
     if (!imageData || typeof imageData !== 'string') {

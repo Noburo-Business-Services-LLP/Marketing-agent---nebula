@@ -7,6 +7,8 @@ const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 // Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
 const L = require('../middleware/limits');
+// SVG and HTML are refused at every upload: mime, name and first bytes must all be a real picture.
+const { rejectUnsafeImage } = require('../services/uploadSafety');
 const { alignProfileToSettings } = require('../services/brandRefresh');
 const { uploadBase64Image, deleteImage } = require('../services/imageUploader');
 const { deepScrapeWebsite } = require('../services/scraper');
@@ -230,7 +232,7 @@ router.get('/templates', protect, async (req, res) => {
  * @desc    Upload a new brand asset (logo or template)
  * @access  Private
  */
-router.post('/upload', protect, L.upload, async (req, res) => {
+router.post('/upload', protect, L.upload, rejectUnsafeImage('imageData'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const { imageData, type, name, isPrimary, defaultPosition, defaultSize } = req.body;
@@ -634,7 +636,7 @@ router.post('/colors-from-logo', protect, L.lightAi, async (req, res) => {
  * @desc    Add an example past post (caption/image) for style learning
  * @access  Private
  */
-router.post('/intelligence-profile/past-posts', protect, L.upload, async (req, res) => {
+router.post('/intelligence-profile/past-posts', protect, L.upload, rejectUnsafeImage('imageData'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const { caption, imageData, platform } = req.body || {};
@@ -747,7 +749,7 @@ router.get('/frames', protect, async (req, res) => {
   }
 });
 
-router.post('/frames', protect, L.upload, async (req, res) => {
+router.post('/frames', protect, L.upload, rejectUnsafeImage('imageData'), async (req, res) => {
   try {
     const userId = getUserId(req);
     const { imageData, kind, name, position, makeDefault } = req.body || {};

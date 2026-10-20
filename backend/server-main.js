@@ -140,7 +140,9 @@ app.set('trust proxy', trustProxySetting(process.env));
 // Security: Helmet — Secure HTTP Headers
 // ============================================
 app.use(helmet({
-  contentSecurityPolicy: false, // Disabled — frontend is served separately
+  // REPORT-ONLY: browsers report what it would block to /api/csp-report, nothing is blocked yet (config/csp.js; the
+  // same policy is in nginx.conf for the static app). Enforce once the reports are clean (security-hardening.md).
+  contentSecurityPolicy: require('./config/csp').helmetCsp(),
   crossOriginEmbedderPolicy: false, // Allow loading external images/resources
   // Default `same-origin` blocks dev (e.g. localhost:3000 loading 127.0.0.1:5000 `/audio/*.mp3`) and some CDN setups.
   crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -312,6 +314,10 @@ const wantsBigBody = matches(BIG_BODY_PREFIXES);
 const wantsMediumBody = matches(MEDIUM_BODY_PREFIXES);
 app.use((req, res, next) => (wantsBigBody(req) ? bigJson : wantsMediumBody(req) ? mediumJson : smallJson)(req, res, next));
 app.use((req, res, next) => (wantsBigBody(req) ? bigForm : wantsMediumBody(req) ? mediumForm : smallForm)(req, res, next));
+
+// Content-Security-Policy violation reports (report-only policy): counts only, per-address limit, 16 KB at most.
+const cspReporter = require('./services/cspReport').createCspReporter();
+app.post('/api/csp-report', L.cspReport, express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'], limit: '16kb' }), cspReporter.handler);
 
 // A short answer time for ordinary routes (30 s, ROUTE_TIMEOUT_MS); generation, upload and stream routes are excluded
 // (services/serverTimeouts.js, LONG_ROUTE_PREFIXES).
@@ -523,8 +529,11 @@ app.get('/api/demo/dashboard', (req, res) => {
 // Reel tone MP3s MUST be registered before `public` static, or a stray `public/audio/*`
 // from a frontend build could shadow these and break previews (wrong/empty file → silent UI).
 // Files live at backend/tone-audio/*.mp3 → /audio/<file>.mp3
-app.use('/audio', express.static(path.join(__dirname, 'tone-audio')));
-app.use('/generated-media', express.static(path.join(__dirname, 'storage', 'ai-videos')));
+// Files made for users are served with `Content-Security-Policy: sandbox`, nosniff and a Content-Disposition, so a
+// file can never run script on this origin even if one slipped through (middleware/userFileHeaders.js).
+const { userFileHeaders } = require('./middleware/userFileHeaders');
+app.use('/audio', express.static(path.join(__dirname, 'tone-audio'), { setHeaders: userFileHeaders }));
+app.use('/generated-media', express.static(path.join(__dirname, 'storage', 'ai-videos'), { setHeaders: userFileHeaders }));
 
 // Serve static files from React frontend build
 app.use(express.static(path.join(__dirname, 'public')));

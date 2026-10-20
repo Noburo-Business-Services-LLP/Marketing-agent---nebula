@@ -122,7 +122,7 @@ async function keepOriginal(dataUrl, name) {
 const publicUpload = (u) => ({ id: String(u._id), name: u.name, kind: u.kind, url: u.url, summary: u.summary, brief: u.brief, details: u.details || {}, notes: u.notes, mimeType: u.mimeType, createdAt: u.createdAt });
 
 // POST /api/create-assist/read-files { files: [{ name, data }], language }
-router.post('/read-files', protect, L.lightAi, async (req, res) => {
+router.post('/read-files', protect, async (req, res) => {
   try {
     const userId = String(req.user.id || req.user._id || req.user.userId);
     const files = Array.isArray(req.body && req.body.files) ? req.body.files.slice(0, MAX_FILES) : [];
@@ -135,6 +135,8 @@ router.post('/read-files', protect, L.lightAi, async (req, res) => {
       const parsed = parseDataUrl(f && f.data);
       const kind = parsed && ALLOWED[parsed.mime];
       if (!parsed || !kind) { results.push({ name, ok: false, message: 'Use a PNG, JPG, WebP or PDF file.' }); continue; }
+      // The bytes must really be a picture or a PDF (never SVG or HTML, whatever the claimed type).
+      if (!require('../services/uploadSafety').checkUpload({ mime: parsed.mime, name, buffer: Buffer.from(parsed.base64.slice(0, 2732), 'base64'), allow: ['png', 'jpeg', 'webp', 'pdf'] }).ok) { results.push({ name, ok: false, message: 'Use a PNG, JPG, WebP or PDF file.' }); continue; }
       if (bytesOf(parsed.base64) > MAX_FILE_BYTES) { results.push({ name, ok: false, message: 'This file is too big. Please use one under 8 MB.' }); continue; }
       let b64 = parsed.base64;
       if (kind === 'pdf') b64 = await firstPages(b64);
@@ -181,7 +183,7 @@ router.delete('/uploads/:id', protect, async (req, res) => {
 });
 
 // POST /api/create-assist/transcribe { audio: dataUrl, language: 'en' | 'ta' }
-router.post('/transcribe', protect, L.lightAi, async (req, res) => {
+router.post('/transcribe', protect, async (req, res) => {
   try {
     const userId = String(req.user.id || req.user._id || req.user.userId);
     if (!within(voiceHits, userId, 40)) return res.status(429).json({ success: false, message: 'Please wait a little before recording again.' });

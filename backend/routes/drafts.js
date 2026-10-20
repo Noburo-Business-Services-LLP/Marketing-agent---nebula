@@ -481,7 +481,8 @@ const mediaUpload = multer({
   }),
   limits: { fileSize: 120 * 1024 * 1024, files: 1 }, // 120MB — comfortably over a reel
   fileFilter: (req, file, cb) => {
-    const ok = /^(image|video)\//i.test(file.mimetype || '');
+    // Pictures and videos only; SVG (a picture that can carry script) and HTML never. The bytes are checked again below.
+    const ok = /^(image|video)\//i.test(file.mimetype || '') && !/(svg|html|xml)/i.test(file.mimetype || '');
     cb(ok ? null : new Error('Only image or video files are allowed'), ok);
   }
 });
@@ -493,6 +494,15 @@ router.post('/upload-media', protect, L.upload, mediaUpload.single('file'), asyn
     const userId = req.user.userId || req.user.id;
     if (!req.file) return res.status(400).json({ success: false, message: 'No file received' });
     tempPath = req.file.path; // multer wrote it to a temporary file; removed in finally
+    {
+      const { checkUpload, IMAGE_TYPES, VIDEO_TYPES } = require('../services/uploadSafety');
+      const fh = await fsp.open(tempPath, 'r');
+      const head = Buffer.alloc(2048);
+      let n = 0;
+      try { ({ bytesRead: n } = await fh.read(head, 0, head.length, 0)); } finally { await fh.close(); }
+      const check = checkUpload({ mime: req.file.mimetype, name: req.file.originalname, buffer: head.slice(0, n), allow: [...IMAGE_TYPES, ...VIDEO_TYPES] });
+      if (!check.ok) return res.status(400).json({ success: false, unsupportedFile: true, message: 'Please use a PNG, JPG, WebP or GIF picture, or an MP4 or WebM video.' });
+    }
 
     const { title, caption, platforms } = req.body || {};
     const isVideo = /^video\//i.test(req.file.mimetype);

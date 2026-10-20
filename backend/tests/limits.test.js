@@ -20,7 +20,7 @@ test('defaults are the documented numbers', () => {
   const s = limitSettings({});
   assert.deepStrictEqual(
     Object.fromEntries(Object.entries(s).map(([k, v]) => [k, [v.max, v.windowMs]])),
-    { heavyAi: [30, 900000], lightAi: [100, 900000], upload: [20, 900000], spend: [10, 900000], scrape: [20, 3600000], webhook: [300, 60000] }
+    { heavyAi: [30, 900000], lightAi: [100, 900000], upload: [20, 900000], spend: [10, 900000], scrape: [20, 3600000], webhook: [300, 60000], cspReport: [60, 60000] }
   );
   assert.strictEqual(DEFAULTS.heavyAi.max, 30);
 });

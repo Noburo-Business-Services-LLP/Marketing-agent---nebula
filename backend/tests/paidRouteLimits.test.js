@@ -37,7 +37,8 @@ const NAMED = {
   drafts: [['post', '/:id/regenerate', 'heavyAi'], ['post', '/generate-linkedin-post', 'heavyAi'], ['post', '/generate-image-bg', 'heavyAi'], ['post', '/:id/retry-image', 'heavyAi'], ['post', '/:id/edit-image', 'heavyAi'], ['post', '/:id/apply-logo', 'lightAi'], ['post', '/upload-media', 'upload']],
   content: [['post', '/regenerate-image', 'heavyAi'], ['post', '/generate', 'heavyAi'], ['post', '/modify', 'heavyAi'], ['post', '/localize-campaign', 'heavyAi'], ['post', '/image-audio-to-video', 'heavyAi'], ['post', '/download-video', 'lightAi'], ['get', '/download-video', 'lightAi']],
   contentCalendar: [['post', '/generate-next', 'heavyAi'], ['post', '/regenerate', 'heavyAi'], ['post', '/cover', 'heavyAi'], ['post', '/items/:itemId/auto-generate', 'heavyAi'], ['post', '/:id/auto-generate-week', 'heavyAi']],
-  createAssist: [['post', '/suggest-details', 'lightAi'], ['post', '/read-files', 'lightAi'], ['post', '/transcribe', 'lightAi']],
+  // read-files and transcribe keep their own per-account limits (within(): 20 and 40 an hour, per task).
+  createAssist: [['post', '/suggest-details', 'lightAi']],
   carousels: [['post', '/generate-stream', 'heavyAi']],
   competitors: [['post', '/auto-discover', 'scrape'], ['post', '/scrape-by-type', 'scrape']],
   products: [['post', '/upload-image', 'upload'], ['post', '/bulk-import', 'upload'], ['post', '/:id/generate-ad-image', 'heavyAi']],

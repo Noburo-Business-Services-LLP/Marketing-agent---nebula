@@ -14,6 +14,7 @@
  *   spend     10 per 15 minutes       LIMIT_SPEND_MAX / LIMIT_SPEND_WINDOW_MS         actions that spend real ad money (Meta)
  *   scrape    20 per hour             LIMIT_SCRAPE_MAX / LIMIT_SCRAPE_WINDOW_MS       paid scraping (competitor discovery and scans)
  *   webhook   300 per minute per IP   LIMIT_WEBHOOK_MAX / LIMIT_WEBHOOK_WINDOW_MS     provider webhooks
+ *   cspReport 60 per minute per IP    LIMIT_CSP_REPORT_MAX / LIMIT_CSP_REPORT_WINDOW_MS  browser CSP violation reports
  *
  * Every limiter is made through services/rateLimitStore.js (RATE_LIMIT_STORE: memory, mongo or redis), with a stable
  * name, so with the shared store every task counts in the same bucket. The module-level limiters are single instances:
@@ -31,7 +32,8 @@ const DEFAULTS = Object.freeze({
   upload: { max: 20, windowMs: 15 * MIN, env: 'UPLOAD', message: 'Too many uploads. Please wait a few minutes and try again.' },
   spend: { max: 10, windowMs: 15 * MIN, env: 'SPEND', message: 'Too many ad actions. Please wait a few minutes and try again.' },
   scrape: { max: 20, windowMs: 60 * MIN, env: 'SCRAPE', message: 'Too many scans. Please try again later.' },
-  webhook: { max: 300, windowMs: MIN, env: 'WEBHOOK', message: 'Too many requests.' }
+  webhook: { max: 300, windowMs: MIN, env: 'WEBHOOK', message: 'Too many requests.' },
+  cspReport: { max: 60, windowMs: MIN, env: 'CSP_REPORT', message: 'Too many requests.' }
 });
 
 const positiveInt = (v) => {
@@ -76,7 +78,8 @@ function createLimits({ env = process.env, prefix = 'limits' } = {}) {
     upload: make('upload', userKey),
     spend: make('spend', userKey),
     scrape: make('scrape', userKey),
-    webhook: make('webhook', addressKey)
+    webhook: make('webhook', addressKey),
+    cspReport: make('cspReport', addressKey)
   };
   /** For a mount where reads are free and every write may spend money (ad campaigns). */
   L.spendWrites = (req, res, next) => (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS' ? next() : L.spend(req, res, next));

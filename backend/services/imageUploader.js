@@ -8,6 +8,15 @@ const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 const path = require('path');
 
+/** True when a picture sent as text is really SVG or HTML (by its claimed type or its first bytes). */
+function unsafeImageData(value) {
+  const { parseDataUrl, sniffType } = require('./uploadSafety');
+  const { mime, head } = parseDataUrl(value);
+  if (/(svg|html|xml|javascript)/i.test(mime)) return true;
+  const t = sniffType(head);
+  return t === 'svg' || t === 'html';
+}
+
 function isRetriableCloudinaryError(error) {
   const code = error?.code;
   const msg = (error?.message || error?.toString?.() || '').toLowerCase();
@@ -45,6 +54,8 @@ async function uploadBase64Image(base64Data, folder = 'nebula-campaigns') {
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      // Never store an SVG or HTML document as a picture (they can carry script), whatever the caller claims.
+      if (unsafeImageData(base64Data)) return { success: false, error: 'Unsupported file type. Please use a PNG, JPG, WebP or GIF picture.' };
       // Ensure the base64 string has the proper data URL prefix
       let uploadData = base64Data;
       if (!base64Data.startsWith('data:')) {
@@ -355,6 +366,7 @@ async function ensurePublicUrl(imageUrl, { strict = false } = {}) {
  */
 async function uploadLogo(logoData, removeBackground = true) {
   try {
+    if (!String(logoData || '').startsWith('http') && unsafeImageData(logoData)) return { success: false, error: 'Unsupported file type. Please use a PNG, JPG, WebP or GIF picture.' };
     let uploadData = logoData;
     if (!logoData.startsWith('data:') && !logoData.startsWith('http')) {
       uploadData = `data:image/png;base64,${logoData}`;
