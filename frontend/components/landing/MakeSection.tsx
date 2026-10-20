@@ -24,7 +24,7 @@ const LOOK: Record<MakeKey, { art: React.ReactNode; palette: CoverPalette; overl
 const MakeSection: React.FC = () => (
   <section className="nb-land-section nb-land-make" id="make" aria-labelledby="make-title">
     <div className="nb-land-wrap">
-      <SectionHead id="make-title" eyebrow={MAKE.eyebrow} title={MAKE.title} emphasis={MAKE.emphasis} />
+      <SectionHead id="make-title" eyebrow={MAKE.eyebrow} title={MAKE.title} emphasis={MAKE.emphasis} line={MAKE.line} />
       <div className="nb-cover-grid nb-land-make-grid">
         {MAKE.tiles.map((t) => {
           const look = LOOK[t.key];

@@ -2,14 +2,14 @@ import React from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { SinglePostArt } from '../art/SinglePost';
 import { ProductArt } from '../art/Product';
-import { CalendarArt } from '../art/Calendar';
-import { CampaignArt } from '../art/Campaign';
+import { PlanMapArt } from '../art/PlanMap';
+import { BrandAssetsArt } from '../art/BrandAssets';
 import { BlueprintArt } from '../art/Blueprint';
 import { BLUEPRINT_COPY } from '../../constants/blueprintCopy';
-import { BUILT_FOR, type AudienceArt } from '../../constants/landingCopy';
+import { BLUEPRINT_INTRO, BUILT_FOR, type AudienceArt } from '../../constants/landingCopy';
 import { GoldButton, SectionHead } from './LandingBits';
 
-const ART: Record<AudienceArt, React.ReactNode> = { single: <SinglePostArt />, product: <ProductArt />, calendar: <CalendarArt />, campaign: <CampaignArt /> };
+const ART: Record<AudienceArt, React.ReactNode> = { single: <SinglePostArt />, product: <ProductArt />, map: <PlanMapArt />, brands: <BrandAssetsArt /> };
 
 /** "Built for": four audience cards, one even row on a desktop. */
 export const BuiltForSection: React.FC = () => (
@@ -30,7 +30,8 @@ export const BuiltForSection: React.FC = () => (
 
 const LEGEND_TINTS = ['#DDF2E6', '#DCEBFA', '#ECE6FB', '#FFE3D0'];
 
-/** The free Brand Growth Blueprint. Every word comes from BLUEPRINT_COPY (shared with the Blueprint pages). */
+/** The free Brand Growth Blueprint, stage one of the loop. The eyebrow and line are the landing's own (BLUEPRINT_INTRO); the
+ * headline, the receive lines and the legend come from BLUEPRINT_COPY (shared with the Blueprint pages). */
 export const BlueprintSection: React.FC<{ onStart: () => void }> = ({ onStart }) => {
   const BP = BLUEPRINT_COPY.landing;
   return (
@@ -38,9 +39,9 @@ export const BlueprintSection: React.FC<{ onStart: () => void }> = ({ onStart })
       <div className="nb-land-wrap">
         <div className="nb-land-bp">
           <div>
-            <p className="nb-land-eyebrow">{BP.eyebrow}</p>
+            <p className="nb-land-eyebrow">{BLUEPRINT_INTRO.eyebrow}</p>
             <h2 className="nb-land-h2" id="blueprint-title">{BP.headline}</h2>
-            <p className="nb-land-lede">{BP.subline}</p>
+            <p className="nb-land-lede">{BLUEPRINT_INTRO.line}</p>
             <ul>
               {BP.receive.map((line) => <li key={line}><CheckCircle2 size={17} aria-hidden="true" /><span>{line}</span></li>)}
             </ul>

@@ -8,7 +8,8 @@ import LandingNav from '../components/landing/LandingNav';
 import LandingHero from '../components/landing/LandingHero';
 import ExamplesSection from '../components/landing/ExamplesSection';
 import MakeSection from '../components/landing/MakeSection';
-import { ApprovalBand, HowSection } from '../components/landing/ApprovalAndSteps';
+import { ApprovalBand } from '../components/landing/ApprovalBand';
+import LoopSection from '../components/landing/LoopSection';
 import { BuiltForSection, BlueprintSection } from '../components/landing/AudienceAndBlueprint';
 import { PlansSection, FaqSection } from '../components/landing/PlansAndFaq';
 import { ClosingBand, LandingFooter } from '../components/landing/ClosingAndFooter';
@@ -17,8 +18,8 @@ import '../components/landing/landing.css';
 
 /**
  * The public page for visitors (route "/", logged out). Everything leads to one action: sign up and choose a plan.
- * Proof first (example posts, what you can make), then how approval works, the seven steps, who it is for, the free
- * Blueprint, plans (from the public plans answer), questions, and a closing call. Words: constants/landingCopy.ts.
+ * The whole system first (the eight-stage loop and community), then how approval works, proof (example designs, what
+ * you can make), who it is for, the free Blueprint, plans (from the public plans answer), questions, and a closing call. Words: constants/landingCopy.ts.
  * Legal pages in the footer through LegalLinks (Terms, Privacy, Refunds). Sign-up, the invitation code and the bot
  * check stay on the sign-up page (pages/Auth.tsx); this page only links to it.
  */
@@ -75,10 +76,10 @@ const LandingPage: React.FC = () => {
       <LandingNav solid={scrolled} startLabel={start} onSignUp={signUp} onSignIn={signIn} />
       <main>
         <LandingHero startLabel={start} onSignUp={signUp} />
+        <LoopSection />
+        <ApprovalBand />
         <ExamplesSection />
         <MakeSection />
-        <ApprovalBand />
-        <HowSection startLabel={start} onSignUp={signUp} />
         <BuiltForSection />
         <BlueprintSection onStart={signUpBlueprint} />
         <PlansSection facts={facts} onChoose={signUp} />

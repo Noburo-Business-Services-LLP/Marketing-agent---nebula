@@ -1,6 +1,6 @@
 // Guards for the public landing page (pages/LandingPage.tsx, components/landing/*, constants/landingCopy.ts,
 // utils/landingPlans.ts): plain, true words only; an honest Inbox; prices only from the plans answer or its checked
-// snapshot; the seven steps; plan order; AA contrast over the landing's glows; no new raster or third-party script.
+// snapshot; the eight-stage loop; plan order; AA contrast over the landing's glows; no new raster or third-party script.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -63,21 +63,57 @@ test('the Inbox stays honest: drafted for approval, never automatic, every line 
   // Each Inbox-dependent entry carries the marker comment on the line above it.
   const lines = COPY_SRC.split('\n');
   const inboxEntries = lines.map((l, i) => [l, i]).filter(([l]) => /inbox: true|inboxNote:/.test(l) && !/inboxNote\?:/.test(l) && !/^\s*\/\//.test(l));
-  assert.ok(inboxEntries.length >= 3, 'the approval point, the workflow step and the FAQ note');
+  assert.ok(inboxEntries.length >= 5, 'the approval point, the Engage stage, the community point and the two FAQ notes');
   for (const [, i] of inboxEntries) assert.match(lines[i - 1], /\/\/ CONFIRM AFTER INBOX TEST/, `line ${i + 1} needs the marker above it`);
   // One switch hides them all.
   assert.equal(typeof C.INBOX_LINES_VISIBLE, 'boolean');
   const used = TSX.map(read).join('\n');
-  assert.equal((used.match(/INBOX_LINES_VISIBLE/g) || []).length >= 3, true, 'approval points, steps and FAQ all read the switch');
-  assert.equal(C.HOW.steps.filter((s) => !s.inbox).length, 6);
+  assert.equal((used.match(/INBOX_LINES_VISIBLE/g) || []).length >= 4, true, 'approval points, the loop, community and FAQ all read the switch');
+  assert.equal(C.LOOP.stages.filter((s) => !s.inbox).length, 7);
+  // With the switch off the Engage stage keeps its place as "Coming soon", still worded as drafted for approval.
+  const engage = C.LOOP.stages.find((s) => s.inbox);
+  assert.ok(engage.soonText && /drafted/.test(engage.soonText) && /approve/.test(engage.soonText));
+  assert.match(read(`${LANDING_DIR}/LoopSection.tsx`), /held \? LOOP\.soon/);
+  // No promise of being always present or always replying, anywhere.
+  assert.ok(!/always (present|on|there|replying|respond)|all the time|24\s*[x×\/]\s*7|round the clock|instantly/i.test(TEXT));
 });
 
-test('the workflow shows the seven real steps; the Inbox step is drafted for approval and an add-on', () => {
-  assert.equal(C.HOW.steps.length, 7);
-  const inbox = C.HOW.steps.find((s) => /Reply from one inbox/.test(s.title));
-  assert.ok(inbox && inbox.addon && inbox.inbox && /drafted/.test(inbox.text) && /approve/.test(inbox.text));
-  assert.ok(C.HOW.steps.find((s) => s.title === 'Publish and schedule').addon);
+test('the eight-stage loop: stages in order, each with copy and a visual; add-ons marked; Learn leads back to Understand', () => {
+  assert.deepEqual(C.LOOP.stages.map((s) => s.title), [
+    'Understand your business', 'Know your market and customers', 'Watch your competitors', 'Plan', 'Create',
+    'Review, schedule and publish', 'Engage', 'Learn and improve',
+  ]);
+  const loop = read(`${LANDING_DIR}/LoopSection.tsx`);
+  for (const s of C.LOOP.stages) {
+    const sentences = s.text.split(/(?<=\.)\s+/).filter(Boolean);
+    assert.ok(sentences.length === 2 && s.text.length <= 160, `${s.title}: two short sentences (${s.text.length} chars)`);
+    assert.match(loop, new RegExp(`\\b${s.art}: <\\w+Art />`), `${s.title} has a drawn piece`);
+  }
+  assert.equal(new Set(C.LOOP.stages.map((s) => s.art)).size, 8, 'each stage has its own picture');
+  const by = (t) => C.LOOP.stages.find((s) => s.title === t);
+  assert.ok(by('Watch your competitors').addon, 'competitor tracking is an add-on');
+  assert.ok(by('Review, schedule and publish').addon && /Nothing goes out until you approve it/.test(by('Review, schedule and publish').text));
+  const engage = by('Engage');
+  assert.ok(engage.addon && engage.inbox && /drafted/.test(engage.text) && /approve/.test(engage.text));
+  assert.match(by('Create').text, /photoshoots are coming soon/i, 'Photoshoot stays coming soon');
+  assert.match(by('Understand your business').text, /Brand Growth Blueprint/);
+  assert.match(by('Learn and improve').text, /learns/);
+  // The loop closes: the last arrow points up to stage 1 on a desktop, and the "starts again" line follows the list.
+  assert.match(loop, /return 'up'/);
+  assert.match(CSS, /\.nb-land-stage\[data-i="8"\] \{ grid-column: 1; grid-row: 2; \}/);
+  assert.match(loop, /LOOP\.back/);
   assert.match(C.APPROVAL.title + ' ' + C.APPROVAL.emphasis, /Nothing goes out until you approve it\./);
+});
+
+test('positioning: the hero headline is about the whole marketing, not posts; the page is not "just posts"', () => {
+  const headline = `${C.HERO.title} ${C.HERO.emphasis}`;
+  assert.ok(!/\bposts?\b/i.test(headline), `hero headline mentions posts: ${headline}`);
+  assert.match(headline, /marketing/i);
+  for (const t of [C.HERO.line, C.LANDING_META.title, `${C.CLOSING.title} ${C.CLOSING.emphasis}`, `${C.MAKE.title} ${C.MAKE.emphasis}`]) {
+    assert.ok(!/\bposts?\b/i.test(t), `reads as just posts: ${t}`);
+  }
+  assert.ok(!/autopilot/i.test(TEXT), 'no autopilot claim');
+  assert.ok(!/guarantee|more followers|more sales|grow your followers/i.test(TEXT), 'no promised results');
 });
 
 test('plan cards run Starter, Growth, Agency in three columns, every figure from the plans answer or the snapshot', () => {
@@ -120,17 +156,24 @@ test('the server answer replaces the snapshot only when it is complete; add-on n
   assert.equal(C.startLabel(f), 'Start for ₹1,099');
   assert.ok(!/automatic/i.test(C.PLANS_COPY.addons(f)), 'the server label for the Inbox add-on is never shown');
   assert.match(C.PLANS_COPY.addons(f), /Inbox ₹600/);
-  assert.match(C.faqItems(f)[0].a, /700 on Starter, 2,100 on Growth and 7,000 on Agency/);
+  assert.match(C.faqItems(f).find((i) => /pricing/.test(i.q)).a, /700 on Starter, 2,100 on Growth and 7,000 on Agency/);
   assert.equal(factsFrom({ ...answer, addons: answer.addons.slice(1) }), null);
   assert.equal(factsFrom({ ...answer, plans: answer.plans.slice(1) }), null);
   assert.equal(factsFrom({ ...answer, agency: undefined }), null);
   assert.equal(factsFrom(null), null);
 });
 
-test('FAQ: eight truthful answers; Quarks written as plain amounts; platforms and languages match the app', async () => {
+test('FAQ: twelve truthful answers; Quarks written as plain amounts; platforms and languages match the app', async () => {
   const items = C.faqItems(PLANS_SNAPSHOT);
-  assert.equal(items.length, 8);
-  assert.match(items[0].a, /600 on Starter, 2,000 on Growth and 6,000 on Agency/);
+  assert.equal(items.length, 12);
+  const ans = (re) => items.find((i) => re.test(i.q)).a;
+  assert.match(ans(/pricing/), /600 on Starter, 2,000 on Growth and 6,000 on Agency/);
+  assert.match(ans(/only for social media posts/), /^No\./);
+  assert.match(ans(/only for social media posts/), /add-ons/);
+  assert.match(ans(/stay in control/), /until you approve it/);
+  assert.match(ans(/learn about my business/), /six sources/);
+  const comp = ans(/track my competitors/);
+  assert.ok(/add-on/.test(comp) && /You confirm/.test(comp) && /public posts/.test(comp), 'competitors: add-on, handles you confirm, public posts only');
   const { PLATFORM_CHOICES } = await import('../utils/platforms.ts');
   const where = items.find((i) => /Where can my posts go/.test(i.q)).a;
   for (const p of PLATFORM_CHOICES.filter((x) => !x.soon)) assert.ok(where.includes(p.label), `platform ${p.label} named`);
@@ -207,7 +250,7 @@ test('AA contrast: body text 4.5 to 1 and headings 3 to 1 over every landing sur
     const em = ratio(hex('#A35A00'), bg);
     assert.ok(em >= 3, `gold italic heading on ${sName}: ${em.toFixed(2)}`);
   }
-  for (const [fg, bg, label] of [['#1A1208', '#F5A623', 'gold button'], ['#6B3F00', '#FFE2A1', 'step number and phone chip'], ['#2B1D0E', '#FFFFFF', 'example chip'], ['#5E4A31', '#FFF1D2', 'waiting line'], ['#7A4A00', '#FFFDF8', 'FAQ link'], ['#8A4A00', '#FFFFFF', 'phone tags'], ['#5E4A31', '#F6ECDA', 'add-on chip']]) {
+  for (const [fg, bg, label] of [['#1A1208', '#F5A623', 'gold button'], ['#6B3F00', '#FFE2A1', 'step number and phone chip'], ['#2B1D0E', '#FFFFFF', 'example chip'], ['#5E4A31', '#FFF1D2', 'waiting line'], ['#7A4A00', '#FFFDF8', 'FAQ link'], ['#8A4A00', '#FFFFFF', 'phone tags'], ['#5E4A31', '#F6ECDA', 'add-on chip'], ['#5E4A31', '#FFF1D2', 'loop starts-again line'], ['#1A1208', '#F5A623', 'loop arrow']]) {
     const r = ratio(hex(fg), hex(bg));
     assert.ok(r >= 4.5, `${label}: ${r.toFixed(2)}`);
   }

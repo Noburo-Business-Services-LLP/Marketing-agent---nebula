@@ -16,7 +16,7 @@ const LandingHero: React.FC<{ startLabel: string; onSignUp: () => void }> = ({ s
         <p className="nb-land-hero-line nb-land-rise" data-d="2">{HERO.line}</p>
         <div className="nb-land-hero-ctas nb-land-rise" data-d="3">
           <GoldButton onClick={onSignUp}>{startLabel}</GoldButton>
-          <SectionLink id="make" className="nb-land-btn" kind="outline">{HERO.secondary}</SectionLink>
+          <SectionLink id="how" className="nb-land-btn" kind="outline">{HERO.secondary}</SectionLink>
         </div>
         <p className="nb-land-promise"><ShieldCheck size={18} strokeWidth={2.4} aria-hidden="true" />{HERO.promise}</p>
         <p className="nb-land-experience">{HERO.experience}</p>

@@ -136,7 +136,7 @@
 .nb-float-chip { position: absolute; z-index: 2; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: #FFFFFF; color: var(--l-ink); font-size: 12.5px; font-weight: 700; box-shadow: 0 12px 26px -10px rgb(80 45 5 / 0.45); white-space: nowrap; }
 .nb-float-chip svg { color: #2F7A49; }
 .nb-float-chip[data-i="0"] { left: calc(50% - 205px); top: 30%; }
-.nb-float-chip[data-i="1"] { right: calc(50% - 205px); top: 62%; }
+.nb-float-chip[data-i="1"] { right: calc(50% - 205px); top: 47%; }
 @media (max-width: 559px) { .nb-float-chip { display: none; } }
 @media (prefers-reduced-motion: no-preference) {
   @keyframes nb-land-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
@@ -186,24 +186,71 @@
 .nb-land-point h3 { margin: 0 0 4px; font-size: 16.5px; font-weight: 700; color: var(--l-ink); }
 .nb-land-point p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--l-ink2); }
 
-/* ---------- How it works: 4 + 4 at desktop (seven steps and the start card), 2 on a tablet, 1 on a phone ---------- */
-.nb-land-steps { display: grid; grid-template-columns: 1fr; gap: 14px; margin: 0; padding: 0; list-style: none; }
-@media (min-width: 640px) { .nb-land-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1024px) { .nb-land-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
-.nb-land-step { display: flex; flex-direction: column; gap: 10px; padding: 22px; border-radius: 20px; background: var(--l-surface); border: 1px solid var(--l-rule); box-shadow: 0 10px 24px -20px rgb(80 45 5 / 0.45); }
-.nb-land-step-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.nb-land-step-num { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #FFE2A1; color: #6B3F00; font-weight: 800; font-size: 15px; }
-.nb-land-step:first-child .nb-land-step-num { background: var(--l-gold); color: #1A1208; }
-.nb-land-chip { padding: 3px 10px; border-radius: 999px; background: var(--l-sand); border: 1px solid var(--l-rule); color: var(--l-ink2); font-size: 11.5px; font-weight: 700; }
-.nb-land-step h3 { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.25; color: var(--l-ink); }
-.nb-land-step p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--l-ink2); }
-.nb-land-step[data-cta] { justify-content: space-between; border-color: #EFD089; }
-.nb-land-step[data-cta] .nb-land-btn { margin-top: auto; }
-@media (min-width: 640px) and (max-width: 1023px) { .nb-land-step[data-cta] { grid-column: span var(--span2, 1); } }
-@media (min-width: 1024px) { .nb-land-step[data-cta] { grid-column: span var(--span4, 1); } }
+/* ---------- How Nebulaa runs your marketing: eight stages as one loop ----------
+   Desktop (1024 px and up): two rows of four with equal heights; stages 5 to 8 run right to left, so the cards sit on
+   a dashed loop track (drawn behind them, seen in the gaps) and stage 8 points back up to stage 1. Below that: one
+   column, an arrow between cards, and the "starts again" line closes the loop. */
+.nb-land-loop-section { background: linear-gradient(180deg, var(--l-bg), var(--l-sand) 40%, var(--l-sand) 70%, var(--l-bg)); }
+.nb-land-loop { position: relative; display: grid; grid-template-columns: 1fr; gap: 30px; margin: 0; padding: 0; list-style: none; }
+.nb-land-stage { position: relative; display: grid; grid-template-columns: 72px 1fr; grid-template-rows: auto auto 1fr; column-gap: 14px; row-gap: 6px; padding: 16px; border-radius: 22px; background: var(--l-surface); border: 1px solid var(--l-rule); box-shadow: 0 12px 28px -22px rgb(80 45 5 / 0.5); }
+.nb-land-stage-art { grid-column: 1; grid-row: 1 / span 2; display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 18px; overflow: hidden; }
+.nb-land-stage-art svg { width: 92%; height: auto; max-height: 90%; }
+.nb-land-stage-art svg[viewBox="0 0 160 120"] > path:first-of-type, .nb-land-aud-art svg[viewBox="0 0 160 120"] > path:first-of-type { fill: rgb(255 255 255 / 0.55); }
+.nb-land-stage-art svg[viewBox="0 0 64 56"] > circle:first-child { fill: rgb(255 255 255 / 0.55); }
+.nb-land-stage-top { grid-column: 2; grid-row: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; align-self: end; }
+.nb-land-stage h3 { grid-column: 2; grid-row: 2; margin: 0; font-size: 17px; font-weight: 700; line-height: 1.25; color: var(--l-ink); align-self: start; }
+.nb-land-stage p { grid-column: 1 / -1; grid-row: 3; margin: 6px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--l-ink2); }
+.nb-land-num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #FFE2A1; color: #6B3F00; font-weight: 800; font-size: 14px; }
+.nb-land-stage:first-child .nb-land-num { background: var(--l-gold); color: #1A1208; }
+.nb-land-chip { padding: 3px 10px; border-radius: 999px; background: var(--l-sand); border: 1px solid var(--l-rule); color: var(--l-ink2); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.nb-land-stage[data-tone="gold"] .nb-land-stage-art { background: radial-gradient(60% 80% at 70% 20%, #FFE7A8, transparent 70%), #FFF0C7; }
+.nb-land-stage[data-tone="coral"] .nb-land-stage-art { background: radial-gradient(60% 80% at 70% 20%, #FFD2BC, transparent 70%), #FFE3D0; }
+.nb-land-stage[data-tone="teal"] .nb-land-stage-art { background: radial-gradient(60% 80% at 70% 20%, #BDE9E4, transparent 70%), #D6F1EF; }
+.nb-land-stage[data-tone="green"] .nb-land-stage-art { background: radial-gradient(60% 80% at 70% 20%, #C4EBD3, transparent 70%), #DDF2E6; }
+.nb-land-stage[data-tone="blue"] .nb-land-stage-art { background: radial-gradient(60% 80% at 70% 20%, #C6DEF7, transparent 70%), #DCEBFA; }
+.nb-land-stage[data-tone="lilac"] .nb-land-stage-art { background: radial-gradient(60% 80% at 70% 20%, #DCD2F7, transparent 70%), #ECE6FB; }
+/* The arrow to the next stage: a small gold disc in the gap. */
+.nb-land-loop-arrow { position: absolute; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--l-gold); color: #1A1208; box-shadow: 0 0 0 4px var(--l-sand), 0 6px 14px -6px rgb(200 120 10 / 0.7); }
+.nb-land-loop-arrow { left: 50%; bottom: -29px; transform: translateX(-50%) rotate(90deg); }
+.nb-land-stage:last-child .nb-land-loop-arrow { display: none; }
+.nb-land-loop-back { display: flex; align-items: center; justify-content: center; gap: 8px; width: fit-content; max-width: 100%; margin: 22px auto 0; padding: 10px 18px; border-radius: 999px; background: #FFF1D2; border: 1px solid #EFD089; font-size: 14px; font-weight: 700; line-height: 1.4; color: #5E4A31; text-align: center; }
+.nb-land-loop-back svg { flex-shrink: 0; color: #6B3F00; }
+@media (min-width: 640px) and (max-width: 1023px) { .nb-land-loop { max-width: 640px; margin: 0 auto; } .nb-land-stage { grid-template-columns: 84px 1fr; padding: 18px 20px; } .nb-land-stage-art { width: 84px; height: 84px; } }
+@media (min-width: 1024px) {
+  .nb-land-loop { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; column-gap: 34px; row-gap: 60px; }
+  /* The track: from the art centre of stage 1 round to stage 8, behind the cards. */
+  .nb-land-loop::before { content: ""; position: absolute; z-index: 0; pointer-events: none;
+    left: calc((100% - 102px) / 8); right: calc((100% - 102px) / 8); top: 66px; bottom: calc(50% - 30px - 66px);
+    border: 2px dashed rgb(232 137 12 / 0.55); border-radius: 36px; }
+  .nb-land-stage { z-index: 1; display: flex; flex-direction: column; gap: 0; padding: 0 0 20px; }
+  .nb-land-stage-art { width: auto; height: 132px; border-radius: 22px 22px 0 0; }
+  .nb-land-stage-art svg { width: 170px; }
+  .nb-land-stage-art svg[viewBox="0 0 64 56"] { width: 118px; }
+  .nb-land-stage-top { padding: 16px 20px 0; align-self: stretch; }
+  .nb-land-stage h3 { margin: 12px 20px 0; }
+  .nb-land-stage p { margin: 8px 20px 0; }
+  .nb-land-stage[data-i="5"] { grid-column: 4; grid-row: 2; }
+  .nb-land-stage[data-i="6"] { grid-column: 3; grid-row: 2; }
+  .nb-land-stage[data-i="7"] { grid-column: 2; grid-row: 2; }
+  .nb-land-stage[data-i="8"] { grid-column: 1; grid-row: 2; }
+  .nb-land-loop-arrow[data-dir="right"] { left: auto; right: -31px; bottom: auto; top: 52px; transform: none; }
+  .nb-land-loop-arrow[data-dir="left"] { left: -31px; bottom: auto; top: 52px; transform: rotate(180deg); }
+  .nb-land-loop-arrow[data-dir="down"] { left: 50%; bottom: -44px; transform: translateX(-50%) rotate(90deg); }
+  .nb-land-stage:last-child .nb-land-loop-arrow[data-dir="up"] { display: inline-flex; left: 50%; bottom: auto; top: -44px; transform: translateX(-50%) rotate(-90deg); }
+  .nb-land-loop-back { margin-top: 28px; }
+}
+
+/* Building a community: a calm card under the loop, text left and three points right. */
+.nb-land-community { display: grid; gap: 24px; margin-top: 44px; padding: 28px 22px; border-radius: 28px; background: var(--l-surface); border: 1px solid var(--l-rule); box-shadow: 0 18px 40px -30px rgb(80 45 5 / 0.5); }
+@media (min-width: 960px) { .nb-land-community { grid-template-columns: 0.9fr 1.1fr; gap: 48px; align-items: center; padding: 48px; } }
+.nb-land-h3 { margin: 0; font-family: var(--l-serif); font-weight: 500; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em; color: var(--l-ink); text-wrap: balance; }
+@media (min-width: 768px) { .nb-land-h3 { font-size: 36px; } }
+.nb-land-community .nb-land-point { background: var(--l-bg); border-color: var(--l-rule); }
+@media (max-width: 639px) { .nb-land-community { padding: 24px 16px; } .nb-land-community .nb-land-point { padding: 16px 14px; gap: 12px; } }
+.nb-land-point h4 { margin: 0 0 4px; font-size: 16.5px; font-weight: 700; color: var(--l-ink); }
 @media (prefers-reduced-motion: no-preference) {
-  .nb-land-step, .nb-land-aud { transition: transform 0.2s ease, box-shadow 0.2s ease; }
-  .nb-land-step:hover, .nb-land-aud:hover { transform: translateY(-2px); box-shadow: 0 18px 32px -22px rgb(200 120 10 / 0.6); }
+  .nb-land-stage, .nb-land-aud { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  .nb-land-stage:hover, .nb-land-aud:hover { transform: translateY(-2px); box-shadow: 0 18px 32px -22px rgb(200 120 10 / 0.6); }
 }
 
 /* ---------- Built for ---------- */
@@ -217,7 +264,6 @@
 .nb-land-aud[data-tone="coral"] .nb-land-aud-art { background: radial-gradient(60% 80% at 70% 20%, #FFD2BC, transparent 70%), #FFE3D0; }
 .nb-land-aud[data-tone="teal"] .nb-land-aud-art { background: radial-gradient(60% 80% at 70% 20%, #BDE9E4, transparent 70%), #D6F1EF; }
 .nb-land-aud[data-tone="lilac"] .nb-land-aud-art { background: radial-gradient(60% 80% at 70% 20%, #DCD2F7, transparent 70%), #ECE6FB; }
-.nb-land-aud-art svg > path:first-of-type { fill: rgb(255 255 255 / 0.55); }
 .nb-land-aud-body { padding: 18px 20px 22px; }
 .nb-land-aud h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--l-ink); }
 .nb-land-aud p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--l-ink2); }
@@ -229,7 +275,6 @@
   .nb-land-aud-body { padding: 14px 16px; align-self: center; }
   .nb-land-aud h3 { font-size: 16.5px; margin-bottom: 4px; }
   .nb-land-aud p { font-size: 14px; }
-  .nb-land-step { padding: 18px; gap: 8px; }
 }
 
 /* ---------- Blueprint ---------- */
