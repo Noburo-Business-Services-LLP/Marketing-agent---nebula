@@ -3,7 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+const { createRateLimits, trustProxySetting } = require('./middleware/rateLimits');
 const mongoSanitize = require('express-mongo-sanitize');
 const hpp = require('hpp');
 const path = require('path');
@@ -130,9 +130,10 @@ const { initializeSocketHub } = require('./services/socketHub');
 const app = express();
 
 // ============================================
-// Security: Trust Proxy (for Render / Cloudflare)
+// Security: Trust Proxy. Production runs behind the AWS load balancer: one hop (TRUST_PROXY_HOPS, default 1; set 2 if
+// a second proxy such as the frontend nginx sits in front). req.ip is then the real client address for the limits.
 // ============================================
-app.set('trust proxy', 1);
+app.set('trust proxy', trustProxySetting(process.env));
 
 // ============================================
 // Security: Helmet — Secure HTTP Headers
@@ -210,50 +211,10 @@ app.use(cors({
 // ============================================
 // Security: Rate Limiting
 // ============================================
-// General API rate limit — 500 requests per 15 minutes per IP
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 2000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' },
-  skip: (req) => {
-    const url = String(req.originalUrl || '');
-    if (req.method !== 'GET') return false;
-    return (
-      url.startsWith('/api/notifications') ||
-      url.startsWith('/api/credits') ||
-      url.startsWith('/api/video-generation/jobs/')
-    );
-  }
-});
-
-// Auth rate limit — 20 requests per 15 minutes (login, register, OTP)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many authentication attempts, please try again later.' }
-});
-
-// AI generation rate limit — 100 requests per 15 minutes (campaigns can generate 14+ posts per run)
-const aiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many AI generation requests, please try again later.' }
-});
-
-// Social media posting rate limit — 30 requests per 15 minutes
-const socialLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many social media requests, please try again later.' }
-});
+// General (per address), credential routes only (per address and account, plus an address cap), social (per user,
+// plus an address cap) and AI (per address). See middleware/rateLimits.js.
+const limits = createRateLimits();
+const aiLimiter = limits.ai;
 
 // Health check endpoint (exempt from rate limiting)
 app.get('/api/health', (req, res) => {
@@ -316,7 +277,7 @@ app.get('/api/health/details', (req, res) => {
 });
 
 // Apply general limiter to all API routes
-app.use('/api', generalLimiter);
+app.use('/api', limits.general);
 
 // Raw body for Razorpay webhook signature verification (must come before express.json)
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
@@ -403,14 +364,14 @@ const homeCacheWatch = require('./routes/home').watch;
 app.use('/api', homeCacheWatch);
 
 // Routes - Admin (no trial/credit guard)
-app.use('/api/admin', authLimiter, adminRoutes);
+app.use('/api/admin', limits.credentialAll, adminRoutes);
 app.use('/api/csm', csmRoutes);
 app.use('/api/staff', staffRoutes);
 
 // Routes - Core (with specific rate limiters on sensitive routes)
-app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/auth', limits.credential, authRoutes);
 app.use('/api/social/inbox', socialInboxRoutes);
-app.use('/api/social', socialLimiter, socialRoutes);
+app.use('/api/social', limits.social, socialRoutes);
 app.use('/api/chat', aiLimiter, chatRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
