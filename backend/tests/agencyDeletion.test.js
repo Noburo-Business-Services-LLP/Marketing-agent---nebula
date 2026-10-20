@@ -211,9 +211,10 @@ test('the running-work check looks at the right states of each collection for th
   const models = {};
   for (const k of ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt']) models[k] = { exists: async (f) => { asked[k] = f; return false; } };
   await w.runningWork('w1', models, NOW.getTime());
-  assert.deepStrictEqual(asked.VideoJob, { userId: 'w1', status: { $in: ['queued', 'processing'] } });
+  // A refund claim still open (being retried) blocks a removal too: the refund has nowhere to go once the client is gone.
+  assert.deepStrictEqual(asked.VideoJob, { userId: 'w1', $or: [{ status: { $in: ['queued', 'processing'] } }, { refundState: 'refunding' }] });
   assert.deepStrictEqual(asked.HeroVideoJob, { userId: 'w1', status: { $in: ['queued', 'processing'] } });
-  assert.deepStrictEqual(asked.StudioVideo, { user: 'w1', status: { $in: ['queued', 'processing'] } }); // queued = charged, waiting for a consumer (E9 B1)
+  assert.deepStrictEqual(asked.StudioVideo, { user: 'w1', $or: [{ status: { $in: ['queued', 'processing'] } }, { refundState: 'refunding' }] }); // queued = charged, waiting for a consumer (E9 B1); refunding = a refund still being retried
   assert.deepStrictEqual(asked.Draft, { userId: 'w1', status: 'processing' });
   assert.deepStrictEqual(asked.Blueprint.$or, [{ status: { $in: ['queued', 'processing'] } }, { 'designed.status': { $in: ['queued', 'processing'] } }]);
   assert.strictEqual(asked.Blueprint.userId, 'w1');
@@ -392,4 +393,17 @@ test('B-I4: a purge left "running" by a crash is picked up after 30 minutes, not
   x.deletions[0].runningSince = new Date(later.getTime() - 40 * 60 * 1000);
   assert.deepStrictEqual(await d.runPurgeOnce({ models, deps, now: later }), { completed: 1, failed: 0 });
   assert.deepStrictEqual(x.users.map((u) => u._id), ['u9']);
+});
+
+test('a StudioVideo or VideoJob whose refund is still being retried (refundState refunding) blocks a removal, a finished refund does not', async () => {
+  for (const [model, label, owner] of [['StudioVideo', 'studio videos', 'user'], ['VideoJob', 'AI video jobs', 'userId']]) {
+    for (const [state, blocks] of [['refunding', true], ['done', false], ['refunded', false], ['', false]]) {
+      const rows = [{ [owner]: 'w1', status: 'failed', refundState: state }];
+      const models = {};
+      for (const k of ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt']) models[k] = { exists: async () => false };
+      models[model] = { exists: async (f) => rows.some((r) => match(r, f)) };
+      const busy = await w.runningWork('w1', models, NOW.getTime());
+      assert.deepStrictEqual(busy, blocks ? [label] : [], `${model} ${state}`);
+    }
+  }
 });

@@ -103,10 +103,12 @@ const RUNNING = ['queued', 'processing'];
 async function runningWork(workspaceId, models, now = Date.now()) {
   const id = String(workspaceId);
   const checks = [
-    ['AI video jobs', 'VideoJob', { userId: id, status: { $in: RUNNING } }],
+    // A job whose refund claim is still open (refundState 'refunding', retried by a sweep) also counts: removing the client
+    // would purge the row and the refund would have nowhere to go.
+    ['AI video jobs', 'VideoJob', { userId: id, $or: [{ status: { $in: RUNNING } }, { refundState: 'refunding' }] }],
     ['Hero videos', 'HeroVideoJob', { userId: id, status: { $in: RUNNING } }],
     ['Blueprints', 'Blueprint', { userId: id, $or: [{ status: { $in: RUNNING } }, { 'designed.status': { $in: RUNNING } }] }],
-    ['studio videos', 'StudioVideo', { user: id, status: { $in: RUNNING } }],
+    ['studio videos', 'StudioVideo', { user: id, $or: [{ status: { $in: RUNNING } }, { refundState: 'refunding' }] }],
     ['pictures and carousels', 'Draft', { userId: id, status: 'processing' }],
     // The scheduler has no "publishing" state of its own: a scheduled post that is due now, or within two minutes, is being published.
     ['posts going out', 'Campaign', {
