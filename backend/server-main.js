@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const { createRateLimits, trustProxySetting } = require('./middleware/rateLimits');
+const { mongoConnectOptions } = require('./config/mongoOptions');
 const mongoSanitize = require('express-mongo-sanitize');
 const hpp = require('hpp');
 const path = require('path');
@@ -856,13 +857,8 @@ const startServer = async () => {
     let retries = 5;
     while (retries > 0) {
       try {
-        await mongoose.connect(process.env.MONGODB_URI, {
-          // Atlas/network hiccups can cause fast failures right in the middle
-          // of scheduling/publishing. Give Mongoose more time to pick a server.
-          serverSelectionTimeoutMS: 30000,
-          socketTimeoutMS: 45000,
-          connectTimeoutMS: 30000,
-        });
+        // Pool and timeouts from config/mongoOptions.js (MONGO_MAX_POOL_SIZE default 20 per task, MONGO_MIN_POOL_SIZE 2).
+        await mongoose.connect(process.env.MONGODB_URI, mongoConnectOptions());
         console.log('✅ MongoDB connected successfully');
         mongoConnected = true;
         break;
