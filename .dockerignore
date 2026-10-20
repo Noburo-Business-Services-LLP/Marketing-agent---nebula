@@ -1,24 +1,48 @@
+# Build context for Dockerfile, Dockerfile.backend and Dockerfile.frontend (hardening E6).
+# Nothing below is needed to build or run the images. scripts/verify-dockerfile.js checks the key entries.
 .git
+.github
 .claude
 .runlogs
 .scannerwork
 .vscode
+.idea
+.DS_Store
 
 node_modules
 backend/node_modules
 frontend/node_modules
 
+# Secrets never enter an image (ECS injects them at run time).
 backend/.env
+backend/.env.*
+!backend/.env.example
 frontend/.env
+frontend/.env.*
 .env
-.env.local
-.env.production
+.env.*
 
 npm-debug.log*
 *.log
 
+# Run-time data and tool output
 backend/storage
 backend/temp
+backend/downloads
+backend/designed-pdf-test-output
 frontend/dist
 dist
 build
+coverage
+qa-reports
+scratch
+**/scratch
+
+# Documentation and tests
+docs
+*.md
+**/*.md
+backend/tests
+frontend/tests
+frontend/test_log.txt
+sonar-project.properties
