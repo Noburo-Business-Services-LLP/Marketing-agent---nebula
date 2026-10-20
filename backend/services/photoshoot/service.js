@@ -683,7 +683,10 @@ function createPhotoshoot(given = {}) {
     const proven = led.spend ? Math.max(0, Number(led.spend.quarks) || 0) : 0;
     const amount = led.spend && !led.refunded ? Math.min(Math.max(0, Math.round(wanted)), proven) : 0;
     const payer = String((led.spend && led.spend.payer) || job.payerId || '');
-    const closed = await repo.closeWhere(id, cond, { status, outcome, refundedQuarks: amount, refundPayer: payer, finishedAt: now, ...(amount > 0 ? {} : { refundSettledAt: now }) });
+    // finishedAt is taken HERE, at the write that claims the refund, not before the slow proof read: the settle sweep treats a
+    // row whose finishedAt is SETTLE_AFTER_MS old as crashed after the claim, so an early stamp would let it pay the same refund.
+    const closedAt = deps.now();
+    const closed = await repo.closeWhere(id, cond, { status, outcome, refundedQuarks: amount, refundPayer: payer, finishedAt: closedAt, ...(amount > 0 ? {} : { refundSettledAt: closedAt }) });
     if (!closed) return null;
     if (wanted > 0 && !led.spend) deps.alert('photoshoot_refund', `Photoshoot ${String(id)}: ${wanted} Quarks were due back but no charge was found for it, so nothing was paid. Check by hand.`);
     if (amount > 0) {

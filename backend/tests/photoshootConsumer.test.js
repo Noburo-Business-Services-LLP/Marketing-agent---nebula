@@ -697,3 +697,25 @@ test('agency client removal waits for a photoshoot in flight or a refund not yet
   assert.ok(JSON.stringify(asked.PhotoshootJob.$or).includes('refundFailed'));
   assert.ok(JSON.stringify(asked.PhotoshootJob.$or).includes('refundSettledAt'));
 });
+
+// ---- review fixes (docs/superpowers/ops/review-photoshoot-consumer-2026-10-20.md) ------------------------------------
+
+test('S1: the close stamps finishedAt at the close WRITE, so a slow proof read cannot let another process\'s settle sweep pay the same refund', async () => {
+  const w = world();
+  await create(w);
+  const id = w.repo.rows[0]._id;
+  w.failIf = () => true;
+  const other = w.server('other');
+  let slow = true; let raced = 0;
+  const svc = createPhotoshoot({
+    ...w.deps,
+    runnerId: 'runner-slow',
+    ledgerFor: async (...a) => { if (slow) { slow = false; w.advance(3 * MIN); } return w.deps.ledgerFor(...a); }, // the proof read takes 3 minutes
+    refundTo: async (...a) => { if (!raced) { raced += 1; await other.sweepUnsettled(); } return w.deps.refundTo(...a); } // another process sweeps right after the close write
+  });
+  const c = w.consumer('a', { service: svc });
+  await quiet(async () => { await c._drain(); await settle(120); });
+  assert.strictEqual(raced, 1);
+  assert.strictEqual(w.row(id).status, 'failed');
+  assert.deepStrictEqual(w.refunds(id).map((m) => m.q), [4 * PER], 'exactly one refund');
+});
