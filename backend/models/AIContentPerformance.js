@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { linksOnlySetter } = require('../services/providerAnswer');
 
 const aiContentPerformanceSchema = new mongoose.Schema(
   {
@@ -24,10 +25,11 @@ const aiContentPerformanceSchema = new mongoose.Schema(
         tags: { type: [String], default: [] }
       }
     ],
+    // Links only (D103): these copied the campaign's pictures, base64 included; the Performance view only uses links.
     assets: {
-      images: { type: [String], default: [] },
-      videos: { type: [String], default: [] },
-      thumbnails: { type: [String], default: [] }
+      images: { type: [String], default: [], set: linksOnlySetter },
+      videos: { type: [String], default: [], set: linksOnlySetter },
+      thumbnails: { type: [String], default: [], set: linksOnlySetter }
     },
     metrics: {
       likes: { type: Number, default: 0 },

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { compactSetter, linksOnlySetter } = require('../services/providerAnswer');
 
 const reusableMetadataSchema = new mongoose.Schema(
   {
@@ -42,7 +43,8 @@ const aiCampaignHistorySchema = new mongoose.Schema(
     generatedCaption: { type: String, default: '' },
     hashtags: { type: [String], default: [] },
     cta: { type: String, default: '' },
-    generatedImages: { type: [String], default: [] },
+    // Links only (D103): a base64 copy of a picture made these rows heavy.
+    generatedImages: { type: [String], default: [], set: linksOnlySetter },
     generatedVideos: { type: [String], default: [] },
     imagePrompts: { type: [String], default: [] },
     scenes: { type: [mongoose.Schema.Types.Mixed], default: [] },
@@ -57,7 +59,7 @@ const aiCampaignHistorySchema = new mongoose.Schema(
     ],
     scheduling: { type: mongoose.Schema.Types.Mixed, default: {} },
     aiSettings: { type: mongoose.Schema.Types.Mixed, default: {} },
-    sourceResponse: { type: mongoose.Schema.Types.Mixed, default: {} },
+    sourceResponse: { type: mongoose.Schema.Types.Mixed, default: {}, set: compactSetter },
     status: {
       type: String,
       enum: ['generated', 'draft', 'scheduled', 'published', 'failed'],

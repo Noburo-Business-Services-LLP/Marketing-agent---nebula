@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { messageSetter } = require('../services/providerAnswer');
 
 const draftSchema = new mongoose.Schema({
   userId: {
@@ -119,7 +120,8 @@ const draftSchema = new mongoose.Schema({
   archivedFrom: { type: String, default: '' },
   errorMessage: {
     type: String,
-    default: ''
+    default: '',
+    set: messageSetter
   },
   // A carousel is one post made of several ordered images that tell a single
   // story. Kept as a sub-array rather than separate drafts so the slides stay

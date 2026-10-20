@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { compactSetter, messageSetter } = require('../services/providerAnswer');
 
 const campaignSchema = new mongoose.Schema({
   userId: {
@@ -167,13 +168,16 @@ const campaignSchema = new mongoose.Schema({
     enum: ['pending', 'scheduled', 'success', 'error', null],
     default: null
   },
+  // Compact copies only (D103): ids, statuses, links, codes, short messages; never a whole raw body or a picture.
   publishResult: {
     type: mongoose.Schema.Types.Mixed,
-    default: null
+    default: null,
+    set: compactSetter
   },
   lastPublishError: {
     type: String,
-    default: null
+    default: null,
+    set: messageSetter
   },
   // Consecutive publish failure counter — auto-cancels the campaign
   // after MAX_PUBLISH_ATTEMPTS (default 3) to stop retry loops from
