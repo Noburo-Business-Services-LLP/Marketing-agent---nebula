@@ -206,23 +206,10 @@ if (extraOrigins.length > 0) {
   console.log(`[CORS] Extra origins from CORS_ALLOWED_ORIGINS env: ${extraOrigins.join(', ')}`);
 }
 
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, same-origin requests)
-    if (!origin) return callback(null, true);
-    // Local development only: any port on localhost or 127.0.0.1 (preview servers use other ports than 3000). Never in production.
-    if (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1):\d{2,5}$/.test(origin)) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.warn(`⛔ CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+// A refused browser origin gets 403 { success:false, message:'Origin not allowed' } on /api (middleware/corsPolicy.js), not a 500.
+const corsPolicy = require('./middleware/corsPolicy');
+app.use(corsPolicy.rejectDisallowedOrigin(allowedOrigins));
+app.use(cors(corsPolicy.corsOptions(allowedOrigins)));
 
 // ============================================
 // Security: Rate Limiting
@@ -339,6 +326,8 @@ app.use('/api', require('./services/serverTimeouts').routeTimeout());
 // ============================================
 // Security: NoSQL Injection Prevention
 // ============================================
+// `?status[$ne]=x` is refused with 400 before any handler can copy an operator into a filter (middleware/queryGuard.js).
+app.use(require('./middleware/queryGuard').queryGuard);
 app.use(mongoSanitize());
 
 // ============================================
