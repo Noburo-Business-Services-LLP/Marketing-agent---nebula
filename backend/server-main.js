@@ -291,20 +291,31 @@ app.use('/api', limits.general);
 // Raw body for Razorpay webhook signature verification (must come before express.json)
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
 
-// Request size limits. Most routes only ever receive small text, so they get 1 MB; only the routes that take pictures
-// (sent as text) get a bigger allowance. A huge body is refused before it is read into memory.
+// Request size limits (docs/superpowers/ops/security-hardening.md). Most routes only ever receive small text: 1 MB.
+// MEDIUM (10 MB): routes that may carry one picture as text (a logo, an avatar, the picture being edited).
+// BIG (40 MB): routes that take several pictures or files as text (campaign images, scenes, reference photos, files
+// to read). A huge body is refused (413) before it is read into memory. Multipart uploads (drafts/upload-media,
+// products/bulk-import) go through multer with their own caps, streamed to a temporary file.
 const BIG_BODY_PREFIXES = [
   '/api/campaigns', '/api/carousels', '/api/create-assist', '/api/drafts', '/api/brand-assets', '/api/video-generation', '/api/hero-video',
-  '/api/products', '/api/ideas', '/api/content', '/api/social', '/api/ads', '/api/ad-campaigns', '/api/chat',
-  '/api/blueprint', '/api/brand', '/api/auth/update-profile', '/api/auth/complete-onboarding', '/api/photoshoot/upload'
+  '/api/products', '/api/ideas', '/api/social', '/api/photoshoot/upload'
 ];
+const MEDIUM_BODY_PREFIXES = ['/api/content', '/api/blueprint', '/api/auth/update-profile', '/api/auth/complete-onboarding'];
 const smallJson = express.json({ limit: '1mb' });
+const mediumJson = express.json({ limit: '10mb' });
 const bigJson = express.json({ limit: '40mb' });
 const smallForm = express.urlencoded({ extended: true, limit: '1mb' });
+const mediumForm = express.urlencoded({ extended: true, limit: '10mb' });
 const bigForm = express.urlencoded({ extended: true, limit: '40mb' });
-const wantsBigBody = (req) => BIG_BODY_PREFIXES.some((p) => req.path === p || req.path.startsWith(`${p}/`));
-app.use((req, res, next) => (wantsBigBody(req) ? bigJson : smallJson)(req, res, next));
-app.use((req, res, next) => (wantsBigBody(req) ? bigForm : smallForm)(req, res, next));
+const matches = (list) => (req) => list.some((p) => req.path === p || req.path.startsWith(`${p}/`));
+const wantsBigBody = matches(BIG_BODY_PREFIXES);
+const wantsMediumBody = matches(MEDIUM_BODY_PREFIXES);
+app.use((req, res, next) => (wantsBigBody(req) ? bigJson : wantsMediumBody(req) ? mediumJson : smallJson)(req, res, next));
+app.use((req, res, next) => (wantsBigBody(req) ? bigForm : wantsMediumBody(req) ? mediumForm : smallForm)(req, res, next));
+
+// A short answer time for ordinary routes (30 s, ROUTE_TIMEOUT_MS); generation, upload and stream routes are excluded
+// (services/serverTimeouts.js, LONG_ROUTE_PREFIXES).
+app.use('/api', require('./services/serverTimeouts').routeTimeout());
 
 // ============================================
 // Security: NoSQL Injection Prevention
@@ -904,6 +915,8 @@ const startServer = async () => {
   });
 
   httpServer = server;
+  // keep-alive 65 s (above the load balancer's 60 s), headers 66 s, whole request SERVER_REQUEST_TIMEOUT_MS (300 s).
+  require('./services/serverTimeouts').applyServerTimeouts(server);
   initializeSocketHub(server, allowedOrigins);
 
   // Memory leak hunting — logs heap + handles every 5 min as [MEM] in stdout.

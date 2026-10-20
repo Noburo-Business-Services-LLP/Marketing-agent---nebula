@@ -6,6 +6,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 // Shared per-user limits for paid AI, scraping, uploads and ad spend (docs/superpowers/ops/security-hardening.md).
 const L = require('../middleware/limits');
+const { listTimeout } = require('../utils/listQueryTimeout');
 const { requireFeature } = require('../middleware/requireFeature');
 const { checkTrial, deductCredits, refundCredits, CREDIT_COSTS } = require('../middleware/trialGuard');
 const Draft = require('../models/Draft');
@@ -90,7 +91,7 @@ router.get('/', protect, async (req, res) => {
     const limit = page.parseLimit(req.query.limit, 30);
     query.userId = new mongoose.Types.ObjectId(String(userId));
     const q = page.pageQuery(query, { cursor: req.query.cursor, limit });
-    const rows = await Draft.aggregate(page.pagePipeline(q, page.DRAFT_TRIM));
+    const rows = await listTimeout(Draft.aggregate(page.pagePipeline(q, page.DRAFT_TRIM)));
     await Draft.populate(rows, { path: 'campaignId', select: 'campaignName', options: { lean: true } });
     const { items, nextCursor, hasMore } = page.finishPage(rows, { limit, cursor: q.cursor });
     res.status(200).json({ success: true, drafts: items, nextCursor, hasMore });
@@ -470,9 +471,15 @@ router.post('/:id/regenerate', protect, L.heavyAi, async (req, res) => {
 // Draft, so an upload just needs to become one. Uses multer + memory storage
 // rather than base64 JSON so real video files don't blow the body limit.
 const multer = require('multer');
+// Streamed to a temporary file (never a 120 MB buffer in memory); the handler removes it. Pictures are capped lower
+// in the handler (MAX_UPLOAD_IMAGE_BYTES), because a picture is read into memory to be sent on.
+const MAX_UPLOAD_IMAGE_BYTES = 20 * 1024 * 1024;
 const mediaUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 120 * 1024 * 1024 }, // 120MB — comfortably over a reel
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, require('os').tmpdir()),
+    filename: (req, file, cb) => cb(null, `upload_${Date.now()}_${require('crypto').randomBytes(6).toString('hex')}`)
+  }),
+  limits: { fileSize: 120 * 1024 * 1024, files: 1 }, // 120MB — comfortably over a reel
   fileFilter: (req, file, cb) => {
     const ok = /^(image|video)\//i.test(file.mimetype || '');
     cb(ok ? null : new Error('Only image or video files are allowed'), ok);
@@ -480,12 +487,12 @@ const mediaUpload = multer({
 });
 
 router.post('/upload-media', protect, L.upload, mediaUpload.single('file'), async (req, res) => {
-  const os = require('os');
   const fsp = require('fs').promises;
   let tempPath = '';
   try {
     const userId = req.user.userId || req.user.id;
     if (!req.file) return res.status(400).json({ success: false, message: 'No file received' });
+    tempPath = req.file.path; // multer wrote it to a temporary file; removed in finally
 
     const { title, caption, platforms } = req.body || {};
     const isVideo = /^video\//i.test(req.file.mimetype);
@@ -493,14 +500,13 @@ router.post('/upload-media', protect, L.upload, mediaUpload.single('file'), asyn
 
     let mediaUrl = '';
     if (isVideo) {
-      // uploadVideoFile works from a path, so stage the buffer on disk first.
-      tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${(req.file.originalname || 'clip').replace(/[^\w.-]/g, '')}`);
-      await fsp.writeFile(tempPath, req.file.buffer);
       const up = await uploadVideoFile(tempPath, 'nebula-uploads');
       if (!up?.success || !up?.url) throw new Error(up?.error || 'Video upload failed');
       mediaUrl = up.url;
     } else {
-      const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      if (req.file.size > MAX_UPLOAD_IMAGE_BYTES) return res.status(413).json({ success: false, message: 'Please use a picture under 20 MB.' });
+      const buffer = await fsp.readFile(tempPath);
+      const dataUrl = `data:${req.file.mimetype};base64,${buffer.toString('base64')}`;
       const up = await uploadBase64Image(dataUrl, 'nebula-uploads');
       if (!up?.success || !up?.url) throw new Error(up?.error || 'Image upload failed');
       mediaUrl = up.url;

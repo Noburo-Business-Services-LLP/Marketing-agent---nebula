@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { listTimeout } = require('../utils/listQueryTimeout');
 const { requireFeature, requireFeatureWhen, wantsScheduling } = require('../middleware/requireFeature');
 const { campaignApprovalBlock } = require('../services/postLifecycle');
 const { checkTrial, deductCredits, requireCredits } = require('../middleware/trialGuard');
@@ -932,11 +933,11 @@ router.get('/', protect, async (req, res) => {
     const limit = page.parseLimit(req.query.limit, 20);
     const q = page.pageQuery(query, { cursor: req.query.cursor, limit });
     const [rows, statusCounts] = await Promise.all([
-      Campaign.aggregate(page.pagePipeline(q, page.CAMPAIGN_TRIM)),
-      Campaign.aggregate([
+      listTimeout(Campaign.aggregate(page.pagePipeline(q, page.CAMPAIGN_TRIM))),
+      listTimeout(Campaign.aggregate([
         { $match: { userId: query.userId } },
         { $group: { _id: '$status', count: { $sum: 1 } } }
-      ])
+      ]))
     ]);
     const { items, nextCursor, hasMore } = page.finishPage(rows, { limit, cursor: q.cursor });
     

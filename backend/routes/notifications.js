@@ -9,6 +9,7 @@ const router = express.Router();
 // The two hot reads use the short auth cache (only the id is read); every write keeps protect. See auth-cache.md.
 const { protect, protectCached } = require('../middleware/auth');
 const Notification = require('../models/Notification');
+const { listTimeout } = require('../utils/listQueryTimeout');
 const notificationScheduler = require('../services/notificationScheduler');
 // The manual triggers below run the reminder scheduler by hand: Nebulaa staff only (owner, admin). Customers get their
 // campaign reminders from the scheduler every minute; nothing they use needs these.
@@ -53,11 +54,11 @@ router.get('/', protectCached, async (req, res) => {
     // Lean, at most 50, and the unread count read at the same time as the list (load-test weeks 2 to 3).
     const max = require('../services/listPage').parseLimit(limit, 20);
     const [notifications, unreadCount] = await Promise.all([
-      Notification.find(freshOnly(query))
+      listTimeout(Notification.find(freshOnly(query))
         .sort({ createdAt: -1 })
         .limit(max)
         .select('-emailError')
-        .lean(),
+        .lean()),
       // Get unread count - include both sent and pending
       Notification.countDocuments(freshOnly({
         userId,

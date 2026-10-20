@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const SocialInboxConversation = require('../models/SocialInboxConversation');
 const SocialInboxMessage = require('../models/SocialInboxMessage');
+const { listTimeout } = require('../utils/listQueryTimeout');
 const AutoReplySettings = require('../models/AutoReplySettings');
 const User = require('../models/User');
 const { generateWithLLM } = require('./llmRouter');
@@ -907,9 +908,9 @@ async function countPending(userId) {
 }
 
 async function listPendingApprovals(userId) {
-  const drafts = await SocialInboxMessage.find({ userId, direction: 'inbound', 'ai.autoReplyStatus': 'pending_approval' })
+  const drafts = await listTimeout(SocialInboxMessage.find({ userId, direction: 'inbound', 'ai.autoReplyStatus': 'pending_approval' })
     .sort({ createdAt: -1 })
-    .limit(100);
+    .limit(100));
   const ids = Array.from(new Set(drafts.map((d) => String(d.conversationId))));
   const conversations = ids.length ? await SocialInboxConversation.find({ _id: { $in: ids }, userId }) : [];
   const byId = new Map(conversations.map((c) => [String(c._id), c]));
@@ -992,10 +993,10 @@ async function listConversations(userId, filters = {}) {
     ];
   }
 
-  return SocialInboxConversation.find(query)
+  return listTimeout(SocialInboxConversation.find(query)
     .sort({ lastMessageAt: -1 })
     .skip(Math.max(0, Number(filters.offset) || 0))
-    .limit(Math.min(100, Math.max(1, Number(filters.limit) || 50)));
+    .limit(Math.min(100, Math.max(1, Number(filters.limit) || 50))));
 }
 
 async function getConversationThread(userId, conversationId) {

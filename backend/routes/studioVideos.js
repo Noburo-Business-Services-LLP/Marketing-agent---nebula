@@ -10,6 +10,7 @@ const User = require('../models/User');
 const BrandAsset = require('../models/BrandAsset');
 const Product = require('../models/Product');
 const StudioVideo = require('../models/StudioVideo');
+const { listTimeout } = require('../utils/listQueryTimeout');
 const { callTextLLM } = require('../services/openAI');
 const omni = require('../services/omniVideo');
 const sv = require('../services/studioVideo');
@@ -545,12 +546,12 @@ const STALE_REASON = 'The video took too long and was stopped. Your Quarks were 
 
 router.get('/', protect, async (req, res) => {
   const userId = userIdOf(req);
-  let list = await StudioVideo.find({ user: userId }).sort({ createdAt: -1 }).limit(30).lean();
+  let list = await listTimeout(StudioVideo.find({ user: userId }).sort({ createdAt: -1 }).limit(30).lean());
   // Lost jobs (a restart, a crash) are closed here too, not only when one video is opened. Bounded per request.
   const stale = list.filter((v) => isStale(v)).slice(0, 5);
   if (stale.length) {
     for (const v of stale) await fail(v, STALE_REASON).catch((e) => console.error('[videos] stale close failed:', e.message));
-    list = await StudioVideo.find({ user: userId }).sort({ createdAt: -1 }).limit(30).lean();
+    list = await listTimeout(StudioVideo.find({ user: userId }).sort({ createdAt: -1 }).limit(30).lean());
   }
   res.json({ success: true, videos: list.map(shape) });
 });
