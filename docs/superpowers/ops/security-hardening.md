@@ -355,3 +355,24 @@ let anyone lock a named person out). Keyed by the TYPED email, whether or not it
 - No screen reads "No account found", `attemptsRemaining`, `expired`, `maxAttempts` or a 423: the flows keep working.
   The resend button already sets its own 60 s cooldown on success. The sign-in page shows the server's 429 message
   (`Please wait N seconds ...`) as it shows any error.
+
+## 11. Background leases, logging, compression, auth error text (hardening items E2, A7, A8, A4 remainder; D56 to D58)
+
+### Leases around scheduler ticks (E2, D56)
+- `backend/services/leaseLock.js` (`withLease(name, ttlMs, fn, {cooldownMs})`, `leased(...)` for a timer's tick) on the `job_leases` collection (`models/JobLease.js`). An accidental second worker, or a web task started without `RUN_BACKGROUND=0`, now skips a tick the other server holds instead of sending, publishing or charging twice. The campaign publish tick is the highest risk (it had no per-campaign claim): its lease is `scheduler:campaign-publish` (10 minutes, renewed every 3 minutes while it runs), and ticks of one process can no longer overlap either.
+- Lease names are unique and start with `scheduler:`. Look at them with `db.job_leases.find()`; a stuck name clears itself when `expiresAt` passes (a crashed server's lease lasts at most its ttl). Rows are deleted a day after expiry.
+- Guard tests: `tests/leaseLock.test.js` (two holders, expiry takeover, renewal, failing tick releases, cooldown, store failure means skipped), `tests/schedulerLeases.test.js` (every starter in `startBackgroundJobs()` is leased, holds an OpsState lease, or is on the allowlist with a reason; names unique).
+- Not a replacement for `RUN_BACKGROUND=0` on the web service: that stays the way to run background work in one place.
+
+### Logging (A7, D57)
+- Format: one JSON object per line, for example `{"level":30,"time":"2026-10-20T10:50:18.620Z","req":{"id":2,"method":"GET","url":"/api/social/inbox/stream?token=[redacted]"},"res":{"statusCode":200},"responseTime":5,"msg":"GET /api/social/inbox/stream 200"}`. Levels are numbers (30 info, 40 warn, 50 error). `LOG_LEVEL` = fatal, error, warn, info (default), debug, trace or silent.
+- No headers are logged; a `token=` value, a Bearer token and a cookie never appear (unit test `tests/loggingAndCompression.test.js`). Use `require('./utils/logger')` (`logger.info/warn/error`, printf arguments, an Error as the last argument is logged as `err`); new code should not add `console.*`.
+- Search in CloudWatch Logs Insights: `fields @timestamp, req.method, req.url, res.statusCode, responseTime | filter res.statusCode >= 500`.
+
+### Compression and cache headers (A8, D57)
+- gzip/deflate for responses over 1 KB when the client sends `Accept-Encoding`; `text/event-stream` (the Inbox live stream) is never compressed. If the load balancer or CloudFront already compresses, nothing breaks (a compressed answer is passed through).
+- `backend/public/assets/<name>-<hash>.<ext>` is `public, max-age=31536000, immutable`; `index.html` is `no-cache`; `X-Content-Type-Options: nosniff` stays (helmet).
+
+### Error text in `routes/auth.js` (A4 remainder, D58)
+- Fixed: the LinkedIn scrape helper's `error` field, the sign-up validation message (was joined from Mongoose messages; now one plain sentence per field from our own list), and the 429 sign-in sentence (chosen by reason from `services/loginGuard.js` MSG; same words). `routes/auth.js` is no longer in `SKIP` (codemod) or `SKIPPED` (`noErrorLeaks.test.js`); the `objectIdParams` test no longer skips it either (it has no `:id` routes).
+

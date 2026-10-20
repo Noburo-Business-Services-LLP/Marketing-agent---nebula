@@ -7,10 +7,10 @@ Source: `/Users/dineshkannaa/Downloads/NEBULAA HARDE.txt` (written for a Windows
 | A1 global sanitiser removed, escape on output | done (emails: in the running security job) | commit `696b65a` |
 | A2 trust proxy hops | done | `TRUST_PROXY_HOPS`, ecs doc |
 | A3 CORS returns 403 | done | `middleware/corsPolicy.js`, D49 |
-| A4 central error mapping, no `error.message` leaks, ObjectId param validation | done except `routes/auth.js` (other change: its codemod and id check are listed in security-hardening.md section 9) | `utils/httpError.js`, `validateObjectId.js`, `queryGuard.js`, D47, D48 |
+| A4 central error mapping, no `error.message` leaks, ObjectId param validation | done, `routes/auth.js` included (off every skip list) | `utils/httpError.js`, `validateObjectId.js`, `queryGuard.js`, D47, D48 |
 | A5 `/api/ready` | done | `3b2dbf0` |
 | A6 crash policy / graceful shutdown | done (crash policy; SIGTERM drain kept) | `utils/crashPolicy.js`, D55 |
-| A7 pino logging, A8 compression and cache headers | TODO (nginx gzip and immutable assets already set) | |
+| A7 pino logging, A8 compression and cache headers | done (pino + pino-http, compression, immutable assets; ~1,700 other console calls left on purpose) | `utils/logger.js`, `middleware/requestLogger.js`, `compression.js`, `staticCache.js`, D57, security-hardening.md section 11 |
 | A9 CSP report-only, A10 body limits and timeouts | RUNNING (security backend job) | |
 | B1 native bcrypt through a semaphore | done | `02dcf4f`, D25 |
 | B2 auth limiter scoped | done | `da7ab96` |
@@ -28,7 +28,7 @@ Source: `/Users/dineshkannaa/Downloads/NEBULAA HARDE.txt` (written for a Windows
 | D1 to D4 lists, calendar GET, parallel queries | done | week-1 doc |
 | D5 duplicate index warning | done | `BrandIntelligenceProfile.userId`, `schemaIndexes.test.js` |
 | E1 RUN_BACKGROUND | done | `7d5d115` |
-| E2 lease lock around every scheduler tick | TODO (single-runner leases exist per job) | |
+| E2 lease lock around every scheduler tick | done (14 ticks wrapped, existing leases kept, 3 queue consumers allowlisted) | `services/leaseLock.js`, `models/JobLease.js`, D56 |
 | E3 OAuth state in Mongo, E4 image jobs persisted | done | |
 | E5 Redis adapter | optional loader done | |
 | E6 container hardening, E7 ECS docs | E7 done, E6 TODO | |
