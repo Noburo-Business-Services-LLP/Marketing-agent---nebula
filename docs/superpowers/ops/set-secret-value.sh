@@ -5,7 +5,7 @@
 # Only these names are accepted, so a typing slip cannot create a stray setting.
 set -euo pipefail
 
-ALLOWED="RAZORPAY_WEBHOOK_SECRET ALERT_EMAILS APP_PUBLIC_URL SIGNUPS_PER_DAY SIGNUP_MODE SIGNUP_INVITE_CODES TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY GEMINI_API_KEY FAL_KEY APIFY_API_KEY SERPER_API_KEY CLAUDE_API_KEY RAZORPAY_PLAN_ID_AGENCY RAZORPAY_PLAN_ID_SLOT ENABLE_COMPETITOR_TRACKER ENABLE_LISTENING LISTENING_MODEL FRONTEND_URL"
+ALLOWED="RAZORPAY_WEBHOOK_SECRET ALERT_EMAILS APP_PUBLIC_URL SIGNUPS_PER_DAY SIGNUP_MODE SIGNUP_INVITE_CODES TURNSTILE_SITE_KEY TURNSTILE_SECRET_KEY GEMINI_API_KEY FAL_KEY APIFY_API_KEY SERPER_API_KEY CLAUDE_API_KEY RAZORPAY_PLAN_ID_AGENCY RAZORPAY_PLAN_ID_SLOT ENABLE_COMPETITOR_TRACKER ENABLE_LISTENING LISTENING_MODEL FRONTEND_URL HASH_PEPPER ENABLE_PHOTOSHOOT ENABLE_COMPETITOR_DRAFTS ENABLE_COMPETITOR_THUMBS ENABLE_STUDIO_VIDEO_CONSUMER ENABLE_PHOTOSHOOT_CONSUMER ENABLE_CAMPAIGN_STATUS_SYNC ENABLE_BIN_PURGE ENABLE_HOME_DRAFTS_SWEEP RATE_LIMIT_STORE TRUST_PROXY_HOPS UNHANDLED_REJECTION_POLICY BCRYPT_ROUNDS SHUTDOWN_DRAIN_MS MONGO_MAX_POOL_SIZE ALLOW_ADMIN_BOOTSTRAP"
 aws() { docker run --rm -i -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_DEFAULT_REGION -v "$HOME/.aws:/root/.aws:ro" amazon/aws-cli "$@"; }
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
 SECRET_ID="${SECRET_ID:-nebulaa-gravity/prod/backend}"
@@ -16,6 +16,7 @@ read -r -p "Name of the setting: " NAME
 case " $ALLOWED " in *" $NAME "*) ;; *) echo "That name is not in the list. Nothing was changed."; exit 1;; esac
 read -r -s -p "Value for $NAME (hidden): " VALUE; echo
 [ -n "$VALUE" ] || { echo "The value is empty. Nothing was changed."; exit 1; }
+if [ "$NAME" = "HASH_PEPPER" ] && [ "${#VALUE}" -lt 32 ]; then echo "Use at least 32 random characters (openssl rand -base64 48 makes a good one). Nothing was changed."; exit 1; fi
 if [ "$NAME" = "RAZORPAY_WEBHOOK_SECRET" ] && [ "${#VALUE}" -lt 24 ]; then echo "Use at least 24 characters (openssl rand -base64 36 makes a good one). Nothing was changed."; exit 1; fi
 
 CURRENT="$(aws secretsmanager get-secret-value --secret-id "$SECRET_ID" --query SecretString --output text)"
