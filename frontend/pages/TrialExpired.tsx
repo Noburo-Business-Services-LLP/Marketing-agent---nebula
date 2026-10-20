@@ -14,6 +14,7 @@ import ExtraClientDialog from '../components/ExtraClientDialog';
 import CancelExtraClientDialog from '../components/CancelExtraClientDialog';
 import LegalLinks from '../components/LegalLinks';
 import { returnHashAfterActing } from '../utils/staffHome';
+import { loadRazorpay } from '../utils/loadRazorpay';
 
 declare global {
   interface Window {
@@ -130,6 +131,7 @@ const TrialExpired: React.FC<TrialExpiredProps> = ({ insideClient }) => {
     try {
       const data = await create();
       if (!data?.success) throw new Error(plainMessage(data?.message, 'The payment could not be started. Please try again.'));
+      await loadRazorpay();
       const rzp = new window.Razorpay({
         ...build(data),
         name: 'Nebulaa',

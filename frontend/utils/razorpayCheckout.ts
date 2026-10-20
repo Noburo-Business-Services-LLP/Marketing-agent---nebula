@@ -1,3 +1,5 @@
+import { loadRazorpay } from './loadRazorpay.ts';
+
 /** Opens the payment window for a subscription the server has already created, then asks the server to confirm it. */
 export interface CheckoutOptions {
   /** The server's answer to the create call: key, subscription_id and prefill. */
@@ -11,6 +13,12 @@ export interface CheckoutOptions {
 }
 
 export function openSubscriptionCheckout(o: CheckoutOptions): void {
+  // The payment script is not part of the page load; it is fetched now (at once when it is already there).
+  if ((window as any).Razorpay) { run(o); return; }
+  loadRazorpay().then(() => run(o), () => o.onProblem('The payment window could not be opened. Please check your connection and try again.'));
+}
+
+function run(o: CheckoutOptions): void {
   const Razorpay = (window as any).Razorpay;
   if (!Razorpay) { o.onProblem('The payment window could not be opened. Please check your connection and try again.'); return; }
   const rzp = new Razorpay({
