@@ -217,7 +217,7 @@ test('the running-work check looks at the right states of each collection for th
   assert.deepStrictEqual(asked.StudioVideo, { user: 'w1', $or: [{ status: { $in: ['queued', 'processing'] } }, { refundState: 'refunding' }] }); // queued = charged, waiting for a consumer (E9 B1); refunding = a refund still being retried
   assert.deepStrictEqual(asked.Draft, { userId: 'w1', status: 'processing' });
   // A photoshoot in flight (waiting for a worker or being made) or a refund not yet paid or settled (E9 B2).
-  assert.deepStrictEqual(asked.PhotoshootJob, { user: 'w1', $or: [{ inFlight: true }, { refundFailed: true, refundGaveUp: { $ne: true } }, { refundedQuarks: { $gt: 0 }, refundSettledAt: null, status: { $in: ['done', 'partial', 'failed'] } }] });
+  assert.deepStrictEqual(asked.PhotoshootJob, { user: 'w1', $or: [{ inFlight: true }, { refundFailed: true, refundGaveUp: { $ne: true } }, { refundedQuarks: { $gt: 0 }, refundSettledAt: null, refundGaveUp: { $ne: true }, status: { $in: ['done', 'partial', 'failed'] } }] });
   assert.deepStrictEqual(asked.Blueprint.$or, [{ status: { $in: ['queued', 'processing'] } }, { 'designed.status': { $in: ['queued', 'processing'] } }]);
   assert.strictEqual(asked.Blueprint.userId, 'w1');
   assert.strictEqual(asked.Campaign.userId, 'w1'); assert.strictEqual(asked.Campaign.status, 'scheduled');
