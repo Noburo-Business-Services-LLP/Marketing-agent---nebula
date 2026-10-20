@@ -13,7 +13,6 @@ const {
   todaySuggestion,
   calendarMonth,
   startManualCover,
-  maybeRetryCover,
   remapProposalItems
 } = require('../services/contentCalendarService');
 const { makeCooldown } = require('../services/routeCooldown');
@@ -26,40 +25,81 @@ async function getCurrentCalendar(userId) {
   return ContentCalendar.findOne({ userId, month: calendarMonth() }).sort({ createdAt: -1 });
 }
 
-// Months whose cover failed or got stuck are re-made, free, at most once a day each (see maybeRetryCover).
-// Never waited for: the page gets the calendar straight away and polls for the cover. At most `max` renders per request.
-async function healCovers(calendars, userId, max = 1) {
-  try {
-    const todo = (calendars || []).filter((c) => c && (c.coverStatus === 'failed' || c.coverStatus === 'pending'));
-    if (!todo.length) return;
-    const user = await User.findById(userId);
-    let started = 0;
-    for (const c of todo) {
-      if (started >= max) break;
-      const r = await maybeRetryCover(c, user);
-      if (r.retried) started += 1;
-    }
-  } catch (e) { /* the page must load regardless */ }
+// GET is read-only (load-test week 1): it returns this month's calendar, or "not prepared yet" with the status, at
+// once. It never makes a calendar (an AI call of 7 to 8 s) and never writes; failed covers are retried by the
+// background job (healStaleCovers). A calendar is made by POST /prepare, /regenerate, /generate-next or the plan.
+const NOT_PREPARED_MESSAGE = 'Your calendar for this month is not prepared yet.';
+const PREPARING_MESSAGE = 'Your calendar for this month is being prepared. This takes about a minute.';
+const FAILED_MESSAGE = 'We could not prepare your calendar just now. Please try again.';
+const FAILED_SHOWN_MS = 10 * 60 * 1000;
+// In this process: accounts whose month is being made in the background, or whose last try failed.
+const preparation = new Map();
+const depsFor = () => router.testDeps || {};
+
+async function readCurrentCalendar(userId) {
+  const CC = depsFor().ContentCalendar || ContentCalendar;
+  return CC.findOne({ userId, month: calendarMonth() }).sort({ createdAt: -1 }).lean();
+}
+
+function preparationState(userId) {
+  const p = preparation.get(String(userId));
+  if (!p) return null;
+  if (p.state === 'failed' && Date.now() - p.at > FAILED_SHOWN_MS) { preparation.delete(String(userId)); return null; }
+  return p.state;
+}
+
+function notReadyAnswer(userId) {
+  const state = preparationState(userId);
+  if (state === 'preparing') return { success: true, calendar: null, status: 'preparing', message: PREPARING_MESSAGE };
+  if (state === 'failed') return { success: true, calendar: null, status: 'failed', message: FAILED_MESSAGE };
+  return { success: true, calendar: null, status: 'not_prepared', message: NOT_PREPARED_MESSAGE };
 }
 
 router.get('/', protect, async (req, res) => {
   try {
-    let calendar = await getCurrentCalendar(req.user._id);
-    if (!calendar) {
-      const user = await User.findById(req.user._id);
-      calendar = await generateMonthlyCalendar(user, null, await withPlanGuidance(req.user._id));
-    }
-    await healCovers([calendar], req.user._id);
-    res.json({ success: true, calendar });
+    const calendar = await readCurrentCalendar(req.user._id);
+    if (!calendar) return res.json(notReadyAnswer(req.user._id));
+    res.json({ success: true, calendar, status: 'ready' });
   } catch (error) {
     console.error('Content calendar fetch error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch content calendar' });
   }
 });
+
+// Makes this month's calendar in the background (the same generator and the same free-of-Quarks rule the old GET
+// used). Answers at once: 200 with the calendar when it exists, 202 "preparing" otherwise. Two clicks make one.
+router.post('/prepare', protect, async (req, res) => {
+  try {
+    const userId = String(req.user._id);
+    const existing = await readCurrentCalendar(userId);
+    if (existing) return res.json({ success: true, calendar: existing, status: 'ready' });
+    if (preparationState(userId) === 'preparing') return res.status(202).json(notReadyAnswer(userId));
+
+    preparation.set(userId, { state: 'preparing', at: Date.now() });
+    const d = depsFor();
+    const generate = d.generateMonthlyCalendar || generateMonthlyCalendar;
+    const guidance = d.withPlanGuidance || withPlanGuidance;
+    Promise.resolve()
+      .then(async () => {
+        const user = await (d.User || User).findById(userId);
+        return generate(user, null, await guidance(userId));
+      })
+      .then(() => { preparation.delete(userId); })
+      .catch((error) => {
+        console.error('Content calendar prepare error:', error && error.message);
+        preparation.set(userId, { state: 'failed', at: Date.now() });
+      });
+    res.status(202).json(notReadyAnswer(userId));
+  } catch (error) {
+    console.error('Content calendar prepare error:', error);
+    res.status(500).json({ success: false, message: 'Failed to prepare the content calendar' });
+  }
+});
+
 router.get('/history', protect, async (req, res) => {
   try {
-    const calendars = await ContentCalendar.find({ userId: req.user._id }).sort({ month: -1 });
-    await healCovers(calendars, req.user._id);
+    const CC = depsFor().ContentCalendar || ContentCalendar;
+    const calendars = await CC.find({ userId: req.user._id }).sort({ month: -1 }).lean();
     res.json({ success: true, calendars });
   } catch (error) {
     console.error('Content calendar history error:', error);

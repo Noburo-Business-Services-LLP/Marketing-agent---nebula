@@ -801,6 +801,40 @@ async function maybeRetryCover(calendar, userProfile = {}, { now = new Date(), d
   }
 }
 
+/**
+ * Background cover healing (moved off GET /api/content-calendar, which is read-only since load-test week 1). Picks at
+ * most `limit` calendars of this month or next (India time) whose cover failed or is pending, with retries left and
+ * not retried in the last day, skips paused accounts, and hands each to maybeRetryCover (which re-checks every rule:
+ * 10-minute stale wait, once a day, at most 3 retries, the spend ceiling, the atomic claim). Never throws.
+ */
+async function healStaleCovers({ now = new Date(), limit = 10, deps = {} } = {}) {
+  const out = { checked: 0, retried: 0 };
+  try {
+    const CC = deps.ContentCalendar || ContentCalendar;
+    const UserModel = deps.User || require('../models/User');
+    const retry = deps.retry || maybeRetryCover;
+    const paused = await (deps.blockedIds || require('./backgroundGate').blockedAccountIdsSafe)();
+    const ist = istParts(now);
+    const rows = await CC.find({
+      coverStatus: { $in: ['failed', 'pending'] },
+      month: { $in: [ist.month, ist.nextMonth] },
+      autoCoverRetries: { $not: { $gte: COVER_AUTO_RETRY_MAX } },
+      $or: [{ lastCoverRetryAt: null }, { lastCoverRetryAt: { $lt: new Date(now.getTime() - COVER_RETRY_GAP_MS) } }],
+      ...(paused.length ? { userId: { $nin: paused } } : {})
+    }).sort({ updatedAt: 1 }).limit(Math.max(1, Math.min(50, limit)));
+    for (const calendar of rows || []) {
+      out.checked += 1;
+      const user = await UserModel.findById(calendar.userId);
+      if (!user) continue;
+      const r = await retry(calendar, user, { now });
+      if (r && r.retried) out.retried += 1;
+    }
+  } catch (error) {
+    console.error('[ContentCalendar] cover healing failed:', error.message);
+  }
+  return out;
+}
+
 async function generateMonthlyCalendar(userProfile = {}, targetMonth = null, { language: languageOverride = '', focus = '', planGuidance = '' } = {}) {
   const profile = getBusinessProfile(userProfile);
   const userId = userProfile._id || userProfile.userId || profile.userId;
@@ -1063,8 +1097,13 @@ function startContentCalendarScheduler({ intervalMs = 60_000, logger = console }
   }
 
   logger.log(`[ContentCalendar] Scheduler started (interval ${intervalMs}ms)`);
+  // Covers that failed or got stuck are retried here, every 10 minutes, at most 10 calendars a run.
+  const HEAL_EVERY = Math.max(1, Math.round((10 * 60_000) / intervalMs));
+  let ticks = 0;
   const timer = setInterval(() => {
     processAutoGeneration().catch((error) => logger.error('[ContentCalendar] Scheduler error:', error));
+    ticks += 1;
+    if (ticks % HEAL_EVERY === 0) healStaleCovers().catch(() => {});
   }, intervalMs);
   processAutoGeneration().catch((error) => logger.error('[ContentCalendar] Scheduler error:', error));
   return () => clearInterval(timer);
@@ -1075,6 +1114,7 @@ module.exports = {
   generateMonthlyCalendar,
   generateCalendarCover,
   maybeRetryCover,
+  healStaleCovers,
   startManualCover,
   monthLabel,
   normalizeLanguage,
