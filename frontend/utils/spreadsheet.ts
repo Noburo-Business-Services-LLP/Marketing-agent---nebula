@@ -45,12 +45,21 @@ export async function readFirstColumn(file: File): Promise<string[]> {
   return out;
 }
 
+/**
+ * A text cell that starts with = + - @ (or a tab or line break) can be run as a formula when the file is opened,
+ * and the AI writes some of this text. A leading apostrophe keeps it as plain text. Numbers, dates and blanks pass through.
+ */
+export function spreadsheetCell(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 /** Saves rows as a one-sheet .xlsx download. */
 export async function downloadXlsx(rows: unknown[][], sheetName: string, fileName: string): Promise<void> {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(sheetName);
-  rows.forEach((r) => ws.addRow(r as any[]));
+  rows.forEach((r) => ws.addRow((r as any[]).map(spreadsheetCell)));
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);

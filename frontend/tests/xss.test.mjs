@@ -299,3 +299,47 @@ test('every link that opens a new tab says noopener noreferrer', () => {
   }
   assert.deepEqual(offenders, []);
 });
+
+// ---------------------------------------------------------------------------------------------
+// Escape on output for places that are not React: spreadsheets, CSV, mailto, titles.
+// ---------------------------------------------------------------------------------------------
+const { spreadsheetCell } = await import('../utils/spreadsheet.ts');
+const { csvCell } = await import('../utils/staffCsv.ts');
+
+test('spreadsheet and CSV cells that start like a formula are kept as text', () => {
+  for (const v of ['=1+1', '+1+1', '-2+3', '@SUM(A1)', '=HYPERLINK("http://evil.test","x")', '\t=1', '\r=1']) {
+    assert.equal(spreadsheetCell(v), `'${v}`, JSON.stringify(v));
+    assert.ok(csvCell(v).startsWith(`"'`), JSON.stringify(v));
+  }
+  for (const v of ['Plain text', 'Week 1', '', 'a=b', 42, null, undefined, true]) assert.equal(spreadsheetCell(v), v);
+  assert.equal(csvCell('say "hi"'), '"say ""hi"""');
+});
+
+test('every spreadsheet writer goes through the cell guard', () => {
+  const sheet = SOURCES.find((s) => s.rel === 'utils/spreadsheet.ts').src;
+  assert.match(sheet, /addRow\(\(r as any\[\]\)\.map\(spreadsheetCell\)\)/);
+  const writers = SOURCES.filter((s) => /\.addRow\(|\.xlsx\.writeBuffer|text\/csv/.test(s.src)).map((s) => s.rel).sort();
+  // utils/spreadsheet.ts writes the xlsx; pages/staff/StaffClients.tsx saves the CSV that utils/staffCsv.ts builds with csvCell.
+  // pages/Inventory.tsx only offers a fixed, typed-in template file (a constant data: link), no user data.
+  assert.deepEqual(writers, ['pages/Inventory.tsx', 'pages/staff/StaffClients.tsx', 'utils/spreadsheet.ts']);
+  assert.match(SOURCES.find((s) => s.rel === 'utils/staffCsv.ts').src, /csvCell/);
+});
+
+test('mailto links are fixed support addresses, never built from typed text', () => {
+  const offenders = [];
+  for (const { rel, src } of SOURCES.filter((x) => x.rel !== 'utils/safeHref.ts')) {
+    for (const m of src.matchAll(/mailto:([^"'`\s>]*)/g)) {
+      if (!/^(\$\{SUPPORT_EMAIL\}|[\w.-]+@nebulaa\.ai)$/.test(m[1].replace(/[)}\]]+$/, '')) && !/^\$\{SUPPORT_EMAIL\}/.test(m[1])) offenders.push(`${rel}: mailto:${m[1]}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test('document.title is only ever set from plain text (the browser does not read it as HTML)', () => {
+  const bad = [];
+  for (const { rel, src } of SOURCES) for (const m of src.matchAll(/document\.title\s*=\s*([^;\n]+)/g)) {
+    const rhs = m[1].trim();
+    if (!/^(documentFileName\(|previous\b|`\$\{displayName\} connected`)/.test(rhs)) bad.push(`${rel}: ${rhs}`);
+  }
+  assert.deepEqual(bad, []);
+});
