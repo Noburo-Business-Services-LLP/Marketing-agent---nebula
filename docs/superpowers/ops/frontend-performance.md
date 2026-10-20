@@ -13,7 +13,7 @@ Why: the owner said the app feels sluggish, and the load test found a ~3 MB scri
 | Style sheet (build output) | 204.1 / 34.9 | 47.3 / 9.5 (each page's own styles load with the page) |
 | Other first-load files | none | none (Home is in the main script on purpose, see below) |
 
-Only about 19 percent of the old first-load script size (and 19 percent of the old gzip size) is still downloaded on the first screen.
+About 17 percent of the old first-load script size (19 percent of the old gzip size) is still downloaded on the first screen.
 
 Loaded only when needed (gzip): PDF libraries 241.5 (only on a PDF download), Excel 271.3 (only on a spreadsheet export), Photoshoot 6.2, Campaigns (old page) 73.6, Dashboard (old page) 32, Staff area 38.4, Reel studio 34.8, Onboarding 18.9, Create 19.8, Plan 19.3, Insights 18.8, Library 12.7, guided tour 3.2. About 160 page and shared files in total; each page costs 1 to 35 KB gzip.
 
