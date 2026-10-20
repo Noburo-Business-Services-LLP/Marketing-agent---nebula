@@ -4,7 +4,6 @@
  */
 
 const sharp = require('sharp');
-const fetch = require('node-fetch');
 
 /**
  * Position mapping for logo placement
@@ -36,7 +35,8 @@ const SIZE_MAP = {
  */
 async function fetchImageBuffer(url) {
   try {
-    const response = await fetch(url);
+    // SSRF-safe download (services/safeFetch.js): public https only, pinned address, size/time caps, images only.
+    const response = await require('./safeFetch').safeFetchResponse(url, { types: ['image/'], allowDataUrl: true });
     if (!response.ok) {
       throw new Error(`Failed to fetch image: ${response.status}`);
     }

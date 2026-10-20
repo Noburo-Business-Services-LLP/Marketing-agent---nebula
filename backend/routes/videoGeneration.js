@@ -50,7 +50,8 @@ async function verifySceneImageAspect(imageUrl, expectedAspect) {
       const b64 = imageUrl.split(',')[1] || '';
       buf = Buffer.from(b64, 'base64');
     } else {
-      const r = await fetch(imageUrl);
+      // SSRF-safe download (services/safeFetch.js): public https only, pinned address, size and time caps.
+      const r = await require('../services/safeFetch').safeFetchResponse(imageUrl, { types: ['image/'] });
       if (!r.ok) return { ok: true, skipped: true, reason: `fetch HTTP ${r.status}` };
       buf = Buffer.from(await r.arrayBuffer());
     }
@@ -2555,7 +2556,7 @@ Match the reference's wall colors, floor materials, ceiling, lighting fixtures, 
     const fetchAsDataUrl = async (url) => {
       if (!url) return '';
       try {
-        const r = await fetch(url);
+        const r = await require('../services/safeFetch').safeFetchResponse(url, { types: ['image/'], allowDataUrl: true });
         if (!r.ok) return '';
         const buf = Buffer.from(await r.arrayBuffer());
         const ct = r.headers.get('content-type') || 'image/png';
@@ -2718,7 +2719,7 @@ router.post('/applySceneLogo', protect, videoJobReadLimiter, async (req, res) =>
 
     // Fetch both images as buffers
     const fetchBuf = async (url) => {
-      const r = await fetch(url);
+      const r = await require('../services/safeFetch').safeFetchResponse(url, { types: ['image/'], allowDataUrl: true });
       if (!r.ok) throw new Error(`Fetch failed HTTP ${r.status} for ${url.slice(0, 80)}`);
       return Buffer.from(await r.arrayBuffer());
     };

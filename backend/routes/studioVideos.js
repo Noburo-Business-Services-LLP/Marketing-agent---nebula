@@ -73,12 +73,9 @@ async function logoUrlOf(userId) {
 async function toRef(url) {
   try {
     if (!/^https:\/\//i.test(String(url))) return null;
-    const r = await fetch(url);
-    if (!r.ok) return null;
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (buf.length > MAX_IMAGE_BYTES) return null;
-    const mimeType = (r.headers.get('content-type') || 'image/jpeg').split(';')[0];
-    if (!/^image\/(png|jpe?g|webp)$/i.test(mimeType)) return null;
+    // SSRF-safe download (services/safeFetch.js): public https only, pinned address, size, time and type caps.
+    const { buffer: buf, contentType } = await require('../services/safeFetch').safeFetchBuffer(url, { types: ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'], maxBytes: MAX_IMAGE_BYTES });
+    const mimeType = contentType || 'image/jpeg';
     return { mimeType, data: buf.toString('base64') };
   } catch (_) { return null; }
 }
@@ -531,9 +528,13 @@ router.post('/:id/change', protect, async (req, res) => {
     res.status(202).json({ success: true, video: shape(doc) });
     launched = true;
     setImmediate(() => run(doc, async () => {
-      const r = await fetch(base.videoUrl);
-      if (!r.ok) return { ok: false, message: 'The earlier video could not be opened. Your Quarks were returned.' };
-      return omni.change({ videoBuffer: Buffer.from(await r.arrayBuffer()), instruction, aspectRatio: base.aspectRatio });
+      let videoBuffer;
+      try {
+        ({ buffer: videoBuffer } = await require('../services/safeFetch').safeFetchBuffer(base.videoUrl, { types: ['video/', 'application/octet-stream'], maxBytes: 200 * 1024 * 1024, timeoutMs: 120000 }));
+      } catch (_) {
+        return { ok: false, message: 'The earlier video could not be opened. Your Quarks were returned.' };
+      }
+      return omni.change({ videoBuffer, instruction, aspectRatio: base.aspectRatio });
     }));
   } catch (e) {
     console.error('[videos] change failed:', e.message);

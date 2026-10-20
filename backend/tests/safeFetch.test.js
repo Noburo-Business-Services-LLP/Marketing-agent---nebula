@@ -209,3 +209,14 @@ test('the connect-time lookup refuses private answers and passes public ones thr
     assert.deepStrictEqual(await new Promise((r) => sf.safeLookup('x.example.com', { all: true }, (e, l) => r(l))), [{ address: '157.240.1.1', family: 4 }]);
   } finally { dns.lookup = real; }
 });
+
+test('data: pictures only with allowDataUrl, under the same type list and cap, with no network', async () => {
+  const d = `data:image/png;base64,${PNG.toString('base64')}`;
+  await assert.rejects(sf.safeFetchBuffer(d), code('protocol'));
+  assert.deepStrictEqual((await sf.safeFetchBuffer(d, { allowDataUrl: true, types: ['image/'] })).buffer, PNG);
+  const res = await sf.safeFetchResponse(d, { allowDataUrl: true });
+  assert.strictEqual(res.headers.get('content-type'), 'image/png');
+  await assert.rejects(sf.safeFetchBuffer('data:text/html;base64,PGgxPg==', { allowDataUrl: true, types: ['image/'] }), code('bad_type'));
+  await assert.rejects(sf.safeFetchBuffer(d, { allowDataUrl: true, maxBytes: 4 }), code('too_big'));
+  await assert.rejects(sf.safeFetchBuffer('data:image/png,notbase64', { allowDataUrl: true }), code('bad_url'));
+});

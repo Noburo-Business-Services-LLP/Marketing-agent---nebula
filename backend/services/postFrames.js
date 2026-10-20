@@ -63,7 +63,8 @@ async function fetchBuffer(src) {
   if (!v) return null;
   if (v.startsWith('data:')) return Buffer.from(v.replace(/^data:image\/[\w+.-]+;base64,/, ''), 'base64');
   if (!/^https:\/\//i.test(v)) return null;
-  const res = await fetch(v);
+  // SSRF-safe download (services/safeFetch.js): public https only, pinned address, size/time caps, images only.
+  const res = await require('./safeFetch').safeFetchResponse(v, { types: ['image/'] });
   if (!res.ok) throw new Error(`frame fetch ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }

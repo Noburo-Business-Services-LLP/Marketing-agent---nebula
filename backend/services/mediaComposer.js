@@ -52,17 +52,6 @@ if (!ffprobePath) {
   console.warn('⚠️ ffprobe not found on system path and ffprobe-static is not installed. Video metadata validation will be incomplete. Install ffprobe-static or ensure ffprobe is available in PATH.');
 }
 
-const fetchImpl = (() => {
-  if (typeof global.fetch === 'function') return global.fetch.bind(global);
-  try {
-    // node-fetch v2 (CJS) fallback for older Node runtimes
-    // eslint-disable-next-line global-require
-    return require('node-fetch');
-  } catch (_) {
-    return null;
-  }
-})();
-
 let ffmpegPath = null;
 try {
   const ffmpegStatic = require('ffmpeg-static');
@@ -101,10 +90,9 @@ async function safeUnlink(filePath) {
 }
 
 async function downloadToFile(url, filePath) {
-  if (!fetchImpl) {
-    throw new Error('No fetch implementation available (install node-fetch or upgrade Node)');
-  }
-  const res = await fetchImpl(url);
+  // SSRF-safe download (services/safeFetch.js): public https only, pinned address, redirects re-checked,
+  // 10 minutes and 750 MB at most (videos, pictures and audio for the composer).
+  const res = await require('./safeFetch').safeFetchResponse(url, { timeoutMs: 600000, maxBytes: 750 * 1024 * 1024 });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Failed to download ${url} (${res.status}): ${text.substring(0, 200)}`);

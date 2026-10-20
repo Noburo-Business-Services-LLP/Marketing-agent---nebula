@@ -154,11 +154,9 @@ function missingNumbers(required, readText) {
 
 async function fetchReference(url) {
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    const mimeType = (res.headers.get('content-type') || 'image/png').split(';')[0];
-    if (!/^image\//.test(mimeType)) return null;
+    // SSRF-safe download (services/safeFetch.js): public https only, pinned address, size/time caps, images only.
+    const { buffer: buf, contentType } = await require('./safeFetch').safeFetchBuffer(url, { types: ['image/'], allowDataUrl: true });
+    const mimeType = contentType || 'image/png';
     return { mimeType, data: buf.toString('base64') };
   } catch (_) { return null; }
 }
@@ -170,7 +168,7 @@ async function fetchReference(url) {
 async function generateDirectPost(input, io = {}) {
   const gen = io.generate || require('./openaiImage').generateOpenAIImage;
   const read = io.readText || (async (url) => {
-    const buf = await (io.fetchBuffer ? io.fetchBuffer(url) : fetch(url).then((r) => r.arrayBuffer()).then((b) => Buffer.from(b)));
+    const buf = await (io.fetchBuffer ? io.fetchBuffer(url) : require('./safeFetch').safeFetchBuffer(url, { types: ['image/'], allowDataUrl: true }).then((r) => r.buffer));
     return require('./openaiImage').readTextFromImage(buf);
   });
   const getRef = io.fetchReference || fetchReference;

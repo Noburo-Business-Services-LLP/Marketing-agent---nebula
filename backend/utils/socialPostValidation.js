@@ -124,15 +124,6 @@ function normalizeScheduleDate(rawDate, options = {}) {
   };
 }
 
-async function getFetchFn() {
-  if (typeof global.fetch === 'function') {
-    return global.fetch.bind(global);
-  }
-
-  const mod = await import('node-fetch');
-  return mod.default;
-}
-
 async function fetchWithTimeout(fetchFn, url, options = {}, timeoutMs = 12000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -167,12 +158,18 @@ async function validateMediaUrl(mediaUrl, options = {}) {
     };
   }
 
-  const fetchFn = await getFetchFn();
-
   try {
-    let response = await fetchWithTimeout(fetchFn, trimmedUrl, { method: 'HEAD' }, options.timeoutMs);
+    // SSRF-safe requests (services/safeFetch.js): public https only, pinned address, redirects re-checked.
+    // Tests may pass options.fetchFn (a fetch-like function) instead.
+    const sf = require('../services/safeFetch');
+    const timeoutMs = options.timeoutMs || 12000;
+    const ask = options.fetchFn
+      ? (method) => fetchWithTimeout(options.fetchFn, trimmedUrl, { method }, timeoutMs)
+      : (method) => sf.safeFetchResponse(trimmedUrl, { method, timeoutMs, maxBytes: 750 * 1024 * 1024 });
+    let response = await ask('HEAD');
     if (!response.ok || response.status === 401 || response.status === 403 || response.status === 405) {
-      response = await fetchWithTimeout(fetchFn, trimmedUrl, { method: 'GET' }, options.timeoutMs);
+      response = await ask('GET');
+      if (response.body && typeof response.body.cancel === 'function') response.body.cancel().catch(() => {});
     }
 
     if (!response.ok) {
@@ -212,7 +209,7 @@ async function validateMediaUrl(mediaUrl, options = {}) {
       contentLength: response.headers.get('content-length')
     };
   } catch (error) {
-    const message = error?.name === 'AbortError'
+    const message = (error?.name === 'AbortError' || error?.code === 'timeout')
       ? 'Timed out while verifying public media URL'
       : `Unable to verify URL: ${error.message}`;
     return { valid: false, reason: message };

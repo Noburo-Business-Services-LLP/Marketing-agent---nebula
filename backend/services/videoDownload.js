@@ -1,7 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const http = require('http');
-const https = require('https');
 const { pipeline } = require('stream/promises');
 const { URL } = require('url');
 
@@ -10,7 +8,6 @@ const {
   validateInstagramVideoRequirements
 } = require('./mediaComposer');
 
-const MAX_REDIRECTS = 5;
 const DEFAULT_TIMEOUT_MS = 120000;
 
 function sanitizeFileName(input = '') {
@@ -66,64 +63,30 @@ async function resolveUniqueFilePath(directory, requestedName) {
   }
 }
 
-function isRedirect(statusCode) {
-  return [301, 302, 303, 307, 308].includes(Number(statusCode));
-}
-
-function requestRemoteStream(videoUrl, { timeoutMs = DEFAULT_TIMEOUT_MS, redirectCount = 0 } = {}) {
-  return new Promise((resolve, reject) => {
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(videoUrl);
-    } catch (error) {
-      reject(new Error(`Invalid video URL: ${error.message}`));
-      return;
-    }
-
-    const client = parsedUrl.protocol === 'https:' ? https : http;
-    const req = client.get(parsedUrl, {
-      headers: {
-        'User-Agent': 'Nebula-Video-Downloader/1.0'
-      },
-      timeout: timeoutMs
-    }, (res) => {
-      if (isRedirect(res.statusCode) && res.headers.location) {
-        if (redirectCount >= MAX_REDIRECTS) {
-          res.resume();
-          reject(new Error('Too many redirects while downloading video.'));
-          return;
-        }
-
-        const redirectedUrl = new URL(res.headers.location, parsedUrl).toString();
-        res.resume();
-        resolve(requestRemoteStream(redirectedUrl, {
-          timeoutMs,
-          redirectCount: redirectCount + 1
-        }));
-        return;
-      }
-
-      if (Number(res.statusCode) < 200 || Number(res.statusCode) >= 300) {
-        const statusMessage = res.statusMessage || 'Request failed';
-        res.resume();
-        reject(new Error(`Video download failed with HTTP ${res.statusCode}: ${statusMessage}`));
-        return;
-      }
-
-      resolve({
-        stream: res,
-        finalUrl: parsedUrl.toString(),
-        headers: res.headers,
-        statusCode: res.statusCode
-      });
+// SSRF-safe streamed download (services/safeFetch.js, hardening C4): public https only (http only with
+// ALLOW_HTTP_FETCH=1), every address public, the connection pinned to the checked address, redirects re-checked
+// (at most 3), one overall time limit and a streamed size cap.
+const VIDEO_MAX_BYTES = 750 * 1024 * 1024;
+async function requestRemoteStream(videoUrl, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  const sf = require('./safeFetch');
+  let remote;
+  try {
+    remote = await sf.safeFetchStream(videoUrl, {
+      timeoutMs: Math.max(DEFAULT_TIMEOUT_MS, Number(timeoutMs) || 0) * 2.5,
+      maxBytes: VIDEO_MAX_BYTES,
+      headers: { 'User-Agent': 'Nebula-Video-Downloader/1.0' }
     });
-
-    req.on('timeout', () => {
-      req.destroy(new Error('Video download timed out.'));
-    });
-
-    req.on('error', reject);
-  });
+  } catch (error) {
+    if (error && error.code === 'too_many_redirects') throw new Error('Too many redirects while downloading video.');
+    if (error && error.code === 'timeout') throw new Error('Video download timed out.');
+    throw new Error(`Invalid video URL: ${error && error.message}`);
+  }
+  if (remote.status < 200 || remote.status >= 300) {
+    if (remote.stream) remote.stream.destroy();
+    remote.done();
+    throw new Error(`Video download failed with HTTP ${remote.status}`);
+  }
+  return { stream: remote.stream, finalUrl: remote.finalUrl, headers: remote.headers, statusCode: remote.status };
 }
 
 async function inspectVideoFile(filePath) {

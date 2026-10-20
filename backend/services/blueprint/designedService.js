@@ -45,10 +45,9 @@ function defaultDeps() {
     fetchLogo: async (url) => {
       try {
         if (!/^https:\/\//i.test(String(url || ''))) return null;
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const buf = Buffer.from(await res.arrayBuffer());
-        return buf.length > 0 && buf.length < 5 * 1024 * 1024 ? buf : null;
+        // SSRF-safe download (services/safeFetch.js): public https only, pinned address, 5 MB, images only.
+        const { buffer: buf } = await require('../safeFetch').safeFetchBuffer(url, { types: ['image/'], maxBytes: 5 * 1024 * 1024 });
+        return buf.length > 0 ? buf : null;
       } catch (_) { return null; }
     },
     enqueue: (...a) => require('./runner').enqueue(...a),

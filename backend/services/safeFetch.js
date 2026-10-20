@@ -332,8 +332,27 @@ async function readAll(stream) {
   return Buffer.concat(parts);
 }
 
+const DATA_URL = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+)?(?:;[a-z0-9=.+-]+)*;base64,([a-z0-9+/=\s]*)$/i;
+
+// `allowDataUrl: true` (call sites that always accepted a stored data: picture): decoded locally, no network,
+// under the same type allowlist and size cap.
+function decodeDataUrl(raw, opts) {
+  const maxBytes = opts.maxBytes > 0 ? opts.maxBytes : DEFAULT_MAX_BYTES;
+  const s = String(raw);
+  if (s.length > Math.ceil(maxBytes * 1.37) + 200) fail('too_big', 'The file is too large');
+  const m = DATA_URL.exec(s);
+  if (!m) fail('bad_url', 'The data link is not valid');
+  const contentType = String(m[1] || 'application/octet-stream').toLowerCase();
+  if (!typeAllowed(contentType, opts.types)) fail('bad_type', `This kind of file is not accepted (${contentType})`);
+  const buffer = Buffer.from(m[2].replace(/\s+/g, ''), 'base64');
+  if (buffer.length > maxBytes) fail('too_big', 'The file is too large');
+  return { buffer, contentType, status: 200, headers: { 'content-type': contentType }, finalUrl: '' };
+}
+const isDataUrl = (url, opts) => opts && opts.allowDataUrl === true && typeof url === 'string' && /^data:/i.test(url.trim());
+
 /** Downloads into a Buffer. Non-2xx answers throw SafeFetchError('bad_status') with `status`. */
 async function safeFetchBuffer(url, opts = {}) {
+  if (isDataUrl(url, opts)) return decodeDataUrl(url.trim(), opts);
   const r = await openSafe(url, opts);
   if (!r.ok) { if (r.stream) r.stream.destroy(); r.done(); fail('bad_status', `The download answered ${r.status}`, { status: r.status }); }
   const buffer = await readAll(r.stream);
@@ -356,6 +375,12 @@ async function safeFetchStream(url, opts = {}) {
  * The body keeps the size cap and the time limit; `finalUrl` is added. Rules errors throw SafeFetchError.
  */
 async function safeFetchResponse(url, opts = {}) {
+  if (isDataUrl(url, opts)) {
+    const d = decodeDataUrl(url.trim(), opts);
+    const res = new Response(d.buffer, { status: 200, headers: { 'content-type': d.contentType } });
+    Object.defineProperty(res, 'finalUrl', { value: '', enumerable: true });
+    return res;
+  }
   const r = await openSafe(url, opts);
   const headers = new Headers();
   for (const [k, v] of Object.entries(r.headers)) headers.set(k, v);

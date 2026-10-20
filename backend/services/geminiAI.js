@@ -3341,7 +3341,8 @@ Keep the overall composition and subject matter the same. Only apply the request
     // Download the current image if URL provided
     if (currentImageUrl) {
       console.log('📥 Downloading current image for refinement...');
-      const imageResponse = await fetchWithTimeout(currentImageUrl, {}, 30000);
+      // SSRF-safe download (services/safeFetch.js): public https only, pinned address, 30 s, images only.
+      const imageResponse = await require('./safeFetch').safeFetchResponse(currentImageUrl, { types: ['image/'], timeoutMs: 30000 });
       if (imageResponse.ok) {
         const buffer = await imageResponse.arrayBuffer();
         imageBase64 = Buffer.from(buffer).toString('base64');
@@ -3772,7 +3773,8 @@ async function editTemplatePoster(currentImageBase64, originalContent, editInstr
   if (currentImageBase64.startsWith('http://') || currentImageBase64.startsWith('https://')) {
     // Download image from URL and convert to base64
     console.log('📥 Downloading image from URL for editing...');
-    const imageResponse = await fetchWithTimeout(currentImageBase64, {}, 30000);
+    // SSRF-safe download (services/safeFetch.js): public https only, pinned address, 30 s, images only.
+    const imageResponse = await require('./safeFetch').safeFetchResponse(currentImageBase64, { types: ['image/'], timeoutMs: 30000 });
     if (imageResponse.ok) {
       const buffer = await imageResponse.arrayBuffer();
       imageData = Buffer.from(buffer).toString('base64');
@@ -4635,7 +4637,8 @@ Treat this as an image editing task where the original person must remain identi
         }
 
         if (String(imageValue).startsWith('http')) {
-          const response = await fetch(imageValue);
+          // SSRF-safe download (services/safeFetch.js): public https only, pinned address, size/time caps, images.
+          const response = await require('./safeFetch').safeFetchResponse(imageValue, { types: ['image/'] });
           if (!response.ok) return null;
           const buffer = await response.arrayBuffer();
           const mimeType = response.headers.get('content-type') || 'image/png';

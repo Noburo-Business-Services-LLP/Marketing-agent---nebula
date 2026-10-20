@@ -359,6 +359,9 @@ test('a change to a longer video is refused, a change to a 10-second one is not'
     const mk = (extra) => ({ _id: 'b1', user: 'uC', status: 'completed', videoUrl: 'https://cdn.example/v.mp4', title: 't', concept: 'c', references: [], ...extra });
     w.docs.b1 = mk({ clips: 3, seconds: 30 });
     const realFetch = global.fetch; global.fetch = async () => ({ ok: false });
+    // The earlier video is read through the SSRF-safe helper; no real network in tests.
+    const sf = require('../services/safeFetch'); const realSafe = sf.safeFetchBuffer;
+    sf.safeFetchBuffer = async () => { throw new sf.SafeFetchError('network', 'offline in tests'); };
     const res = resp();
     await handler('/:id/change', 'post')({ user: { userId: 'uC' }, params: { id: 'b1' }, body: { instruction: 'make it brighter' } }, res);
     assert.strictEqual(res.code, 400);
@@ -371,6 +374,7 @@ test('a change to a longer video is refused, a change to a 10-second one is not'
     assert.strictEqual(w.spends[0].amount, QUARK_COSTS.studio_video);
     await quiet(flush);
     global.fetch = realFetch;
+    sf.safeFetchBuffer = realSafe;
   } finally { w.restore(); }
 });
 

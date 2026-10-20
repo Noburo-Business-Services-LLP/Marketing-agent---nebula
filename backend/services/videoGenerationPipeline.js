@@ -227,7 +227,11 @@ async function downloadToFile(url, outputPath) {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
-      const response = await fetchImpl(url, {
+      // SSRF-safe download (services/safeFetch.js): public https only, pinned address, redirects re-checked,
+      // the time limit and size cap below.
+      const response = await require('./safeFetch').safeFetchResponse(url, {
+        timeoutMs,
+        maxBytes,
         headers: {
           // Some media CDNs reject unknown/empty clients; keep this browser-like.
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',

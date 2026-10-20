@@ -23,7 +23,6 @@ const { rejectUnsafeImage } = require('../services/uploadSafety');
 const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const { readRows, SpreadsheetError } = require('../services/spreadsheetRows');
-const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 const { uploadBase64Image } = require('../services/imageUploader');
@@ -94,14 +93,10 @@ async function toDataUriFromImage(imageSource, label = 'image') {
   if (!source.startsWith('http')) return null;
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch(source, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (!response.ok) return null;
-    const buffer = await response.arrayBuffer();
-    const mime = response.headers.get('content-type') || 'image/png';
-    return `data:${mime};base64,${Buffer.from(buffer).toString('base64')}`;
+    // SSRF-safe download (services/safeFetch.js): public https only, pinned address, 8 s, images only.
+    const { buffer, contentType } = await require('../services/safeFetch').safeFetchBuffer(source, { types: ['image/'], timeoutMs: 8000 });
+    const mime = contentType || 'image/png';
+    return `data:${mime};base64,${buffer.toString('base64')}`;
   } catch (error) {
     console.warn(`Could not fetch ${label}:`, error.message);
     return null;

@@ -69,8 +69,9 @@ async function validateMediaUrl(mediaUrl) {
 
   try {
     // Try lightweight HEAD request to validate access. Some CDN/prefix may not support HEAD; fallback to GET.
-    let fetchFn = global.fetch || (await import('node-fetch')).default;
-    const headResp = await fetchFn(mediaUrl, { method: 'HEAD', redirect: 'follow', timeout: 12000 });
+    // SSRF-safe requests (services/safeFetch.js): public https only, pinned address, redirects re-checked.
+    const sf = require('../services/safeFetch');
+    const headResp = await sf.safeFetchResponse(mediaUrl, { method: 'HEAD', timeoutMs: 12000 });
     if (headResp.ok) {
       const contentType = headResp.headers.get('content-type');
       const length = headResp.headers.get('content-length');
@@ -80,7 +81,8 @@ async function validateMediaUrl(mediaUrl) {
       return { valid: true, contentType, contentLength: length };
     }
 
-    const getResp = await fetchFn(mediaUrl, { method: 'GET', redirect: 'follow', timeout: 12000 });
+    const getResp = await sf.safeFetchResponse(mediaUrl, { method: 'GET', timeoutMs: 12000, maxBytes: 200 * 1024 * 1024 });
+    if (getResp.body) getResp.body.cancel().catch(() => {});
     if (!getResp.ok) {
       return { valid: false, reason: `HTTP ${getResp.status} ${getResp.statusText}` };
     }
