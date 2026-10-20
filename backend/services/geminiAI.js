@@ -3391,9 +3391,10 @@ Keep the overall composition and subject matter the same. Only apply the request
             const resultMime = inlineData.mimeType || inlineData.mime_type || 'image/png';
             const base64Url = `data:${resultMime};base64,${inlineData.data}`;
 
-            // Upload to Cloudinary for permanent URL
-            const uploadResult = await uploadBase64Image(base64Url, 'nebula-refined');
-            const finalUrl = uploadResult.success ? uploadResult.url : base64Url;
+            // Stored for a permanent link; never kept as base64 in production (D101): the route refunds on failure.
+            const stored = await require('./imageStore').finishGeneratedImage(base64Url, { folder: 'nebula-refined' });
+            if (!stored.ok) return { success: false, storageFailed: true, error: stored.error };
+            const finalUrl = stored.url;
 
             console.log('✅ Image refined with Nano Banana 2 successfully');
             return {
@@ -4057,7 +4058,8 @@ Create a poster that someone would think "this looks like it was designed by the
   try {
     if (String(process.env.IMAGE_PROVIDER_FIRST || 'openai').toLowerCase() !== 'google') {
       const first = await generateOpenAIImage(prompt, { aspectRatio: aspectRatio || '4:5', references: [{ mimeType, data: imageData }] });
-      if (first && first.success && first.imageBase64) {
+      // This path hands the bytes to its caller, which stores them itself: a failed store here is not a failed picture.
+      if (first && (first.success || first.storageFailed) && first.imageBase64) {
         console.log(`✅ Poster from reference made by ${first.model} in ${Date.now() - startTime}ms`);
         return { success: true, imageBase64: first.imageBase64, model: first.model };
       }
@@ -4807,6 +4809,8 @@ Only the visual language should carry over, not the specific scene.`);
         console.log(`[ImageFirst] Post ${postIndex + 1} made by ${first.model}`);
         return { success: true, imageUrl: first.imageUrl, model: first.model, promptUsed };
       }
+      // The picture was made but could not be stored: another model would be paid for the same failure.
+      if (first && first.storageFailed) return { success: false, storageFailed: true, error: first.error, model: first.model, promptUsed };
       console.warn(`[ImageFirst] OpenAI did not return a picture (${first && first.error}); trying Google's models`);
     }
 
@@ -4840,16 +4844,10 @@ Only the visual language should carry over, not the specific scene.`);
           console.log(`[NanoBanana2] Post ${postIndex + 1} generated successfully`);
 
           const base64Image = `data:${mime};base64,${imgData.data}`;
-          try {
-            const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
-            if (uploadResult.success && uploadResult.url) {
-              return { success: true, imageUrl: uploadResult.url, model: 'nano-banana-2', promptUsed };
-            }
-          } catch (uploadErr) {
-            console.warn('Cloudinary upload failed, returning base64:', uploadErr.message);
-          }
-
-          return { success: true, imageUrl: base64Image, model: 'nano-banana-2', promptUsed };
+          // Stored, never kept as base64 in production (D101); a failed store ends here (no second paid model).
+          const stored = await require('./imageStore').finishGeneratedImage(base64Image, { folder: 'nebula-campaign-posts' });
+          if (!stored.ok) return { success: false, storageFailed: true, error: stored.error, model: 'nano-banana-2', promptUsed };
+          return { success: true, imageUrl: stored.url, model: 'nano-banana-2', promptUsed };
         }
       }
     }
@@ -4894,13 +4892,9 @@ Only the visual language should carry over, not the specific scene.`);
             if (imgData?.data) {
               const mime = imgData.mimeType || imgData.mime_type || 'image/png';
               const base64Image = `data:${mime};base64,${imgData.data}`;
-              try {
-                const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
-                if (uploadResult.success && uploadResult.url) {
-                  return { success: true, imageUrl: uploadResult.url, model: 'gemini-2.5-flash-image', promptUsed };
-                }
-              } catch (err) { logger.debug('campaign image: upload of the generated picture failed (the data URL is used instead): %s', err && err.message); }
-              return { success: true, imageUrl: base64Image, model: 'gemini-2.5-flash-image', promptUsed };
+              const stored = await require('./imageStore').finishGeneratedImage(base64Image, { folder: 'nebula-campaign-posts' });
+              if (!stored.ok) return { success: false, storageFailed: true, error: stored.error, model: 'gemini-2.5-flash-image', promptUsed };
+              return { success: true, imageUrl: stored.url, model: 'gemini-2.5-flash-image', promptUsed };
             }
           }
         }
@@ -4923,6 +4917,7 @@ Only the visual language should carry over, not the specific scene.`);
       if (openAiResult?.success && openAiResult?.imageUrl) {
         return { success: true, imageUrl: openAiResult.imageUrl, model: openAiResult.model, promptUsed };
       }
+      if (openAiResult?.storageFailed) return { success: false, storageFailed: true, error: openAiResult.error, model: openAiResult.model, promptUsed };
       console.warn('[NanoBanana2] OpenAI fallback also failed:', openAiResult?.error);
     } catch (openAiErr) {
       if (!openAiTried) console.error('[NanoBanana2] OpenAI fallback threw:', openAiErr.message);

@@ -195,6 +195,9 @@ const draftSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// A picture written as base64 is stored and replaced by its link (D102; never fails the write).
+draftSchema.plugin(require('./plugins/inlineImages').inlineImagesPlugin, { paths: ['imageUrl', 'imageUrlNoLogo', 'creative', 'carouselSlides'] });
+
 // Composite Indexes
 draftSchema.index({ userId: 1, status: 1 });
 draftSchema.index({ userId: 1, createdAt: -1 });

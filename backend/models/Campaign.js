@@ -206,6 +206,9 @@ const campaignSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// A picture written as base64 is stored and replaced by its link (D102; never fails the write).
+campaignSchema.plugin(require('./plugins/inlineImages').inlineImagesPlugin, { paths: ['creative'] });
+
 // Index for efficient queries
 campaignSchema.index({ userId: 1, status: 1 });
 campaignSchema.index({ userId: 1, createdAt: -1 });

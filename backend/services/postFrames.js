@@ -77,14 +77,17 @@ async function fetchBuffer(src) {
 async function addFramesToImage(imageSrc, { headerUrl, footerUrl } = {}, io = {}) {
   if (!imageSrc || (!headerUrl && !footerUrl)) return { imageUrl: imageSrc, applied: false };
   const getBuffer = io.fetchBuffer || fetchBuffer;
-  const upload = io.upload || ((d) => require('./imageUploader').uploadBase64Image(d, 'nebula-campaign-posts'));
+  // Stored through the picture store (D101): never kept as base64 in production; a failed store keeps the unframed
+  // picture (already stored) instead of a framed base64 copy.
+  const store = io.upload ? require('./imageStore').createImageStore({ upload: (d) => io.upload(d) }) : require('./imageStore');
   try {
     const [base, header, footer] = await Promise.all([getBuffer(imageSrc), getBuffer(headerUrl), getBuffer(footerUrl)]);
     if (!base || (!header && !footer)) return { imageUrl: imageSrc, applied: false };
     const out = await compositeFrames(base, { header, footer });
     const dataUrl = `data:image/png;base64,${out.toString('base64')}`;
-    const up = await Promise.resolve(upload(dataUrl)).catch(() => null);
-    return { imageUrl: (up && up.success && up.url) || dataUrl, preFrameImageUrl: imageSrc, applied: true };
+    const stored = await store.finishGeneratedImage(dataUrl, { folder: 'nebula-campaign-posts' });
+    if (!stored.ok) return { imageUrl: imageSrc, applied: false };
+    return { imageUrl: stored.url, preFrameImageUrl: imageSrc, applied: true };
   } catch (err) {
     console.error('[frames] could not add the header and footer:', err && err.message);
     return { imageUrl: imageSrc, applied: false };

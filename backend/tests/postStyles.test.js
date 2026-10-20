@@ -74,3 +74,13 @@ test('addFramesToImage lays the frames over and never throws', async () => {
   const broken = await addFramesToImage('post', { footerUrl: 'footer' }, { fetchBuffer: async () => { throw new Error('x'); } });
   assert.equal(broken.applied, false); assert.equal(broken.imageUrl, 'post');
 });
+
+test('frames: a failed store keeps the unframed picture, never a framed base64 copy (D101)', async () => {
+  const { addFramesToImage } = require('../services/postFrames');
+  const post = await solid(1080, 1080, { r: 255, g: 0, b: 0, alpha: 1 });
+  const footer = await solid(1080, 200, { r: 0, g: 0, b: 255, alpha: 1 });
+  const io = { fetchBuffer: async (s) => (s === 'post' ? post : s === 'footer' ? footer : null), upload: async () => ({ success: false, error: 'down' }) };
+  const out = await addFramesToImage('post', { footerUrl: 'footer' }, io);
+  assert.equal(out.applied, false);
+  assert.equal(out.imageUrl, 'post');
+});

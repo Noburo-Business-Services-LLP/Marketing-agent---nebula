@@ -1,4 +1,3 @@
-const { uploadBase64Image } = require('./imageUploader');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_IMAGE_URL = 'https://api.openai.com/v1/images/generations';
@@ -162,15 +161,11 @@ async function generateOpenAIImage(prompt, { aspectRatio, references = [], quali
     }
 
     const base64Image = `data:image/png;base64,${b64}`;
-    try {
-      const uploadResult = await uploadBase64Image(base64Image, 'nebula-campaign-posts');
-      if (uploadResult.success && uploadResult.url) {
-        return { success: true, imageUrl: uploadResult.url, imageBase64: base64Image, model: usedModel };
-      }
-    } catch (uploadErr) {
-      console.warn('[OpenAI Image] Cloudinary upload failed, returning base64:', uploadErr.message);
-    }
-    return { success: true, imageUrl: base64Image, imageBase64: base64Image, model: usedModel };
+    // The picture goes to storage; base64 is kept only where storage is not set up in development (D101). In
+    // production a failed store fails this call (storageFailed: callers must not pay for another model).
+    const stored = await require('./imageStore').finishGeneratedImage(base64Image, { folder: 'nebula-campaign-posts' });
+    if (!stored.ok) return { success: false, storageFailed: true, error: stored.error, imageBase64: base64Image, model: usedModel };
+    return { success: true, imageUrl: stored.url, imageBase64: base64Image, model: usedModel };
   } catch (error) {
     console.error('[OpenAI Image] Generation failed:', error.message);
     return { success: false, error: error.message };

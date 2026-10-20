@@ -1624,7 +1624,11 @@ router.post('/strategic-advisor/refine-image', protect, L.heavyAi, async (req, r
     }
     
     const result = await refineImageWithPrompt(originalPrompt, refinementPrompt, style, currentImageUrl);
-    
+    // Nothing is charged for an edit that did not come back (or could not be stored).
+    if (!result || !result.success) {
+      return res.status(500).json({ success: false, error: (result && result.error) || 'Could not apply that edit', creditsRemaining: poolBalance });
+    }
+
     // Deduct credits
     const creditResult = await deductCredits(userId, 'refine_image', 1, 'Refine image with AI');
     
