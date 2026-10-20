@@ -54,6 +54,12 @@ function createFakePhotoshootRepo({ fail = {} } = {}) {
       Object.assign(r, { status: 'failed', outcome: 'ledger', refunded: true, refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now }); delete r.inFlight;
       return before;
     },
+    claimLateRefund: async (id, { refundedQuarks, payerId, now }) => {
+      const r = find(id);
+      if (!r || r.status !== 'failed' || r.outcome !== 'stale_queued' || r.refunded !== true || (r.refundedQuarks || 0) !== 0 || r.chargedAt != null || r.refundSettledAt) return null;
+      Object.assign(r, { refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now });
+      return clone(r);
+    },
     claimLease: async (id, owner, now, until) => {
       const r = find(id); if (!r || r.status !== 'running' || !leaseFree(r, owner, now)) return null;
       Object.assign(r, { leaseOwner: owner, leaseUntil: until }); return clone(r);

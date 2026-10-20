@@ -753,3 +753,40 @@ test('S2: a write that definitely did not match (the claim is gone) still delete
   await quiet(() => settle(60));
   assert.ok(w.deleted.length >= 1);
 });
+
+for (const mode of ['consumer', 'in-process']) {
+  test(`S3 (${mode}): a charge slower than the stale window lands on a row the stale sweep already closed with a 0 refund: it is refunded once from the proof`, async () => {
+    const w = world({ consumer: mode === 'consumer' });
+    const other = w.server('other');
+    const realSpend = w.deps.spend;
+    const svc = createPhotoshoot({
+      ...w.deps,
+      runnerId: 'runner-slowcharge',
+      spend: async (...a) => { w.advance(4 * MIN); await other.sweepStale(); return realSpend(...a); } // the sweep reads the proof before the charge lands
+    });
+    const r = await quiet(() => svc.create(userOf(U1), body()));
+    assert.strictEqual(r.status, 503, 'the customer is told it comes back by itself');
+    const row = w.repo.rows[0];
+    assert.strictEqual(row.status, 'failed');
+    assert.strictEqual(w.spends().length, 1, 'the charge did land');
+    assert.strictEqual(w.refunds().length, 0, 'nothing refunded yet');
+    assert.strictEqual(row.refundedQuarks, 4 * PER, 'the late charge is claimed for refund on the closed row');
+    assert.ok(!row.refundSettledAt);
+    w.advance(caps.SETTLE_AFTER_MS + 1000);
+    const [a, b] = await quiet(() => Promise.all([w.server('x').sweepUnsettled(), w.server('y').sweepUnsettled()]));
+    assert.strictEqual(a + b, 1);
+    assert.deepStrictEqual(w.refunds().map((m) => [m.q, m.ref]), [[4 * PER, String(row._id)]], 'exactly one refund');
+    w.advance(caps.SETTLE_HOLD_MS + 1000);
+    assert.strictEqual(await quiet(() => w.web.sweepUnsettled()), 0);
+    assert.strictEqual(w.refunds().length, 1);
+  });
+}
+
+test('S3: the late-refund claim does not touch a row that was refunded in full, or one that was accepted', async () => {
+  const w = world();
+  await create(w);
+  const accepted = w.repo.rows[0];
+  assert.strictEqual(await w.repo.claimLateRefund(accepted._id, { refundedQuarks: 40, payerId: U1, now: NOW }), null, 'a queued, charged row');
+  w.repo.rows.push({ _id: 'cl1', user: U1, status: 'failed', outcome: 'stale_queued', refunded: true, refundedQuarks: 40, chargedAt: null, createdAt: NOW });
+  assert.strictEqual(await w.repo.claimLateRefund('cl1', { refundedQuarks: 40, payerId: U1, now: NOW }), null, 'a row that already carries a refund');
+});

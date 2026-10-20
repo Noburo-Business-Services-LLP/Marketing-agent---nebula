@@ -363,7 +363,7 @@ function createPhotoshoot(given = {}) {
       // The charge is not on the job: nothing is called and the Quarks go straight back, but only after this caller won
       // the refund claim (the stale sweep may have closed and refunded the row already while the charge was slow).
       const claimed = await repo.closeLedger(row._id, { refundedQuarks: cost, payerId, now: deps.now() }).catch(() => null);
-      if (!claimed) return reply(503, { message: MESSAGES.chargeUnsure }); // the stale sweep settles it from the ledger
+      if (!claimed) return lateCharge(row, cost, payerId); // the stale sweep got there first: see lateCharge
       let back = null;
       try { back = await deps.refundTo(userId, cost, { action: `${ACTION}_refund`, ref: String(row._id), payerId }); } catch (_) { back = null; }
       if (!back || !back.ok) {
@@ -375,6 +375,21 @@ function createPhotoshoot(given = {}) {
     const job = { ...row, status: 'running', quarks: cost, payerId, chargedAt: now };
     deps.schedule(() => runJob(row._id).catch((e) => console.error('[photoshoot] runner failed:', e && e.message)));
     return reply(202, { job: jobView(job) });
+  }
+
+  /**
+   * The charge landed but the row can no longer take it: it is not queued any more and the refund claim is not free. Either
+   * another path already holds the refund (closeLedger's own earlier win, a sweep that saw the charge) and nothing is owed
+   * here, or the stale sweep closed the row with a 0 refund because the charge took longer than the stale window (review
+   * S3): then the refund is recorded on that closed row (one conditional update) and the settle sweep pays it once, with
+   * proof. Never pays here, never twice. Always the "comes back by itself" answer.
+   */
+  async function lateCharge(row, cost, payerId) {
+    try {
+      const late = await repo.claimLateRefund(row._id, { refundedQuarks: cost, payerId, now: deps.now() });
+      if (late) deps.alert('photoshoot_refund', `Photoshoot ${String(row._id)}: the charge of ${cost} Quarks landed after the stale sweep closed the job; the refund is recorded and the settle sweep pays it.`);
+    } catch (e) { console.error('[photoshoot] late charge could not be claimed for refund:', String(row._id), e && e.message); }
+    return reply(503, { message: MESSAGES.chargeUnsure });
   }
 
   /**
@@ -396,7 +411,7 @@ function createPhotoshoot(given = {}) {
       return reply(202, { job: jobView(queued) });
     }
     const claimed = await repo.closeLedger(row._id, { refundedQuarks: cost, payerId, now: deps.now() }).catch(() => null);
-    if (!claimed) return reply(503, { message: MESSAGES.chargeUnsure }); // the stale sweep settles it from the proof
+    if (!claimed) return lateCharge(row, cost, payerId); // the stale sweep got there first: see lateCharge
     let back = null;
     try { back = await deps.refundTo(userId, cost, { action: `${ACTION}_refund`, ref: String(row._id), payerId }); } catch (_) { back = null; }
     if (!back || !back.ok) {

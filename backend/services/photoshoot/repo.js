@@ -39,6 +39,15 @@ function createPhotoshootRepo({ Job = () => require('../../models/PhotoshootJob'
       { _id: id, status: 'queued', chargedAt: null, refunded: { $ne: true } },
       { $set: { status: 'failed', outcome: 'ledger', refunded: true, refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now }, $unset: { inFlight: 1 } },
       { new: false })),
+    /**
+     * A charge landed AFTER the stale sweep closed its row with a 0 refund (the charge was slower than the stale window).
+     * Records the refund on that closed row in one conditional update (only a row closed 'stale_queued' with refund 0 and no
+     * recorded charge, so it can happen once); refundSettledAt stays unset, so the settle sweep pays it once, with proof.
+     * The row after, or null.
+     */
+    claimLateRefund: (id, { refundedQuarks, payerId, now }) => lean(J().findOneAndUpdate(
+      { _id: id, status: 'failed', outcome: 'stale_queued', refunded: true, refundedQuarks: 0, chargedAt: null, refundSettledAt: null },
+      { $set: { refundedQuarks, ...(payerId ? { payerId } : {}), finishedAt: now } }, { new: true })),
     claimLease: (id, owner, now, until) => lean(J().findOneAndUpdate(
       { _id: id, status: 'running', $or: [{ leaseUntil: null }, { leaseUntil: { $lt: now } }, { leaseOwner: owner }] },
       { $set: { leaseOwner: owner, leaseUntil: until } }, { new: true })),
