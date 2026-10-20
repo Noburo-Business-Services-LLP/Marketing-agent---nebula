@@ -38,7 +38,9 @@ router.get('/queue', protect, staffOnly, async (req, res) => {
     const video = await router.queues.video().metrics();
     const image = await router.queues.image().metrics();
     const studio = await router.queues.studio().metrics();
-    const photoshoot = await router.queues.photoshoot().metrics();
+    // Best effort: a failure here must not hide the other queues (this endpoint is also the drain gauge for the others).
+    let photoshoot;
+    try { photoshoot = await router.queues.photoshoot().metrics(); } catch (e) { photoshoot = { unavailable: true }; console.error('[metrics] photoshoot numbers failed:', e && e.message); }
     res.json({ success: true, at: new Date().toISOString(), videoJobs: video, imageJobs: image, studioVideos: studio, photoshoot });
   } catch (err) {
     require('../utils/httpError').fail(res, err, 'Could not read the queue numbers.');

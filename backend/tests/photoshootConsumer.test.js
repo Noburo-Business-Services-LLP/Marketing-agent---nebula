@@ -1002,3 +1002,32 @@ test('S6 M23: the consumer heartbeat marks a run lost when the lease renewal mat
   assert.strictEqual(w.calls.gen, 2, 'no second batch');
   assert.notStrictEqual(w.row(id).status, 'done');
 });
+
+// ---- minors fixed with the review (M-a, M-e) -------------------------------------------------------------------------
+
+test('M-a: agency client removal does not wait forever on a refund that was set aside for a person', async () => {
+  const ws = require('../services/agencyWorkspaces');
+  const asked = {};
+  const models = {};
+  for (const k of ['VideoJob', 'HeroVideoJob', 'Blueprint', 'StudioVideo', 'Draft', 'Campaign', 'SocialPostAttempt', 'PhotoshootJob']) models[k] = { exists: async (f) => { asked[k] = f; return false; } };
+  await ws.runningWork('w1', models, NOW.getTime());
+  const third = asked.PhotoshootJob.$or.find((c) => c.refundedQuarks);
+  assert.deepStrictEqual(third.refundGaveUp, { $ne: true });
+});
+
+test('M-e: a failure in the Photoshoot numbers does not take down the staff queue endpoint', async () => {
+  const metrics = require('../routes/metrics');
+  const orig = { ...metrics.queues };
+  metrics.queues.video = () => ({ metrics: async () => ({ queueDepth: 0 }) });
+  metrics.queues.image = () => ({ metrics: async () => ({ queueDepth: 0 }) });
+  metrics.queues.studio = () => ({ metrics: async () => ({ queueDepth: 0 }) });
+  metrics.queues.photoshoot = () => ({ metrics: async () => { throw new Error('db down'); } });
+  try {
+    const layer = metrics.stack.find((l) => l.route && l.route.path === '/queue');
+    const res = { code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; }, set() { return this; } };
+    await quiet(() => layer.route.stack.slice(-1)[0].handle({}, res));
+    assert.strictEqual(res.code, 200);
+    assert.ok(res.body.videoJobs && res.body.imageJobs && res.body.studioVideos);
+    assert.strictEqual(res.body.photoshoot.unavailable, true);
+  } finally { Object.assign(metrics.queues, orig); }
+});
