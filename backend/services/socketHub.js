@@ -8,6 +8,29 @@ function roomForUser(userId) {
   return `user:${String(userId)}`;
 }
 
+async function socketAuth(socket, next) {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (!token) return next(new Error('Missing auth token'));
+
+    // Demo tokens name the user with no check, so they work only in demo mode (never in production).
+    if (String(token).startsWith('demo:') && require('../middleware/auth').demoModeActive()) {
+      socket.userId = String(token).slice(5);
+      return next();
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('_id isActive deletion.status agency.ownerId agency.frozen');
+    if (!user || !user.isActive) return next(new Error('Unauthorized'));
+    // The same pass, CSM and deletion checks as every other request.
+    if (await require('../middleware/auth')._tokenProblem(decoded, user)) return next(new Error('Unauthorized'));
+    socket.userId = String(user._id);
+    return next();
+  } catch (error) {
+    return next(new Error('Unauthorized'));
+  }
+}
+
 function initializeSocketHub(server, corsOrigins = []) {
   try {
     const { Server } = require('socket.io');
@@ -19,27 +42,7 @@ function initializeSocketHub(server, corsOrigins = []) {
       }
     });
 
-    io.use(async (socket, next) => {
-      try {
-        const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-        if (!token) return next(new Error('Missing auth token'));
-
-        if (String(token).startsWith('demo:')) {
-          socket.userId = String(token).slice(5);
-          return next();
-        }
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id).select('_id isActive deletion.status agency.ownerId agency.frozen');
-        if (!user || !user.isActive) return next(new Error('Unauthorized'));
-        // The same pass, CSM and deletion checks as every other request.
-        if (await require('../middleware/auth')._tokenProblem(decoded, user)) return next(new Error('Unauthorized'));
-        socket.userId = String(user._id);
-        return next();
-      } catch (error) {
-        return next(new Error('Unauthorized'));
-      }
-    });
+    io.use(socketAuth);
 
     io.on('connection', (socket) => {
       if (socket.userId) {
@@ -95,6 +98,7 @@ function isSocketReady() {
 
 module.exports = {
   initializeSocketHub,
+  socketAuth,
   emitToUser,
   addSseSubscriber,
   isSocketReady

@@ -2,9 +2,13 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 // Demo mode when MONGODB_URI is missing or clearly a placeholder
-const isDemoMode = process.env.NODE_ENV !== 'production' && (
-  !process.env.MONGODB_URI ||
-  process.env.MONGODB_URI.includes('your_mongodb_connection_string_here'));
+// Read at call time so the live inbox stream and socket hub use the exact same rule (never true in production).
+function demoModeActive() {
+  return process.env.NODE_ENV !== 'production' && (
+    !process.env.MONGODB_URI ||
+    process.env.MONGODB_URI.includes('your_mongodb_connection_string_here'));
+}
+const isDemoMode = demoModeActive();
 
 // Generate JWT Token
 const generateToken = (userId) => {
@@ -205,4 +209,4 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { generateToken, protect, optionalAuth, _agencyPassProblem, _tokenProblem, _allowedWhileDeleting };
+module.exports = { demoModeActive, generateToken, protect, optionalAuth, _agencyPassProblem, _tokenProblem, _allowedWhileDeleting };

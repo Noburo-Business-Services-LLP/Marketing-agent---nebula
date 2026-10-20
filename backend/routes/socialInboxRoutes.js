@@ -27,7 +27,8 @@ const streamAuth = async (req, res, next) => {
   try {
     const token = req.query.token || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!token) return res.status(401).json({ success: false, message: 'Missing auth token' });
-    if (String(token).startsWith('demo:')) {
+    // A demo token names the user with no check at all, so it works only in demo mode (never in production).
+    if (String(token).startsWith('demo:') && require('../middleware/auth').demoModeActive()) {
       req.user = { _id: String(token).slice(5), id: String(token).slice(5), isActive: true };
       return next();
     }
@@ -98,4 +99,5 @@ router.post('/reviews/draft', requireFeature('inbox'), async (req, res) => {
 router.post('/dev/ingest', requireFeature('inbox'), controller.devIngest);
 router.post('/dev/test', requireFeature('inbox'), controller.testWebhook);
 
+router.streamAuth = streamAuth;
 module.exports = router;
