@@ -144,10 +144,11 @@ function assign(now) {
 }
 
 /**
- * The full build. `productIds`: slug -> ObjectId. `base`: the asset base. Returns { drafts, campaigns, calendars,
+ * The full build. `productIds`: slug -> ObjectId. `videoUrls`: slug -> link of that product's locally made video (Stage 3; reels
+ * of a product that has one point at it, the rest have none). `base`: the asset base. Returns { drafts, campaigns, calendars,
  * posters, performanceItems, summary }. Rows are plain objects ready for validateSync / insertMany.
  */
-function build({ userId, now, base, productIds }) {
+function build({ userId, now, base, productIds, videoUrls = {} }) {
   const r = seeded('zaya-stage2-rows');
   const { items, left } = assign(now);
   if (left.reels || left.others) throw new Error(`content pool left over: ${JSON.stringify(left)}`);
@@ -199,6 +200,8 @@ function build({ userId, now, base, productIds }) {
       carouselSlides: slides.map((u, n) => ({ order: n + 1, role: ['hook', 'build', 'payoff'][n], headline: n === 0 ? s.head : [product.name, 'Shop the ritual'][n - 1], imageText: n === 0 ? s.head : '', imageUrl: u })),
       createdAt, updatedAt: createdAt
     };
+    const videoUrl = s.fmt === 'reel' ? (videoUrls[product.slug] || '') : '';
+    if (videoUrl) draft.creative = { type: 'reel', videoUrl };
     if (cal && day) { draft.contentCalendarId = cal.id; draft.calendarWeek = Math.min(6, Math.ceil(day.d / 7)); draft.calendarDay = day.d; }
     else if (origin === 'automation' && day) { draft.calendarDay = day.d; }
     if (status === 'published') {
@@ -226,7 +229,7 @@ function build({ userId, now, base, productIds }) {
       campaigns.push({
         _id: campaignId, userId, name: cap(s.title, 120), objective: draft.objective === 'sales' ? 'sales' : draft.objective, platforms, status: posted ? 'posted' : 'scheduled',
         priority: 'medium', notes: '', selectedProducts: productId ? [productId] : [], tone: 'warm', aiGenerated: origin === 'automation',
-        creative: { type: s.fmt === 'reel' ? 'reel' : s.fmt === 'carousel' ? 'carousel' : 'image', textContent: caption, imageUrls: slides.length ? slides : [imageUrl], videoUrl: '', captions: caption, hashtags: tags, callToAction: s.cta },
+        creative: { type: s.fmt === 'reel' ? 'reel' : s.fmt === 'carousel' ? 'carousel' : 'image', textContent: caption, imageUrls: slides.length ? slides : [imageUrl], videoUrl, captions: caption, hashtags: tags, callToAction: s.cta },
         scheduling: { startDate: at, postTime: new Date(at.getTime() + IST).toISOString().slice(11, 16), timezone: 'Asia/Kolkata', frequency: 'once' },
         targeting: { demographics: '', ageRange: { min: 18, max: 55 }, gender: 'all', locations: ['India'], interests: ['skincare', 'ayurveda'] },
         budget: { amount: 0, total: 0, daily: 0, spent: 0, currency: 'INR' },
