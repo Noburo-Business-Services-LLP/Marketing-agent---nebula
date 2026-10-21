@@ -112,7 +112,8 @@ test('positioning: the hero headline is about the whole marketing, not posts; th
   for (const t of [C.HERO.line, C.LANDING_META.title, `${C.CLOSING.title} ${C.CLOSING.emphasis}`, `${C.MAKE.title} ${C.MAKE.emphasis}`]) {
     assert.ok(!/\bposts?\b/i.test(t), `reads as just posts: ${t}`);
   }
-  assert.ok(!/autopilot/i.test(TEXT), 'no autopilot claim');
+  // Owner chose "Marketing on autopilot. You just say yes." (2026-10-21): autopilot is allowed in the hero only.
+  assert.match(headline, /autopilot/i);
   assert.ok(!/guarantee|more followers|more sales|grow your followers/i.test(TEXT), 'no promised results');
 });
 

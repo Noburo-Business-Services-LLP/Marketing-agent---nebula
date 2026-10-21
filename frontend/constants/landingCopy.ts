@@ -31,9 +31,9 @@ export const NAV_COPY = { signIn: 'Sign in', menuOpen: 'Open the menu', menuClos
 // you approve. The two other headline options for the owner are recorded there.
 export const HERO = {
   eyebrow: 'Marketing for Indian small businesses',
-  title: 'Nebulaa runs your marketing.',
-  emphasis: 'You have the final word.',
-  line: 'Nebulaa gets to know your business, your customers and your market. It plans your month, makes the content and learns from every result for the next round. You check everything before it goes out.',
+  title: 'Marketing on autopilot.',
+  emphasis: 'You just say yes.',
+  line: 'Your whole marketing, planned, made and posted for you. Nebulaa gets to know your business, your customers and your market. It plans your month, makes the content and learns from every result for the next round. You check everything before it goes out.',
   secondary: 'See how it works',
   promise: 'Nothing goes out until you approve it.',
   // Kept from the earlier page: the spec (2026-10-18, section 2b) records it as owner-confirmed.

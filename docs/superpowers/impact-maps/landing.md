@@ -7,7 +7,7 @@ Written 2026-10-20 before building, per the ledger rule 3. Owner request (ledger
 Owner feedback (ledger, LANDING PAGE AND WEBSITE, 2026-10-21): the page talked about posts everywhere; Nebulaa runs the whole marketing from one place, and the customer approves. New positioning line: **Nebulaa runs your whole marketing from one place, and you stay in charge: nothing goes out until you approve it.** No "autopilot" (approval is required, so it would mislead), no promised results.
 
 Headline options (none leans on "posts"):
-1. **Chosen: "Nebulaa runs your marketing. You have the final word."** Names the whole job in four plain words, then answers the first worry of an owner (control) in the same breath; short enough for two lines on a phone.
+1. **Chosen by the owner 2026-10-21 (replaced "Nebulaa runs your marketing. You have the final word."): "Marketing on autopilot. You just say yes."** Earlier text: **"Nebulaa runs your marketing. You have the final word."** Names the whole job in four plain words, then answers the first worry of an owner (control) in the same breath; short enough for two lines on a phone.
 2. "From knowing your customers to learning what works, your marketing in one place." Shows the span of the loop, but it is long and explains more than it promises; better as a section line.
 3. "One place for your brand's marketing, planned, made and improved every month." Concrete verbs and a monthly rhythm that suits owners who budget by the month; weaker on the control point and on the "runs it for you" idea.
 
