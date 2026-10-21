@@ -1099,7 +1099,7 @@ router.post('/:platform/disconnect', protect, async (req, res) => {
     const { platform } = req.params;
     const user = await User.findById(req.user._id);
 
-    // Unlink from Ayrshare first (never for a demo account, D101: its connections are only stored here)
+    // Unlink from Ayrshare first (never for a demo account, D112: its connections are only stored here)
     if (user.ayrshare?.profileKey && !require('../services/demoProfile').isDemoProfile(user)) {
       const ayrsharePlatform = AYRSHARE_PLATFORM_MAP[platform.toLowerCase()] || platform.toLowerCase();
       try {

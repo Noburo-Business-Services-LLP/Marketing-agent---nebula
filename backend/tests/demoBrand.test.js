@@ -1,4 +1,4 @@
-// The demo brand seed (scripts/seed-demo-brand.js) and the demo-account guard (D101): pure parts only, no database.
+// The demo brand seed (scripts/seed-demo-brand.js) and the demo-account guard (D112): pure parts only, no database.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -21,7 +21,7 @@ const UID = '65f000000000000000000001';
 
 // ---------------------------------------------------------------- constants
 test('constants: the brand, palette, 8 products, 5 competitors and 4 socials are complete', () => {
-  assert.strictEqual(K.BRAND.name, 'Nilaa Botanics');
+  assert.strictEqual(K.BRAND.name, 'Zaya Naturals');
   assert.ok(K.BRAND.tagline.length > 10);
   assert.deepStrictEqual(K.PALETTE, { plum: '#3B1F3A', roseGold: '#C98B7B', cream: '#FBF3EA', sage: '#8AA17D' });
   assert.strictEqual(K.PRODUCTS.length, 8);
@@ -77,7 +77,7 @@ test('safety: password file outside the repo only, local picture links only, fix
   assert.ok(!safety.passwordFileOk(''));
   assert.ok(safety.assetBaseOk('http://localhost:5000') && safety.assetBaseOk('http://127.0.0.1:5001'));
   assert.ok(!safety.assetBaseOk('https://gravity.nebulaa.ai') && !safety.assetBaseOk('http://localhost:5000/'));
-  assert.ok(safety.emailOk('demo-nilaa@example.test') && !safety.emailOk('someone@gmail.com'));
+  assert.ok(safety.emailOk('demo-zaya@example.test') && !safety.emailOk('someone@gmail.com'));
   assert.match(safety.makePassword(), /^[A-HJ-NP-Za-km-z2-9]{5}-[A-HJ-NP-Za-km-z2-9]{5}-[A-HJ-NP-Za-km-z2-9]{5}$/);
   assert.ok(safety.PROFILE_KEY.startsWith('demo-'));
 });
@@ -104,7 +104,7 @@ test('markers: every row the seed builds carries its collection marker, and the 
   for (const spec of assets.assetSpecs()) {
     const row = assets.assetRow(spec, { userId: UID, base, buffer: Buffer.from('x'.repeat(30)), createdAt: NOW });
     assert.ok(safety.hasMarker('BrandAsset', row), spec.rel);
-    assert.ok(row.url.startsWith(`${base}/demo-assets/nilaa/`));
+    assert.ok(row.url.startsWith(`${base}/demo-assets/zaya/`));
   }
   for (const row of products.productRows({ userId: UID, base, createdAt: t.createdAt })) assert.ok(safety.hasMarker('Product', row), row.name);
   for (const row of account.ledgerRows(t, UID)) assert.ok(safety.hasMarker('QuarkLedger', row), row.ref);
@@ -115,15 +115,15 @@ test('markers: every row the seed builds carries its collection marker, and the 
     assert.strictEqual(String(f.user || f.userId), UID, name);
   }
   assert.throws(() => safety.markerFilter('Draft', UID), /No demo marker/);
-  assert.ok(safety.isDemoUser({ email: 'demo-nilaa@example.test', ayrshare: { profileKey: 'demo-nilaa-botanics' } }));
-  assert.ok(!safety.isDemoUser({ email: 'demo-nilaa@example.test', ayrshare: { profileKey: 'real-key' } }));
+  assert.ok(safety.isDemoUser({ email: 'demo-zaya@example.test', ayrshare: { profileKey: 'demo-zaya-naturals' } }));
+  assert.ok(!safety.isDemoUser({ email: 'demo-zaya@example.test', ayrshare: { profileKey: 'real-key' } }));
 });
 
 // ---------------------------------------------------------------- account, payments and wallet
 test('account: Growth plan with the bundle, consent, tour, new-shape profile, reminder already claimed', () => {
   const t = account.timeline(NOW);
-  const f = account.buildUserFields(t, { logoUrl: 'http://localhost:5000/demo-assets/nilaa/brand/logo.png' });
-  assert.strictEqual(f.email, 'demo-nilaa@example.test');
+  const f = account.buildUserFields(t, { logoUrl: 'http://localhost:5000/demo-assets/zaya/brand/logo.png' });
+  assert.strictEqual(f.email, 'demo-zaya@example.test');
   assert.ok(f.isVerified && f.onboardingCompleted && f.tour.completedAt);
   assert.strictEqual(f.consent.termsVersion, require('../config/legalVersions').TERMS_VERSION);
   assert.strictEqual(f.plan.tier, 'professional');
@@ -151,7 +151,7 @@ test('account: 6 plan charges (first + 5 renewals), 5 bundle charges and 1 top-u
   assert.strictEqual(topups.length, 1);
   assert.strictEqual(plan[0].amount, chargePaise(PLANS.professional.inr) / 100);
   assert.strictEqual(plan[0].credits, PLANS.professional.quarks);
-  assert.ok(pays.every((p) => p.status === 'paid' && p.paidAt <= NOW && p.razorpayPaymentId.startsWith('pay_demoNilaa')));
+  assert.ok(pays.every((p) => p.status === 'paid' && p.paidAt <= NOW && p.razorpayPaymentId.startsWith('pay_demoZaya')));
   assert.strictEqual(new Set(pays.map((p) => p.razorpayPaymentId)).size, pays.length);
   for (let i = 1; i < pays.length; i += 1) assert.ok(pays[i].paidAt >= pays[i - 1].paidAt, 'oldest first');
 });
@@ -186,9 +186,9 @@ test('wallet: the same numbers whatever day create runs (the demo never goes sta
   }
 });
 
-// ---------------------------------------------------------------- socials and the demo guard (D101)
+// ---------------------------------------------------------------- socials and the demo guard (D112)
 test('socials: stored in the real fields with a demo key; reads come from the stored record', () => {
-  const ay = socials.buildAyrshare({ connectedAt: NOW, avatarUrl: 'http://localhost:5000/demo-assets/nilaa/brand/logo.png', now: NOW });
+  const ay = socials.buildAyrshare({ connectedAt: NOW, avatarUrl: 'http://localhost:5000/demo-assets/zaya/brand/logo.png', now: NOW });
   assert.ok(demo.isDemoProfile({ ayrshare: ay }));
   assert.deepStrictEqual(ay.activeSocialAccounts, ['instagram', 'facebook', 'youtube', 'linkedin']);
   assert.ok(ay.displayNames.every((d) => !d.profileUrl), 'no link to a real profile');
@@ -203,7 +203,7 @@ test('socials: stored in the real fields with a demo key; reads come from the st
 });
 
 test('isDemoProfile: only keys that start with demo-', () => {
-  assert.ok(demo.isDemoProfile({ ayrshare: { profileKey: 'demo-nilaa-botanics' } }));
+  assert.ok(demo.isDemoProfile({ ayrshare: { profileKey: 'demo-zaya-naturals' } }));
   assert.ok(demo.isDemoProfile({ ayrshare: { profileKey: '  demo-x' } }));
   for (const u of [{}, null, { ayrshare: {} }, { ayrshare: { profileKey: '' } }, { ayrshare: { profileKey: 'A1B2-demo-C3' } }, { ayrshare: { profileKey: 'DEMO-x' } }]) {
     assert.ok(!demo.isDemoProfile(u), JSON.stringify(u));
@@ -230,19 +230,19 @@ test('the provider client never opens a connection for a demo key (and answers r
   const log = console.log; console.log = () => {};
   try {
     const api = require('../services/socialMediaAPI');
-    const st = await api.getPostStatus('post123', { profileKey: 'demo-nilaa-botanics' });
+    const st = await api.getPostStatus('post123', { profileKey: 'demo-zaya-naturals' });
     assert.strictEqual(st.success, false);
-    const del = await api.retryPost('post123', { profileKey: 'demo-nilaa-botanics' });
+    const del = await api.retryPost('post123', { profileKey: 'demo-zaya-naturals' });
     assert.strictEqual(del.success, false);
-    const post = await api.postToSocialMedia(['instagram'], 'hello', { profileKey: 'demo-nilaa-botanics' });
+    const post = await api.postToSocialMedia(['instagram'], 'hello', { profileKey: 'demo-zaya-naturals' });
     assert.strictEqual(post.success, false); assert.strictEqual(post.demo, true);
     // Reads use the stored record (a fake model here).
     const stored = { ayrshare: socials.buildAyrshare({ connectedAt: NOW, now: NOW }) };
     const User = { findOne: () => ({ select: () => ({ lean: async () => stored }) }) };
-    const prof = await demo.storedProfile('demo-nilaa-botanics', { User });
+    const prof = await demo.storedProfile('demo-zaya-naturals', { User });
     assert.strictEqual(prof.success, true);
     assert.strictEqual(prof.activeSocialAccounts.length, 4);
-    const an = await demo.storedAnalytics('demo-nilaa-botanics', ['instagram'], { User });
+    const an = await demo.storedAnalytics('demo-zaya-naturals', ['instagram'], { User });
     assert.strictEqual(an.data.instagram.analytics.followersCount, 34280);
     assert.strictEqual(opened, 0, 'no connection was opened');
   } finally {
@@ -267,7 +267,7 @@ test('background jobs leave demo accounts alone (the shared gate lists them)', a
 test('no renewal reminder email for a demo account, even when due', async () => {
   const rr = require('../services/renewalReminders');
   const now = Date.parse('2026-11-10T06:00:00Z');
-  const u = { _id: 'd1', email: 'demo-nilaa@example.test', firstName: 'Nila', isActive: true, ayrshare: { profileKey: 'demo-nilaa-botanics' },
+  const u = { _id: 'd1', email: 'demo-zaya@example.test', firstName: 'Nila', isActive: true, ayrshare: { profileKey: 'demo-zaya-naturals' },
     subscription: { status: 'active', nextBillingAt: new Date(now + 3 * 86400000), cancelAtPeriodEnd: false },
     plan: { tier: 'professional', subscriptions: [{ subscriptionId: 's1', kind: 'plan', key: 'professional', active: true }] } };
   let asked = null; const sent = [];
@@ -280,10 +280,10 @@ test('no renewal reminder email for a demo account, even when due', async () => 
 
 test('the profile count and the reviews, disconnect, billing and scheduler paths all honour the demo guard', async () => {
   const watch = require('../services/ayrshareProfileWatch');
-  assert.ok(watch.PROFILE_FILTER['ayrshare.profileKey'].$not.test('demo-nilaa-botanics'));
+  assert.ok(watch.PROFILE_FILTER['ayrshare.profileKey'].$not.test('demo-zaya-naturals'));
   const reviews = require('../services/googleReviews');
   let fetched = 0;
-  const r = await reviews.fetchReviews({ profileKey: 'demo-nilaa-botanics', apiKey: 'k', fetchImpl: async () => { fetched += 1; return { ok: true, json: async () => ({}) }; } });
+  const r = await reviews.fetchReviews({ profileKey: 'demo-zaya-naturals', apiKey: 'k', fetchImpl: async () => { fetched += 1; return { ok: true, json: async () => ({}) }; } });
   assert.strictEqual(fetched, 0); assert.strictEqual(r.success, false);
   const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
   assert.match(read('routes/social.js'), /profileKey && !require\('\.\.\/services\/demoProfile'\)\.isDemoProfile\(user\)/);
@@ -345,7 +345,7 @@ function fakeDeps(over = {}) {
   };
 }
 const DEV = { MONGODB_URI: 'mongodb+srv://u:p@c.example.net/nebulaa_dev?x=1' };
-const PWFILE = path.join(os.tmpdir(), 'demo-nilaa-test-login.txt');
+const PWFILE = path.join(os.tmpdir(), 'demo-zaya-test-login.txt');
 
 test('script: refuses another database before connecting, and refuses after connecting to the wrong one', async () => {
   const { deps, calls } = fakeDeps();
@@ -398,21 +398,63 @@ test('demo pictures are served by a development server only', async () => {
   assert.strictEqual(mountDemoAssets({ use: (...a) => used.push(a) }, { env: { NODE_ENV: 'production' } }), false);
   assert.strictEqual(used.length, 0);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-assets-'));
-  fs.mkdirSync(path.join(dir, 'nilaa'));
-  fs.writeFileSync(path.join(dir, 'nilaa', 'a.png'), images.logoPng(64));
+  fs.mkdirSync(path.join(dir, 'zaya'));
+  fs.writeFileSync(path.join(dir, 'zaya', 'a.png'), images.logoPng(64));
   const app = express();
   assert.strictEqual(mountDemoAssets(app, { env: { NODE_ENV: 'development' }, dir }), true);
   const server = app.listen(0);
   try {
     const port = server.address().port;
-    const ok = await fetch(`http://127.0.0.1:${port}/demo-assets/nilaa/a.png`);
+    const ok = await fetch(`http://127.0.0.1:${port}/demo-assets/zaya/a.png`);
     assert.strictEqual(ok.status, 200);
     assert.deepStrictEqual(images.imageSize(Buffer.from(await ok.arrayBuffer())), { type: 'png', width: 64, height: 64 });
-    assert.strictEqual((await fetch(`http://127.0.0.1:${port}/demo-assets/nilaa/missing.png`)).status, 404);
+    assert.strictEqual((await fetch(`http://127.0.0.1:${port}/demo-assets/zaya/missing.png`)).status, 404);
   } finally { server.close(); fs.rmSync(dir, { recursive: true, force: true }); }
   const src = fs.readFileSync(path.join(__dirname, '..', 'server-main.js'), 'utf8');
   assert.match(src, /require\('\.\/routes\/demoAssets'\)\.mountDemoAssets\(app\)/);
   const ignore = fs.readFileSync(path.join(safety.REPO_ROOT, '.gitignore'), 'utf8');
   assert.match(ignore, /^backend\/demo-assets\/$/m);
   assert.match(fs.readFileSync(path.join(safety.REPO_ROOT, '.dockerignore'), 'utf8'), /^backend\/demo-assets$/m);
+});
+
+// ---------------------------------------------------------------- the current models accept what the seed builds (D112)
+test('schema: the real models accept every row, and the local picture links survive the http(s) URL setters', () => {
+  const mongoose = require('mongoose');
+  const User = require('../models/User');
+  const Product = require('../models/Product');
+  const BrandAsset = require('../models/BrandAsset');
+  const BrandIntelligenceProfile = require('../models/BrandIntelligenceProfile');
+  const QuarkLedger = require('../models/QuarkLedger');
+  const base = 'http://localhost:5000';
+  const uid = new mongoose.Types.ObjectId();
+  const t = account.timeline(NOW);
+  const logoUrl = safety.assetUrl(base, assets.LOGO_REL);
+
+  const u = new User({
+    ...account.buildUserFields(t, { logoUrl }), password: 'Abcdefghij23',
+    ayrshare: socials.buildAyrshare({ connectedAt: socials.connectedAtFor(t.createdAt), avatarUrl: logoUrl, now: NOW })
+  });
+  assert.strictEqual(u.validateSync(), undefined, String(u.validateSync()));
+  assert.strictEqual(u.businessProfile.brandAssets.logoUrl, logoUrl, 'the logo link is not blanked by the URL setter');
+  assert.strictEqual(u.businessProfile.accountKind, 'one');
+  assert.strictEqual(u.ayrshare.displayNames[0].userImage, logoUrl);
+
+  for (const row of products.productRows({ userId: uid, base, createdAt: NOW })) {
+    const p = new Product(row);
+    assert.strictEqual(p.validateSync(), undefined, String(p.validateSync()));
+    assert.ok(p.imageUrl.startsWith(`${base}${safety.ASSET_PATH}/`) && p.images.length >= 2, 'picture links kept');
+  }
+  const draws = images.logoPng(64);
+  for (const spec of assets.assetSpecs()) {
+    const a = new BrandAsset(assets.assetRow(spec, { userId: uid, base, buffer: draws, createdAt: NOW }));
+    assert.strictEqual(a.validateSync(), undefined, String(a.validateSync()));
+    assert.strictEqual(a.url, safety.assetUrl(base, spec.rel));
+  }
+  const prof = new BrandIntelligenceProfile(assets.intelligenceProfile({ userId: uid, logoUrl }));
+  assert.strictEqual(prof.validateSync(), undefined, String(prof.validateSync()));
+  assert.strictEqual(prof.assets.primaryLogoUrl, logoUrl);
+  for (const r of account.ledgerRows(t, uid)) {
+    const q = new QuarkLedger(r);
+    assert.strictEqual(q.validateSync(), undefined, String(q.validateSync()));
+  }
 });

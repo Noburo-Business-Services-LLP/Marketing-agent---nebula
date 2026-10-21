@@ -15,8 +15,8 @@ const { DEMO_EMAIL, DEMO_TAG, tagRef } = require('./safety');
 const DAY = 24 * 60 * 60 * 1000;
 const PLAN_KEY = 'professional';
 const ADDON_KEY = 'bundle';
-const SUB_PLAN = 'sub_demo_nilaa_growth';
-const SUB_ADDON = 'sub_demo_nilaa_bundle';
+const SUB_PLAN = 'sub_demo_zaya_growth';
+const SUB_ADDON = 'sub_demo_zaya_bundle';
 
 /** The same calendar day `months` earlier (clamped to the month's end), at the same time of day. */
 function monthsBefore(date, months) {
@@ -50,18 +50,18 @@ function buildPayments(t) {
   t.charges.forEach((at, i) => {
     const n = i + 1;
     rows.push({
-      razorpayOrderId: SUB_PLAN, razorpayPaymentId: `pay_demoNilaaPlan${n}`, amount: rupees(chargePaise(PLANS[PLAN_KEY].inr)),
+      razorpayOrderId: SUB_PLAN, razorpayPaymentId: `pay_demoZayaPlan${n}`, amount: rupees(chargePaise(PLANS[PLAN_KEY].inr)),
       currency: 'INR', credits: PLANS[PLAN_KEY].quarks, status: 'paid', paidAt: at, item: INVOICE_ITEMS.plan, exGstAmount: PLANS[PLAN_KEY].inr, invoiceUrl: ''
     });
     if (n >= TIMELINE.bundleFromCharge) {
       rows.push({
-        razorpayOrderId: SUB_ADDON, razorpayPaymentId: `pay_demoNilaaAddon${n}`, amount: rupees(chargePaise(ADDONS[ADDON_KEY].inr)),
+        razorpayOrderId: SUB_ADDON, razorpayPaymentId: `pay_demoZayaAddon${n}`, amount: rupees(chargePaise(ADDONS[ADDON_KEY].inr)),
         currency: 'INR', credits: 0, status: 'paid', paidAt: new Date(at.getTime() + 2 * 60 * 1000), item: INVOICE_ITEMS.addon, exGstAmount: ADDONS[ADDON_KEY].inr, invoiceUrl: ''
       });
     }
   });
   rows.push({
-    razorpayOrderId: 'order_demoNilaaTopup1', razorpayPaymentId: 'pay_demoNilaaTopup1', amount: rupees(chargePaise(pack.inr)),
+    razorpayOrderId: 'order_demoZayaTopup1', razorpayPaymentId: 'pay_demoZayaTopup1', amount: rupees(chargePaise(pack.inr)),
     currency: 'INR', credits: pack.quarks, status: 'paid', paidAt: t.topupAt, item: INVOICE_ITEMS.topup, exGstAmount: pack.inr, invoiceUrl: ''
   });
   return rows.sort((a, b) => a.paidAt - b.paidAt);
@@ -99,7 +99,7 @@ function buildWallet(t) {
   t.charges.forEach((at, i) => {
     if (plan > 0) { const gone = plan; plan = 0; push({ type: 'expiry', bucket: 'plan', quarks: -gone, action: 'plan_expired', ref: tagRef(`expiry-${i}`), createdAt: at }); }
     plan = grant;
-    push({ type: 'grant', bucket: 'plan', quarks: grant, action: 'plan_charge', ref: tagRef(`pay_demoNilaaPlan${i + 1}`), note: 'Growth plan, monthly Quarks', createdAt: new Date(at.getTime() + 1000) });
+    push({ type: 'grant', bucket: 'plan', quarks: grant, action: 'plan_charge', ref: tagRef(`pay_demoZayaPlan${i + 1}`), note: 'Growth plan, monthly Quarks', createdAt: new Date(at.getTime() + 1000) });
     const end = i + 1 < t.charges.length ? t.charges[i + 1] : t.now;
     const spends = monthSpendRows(TIMELINE.monthSpends[i], i);
     const step = (end.getTime() - at.getTime()) / (spends.length + 1);
@@ -108,7 +108,7 @@ function buildWallet(t) {
       // The top-up arrives before the spend that needs it.
       if (pack && !rows.some((r) => r.type === 'purchase') && t.topupAt <= when) {
         topup += pack.quarks;
-        push({ type: 'purchase', bucket: 'topup', quarks: pack.quarks, action: 'topup', ref: tagRef('pay_demoNilaaTopup1'), note: `Top-up, ${pack.quarks} Quarks`, createdAt: t.topupAt });
+        push({ type: 'purchase', bucket: 'topup', quarks: pack.quarks, action: 'topup', ref: tagRef('pay_demoZayaTopup1'), note: `Top-up, ${pack.quarks} Quarks`, createdAt: t.topupAt });
       }
       let q = s.quarks;
       const fromPlan = Math.min(plan, q); plan -= fromPlan; q -= fromPlan;
@@ -147,8 +147,8 @@ function businessProfile({ logoUrl = '' } = {}) {
 /** Everything on the user record except the password and the social accounts (socials.js adds those). */
 function buildUserFields(t, { logoUrl = '' } = {}) {
   const { credits } = buildWallet(t);
-  const planRecord = { subscriptionId: SUB_PLAN, kind: 'plan', key: PLAN_KEY, razorpayPlanId: 'plan_demo_nilaa_growth', expectedPaise: chargePaise(PLANS[PLAN_KEY].inr), active: true, createdAt: t.charges[0] };
-  const addonRecord = { subscriptionId: SUB_ADDON, kind: 'addon', key: ADDON_KEY, razorpayPlanId: 'plan_demo_nilaa_bundle', expectedPaise: chargePaise(ADDONS[ADDON_KEY].inr), active: true, createdAt: t.charges[TIMELINE.bundleFromCharge - 1] };
+  const planRecord = { subscriptionId: SUB_PLAN, kind: 'plan', key: PLAN_KEY, razorpayPlanId: 'plan_demo_zaya_growth', expectedPaise: chargePaise(PLANS[PLAN_KEY].inr), active: true, createdAt: t.charges[0] };
+  const addonRecord = { subscriptionId: SUB_ADDON, kind: 'addon', key: ADDON_KEY, razorpayPlanId: 'plan_demo_zaya_bundle', expectedPaise: chargePaise(ADDONS[ADDON_KEY].inr), active: true, createdAt: t.charges[TIMELINE.bundleFromCharge - 1] };
   return {
     email: DEMO_EMAIL, firstName: BRAND.founder.firstName, lastName: BRAND.founder.lastName, companyName: BRAND.name,
     isVerified: true, onboardingCompleted: true, initialCampaignsGenerated: true, isActive: true,

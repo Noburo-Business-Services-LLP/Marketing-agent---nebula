@@ -1,21 +1,21 @@
 'use strict';
 /**
- * Every fact about the demo brand in ONE place (decision D23: the owner can rename the brand or change a product here).
- * Nilaa Botanics is fictional: a Chennai direct-to-consumer, ayurveda-inspired skincare and haircare brand.
+ * Every fact about the demo brand in ONE place (decisions D110 and D111: the owner can rename the brand or change a product here).
+ * Zaya Naturals is fictional: a Chennai direct-to-consumer, ayurveda-inspired skincare and haircare brand.
  * The competitors are fictional too. Nothing here names a real person, brand or account.
  */
 
 const BRAND = Object.freeze({
-  name: 'Nilaa Botanics',
-  slug: 'nilaa',
+  name: 'Zaya Naturals',
+  slug: 'zaya',
   tagline: 'Skin care that remembers where it came from.',
   promise: 'Clean, not clinical.',
   city: 'Chennai, Tamil Nadu',
   founded: 2022,
   // A reserved example domain: never a real website.
-  website: 'https://nilaabotanics.example',
+  website: 'https://zayanaturals.example',
   founder: { firstName: 'Nila', lastName: 'Raman', role: 'Founder' },
-  description: 'Nilaa Botanics makes ayurveda-inspired skincare and haircare in small batches in Chennai: kumkumadi, saffron, neem, rose and hibiscus, '
+  description: 'Zaya Naturals makes ayurveda-inspired skincare and haircare in small batches in Chennai: kumkumadi, saffron, neem, rose and hibiscus, '
     + 'blended the way grandmothers did, tested the way dermatologists want. Sold on our own website and on the big marketplaces.',
   problemSolved: 'Women who want the rituals they grew up with, without heavy fragrance, harsh chemicals or guesswork about what is inside.',
   niche: 'Ayurveda-inspired skincare and haircare',
@@ -24,7 +24,7 @@ const BRAND = Object.freeze({
   targetCustomerProfile: 'Working women in Chennai, Bengaluru, Mumbai and Delhi who read labels, follow skin creators, and buy online two or three times a month.',
   keyDifferentiator: 'Traditional ayurvedic recipes in clean, fragrance-light formulas, with every ingredient and its source on the label.',
   brandStory: 'Nila grew up watching her paati make kumkumadi oil in a brass pot. In 2022 she turned those recipes into a small Chennai studio, '
-    + 'with a chemist friend checking every batch. Today Nilaa ships across India, still poured and labelled by hand.',
+    + 'with a chemist friend checking every batch. Today Zaya ships across India, still poured and labelled by hand.',
   voice: 'Warm, knowledgeable and honest, a little poetic. English with light Tamil touches (paati, azhagu, vanakkam).',
   contentRestrictions: 'No medical claims (no "cures", no "treats acne"). No before and after photos. No comparisons that name other brands.',
   firstMonthContentAngles: 'Ritual and ingredients; skin education; founder story; customer glow stories; offers.',
@@ -141,14 +141,14 @@ const PLACES = Object.freeze([
 ]);
 
 /**
- * Connected social accounts (fake: the profile key starts with `demo-`, so nothing is ever sent to the provider, D101).
+ * Connected social accounts (fake: the profile key starts with `demo-`, so nothing is ever sent to the provider, D112).
  * `analytics` uses the provider's own field names, so the app's existing readers show the numbers.
  */
 const SOCIALS = Object.freeze([
-  { platform: 'instagram', username: 'nilaa.botanics', displayName: 'Nilaa Botanics', analytics: { followersCount: 34280, followsCount: 412, mediaCount: 486, reachCount: 61200, likeCount: 1840, commentsCount: 212 } },
-  { platform: 'facebook', username: 'Nilaa Botanics', displayName: 'Nilaa Botanics', analytics: { followersCount: 12940, fanCount: 12610, pageFollows: 0, mediaCount: 318, pagePostsImpressionsUnique: 22800, pagePostsImpressions: 30400, pagePostEngagements: 980 } },
-  { platform: 'youtube', username: 'Nilaa Botanics', displayName: 'Nilaa Botanics', analytics: { followersCount: 3870, followingCount: 0, postsCount: 64 } },
-  { platform: 'linkedin', username: 'Nilaa Botanics', displayName: 'Nilaa Botanics', analytics: { followers: { totalFollowerCount: 1460 }, engagement: 0.052, uniqueImpressionsCount: 5200, impressionCount: 7400 } },
+  { platform: 'instagram', username: 'zaya.naturals', displayName: 'Zaya Naturals', analytics: { followersCount: 34280, followsCount: 412, mediaCount: 486, reachCount: 61200, likeCount: 1840, commentsCount: 212 } },
+  { platform: 'facebook', username: 'Zaya Naturals', displayName: 'Zaya Naturals', analytics: { followersCount: 12940, fanCount: 12610, pageFollows: 0, mediaCount: 318, pagePostsImpressionsUnique: 22800, pagePostsImpressions: 30400, pagePostEngagements: 980 } },
+  { platform: 'youtube', username: 'Zaya Naturals', displayName: 'Zaya Naturals', analytics: { followersCount: 3870, followingCount: 0, postsCount: 64 } },
+  { platform: 'linkedin', username: 'Zaya Naturals', displayName: 'Zaya Naturals', analytics: { followers: { totalFollowerCount: 1460 }, engagement: 0.052, uniqueImpressionsCount: 5200, impressionCount: 7400 } },
 ]);
 
 /**

@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
 const https = require('https');
 const http = require('http');
-// Demo accounts (D101): a request carrying a `demo-` profile key never leaves this process.
+// Demo accounts (D112): a request carrying a `demo-` profile key never leaves this process.
 const demoProfile = require('./demoProfile');
 
 // API Configuration
@@ -235,7 +235,7 @@ function _trackAyrshareCall(url, method, statusBucket) {
 }
 
 async function makeRequest(url, options = {}) {
-  // DEMO ACCOUNT GUARD (D101): a fake profile key is answered here, offline. Checked first, so no call and no counter.
+  // DEMO ACCOUNT GUARD (D112): a fake profile key is answered here, offline. Checked first, so no call and no counter.
   if (demoProfile.requestUsesDemoKey(options)) {
     console.log('[demo account] no provider call made');
     return demoProfile.blockedReply();
@@ -357,7 +357,7 @@ function setCache(key, data) {
  * Post content to social media via Ayrshare
  */
 async function postToSocialMedia(platforms, content, options = {}) {
-  // A demo account never posts (D101); answered before any alert or circuit breaker can see it.
+  // A demo account never posts (D112); answered before any alert or circuit breaker can see it.
   if (demoProfile.isDemoProfileKey(options.profileKey)) {
     return { success: false, error: demoProfile.DEMO_MESSAGE, status: 400, data: { message: demoProfile.DEMO_MESSAGE, code: 'demo_account' }, demo: true };
   }
@@ -569,7 +569,7 @@ async function getAyrshareAnalytics(platforms = ['instagram', 'twitter', 'facebo
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
 async function getUserSocialAnalytics(profileKey, platforms = ['instagram', 'facebook', 'twitter', 'linkedin']) {
-  // A demo account's numbers are the ones stored on it (D101).
+  // A demo account's numbers are the ones stored on it (D112).
   if (demoProfile.isDemoProfileKey(profileKey)) return demoProfile.storedAnalytics(profileKey, platforms);
   if (!AYRSHARE_API_KEY) {
     return { success: false, error: 'API not configured' };
@@ -1008,7 +1008,7 @@ async function generateAyrshareJWT(user, options = {}) {
  * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
 async function getAyrshareUserProfile(profileKey, { bypassCache = false } = {}) {
-  // A demo account's connected accounts are the ones stored on it (D101).
+  // A demo account's connected accounts are the ones stored on it (D112).
   if (demoProfile.isDemoProfileKey(profileKey)) return demoProfile.storedProfile(profileKey);
   if (!AYRSHARE_API_KEY) {
     return { success: false, error: 'API not configured' };

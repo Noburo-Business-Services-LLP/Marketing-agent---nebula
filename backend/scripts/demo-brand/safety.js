@@ -2,7 +2,7 @@
 /**
  * The guard rails of the demo brand seed. Pure: no database, no network, no environment reads.
  *  - Only the development database `nebulaa_dev`, checked from the address BEFORE connecting and again after.
- *  - Only the fake address demo-nilaa@example.test.
+ *  - Only the fake address demo-zaya@example.test.
  *  - The password file must sit outside the repository.
  *  - Picture links only on this computer (http://localhost:<port>).
  *  - Every row the seed makes carries a marker, so `remove` deletes exactly those rows.
@@ -12,13 +12,13 @@ const path = require('path');
 const { isDemoProfileKey } = require('../../services/demoProfile');
 
 const DEV_DB = 'nebulaa_dev';
-const DEMO_EMAIL = 'demo-nilaa@example.test';
-const DEMO_TAG = 'demo-nilaa';
-// The fake social profile key: starts with `demo-`, so the app never calls the provider for it (D101).
-const PROFILE_KEY = 'demo-nilaa-botanics';
+const DEMO_EMAIL = 'demo-zaya@example.test';
+const DEMO_TAG = 'demo-zaya';
+// The fake social profile key: starts with `demo-`, so the app never calls the provider for it (D112).
+const PROFILE_KEY = 'demo-zaya-naturals';
 const DEFAULT_ASSET_BASE = 'http://localhost:5000';
 // Where the pictures are served: <asset base>/demo-assets/<brand slug>/...
-const ASSET_PATH = '/demo-assets/nilaa';
+const ASSET_PATH = '/demo-assets/zaya';
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 
 const fail = (msg) => { throw new Error(msg); };

@@ -88,7 +88,7 @@ function logoPng(size = 512) {
   leaf(ctx, cx + size * 0.02, size * 0.47, size * 0.11, -0.54, PALETTE.sage);
   ctx.fillStyle = PALETTE.cream; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.font = `${Math.round(size * 0.17)}px ${DISPLAY}`;
-  ctx.fillText('Nilaa', cx, size * 0.7);
+  ctx.fillText('Zaya', cx, size * 0.7);
   ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(size * 0.05)}px ${SANS}`;
   const spaced = 'B O T A N I C S';
   ctx.fillText(spaced, cx, size * 0.79);
@@ -103,7 +103,7 @@ function drawContainer(ctx, product, cx, baseY, h) {
     ctx.fillStyle = label; roundRect(ctx, x, y, lw, lh, Math.min(lw, lh) * 0.08); ctx.fill();
     crescent(ctx, x + lw / 2, y + lh * 0.24, Math.min(lw, lh) * 0.09, PALETTE.roseGold, label);
     ctx.fillStyle = label === PALETTE.plum ? PALETTE.cream : PALETTE.plum; ctx.textAlign = 'center';
-    fitText(ctx, 'Nilaa', lw * 0.8, Math.round(lh * 0.16), DISPLAY); ctx.fillText('Nilaa', x + lw / 2, y + lh * 0.55);
+    fitText(ctx, 'Zaya', lw * 0.8, Math.round(lh * 0.16), DISPLAY); ctx.fillText('Zaya', x + lw / 2, y + lh * 0.55);
     const words = product.name.split(' ').filter((w) => w.toLowerCase() !== 'and').slice(0, 2).join(' ');
     fitText(ctx, words.toUpperCase(), lw * 0.86, Math.round(lh * 0.075), SANS); ctx.fillText(words.toUpperCase(), x + lw / 2, y + lh * 0.72);
     fitText(ctx, product.size, lw * 0.6, Math.round(lh * 0.065), SANS); ctx.fillText(product.size, x + lw / 2, y + lh * 0.86);

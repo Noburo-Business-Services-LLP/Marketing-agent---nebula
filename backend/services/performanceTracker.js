@@ -93,7 +93,7 @@ async function runPerformanceTrackerOnce({ now = new Date(), limit = MAX_CHECKS_
   if (LAUNCH_AT && !Number.isNaN(LAUNCH_AT.getTime())) {
     publishedAtFilter.$gte = LAUNCH_AT;
   }
-  // Accounts background work must leave alone (paused, frozen, waiting to be deleted, demo accounts: D101).
+  // Accounts background work must leave alone (paused, frozen, waiting to be deleted, demo accounts: D112).
   const paused = await require('./backgroundGate').blockedAccountIdsSafe();
   const candidates = await Campaign.find({
     ...(paused.length ? { userId: { $nin: paused } } : {}),

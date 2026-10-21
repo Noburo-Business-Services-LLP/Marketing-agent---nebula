@@ -2,7 +2,7 @@
 /**
  * Brand assets of the demo account: the logo, the people (founder and two models) and the places (studio, shelf),
  * as BrandAsset rows with locally drawn pictures; plus the brand's colours and fonts on its BrandIntelligenceProfile
- * (the record Brand assets reads them from). Every BrandAsset row is tagged `cloudinaryPublicId: demo-nilaa/...`.
+ * (the record Brand assets reads them from). Every BrandAsset row is tagged `cloudinaryPublicId: demo-zaya/...`.
  */
 const images = require('./images');
 const { BRAND, PALETTE, FONTS, PRODUCTS, CHARACTERS, PLACES } = require('./constants');

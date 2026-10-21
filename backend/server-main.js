@@ -298,7 +298,7 @@ app.get('/api/health/details', (req, res) => {
   });
 });
 
-// Demo account pictures (backend/demo-assets, git-ignored): development servers only, never in production (D101)
+// Demo account pictures (backend/demo-assets, git-ignored): development servers only, never in production (D112)
 require('./routes/demoAssets').mountDemoAssets(app);
 
 // Apply general limiter to all API routes

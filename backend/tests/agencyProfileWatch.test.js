@@ -26,7 +26,7 @@ test('below 25 is fine, 25 to 30 is a warning, past 30 costs extra', () => {
 test('only accounts with a real profile key are counted, workspaces included', async () => {
   let seen;
   await p.countProfiles({ User: { countDocuments: async (q) => { seen = q; return 3; } } });
-  // A demo account's fake key (D101) is not a provider profile, so it is not counted.
+  // A demo account's fake key (D112) is not a provider profile, so it is not counted.
   assert.deepStrictEqual(seen, { 'ayrshare.profileKey': { $exists: true, $nin: [null, ''], $not: /^demo-/ } });
 });
 

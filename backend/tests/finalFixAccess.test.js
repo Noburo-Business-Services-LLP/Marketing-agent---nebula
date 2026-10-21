@@ -213,7 +213,7 @@ test('B-M6: the content calendar, snapshot and publishing schedulers all exclude
   const real = { find: User.find, distinct: User.distinct, cal: ContentCalendar.find, camp: Campaign.find };
   const fake = world6(); const seen = {};
   const base = User.find;
-  // The snapshot job's own query (the gate's demo-account query, D101, also names the profile key but is not it).
+  // The snapshot job's own query (the gate's demo-account query, D112, also names the profile key but is not it).
   User.find = (f) => { if (f && f['ayrshare.profileKey'] && '$exists' in f['ayrshare.profileKey']) { seen.snapshot = f; return { select: async () => [] }; } return fake.find(f); };
   User.distinct = fake.distinct;
   ContentCalendar.find = (f) => { seen.calendar = f; return { limit: async () => [] }; };

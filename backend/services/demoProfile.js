@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Demo accounts (decision D101): an account whose social profile key starts with `demo-` was made by a seed script
+ * Demo accounts (decision D112): an account whose social profile key starts with `demo-` was made by a seed script
  * (for example `scripts/seed-demo-brand.js`) on the development database. Its "connected" social accounts are fake, so:
  *   - nothing is ever sent to the social provider for it (every request carrying a demo key is answered here, offline),
  *   - the reads that show connected accounts and their numbers are served from what is stored on the account,

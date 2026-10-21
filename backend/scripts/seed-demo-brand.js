@@ -1,5 +1,5 @@
 /**
- * The demo BRAND account "Nilaa Botanics" in the DEVELOPMENT database, for the demo video (plan:
+ * The demo BRAND account "Zaya Naturals" in the DEVELOPMENT database, for the demo video (plan:
  * docs/superpowers/ops/demo-brand-plan.md, how-to: docs/superpowers/ops/demo-brand.md).
  *
  *   node scripts/seed-demo-brand.js create --password-file /absolute/path/outside/the/repo.txt [--asset-base http://localhost:5000]
@@ -9,13 +9,13 @@
  * SAFETY
  *  - Refuses to run unless MONGODB_URI names the database `nebulaa_dev` (checked before connecting, and again after).
  *  - Reads the environment through dotenv like the other scripts, and never prints any value from it.
- *  - Only the fake address demo-nilaa@example.test; the social profile key starts with `demo-`, so the app never calls
- *    the social provider for this account (services/demoProfile.js, decision D101).
+ *  - Only the fake address demo-zaya@example.test; the social profile key starts with `demo-`, so the app never calls
+ *    the social provider for this account (services/demoProfile.js, decision D112).
  *  - The password is generated here and written ONLY to the --password-file (mode 0600, outside the repository). It is
  *    never printed or logged.
  *  - `create` is idempotent: running it again adds only what is missing. `remove` deletes exactly what `create` made
  *    (every row carries a marker, see demo-brand/safety.js), anything the app later made for this account, the
- *    account, and the picture folder backend/demo-assets/nilaa, then checks that nothing is left.
+ *    account, and the picture folder backend/demo-assets/zaya, then checks that nothing is left.
  *  - No payment, email, AI, image-service or social call is made: every picture is drawn on this computer.
  */
 require('dotenv').config();
@@ -24,7 +24,7 @@ const path = require('path');
 const safety = require('./demo-brand/safety');
 const { BRAND, PRODUCTS, SOCIALS } = require('./demo-brand/constants');
 
-const DEMO_DIR = path.join(__dirname, '..', 'demo-assets', 'nilaa');
+const DEMO_DIR = path.join(__dirname, '..', 'demo-assets', 'zaya');
 const FRONTEND_URL = 'http://localhost:3200';
 const USAGE = 'Usage: node scripts/seed-demo-brand.js create --password-file <absolute path outside the repo> | status | remove';
 
@@ -55,11 +55,12 @@ async function main({ argv, env, deps, log = console.log }) {
       const existed = await deps.exists();
       if (!existed && !passwordFile) throw new Error('Name a --password-file for the new demo account (the password is written only there). Nothing was changed.');
       const password = existed ? null : safety.makePassword();
+      // The password file is written BEFORE the account exists, so a crash can never leave an account nobody can sign in to.
+      if (password) deps.writeFile(passwordFile, `Email: ${safety.DEMO_EMAIL}\nPassword: ${password}\n`);
       const r = await deps.create({ password, assetBase, now: new Date() });
       log(existed ? `The demo account ${safety.DEMO_EMAIL} already exists: only missing parts were added.` : `Created the demo account ${safety.DEMO_EMAIL} (${BRAND.name}).`);
       log(`Added now: ${Object.entries(r.added).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ') || 'nothing'}.`);
       if (password) {
-        deps.writeFile(passwordFile, `Email: ${safety.DEMO_EMAIL}\nPassword: ${password}\n`);
         log(`The password was written to ${passwordFile} (readable only by you). It is not printed.`);
       }
       const v = await deps.verify({ password });

@@ -4,7 +4,7 @@
  *   - any account that is waiting to be deleted,
  *   - a client workspace that is frozen (over the agency's limit),
  *   - a client workspace whose agency plan has ended, or whose agency is switched off or waiting to be deleted,
- *   - a demo account made by a seed script (social profile key starting `demo-`, decision D101): its data is fixed.
+ *   - a demo account made by a seed script (social profile key starting `demo-`, decision D112): its data is fixed.
  * An ordinary account that is not waiting to be deleted is never in this list, so nothing changes for them.
  * The jobs add `$nin: ids` to their query, so a long list of skipped accounts can never starve the others of a turn.
  */

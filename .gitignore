@@ -41,5 +41,5 @@ backend/temp/
 backend/downloads/
 backend/designed-pdf-test-output/
 frontend/test_log.txt
-# Demo account pictures made locally by backend/scripts/seed-demo-brand.js (development only, D101)
+# Demo account pictures made locally by backend/scripts/seed-demo-brand.js (development only, D112)
 backend/demo-assets/

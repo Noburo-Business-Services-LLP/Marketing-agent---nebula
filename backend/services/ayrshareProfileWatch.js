@@ -11,7 +11,7 @@ const ALERT_AT = AYRSHARE.alertAtProfiles;
 const STATE_KEY = 'ayrshare_profile_alert';
 const RANK = { ok: 0, near: 1, over: 2 };
 
-// Same test everywhere: an account counts only when it really has a profile key (a demo account's fake key is not one, D101).
+// Same test everywhere: an account counts only when it really has a profile key (a demo account's fake key is not one, D112).
 const PROFILE_FILTER = { 'ayrshare.profileKey': { $exists: true, $nin: [null, ''], $not: /^demo-/ } };
 
 function status(count) {

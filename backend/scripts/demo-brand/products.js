@@ -1,7 +1,7 @@
 'use strict';
 /**
  * The 8 products of the demo brand as Product rows, each with 2 or 3 locally drawn packshots.
- * Every row is tagged by its picture links (they live under /demo-assets/nilaa/), which `remove` matches.
+ * Every row is tagged by its picture links (they live under /demo-assets/zaya/), which `remove` matches.
  */
 const images = require('./images');
 const { PRODUCTS } = require('./constants');

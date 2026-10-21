@@ -2,7 +2,7 @@
 /**
  * The demo account's "connected" social accounts: stored in the user's own `ayrshare` fields, which /social/status,
  * Home and Performance read. The profile key starts with `demo-`, so the app answers every provider read from these
- * stored values and never calls the provider for this account (services/demoProfile.js, decision D101).
+ * stored values and never calls the provider for this account (services/demoProfile.js, decision D112).
  * No profile link is stored: a fictional handle might belong to a real person on the real network.
  */
 const { BRAND, SOCIALS } = require('./constants');

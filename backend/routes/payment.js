@@ -1049,7 +1049,7 @@ function createPaymentRouter(deps = {}) {
 
       const payments = user.payments || [];
       let needsSave = false;
-      // A demo account's payments are local records (D101): never looked up at Razorpay.
+      // A demo account's payments are local records (D112): never looked up at Razorpay.
       const isDemo = require('../services/demoProfile').isDemoProfile(user);
 
       // Lazily enrich payments with Razorpay invoice URLs (fetched once, then cached)

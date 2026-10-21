@@ -102,7 +102,7 @@ async function runRenewalRemindersOnce({ now = Date.now(), deps = {} } = {}) {
   }).select('email firstName isActive subscription plan ayrshare.profileKey').limit(500).lean();
   let sent = 0; let skipped = 0;
   for (const user of candidates) {
-    // A demo account (D101) never gets email.
+    // A demo account (D112) never gets email.
     if (!isDue(user, now) || require('./demoProfile').isDemoProfile(user)) { skipped += 1; continue; }
     // Claim this month's reminder first, so two servers (or a restart) cannot both send it.
     const claimed = await User.findOneAndUpdate(

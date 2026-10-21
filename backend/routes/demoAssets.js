@@ -2,7 +2,7 @@
 /**
  * Pictures of the demo account (scripts/seed-demo-brand.js), made locally and kept in the git-ignored folder
  * backend/demo-assets. Served at /demo-assets by a development server ONLY: never when NODE_ENV is production,
- * so nothing demo is ever reachable from the production app (decision D101).
+ * so nothing demo is ever reachable from the production app (decision D112).
  */
 const path = require('path');
 const express = require('express');
