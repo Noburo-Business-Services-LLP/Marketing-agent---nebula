@@ -32,15 +32,15 @@ const ADDON_IDS: LandingAddonId[] = ['publish', 'competitors', 'inbox', 'bundle'
 export const PLANS_SNAPSHOT: LandingFacts = {
   plans: [
     {
-      id: 'starter', name: 'Starter', description: 'Posts and short videos for one business, every month.', inr: 999, quarks: 600,
+      id: 'starter', name: 'Starter', description: 'Marketing for one business, planned, made and improved every month.', inr: 999, quarks: 600,
       features: ['Up to 54 posts a month, or', 'up to 3 short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time'],
     },
     {
-      id: 'professional', name: 'Growth', description: 'Over three times the output, for businesses that post every day.', inr: 1999, quarks: 2000,
+      id: 'professional', name: 'Growth', description: 'More room each month, for businesses that market every day.', inr: 1999, quarks: 2000,
       features: ['Up to 181 posts a month, or', 'up to 12 short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time', 'Up to 5 team members'],
     },
     {
-      id: 'agency', name: 'Agency', description: 'Run several client brands from one account, with one shared pool of posts and videos.', inr: 6999, quarks: 6000,
+      id: 'agency', name: 'Agency', description: 'Run the marketing of several client brands from one account, with one shared pool of Quarks.', inr: 6999, quarks: 6000,
       features: ['Up to 545 posts a month, or', 'up to 37 short videos with voice and music', 'Spend it on posts or videos, in any mix', 'Top up any time', '5 client brands included', 'Publishing, inbox and competitor insights included', 'Usage report for each client'],
     },
   ],

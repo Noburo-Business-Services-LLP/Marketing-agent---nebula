@@ -45,7 +45,6 @@ export const BlueprintSection: React.FC<{ onStart: () => void }> = ({ onStart })
             <ul>
               {BP.receive.map((line) => <li key={line}><CheckCircle2 size={17} aria-hidden="true" /><span>{line}</span></li>)}
             </ul>
-            {/* BP.note ("It uses 7 of your Quarks.") is left out here: it is a typed Quark figure and reads against "free". */}
             <GoldButton onClick={onStart}>{BP.button}</GoldButton>
           </div>
           <div className="nb-land-bp-legend">

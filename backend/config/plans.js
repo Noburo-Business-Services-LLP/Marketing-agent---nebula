@@ -5,19 +5,19 @@
 const PLAN_PRESENTATION = {
   starter: {
     name: 'Starter',
-    description: 'Posts and short videos for one business, every month.',
+    description: 'Marketing for one business, planned, made and improved every month.',
     extraFeatures: [],
     envVar: 'RAZORPAY_PLAN_ID_STARTER'
   },
   professional: {
     name: 'Growth',
-    description: 'Over three times the output, for businesses that post every day.',
+    description: 'More room each month, for businesses that market every day.',
     extraFeatures: ['Up to 5 team members'],
     envVar: 'RAZORPAY_PLAN_ID_PROFESSIONAL'
   },
   agency: {
     name: 'Agency',
-    description: 'Run several client brands from one account, with one shared pool of posts and videos.',
+    description: 'Run the marketing of several client brands from one account, with one shared pool of Quarks.',
     extraFeatures: ['5 client brands included', 'Publishing, inbox and competitor insights included', 'Usage report for each client'],
     envVar: 'RAZORPAY_PLAN_ID_AGENCY'
   }
