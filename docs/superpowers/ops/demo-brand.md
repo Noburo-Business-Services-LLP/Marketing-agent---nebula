@@ -8,7 +8,7 @@ A fictional direct-to-consumer ayurveda-inspired skincare brand with a complete 
 - Brand assets: logo, colours (plum #3B1F3A, rose gold #C98B7B, cream #FBF3EA, sage #8AA17D), fonts, a founder and two models, two places. Eight products with two or three pictures each.
 - Connected accounts (fake): Instagram @zaya.naturals (about 34k), a Facebook page, a YouTube channel, a LinkedIn page. The profile key starts with `demo-`, so the app never calls the social provider for this account (see D112).
 - Every picture is drawn on this computer (node-canvas and sharp) into `backend/demo-assets/zaya/` (git-ignored, in `.dockerignore`, nothing under `frontend/public`). The dev backend serves them at `/demo-assets/...` only when `NODE_ENV` is not production.
-- Not yet (later stages): plan, Blueprint, brand memory, calendar, posts, performance, competitors, inbox, photoshoot, videos, reviews. Those screens are empty for now.
+- Stages 2 and 3 (below) add the plan, posts, results, memory, competitors, Inbox, Photoshoot and Videos.
 
 ## Commands (from the `backend` folder, `nvm use 20`)
 
@@ -39,4 +39,19 @@ Change `BRAND` in `backend/scripts/demo-brand/constants.js` (and the email and k
 4. `memory.js`: runs the app's own brand memory runner (no model call). Six sources: plan, Blueprint, customers, products and results learn; competitors honestly says "not enough yet" until Stage 3 seeds competitors.
 
 Every run of `create` deletes and rebuilds these Stage 2 rows (D115) so dates are counted back from today; the account, password, payments, products and pictures are kept. `status` prints a count for each collection; `remove` deletes all of it plus the picture folder. Check the screens' data with `node scripts/demo-brand-login-check.js --password-file <file>` (Library counts and every view, Performance for week, month and 90 days, My plan, Blueprint, calendar, What Nebulaa learned, Home).
+
+## Stage 3 (conversations and media): competitors, Inbox, Photoshoot, Videos (2026-10-21)
+`create` now also builds (modules in `backend/scripts/demo-brand/`, pictures in `images3.js`):
+1. `competitors.js`: five fictional brands (Kaya Veda, Pure Petal Co, Ritu Organics, Glow Ghar, Amla and Ash), each with 12 weekly readings (60 `CompetitorSnapshot` rows) whose newest one is this India week, a locally drawn profile picture and six post pictures. The readings are the app's own `summarise()` of invented scraper-shaped posts. Story: reels get about 2.2 times the likes of other posts (what the "What worked" line says), Glow Ghar is big and slow, Amla and Ash small and fast. Home's competitor tiles, the Competitors page and "What Nebulaa learned" (competitors source, 3 items) read them.
+2. `inbox.js`: 25 conversations (17 Instagram, 6 Facebook, 2 YouTube; WhatsApp is not in the Inbox model and Google reviews are read live, so that panel says "not connected" for a demo account): 7 unread (Home: "Reply to 7 messages"), 5 read, 11 replied, 2 closed; 3 drafts waiting for approval (a shade question, a complaint, a Hinglish bulk-pricing query), 4 sent after approval, Tamil and Hindi mixes; settings are "approval before sending" with comments suggest-only.
+3. `photoshoot.js`: 3 finished photoshoots (product shoot in the studio, flat lay, festival pack) with 14 drawn photos in the Photoshoot page and the Library.
+4. `videos.js`: 5 finished videos (four 9:16, one 16:9, 11 s each) made with `ffmpeg-static`, each with a poster, listed on the Videos page and in the Library; the reels of those products in the Library play them. Needs `node_modules/ffmpeg-static` (without it the posters are made and the videos are skipped with a message).
+
+Like Stage 2 these rows are rebuilt on every `create` (the demo user's own rows of those collections), so dates are counted back from today. The check script (`node scripts/demo-brand-login-check.js --password-file <file>`) now also reads `/api/competitors/best-posts` and `/insights`, the Inbox summary, conversations (each status), pending drafts, a thread, settings and reviews, `/api/photoshoot/jobs` and `/library`, `/api/videos`, and fetches a video (200 and a 206 range answer, as a player sends), its poster and two competitor pictures.
+
+Notes for the recording
+- The competitor picture exception (D120) is on in every non-production run; the post pictures need no `ENABLE_COMPETITOR_THUMBS` for the demo's local files.
+- "posted N times this week, down from M" on the competitor highlights is the app's own wording for a part-finished week; it reads best late in the week.
+- The Quark ledger (Stage 1) shows more past photoshoot and video spending than the 3 photoshoots and 5 videos that are listed.
+- Verified through the real routes and files; not looked at in a browser by the seed's author (see the final report).
 
