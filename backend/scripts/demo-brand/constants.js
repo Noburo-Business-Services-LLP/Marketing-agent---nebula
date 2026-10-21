@@ -14,7 +14,7 @@ const BRAND = Object.freeze({
   founded: 2022,
   // A reserved example domain: never a real website.
   website: 'https://zayanaturals.example',
-  founder: { firstName: 'Nila', lastName: 'Raman', role: 'Founder' },
+  founder: { firstName: 'Aanya', lastName: 'Raghavan', role: 'Founder' },
   description: 'Zaya Naturals makes ayurveda-inspired skincare and haircare in small batches in Chennai: kumkumadi, saffron, neem, rose and hibiscus, '
     + 'blended the way grandmothers did, tested the way dermatologists want. Sold on our own website and on the big marketplaces.',
   problemSolved: 'Women who want the rituals they grew up with, without heavy fragrance, harsh chemicals or guesswork about what is inside.',
@@ -23,7 +23,7 @@ const BRAND = Object.freeze({
   targetAudience: 'Women 22 to 38 in metro India who care about ingredients, plus a small unisex line for men',
   targetCustomerProfile: 'Working women in Chennai, Bengaluru, Mumbai and Delhi who read labels, follow skin creators, and buy online two or three times a month.',
   keyDifferentiator: 'Traditional ayurvedic recipes in clean, fragrance-light formulas, with every ingredient and its source on the label.',
-  brandStory: 'Nila grew up watching her paati make kumkumadi oil in a brass pot. In 2022 she turned those recipes into a small Chennai studio, '
+  brandStory: 'Aanya grew up watching her paati make kumkumadi oil in a brass pot. In 2022 she turned those recipes into a small Chennai studio, '
     + 'with a chemist friend checking every batch. Today Zaya ships across India, still poured and labelled by hand.',
   voice: 'Warm, knowledgeable and honest, a little poetic. English with light Tamil touches (paati, azhagu, vanakkam).',
   contentRestrictions: 'No medical claims (no "cures", no "treats acne"). No before and after photos. No comparisons that name other brands.',

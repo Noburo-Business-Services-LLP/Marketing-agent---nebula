@@ -104,6 +104,11 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
   const assets = require('./demo-brand/assets');
   const products = require('./demo-brand/products');
   const socials = require('./demo-brand/socials');
+  const planMod = require('./demo-brand/plan');
+  const contentMod = require('./demo-brand/content');
+  const perfMod = require('./demo-brand/performance');
+  const memoryMod = require('./demo-brand/memory');
+  const images = require('./demo-brand/images');
 
   const findUser = async () => {
     const User = mongoose.model('User');
@@ -174,7 +179,59 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
         await m.Product.create(row);
         added.products += 1;
       }
+      // 5. the founder's name and story follow the constants (an older run used another name)
+      if (user.firstName !== BRAND.founder.firstName || (user.businessProfile && user.businessProfile.brandStory !== BRAND.brandStory)) {
+        await m.User.updateOne({ _id: user._id }, { $set: { firstName: BRAND.founder.firstName, lastName: BRAND.founder.lastName, 'businessProfile.brandStory': BRAND.brandStory } });
+      }
+
+      // 6. Stage 2: plan, Blueprint, calendars, posts, campaigns, results, daily numbers, brand memory.
+      // These are rebuilt on every run (their own tagged rows only), so dates are always counted back from today.
+      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw) });
+      Object.assign(added, rebuilt);
       return { added, userId: user._id };
+    },
+
+    /** Stage 2. Deletes the demo's own rows of these collections, then builds them fresh. */
+    async createContent({ user, base, createdAt, now, writeAsset: write }) {
+      const m = models();
+      const uid = user._id;
+      const out = {};
+      const wipe = async (name) => (await m[name].deleteMany(safety.markerFilter(name, uid))).deletedCount;
+      for (const name of ['Draft', 'Campaign', 'ContentCalendar', 'Blueprint', 'AIContentPerformance', 'SocialSnapshot', 'AIBrandMemory']) await wipe(name);
+
+      // plan and Blueprint (the designed pages are drawn here)
+      const logoUrl = safety.assetUrl(base, assets.LOGO_REL);
+      const { plan, blueprint, deck } = planMod.planRows({ userId: uid, createdAt, now, logoUrl, designedBase: (n) => safety.assetUrl(base, `blueprint/page-${n}.jpg`) });
+      deck.forEach((p, i) => write(`blueprint/page-${i + 1}.jpg`, () => images.deckPageJpg(p, i)));
+      await m.Blueprint.insertMany([blueprint, plan]);
+      out['plan and Blueprint'] = 2;
+
+      // posts, campaigns, calendars
+      const prods = await m.Product.find(safety.markerFilter('Product', uid)).select('name category imageUrl').lean();
+      const productIds = {};
+      for (const p of PRODUCTS) { const row = prods.find((x) => x.name === p.name); if (row) productIds[p.slug] = row._id; }
+      const built = contentMod.build({ userId: uid, now, base, productIds });
+      let files = 0;
+      for (const [rel, draw] of built.posters) { if (write(rel, draw).made) files += 1; }
+      out['picture files'] = (out['picture files'] || 0) + files + deck.length;
+      await m.ContentCalendar.insertMany(built.calendars);
+      await m.Campaign.insertMany(built.campaigns);
+      await m.Draft.insertMany(built.drafts);
+      out.calendars = built.calendars.length; out.campaigns = built.campaigns.length; out.posts = built.drafts.length;
+
+      // results and daily numbers
+      const rows = perfMod.performanceRows({ userId: uid, items: built.performanceItems, now });
+      await m.AIContentPerformance.insertMany(rows);
+      const snaps = perfMod.snapshotRows({ userId: uid, now });
+      await m.SocialSnapshot.insertMany(snaps);
+      out['measured post rows'] = rows.length; out['daily snapshots'] = snaps.length;
+
+      // brand memory: the app's own runner learns from the rows above
+      const learned = await memoryMod.learn(uid);
+      if (!learned.ok) throw new Error(`Brand memory could not run (${learned.reason}).`);
+      const doc = await m.AIBrandMemory.findOne({ userId: uid }).lean();
+      out['brand memory items'] = memoryMod.summarise(doc).items;
+      return out;
     },
 
     async verify({ password }) {
@@ -201,6 +258,32 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
       check(prods.length === PRODUCTS.length && prods.every((p) => p.images.length >= 2), `${prods.length} products with 2 or 3 pictures each`);
       const missing = [...assets.assetSpecs().map((s) => s.rel), ...products.productPictureSpecs().map((s) => s.rel)].filter((rel) => !fs.existsSync(path.join(demoDir, rel)));
       check(missing.length === 0, `every picture file is on disk${missing.length ? ` (missing: ${missing.join(', ')})` : ''}`);
+      // Stage 2
+      const S = require('../services/draftStatus');
+      const draftsFor = (extra) => m.Draft.countDocuments({ userId: u._id, ...extra });
+      const counts = {
+        needsApproval: await m.Draft.countDocuments(S.needsApprovalFilter(u._id)),
+        drafts: await m.Draft.countDocuments({ ...S.awaitingFilter(u._id), $and: [{ $nor: S.automationClauses() }] }),
+        approved: await draftsFor({ status: 'approved' }), scheduled: await draftsFor({ status: 'scheduled' }), posted: await draftsFor({ status: 'published' }),
+        archived: await draftsFor({ status: 'archived' }), binned: await draftsFor({ status: 'binned' })
+      };
+      const T = require('./demo-brand/content').TARGETS;
+      check(Object.keys(T).every((k) => counts[k] === T[k]), `Library views: ${Object.entries(counts).map(([k, n]) => `${k} ${n}`).join(', ')}`);
+      const future = await m.Draft.countDocuments({ userId: u._id, status: 'published', publishedAt: { $gt: new Date() } });
+      check(future === 0, 'no posted post is dated in the future');
+      const camps = await m.Campaign.find(safety.markerFilter('Campaign', u._id)).select('status').lean();
+      check(camps.length === T.scheduled + T.posted && camps.filter((c) => c.status === 'posted').length === T.posted, `${camps.length} campaigns (scheduled and posted) with fake provider post ids`);
+      const cals = await m.ContentCalendar.countDocuments(safety.markerFilter('ContentCalendar', u._id));
+      check(cals === 5, `${cals} monthly calendars`);
+      const bp = await m.Blueprint.find(safety.markerFilter('Blueprint', u._id)).select('kind status designed.status').lean();
+      check(bp.some((b) => b.kind === 'plan' && b.status === 'completed') && bp.some((b) => b.kind === 'blueprint' && b.designed && b.designed.status === 'completed'), 'a finished plan and a finished Blueprint with its designed edition');
+      const measured = await m.AIContentPerformance.countDocuments(safety.markerFilter('AIContentPerformance', u._id));
+      const snaps = await m.SocialSnapshot.countDocuments({ userId: u._id });
+      check(measured >= 50 && snaps >= 90, `${measured} measured post rows, ${snaps} daily snapshots`);
+      const mem = require('./demo-brand/memory').summarise(await m.AIBrandMemory.findOne({ userId: u._id }).lean());
+      check(mem.items > 0, `brand memory: ${mem.items} learned items (${Object.entries(mem.bySource).map(([k, n]) => `${k} ${n}`).join(', ')})`);
+      const posterMissing = (await m.Draft.find({ userId: u._id }).select('imageUrl').lean()).filter((d) => !fs.existsSync(path.join(demoDir, String(d.imageUrl).split(safety.ASSET_PATH + '/')[1] || '__none__'))).length;
+      check(posterMissing === 0, 'every post picture is on disk');
       if (password) check(await u.comparePassword(password), 'the new password signs in');
       return { ok, lines };
     },

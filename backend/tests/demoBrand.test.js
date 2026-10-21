@@ -114,7 +114,7 @@ test('markers: every row the seed builds carries its collection marker, and the 
     const f = safety.markerFilter(name, UID);
     assert.strictEqual(String(f.user || f.userId), UID, name);
   }
-  assert.throws(() => safety.markerFilter('Draft', UID), /No demo marker/);
+  assert.throws(() => safety.markerFilter('Competitor', UID), /No demo marker/);
   assert.ok(safety.isDemoUser({ email: 'demo-zaya@example.test', ayrshare: { profileKey: 'demo-zaya-naturals' } }));
   assert.ok(!safety.isDemoUser({ email: 'demo-zaya@example.test', ayrshare: { profileKey: 'real-key' } }));
 });

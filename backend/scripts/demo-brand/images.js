@@ -90,7 +90,7 @@ function logoPng(size = 512) {
   ctx.font = `${Math.round(size * 0.17)}px ${DISPLAY}`;
   ctx.fillText('Zaya', cx, size * 0.7);
   ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(size * 0.05)}px ${SANS}`;
-  const spaced = 'B O T A N I C S';
+  const spaced = 'N A T U R A L S';
   ctx.fillText(spaced, cx, size * 0.79);
   return png(c);
 }
@@ -247,4 +247,46 @@ function imageSize(buf) {
   return null;
 }
 
-module.exports = { logoPng, packshotJpg, posterJpg, portraitJpg, placeJpg, imageSize, seeded };
+/** A calendar cover: the month in large type on a brand-colour backdrop with the theme below. 1200 x 800 JPEG. */
+function calendarCoverJpg(monthName, theme, variant = 0, { width = 1200, height = 800 } = {}) {
+  const schemes = [[PALETTE.plum, PALETTE.cream, PALETTE.roseGold], [PALETTE.cream, PALETTE.plum, PALETTE.sage], [PALETTE.roseGold, PALETTE.cream, PALETTE.plum], [PALETTE.sage, PALETTE.plum, PALETTE.cream], [PALETTE.plum, PALETTE.roseGold, PALETTE.cream]];
+  const [bg, fg, accent] = schemes[variant % schemes.length];
+  const { c, ctx } = canvasOf(width, height);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, width, height);
+  scatterLeaves(ctx, width, height, `cover-${monthName}-${variant}`, accent, 10);
+  ctx.fillStyle = fg; ctx.textAlign = 'left';
+  fitText(ctx, monthName, width * 0.84, Math.round(width * 0.17), DISPLAY);
+  ctx.fillText(monthName, width * 0.08, height * 0.5);
+  ctx.fillStyle = accent; ctx.font = `${Math.round(width * 0.03)}px ${SANS}`;
+  wrap(ctx, theme, width * 0.8).slice(0, 2).forEach((l, i) => ctx.fillText(l, width * 0.08, height * 0.64 + i * width * 0.04));
+  ctx.fillStyle = fg; ctx.font = `${Math.round(width * 0.022)}px ${SANS}`;
+  ctx.fillText(BRAND.name.toUpperCase(), width * 0.08, height * 0.92);
+  return jpg(c);
+}
+
+/** One page of the designed Blueprint: title, purpose and a few short lines on cream. A4 proportions (794 x 1123). */
+function deckPageJpg(page, index, { width = 794, height = 1123 } = {}) {
+  const { c, ctx } = canvasOf(width, height);
+  const cover = page.kind === 'cover';
+  ctx.fillStyle = cover ? PALETTE.plum : PALETTE.cream; ctx.fillRect(0, 0, width, height);
+  scatterLeaves(ctx, width, height * 0.3, `deck-${index}`, cover ? PALETTE.roseGold : PALETTE.sage, 6);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(width * 0.02)}px ${SANS}`;
+  ctx.fillText(String(page.kicker || '').toUpperCase().slice(0, 64), width * 0.08, height * 0.13);
+  ctx.fillStyle = cover ? PALETTE.cream : PALETTE.plum; ctx.font = `${Math.round(width * 0.075)}px ${DISPLAY}`;
+  wrap(ctx, page.title || '', width * 0.84).slice(0, 3).forEach((l, i) => ctx.fillText(l, width * 0.08, height * 0.2 + i * width * 0.09));
+  ctx.font = `${Math.round(width * 0.03)}px ${SANS}`;
+  let y = height * 0.42;
+  for (const line of (page.lines || []).slice(0, 7)) {
+    ctx.fillStyle = PALETTE.roseGold; ctx.beginPath(); ctx.arc(width * 0.09, y - width * 0.01, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = cover ? PALETTE.cream : PALETTE.plum;
+    const ls = wrap(ctx, line, width * 0.78).slice(0, 3);
+    ls.forEach((l, i) => ctx.fillText(l, width * 0.12, y + i * width * 0.04));
+    y += Math.max(1, ls.length) * width * 0.04 + width * 0.03;
+  }
+  ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(width * 0.022)}px ${SANS}`;
+  ctx.fillText(`${BRAND.name.toUpperCase()}  .  BRAND GROWTH BLUEPRINT`, width * 0.08, height * 0.95);
+  return jpg(c);
+}
+
+module.exports = { logoPng, packshotJpg, posterJpg, portraitJpg, placeJpg, calendarCoverJpg, deckPageJpg, imageSize, seeded };

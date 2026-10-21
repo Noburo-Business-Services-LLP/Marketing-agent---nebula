@@ -86,6 +86,16 @@ const MARKERS = Object.freeze({
   QuarkLedger: { field: 'user', tag: { ref: new RegExp(`^${DEMO_TAG}:`) } },
   // One per account, made by the seed with the brand's colours and fonts (it has no free field for a tag).
   BrandIntelligenceProfile: { field: 'userId', tag: {} },
+  // Stage 2 (content). Posts carry a link to a demo picture; Campaigns and measured rows a fake provider post id.
+  Draft: { field: 'userId', tag: { imageUrl: ASSET_RE } },
+  Campaign: { field: 'userId', tag: { socialPostId: new RegExp(`^${DEMO_TAG}-post-`) } },
+  ContentCalendar: { field: 'userId', tag: { coverImageUrl: ASSET_RE } },
+  Blueprint: { field: 'userId', tag: { blueprintId: new RegExp(`^${DEMO_TAG}-`) } },
+  AIContentPerformance: { field: 'userId', tag: { postId: new RegExp(`^${DEMO_TAG}-post-`) } },
+  // The demo account is skipped by every background job, so these two hold only what the seed (and the app's own
+  // brand memory run) wrote for it.
+  SocialSnapshot: { field: 'userId', tag: {} },
+  AIBrandMemory: { field: 'userId', tag: {} },
 });
 
 /** The query for the demo rows of one collection. */
