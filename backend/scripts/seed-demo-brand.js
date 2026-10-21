@@ -16,12 +16,15 @@
  *  - `create` is idempotent: running it again adds only what is missing. `remove` deletes exactly what `create` made
  *    (every row carries a marker, see demo-brand/safety.js), anything the app later made for this account, the
  *    account, and the picture folder backend/demo-assets/zaya, then checks that nothing is left.
- *  - No payment, email, AI, image-service or social call is made: every picture is drawn on this computer.
+ *  - No payment, email, AI, image-service or social call is made: every picture is drawn on this computer, except the slots that have a
+ *    real photo made earlier by scripts/generate-demo-photos.js (kept in ~/nebulaa-demo-photos, outside the repository). `create` lays those
+ *    over the drawn ones and never redraws a slot that has one; `remove` deletes only the demo folder, never ~/nebulaa-demo-photos.
  */
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const safety = require('./demo-brand/safety');
+const realPhotos = require('./demo-brand/realPhotos');
 const { BRAND, PRODUCTS, SOCIALS } = require('./demo-brand/constants');
 
 const DEMO_DIR = path.join(__dirname, '..', 'demo-assets', 'zaya');
@@ -74,6 +77,7 @@ async function main({ argv, env, deps, log = console.log }) {
       else log(`The demo account ${safety.DEMO_EMAIL} exists (${BRAND.name}).`);
       for (const [k, n] of Object.entries(s.counts)) log(`  ${k}: ${n}`);
       log(`  picture files: ${s.files}`);
+      if (s.photos) log(`  real photos: ${s.photos.real} of ${s.photos.total} slots are real (${s.photos.inDemo} in the demo folder), ${s.photos.drawn} still drawn`);
     } else {
       const r = await deps.remove();
       log(`Removed: ${Object.entries(r.removed).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ') || 'nothing'}.`);
@@ -97,7 +101,7 @@ function listFiles(dir) {
   return out;
 }
 
-function realDeps({ demoDir = DEMO_DIR } = {}) {
+function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}) {
   const mongoose = require('mongoose');
   const models = () => require('../services/accountDeletion').defaultModels();
   const account = require('./demo-brand/account');
@@ -122,6 +126,9 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
     return u;
   };
   const writeAsset = (rel, draw) => {
+    // a real photo for this slot wins over the drawing, and a slot that has one is never redrawn
+    const real = realPhotos.applyReal(rel, demoDir, photosDir);
+    if (real) return real;
     const file = path.join(demoDir, rel);
     if (fs.existsSync(file)) return { buffer: fs.readFileSync(file), made: false };
     const buffer = draw();
@@ -194,7 +201,7 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
 
       // 6. Stage 2: plan, Blueprint, calendars, posts, campaigns, results, daily numbers, brand memory.
       // These are rebuilt on every run (their own tagged rows only), so dates are always counted back from today.
-      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw), videoUrls: videosMod.videoUrlsOf(base) });
+      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw), videoUrls: videosMod.videoUrlsOf(base), hasExtraSlide: (rel) => realPhotos.hasReal(rel, photosDir) });
       Object.assign(added, rebuilt);
 
       // 7. Stage 3: competitors, Inbox, Photoshoot, Videos (rebuilt on every run, like Stage 2), then the brand memory learns once
@@ -207,7 +214,7 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
     },
 
     /** Stage 2. Deletes the demo's own rows of these collections, then builds them fresh. */
-    async createContent({ user, base, createdAt, now, writeAsset: write, videoUrls = {} }) {
+    async createContent({ user, base, createdAt, now, writeAsset: write, videoUrls = {}, hasExtraSlide }) {
       const m = models();
       const uid = user._id;
       const out = {};
@@ -225,7 +232,7 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
       const prods = await m.Product.find(safety.markerFilter('Product', uid)).select('name category imageUrl').lean();
       const productIds = {};
       for (const p of PRODUCTS) { const row = prods.find((x) => x.name === p.name); if (row) productIds[p.slug] = row._id; }
-      const built = contentMod.build({ userId: uid, now, base, productIds, videoUrls });
+      const built = contentMod.build({ userId: uid, now, base, productIds, videoUrls, hasExtraSlide });
       let files = 0;
       for (const [rel, draw] of built.posters) { if (write(rel, draw).made) files += 1; }
       out['picture files'] = (out['picture files'] || 0) + files + deck.length;
@@ -397,11 +404,13 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
         const n = u && m[rule.model] ? await m[rule.model].countDocuments(filterFor(rule, u._id)) : 0;
         if (n || Object.keys(safety.MARKERS).includes(rule.model)) counts[rule.model] = n;
       }
-      return { exists: !!u, counts, files: listFiles(demoDir).length };
+      return { exists: !!u, counts, files: listFiles(demoDir).length, photos: realPhotos.summary(demoDir, photosDir) };
     },
 
     async remove() {
       const m = models();
+      // checked first, before anything is deleted
+      if (path.resolve(demoDir).startsWith(path.resolve(photosDir) + path.sep) || path.resolve(photosDir).startsWith(path.resolve(demoDir) + path.sep)) throw new Error('Refusing to remove: the demo folder and the real photos folder overlap. Nothing was removed.');
       const { erasable, filterFor } = require('../services/dataRegistry');
       const removed = {};
       const u = await findUser();
@@ -417,7 +426,7 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
         removed['rows the app made while the demo was used'] = appMade;
         removed.account = (await m.User.deleteOne({ _id: u._id, email: safety.DEMO_EMAIL })).deletedCount;
       }
-      // 3. the pictures
+      // 3. the pictures (the demo folder only: the real photos in the owner's home folder are never touched)
       const files = listFiles(demoDir).length;
       fs.rmSync(demoDir, { recursive: true, force: true });
       const parent = path.dirname(demoDir);

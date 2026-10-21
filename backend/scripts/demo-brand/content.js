@@ -18,6 +18,7 @@ const perf = require('./performance');
 const bank = require('./contentBank');
 const { BRAND, PRODUCTS } = require('./constants');
 const { assetUrl } = require('./safety');
+const { CAROUSEL_EXTRA } = require('./photoPrompts');
 
 const DAY = 86400000;
 const IST = 330 * 60000;
@@ -170,7 +171,7 @@ function assign(now) {
  * of a product that has one point at it, the rest have none). `base`: the asset base. Returns { drafts, campaigns, calendars,
  * posters, performanceItems, summary }. Rows are plain objects ready for validateSync / insertMany.
  */
-function build({ userId, now, base, productIds, videoUrls = {} }) {
+function build({ userId, now, base, productIds, videoUrls = {}, hasExtraSlide = () => false }) {
   const r = seeded('zaya-stage2-rows');
   const { items, left } = assign(now);
   if (left.reels || left.others) throw new Error(`content pool left over: ${JSON.stringify(left)}`);
@@ -199,6 +200,11 @@ function build({ userId, now, base, productIds, videoUrls = {} }) {
     if (!posters.has(rel)) posters.set(rel, () => images.posterJpg(product, s.head, POSTER_SIZE));
     const imageUrl = assetUrl(base, rel);
     const slides = s.fmt === 'carousel' ? [imageUrl, assetUrl(base, `products/${product.slug}-2.jpg`), assetUrl(base, `products/${product.slug}-1.jpg`)] : [];
+    // One carousel gets a fourth slide, but only when its real photo exists (demo-brand/photoPrompts.js CAROUSEL_EXTRA); otherwise it keeps its three.
+    if (s.fmt === 'carousel' && s.key === CAROUSEL_EXTRA.key && hasExtraSlide(CAROUSEL_EXTRA.rel)) {
+      posters.set(CAROUSEL_EXTRA.rel, () => images.posterJpg(product, s.head, POSTER_SIZE));
+      slides.push(assetUrl(base, CAROUSEL_EXTRA.rel));
+    }
     const origin = it.origin || (it.status === 'published' || it.status === 'scheduled' ? (r() < 0.55 ? 'automation' : 'manual') : 'manual');
     const status = it.status === 'published' ? 'published' : it.status;
     const at = it.at || null;
@@ -223,7 +229,7 @@ function build({ userId, now, base, productIds, videoUrls = {} }) {
       language: 'English', tone: 'Warm and knowledgeable', objective: s.pillar === 'Offers and festivals' ? 'sales' : s.pillar === 'Customer glow stories' ? 'engagement' : 'awareness',
       status, origin, sourceType: origin === 'automation' ? 'calendar' : s.fmt === 'reel' ? 'reel' : s.fmt === 'carousel' ? 'carousel' : 'post',
       contentType: s.fmt === 'reel' ? 'reel' : s.fmt === 'carousel' ? 'carousel' : 'post', theme: cap(s.theme || '', 60),
-      carouselSlides: slides.map((u, n) => ({ order: n + 1, role: ['hook', 'build', 'payoff'][n], headline: n === 0 ? s.head : [product.name, 'Shop the ritual'][n - 1], imageText: n === 0 ? s.head : '', imageUrl: u })),
+      carouselSlides: slides.map((u, n) => ({ order: n + 1, role: (slides.length === 4 ? ['hook', 'build', 'build', 'payoff'] : ['hook', 'build', 'payoff'])[n], headline: n === 0 ? s.head : (slides.length === 4 ? [product.name, 'Poured by hand', 'Shop the ritual'] : [product.name, 'Shop the ritual'])[n - 1], imageText: n === 0 ? s.head : '', imageUrl: u })),
       createdAt, updatedAt: createdAt
     };
     const videoUrl = s.fmt === 'reel' ? (videoUrls[product.slug] || '') : '';

@@ -239,7 +239,7 @@ async function main(argv, deps = {}) {
   return rows.some((r) => !r.web) ? 4 : 0;
 }
 
-module.exports = { main, parseArgs, planSlots, estimate, perPhotoUsd, toWebp, openaiGenerate, scrub, contactSheet, MAX_USD, WEB_SIZE, GEN_SIZE, MAX_WEB_BYTES, SCRATCH_DIR, SAMPLES_DIR };
+module.exports = { askHidden, askLine, main, parseArgs, planSlots, estimate, perPhotoUsd, toWebp, openaiGenerate, scrub, contactSheet, MAX_USD, WEB_SIZE, GEN_SIZE, MAX_WEB_BYTES, SCRATCH_DIR, SAMPLES_DIR };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then((c) => process.exit(c), (e) => { console.error('The script stopped:', scrub(e && e.message)); process.exit(1); });

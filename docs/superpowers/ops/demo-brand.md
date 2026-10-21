@@ -61,3 +61,6 @@ Every screen was walked in the browser; the data fixes are in `demo-brand/extras
 - Four reel-only tall clips (`videos/reel-<product>.mp4`) are made next to the five studio videos so every reel in the Library plays and no reel uses the wide video. They are not rows on the Videos page.
 - Notifications are only listed by the app for 24 hours, so run `create` on the recording day. `create` on an existing account rebuilds all dated rows and refreshes the social counts; the browser may keep old pictures, so hard refresh.
 - The video and poster files are kept between runs; delete `backend/demo-assets/zaya/videos` (or run `remove`) to redraw them.
+
+## Real pictures (optional, USD 1.10 once)
+`docs/superpowers/ops/demo-photos.md`: 24 real photos made with your own OpenAI key replace the drawn ones (same file names). `create` keeps them and `status` shows how many slots are real.
