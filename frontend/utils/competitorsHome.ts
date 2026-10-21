@@ -189,10 +189,13 @@ export function workingView(w: WorkingPost): WorkingRow {
 // sample-data preview uses them.
 const STORED_THUMB = /^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_-]+\/image\/upload\/(?:[A-Za-z0-9_,.:-]+\/)*nebula-competitor-posts\/[A-Za-z0-9_-]{1,140}\.(?:webp|jpg|jpeg|png)$/;
 const INLINE_THUMB = /^data:image\/(?:svg\+xml|webp|png);/;
+// A demo account's pictures are drawn on the developer's computer (backend/scripts/demo-brand): accepted outside a production build only.
+const DEMO_PICTURE = /^http:\/\/(?:localhost|127\.0\.0\.1):\d{2,5}\/demo-assets\/zaya\/competitors\/[A-Za-z0-9_-]{1,140}\.jpg$/;
+const demoPicture = (u: string): boolean => import.meta.env?.PROD !== true && u.length <= 320 && DEMO_PICTURE.test(u);
 /** The picture link a post card may load, or null (the card then shows the post type on a tint). */
 export function thumbSrc(url: string | null | undefined): string | null {
   const u = typeof url === 'string' ? url : '';
-  if (u.length <= 320 && STORED_THUMB.test(u)) return u;
+  if ((u.length <= 320 && STORED_THUMB.test(u)) || demoPicture(u)) return u;
   if (u.length <= 16000 && INLINE_THUMB.test(u)) return u;
   return null;
 }
@@ -270,6 +273,6 @@ export function avatarView(name: string | null | undefined, handle: string | nul
   const key = (h || n).toLowerCase();
   let hash = 2166136261;
   for (const ch of key) { hash ^= ch.codePointAt(0) || 0; hash = Math.imul(hash, 16777619) >>> 0; }
-  const src = typeof url === 'string' && url.length <= 300 && STORED_AVATAR.test(url) ? url : null;
+  const src = typeof url === 'string' && ((url.length <= 300 && STORED_AVATAR.test(url)) || demoPicture(url)) ? url : null;
   return { src, initials, tone: hash % AVATAR_TONES.length, alt: h ? `@${h}` : n || 'Competitor' };
 }

@@ -34,7 +34,8 @@ const STORED_URL = /^https:\/\/res\.cloudinary\.com\/[A-Za-z0-9_-]+\/image\/uplo
 class AvatarError extends Error { constructor(code) { super(code); this.code = code; } }
 const fail = (code) => { throw new AvatarError(code); };
 
-const isStoredAvatarUrl = (u) => typeof u === 'string' && u.length <= 300 && STORED_URL.test(u);
+// Our stored copy, or (outside production only) a demo account's locally drawn picture (services/demoProfile.js).
+const isStoredAvatarUrl = (u) => (typeof u === 'string' && u.length <= 300 && STORED_URL.test(u)) || require('../demoProfile').isDemoCompetitorPicture(u);
 
 /** Is this an https link on an allowed picture host? */
 function isAllowedUrl(raw) {

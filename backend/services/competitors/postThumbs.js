@@ -43,7 +43,8 @@ const toDate = (v) => { if (v === undefined || v === null || v === '') return nu
 
 /** The switch: exactly "on", like the other competitor switches. */
 const thumbsEnabled = (env = process.env) => String((env && env.ENABLE_COMPETITOR_THUMBS) || '').trim() === 'on';
-const isStoredThumbUrl = (u) => typeof u === 'string' && u.length <= 320 && STORED_URL.test(u);
+// Our stored copy, or (outside production only) a demo account's locally drawn picture (services/demoProfile.js).
+const isStoredThumbUrl = (u) => (typeof u === 'string' && u.length <= 320 && STORED_URL.test(u)) || require('../demoProfile').isDemoCompetitorPicture(u);
 
 /** "p-<shortcode>" from a post's own Instagram link (the same key bestPosts.postKeyOf makes), or ''. */
 function keyOfUrl(url) {
@@ -248,8 +249,11 @@ async function refreshPostThumbs({ competitor, profile, snapshots = [], now = ne
 /** postKey -> our stored link, for the read model. Empty when the switch is off. */
 function thumbMap(competitor, { on = thumbsEnabled() } = {}) {
   const m = new Map();
-  if (!on) return m;
-  for (const t of asArray(competitor && competitor.postThumbs)) if (t && t.postKey && isStoredThumbUrl(t.thumbUrl)) m.set(t.postKey, t.thumbUrl);
+  const demo = require('../demoProfile').isDemoCompetitorPicture;
+  for (const t of asArray(competitor && competitor.postThumbs)) {
+    // The switch guards storing pictures with the image host; a demo picture is a local file, so it needs no switch.
+    if (t && t.postKey && isStoredThumbUrl(t.thumbUrl) && (on || demo(t.thumbUrl))) m.set(t.postKey, t.thumbUrl);
+  }
   return m;
 }
 

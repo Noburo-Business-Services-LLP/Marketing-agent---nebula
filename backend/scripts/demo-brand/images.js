@@ -289,4 +289,8 @@ function deckPageJpg(page, index, { width = 794, height = 1123 } = {}) {
   return jpg(c);
 }
 
-module.exports = { logoPng, packshotJpg, posterJpg, portraitJpg, placeJpg, calendarCoverJpg, deckPageJpg, imageSize, seeded };
+module.exports = {
+  logoPng, packshotJpg, posterJpg, portraitJpg, placeJpg, calendarCoverJpg, deckPageJpg, imageSize, seeded,
+  // drawing helpers, shared with images3.js (Stage 3 pictures)
+  canvasOf, jpg, png, roundRect, leaf, scatterLeaves, fitText, wrap, drawContainer, crescent, DISPLAY, SANS
+};

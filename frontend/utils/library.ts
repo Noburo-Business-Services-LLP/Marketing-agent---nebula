@@ -52,6 +52,9 @@ const VIDEO_FILE = /\.(mp4|webm|mov|m4v)(\?|$)|\/video\/upload\//i;
 
 /** A still frame for a hosted (Cloudinary) video link, or '' when it is not one. */
 export function stillFor(videoUrl: string): string {
+  // A demo account's videos are made on the developer's computer; each has a poster of the same name (outside a production build only).
+  const demo = /^(http:\/\/(?:localhost|127\.0\.0\.1):\d{2,5}\/demo-assets\/zaya\/videos\/[A-Za-z0-9_-]{1,120})\.mp4$/.exec(String(videoUrl || ''));
+  if (demo) return import.meta.env?.PROD !== true ? `${demo[1]}.jpg` : '';
   const m = /^(https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\/)(.+)$/.exec(String(videoUrl || ''));
   if (!m) return '';
   return `${m[1]}so_1,w_480,h_480,c_fill,g_auto,f_jpg/${m[2]}`.replace(/\.(mp4|mov|webm|m4v)(\?.*)?$/i, '.jpg');

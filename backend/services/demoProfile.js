@@ -72,7 +72,15 @@ async function storedAnalytics(key, platforms, { User } = {}) {
   return analyticsFromUser(user, platforms);
 }
 
+// The demo brand's competitor pictures (profile pictures and post pictures) are drawn on this computer and served by the
+// development backend. The competitor screens accept our stored Cloudinary copies only; this one extra shape is accepted
+// outside production so the demo can show pictures without any upload (decision D120). Never in production.
+const DEMO_COMPETITOR_PICTURE = /^http:\/\/(localhost|127\.0\.0\.1):\d{2,5}\/demo-assets\/zaya\/competitors\/[A-Za-z0-9_-]{1,140}\.jpg$/;
+const isDemoCompetitorPicture = (url, env = process.env) => typeof url === 'string' && url.length <= 320
+  && String((env && env.NODE_ENV) || '') !== 'production' && DEMO_COMPETITOR_PICTURE.test(url);
+
 module.exports = {
+  isDemoCompetitorPicture, DEMO_COMPETITOR_PICTURE,
   DEMO_PROFILE_PREFIX, DEMO_MESSAGE, DEMO_PROFILE_QUERY,
   isDemoProfileKey, isDemoProfile, requestUsesDemoKey, blockedReply,
   profileFromUser, analyticsFromUser, storedProfile, storedAnalytics
