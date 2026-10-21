@@ -131,7 +131,7 @@ const COMPETITORS = Object.freeze([
 
 /** People and places in Brand assets (drawn locally as simple illustrations). */
 const CHARACTERS = Object.freeze([
-  { slug: 'founder-nila', name: 'Nila Raman (founder)', tone: '#8C5A3C', outfit: PALETTE.plum },
+  { slug: 'founder-nila', name: 'Aanya Raghavan (founder)', tone: '#8C5A3C', outfit: PALETTE.plum },
   { slug: 'model-aarthi', name: 'Aarthi (model)', tone: '#A86B4C', outfit: PALETTE.roseGold },
   { slug: 'model-karthik', name: 'Karthik (model)', tone: '#7A4E35', outfit: PALETTE.sage },
 ]);
