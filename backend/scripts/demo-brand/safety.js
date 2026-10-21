@@ -96,6 +96,16 @@ const MARKERS = Object.freeze({
   // brand memory run) wrote for it.
   SocialSnapshot: { field: 'userId', tag: {} },
   AIBrandMemory: { field: 'userId', tag: {} },
+  // Stage 3 (conversations and media). Competitors by their locally drawn profile picture, their weekly readings by the
+  // fictional handle (every one ends in `.demo`), Inbox rows by the fake thread and message ids, the settings by the demo
+  // user (one row per account), photoshoots by their key, videos by their local video link.
+  Competitor: { field: 'userId', tag: { avatarUrl: ASSET_RE } },
+  CompetitorSnapshot: { field: 'userId', tag: { handle: /\.demo$/ } },
+  SocialInboxConversation: { field: 'userId', tag: { providerThreadId: new RegExp(`^${DEMO_TAG}-`) } },
+  SocialInboxMessage: { field: 'userId', tag: { providerMessageId: new RegExp(`^${DEMO_TAG}-`) } },
+  AutoReplySettings: { field: 'userId', tag: {} },
+  PhotoshootJob: { field: 'user', tag: { key: new RegExp(`^${DEMO_TAG}:`) } },
+  StudioVideo: { field: 'user', tag: { videoUrl: ASSET_RE } },
 });
 
 /** The query for the demo rows of one collection. */

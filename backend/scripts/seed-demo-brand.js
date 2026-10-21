@@ -109,6 +109,10 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
   const perfMod = require('./demo-brand/performance');
   const memoryMod = require('./demo-brand/memory');
   const images = require('./demo-brand/images');
+  const competitorsMod = require('./demo-brand/competitors');
+  const inboxMod = require('./demo-brand/inbox');
+  const photoshootMod = require('./demo-brand/photoshoot');
+  const videosMod = require('./demo-brand/videos');
 
   const findUser = async () => {
     const User = mongoose.model('User');
@@ -186,13 +190,20 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
 
       // 6. Stage 2: plan, Blueprint, calendars, posts, campaigns, results, daily numbers, brand memory.
       // These are rebuilt on every run (their own tagged rows only), so dates are always counted back from today.
-      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw) });
+      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw), videoUrls: videosMod.videoUrlsOf(base) });
       Object.assign(added, rebuilt);
+
+      // 7. Stage 3: competitors, Inbox, Photoshoot, Videos (rebuilt on every run, like Stage 2), then the brand memory learns once
+      // from everything (it reads the competitors too).
+      const stage3 = await this.createStage3({ user, base, now, writeAsset: (rel, draw) => writeAsset(rel, draw) });
+      added['picture files'] = (added['picture files'] || 0) + (stage3['picture files'] || 0);
+      Object.assign(added, { ...stage3, 'picture files': added['picture files'] });
+      added['brand memory items'] = await this.learnMemory(user._id);
       return { added, userId: user._id };
     },
 
     /** Stage 2. Deletes the demo's own rows of these collections, then builds them fresh. */
-    async createContent({ user, base, createdAt, now, writeAsset: write }) {
+    async createContent({ user, base, createdAt, now, writeAsset: write, videoUrls = {} }) {
       const m = models();
       const uid = user._id;
       const out = {};
@@ -210,7 +221,7 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
       const prods = await m.Product.find(safety.markerFilter('Product', uid)).select('name category imageUrl').lean();
       const productIds = {};
       for (const p of PRODUCTS) { const row = prods.find((x) => x.name === p.name); if (row) productIds[p.slug] = row._id; }
-      const built = contentMod.build({ userId: uid, now, base, productIds });
+      const built = contentMod.build({ userId: uid, now, base, productIds, videoUrls });
       let files = 0;
       for (const [rel, draw] of built.posters) { if (write(rel, draw).made) files += 1; }
       out['picture files'] = (out['picture files'] || 0) + files + deck.length;
@@ -225,12 +236,72 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
       const snaps = perfMod.snapshotRows({ userId: uid, now });
       await m.SocialSnapshot.insertMany(snaps);
       out['measured post rows'] = rows.length; out['daily snapshots'] = snaps.length;
+      return out;
+    },
 
-      // brand memory: the app's own runner learns from the rows above
-      const learned = await memoryMod.learn(uid);
+    /** Brand memory: the app's own runner learns from every row above (no model call). Returns the number of learned items. */
+    async learnMemory(uid) {
+      const m = models();
+      let learned = { ok: false, reason: 'not run' };
+      for (let i = 0; i < 4 && !learned.ok; i += 1) {
+        learned = await memoryMod.learn(uid);
+        if (!learned.ok && learned.reason === 'busy') await new Promise((r) => setTimeout(r, 1500));
+        else if (!learned.ok) break;
+      }
       if (!learned.ok) throw new Error(`Brand memory could not run (${learned.reason}).`);
-      const doc = await m.AIBrandMemory.findOne({ userId: uid }).lean();
-      out['brand memory items'] = memoryMod.summarise(doc).items;
+      return memoryMod.summarise(await m.AIBrandMemory.findOne({ userId: uid }).lean()).items;
+    },
+
+    /**
+     * Stage 3. Deletes the demo user's own rows of these collections (the demo account owns them all), then builds them fresh:
+     * 5 competitors with 12 weekly readings each, 25 Inbox conversations with their settings, 3 photoshoots and 5 videos.
+     */
+    async createStage3({ user, base, now, writeAsset: write }) {
+      const m = models();
+      const uid = user._id;
+      const out = {};
+      for (const name of ['Competitor', 'CompetitorSnapshot', 'SocialInboxConversation', 'SocialInboxMessage', 'AutoReplySettings']) await m[name].deleteMany({ userId: uid });
+      for (const name of ['PhotoshootJob']) await m[name].deleteMany({ user: uid });
+      await m.StudioVideo.deleteMany({ user: uid });
+      // pictures that depend on today's date are redrawn (the video files are kept: they never change)
+      for (const dir of ['competitors', 'photoshoot']) fs.rmSync(path.join(demoDir, dir), { recursive: true, force: true });
+      let files = 0;
+      const drawAll = (map) => { for (const [rel, draw] of map) { if (write(rel, draw).made) files += 1; } };
+
+      // competitors and their weekly readings
+      const comp = competitorsMod.build({ userId: uid, now, base });
+      drawAll(comp.pictures);
+      await m.Competitor.insertMany(comp.competitors);
+      await m.CompetitorSnapshot.insertMany(comp.snapshots);
+      out.competitors = comp.competitors.length; out['competitor readings'] = comp.snapshots.length;
+
+      // Inbox
+      const inbox = inboxMod.build({ userId: uid, now });
+      await m.SocialInboxConversation.insertMany(inbox.conversations);
+      await m.SocialInboxMessage.insertMany(inbox.messages);
+      await m.AutoReplySettings.create(inbox.settings);
+      await m.User.updateOne({ _id: uid }, { $set: { 'ayrshare.inboxWebhookAt': new Date(now.getTime() - 50 * 24 * 3600000), 'ayrshare.inboxWebhookError': '' } });
+      out['inbox conversations'] = inbox.conversations.length; out['inbox messages'] = inbox.messages.length;
+
+      // Photoshoot
+      const prods = await m.Product.find(safety.markerFilter('Product', uid)).select('name imageUrl images').lean();
+      const place = await m.BrandAsset.findOne({ user: uid, type: 'environment', cloudinaryPublicId: new RegExp(`^${safety.DEMO_TAG}/`) }).select('name url').lean();
+      const shoot = photoshootMod.build({ userId: uid, now, base, products: prods, place });
+      drawAll(shoot.pictures);
+      await m.PhotoshootJob.insertMany(shoot.jobs);
+      out.photoshoots = shoot.jobs.length; out['photoshoot photos'] = shoot.photos;
+
+      // Videos (made with ffmpeg; a missing ffmpeg leaves the poster only and the video is not listed)
+      let made = 0; const skipped = [];
+      for (const v of videosMod.VIDEOS) {
+        const r = videosMod.makeVideo({ demoDir, video: v });
+        made += r.made; if (r.skipped) skipped.push(`${v.slug}: ${r.skipped}`);
+      }
+      const rows = videosMod.build({ userId: uid, now, base, hasFile: (v) => fs.existsSync(path.join(demoDir, videosMod.mp4Rel(v))) });
+      if (rows.length) await m.StudioVideo.insertMany(rows);
+      out.videos = rows.length; files += made;
+      if (skipped.length) out['videos skipped'] = skipped.join('; ');
+      out['picture files'] = files;
       return out;
     },
 
@@ -284,6 +355,24 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
       check(mem.items > 0, `brand memory: ${mem.items} learned items (${Object.entries(mem.bySource).map(([k, n]) => `${k} ${n}`).join(', ')})`);
       const posterMissing = (await m.Draft.find({ userId: u._id }).select('imageUrl').lean()).filter((d) => !fs.existsSync(path.join(demoDir, String(d.imageUrl).split(safety.ASSET_PATH + '/')[1] || '__none__'))).length;
       check(posterMissing === 0, 'every post picture is on disk');
+      // Stage 3: competitors, Inbox, Photoshoot, Videos (read back the way the screens read them)
+      const onDisk = (url) => fs.existsSync(path.join(demoDir, String(url || '').split(`${safety.ASSET_PATH}/`)[1] || '__none__'));
+      const comps = await m.Competitor.find(safety.markerFilter('Competitor', u._id)).lean();
+      check(comps.length === 5 && comps.every((c) => c.postThumbs.length > 0 && onDisk(c.avatarUrl) && c.postThumbs.every((t) => onDisk(t.thumbUrl))), `${comps.length} competitors, each with a profile picture and post pictures on disk`);
+      const readings = await m.CompetitorSnapshot.countDocuments(safety.markerFilter('CompetitorSnapshot', u._id));
+      check(readings === 60, `${readings} weekly competitor readings (12 for each)`);
+      const board = await require('../routes/competitorBestPosts').build({ user: u });
+      check(board.entitled && board.state === 'ready' && board.competitors.length === 5 && board.competitors.every((c) => c.followers && c.bestPost && c.avatarUrl) && board.working.length === 3, `Home and Competitors read it: state ${board.state}, ${board.competitors.length} tiles, ${board.working.length} best posts, ${board.trending.length} trends`);
+      const inboxSvc = require('../services/socialInboxService');
+      const inboxSum = await inboxSvc.getSummary(u);
+      check(inboxSum.unreadMessageCount === 7 && inboxSum.pendingCount === 3 && inboxSum.aiEngagement.automationMode === 'approval_required' && inboxSum.liveUpdates === 'on', `Inbox: ${await m.SocialInboxConversation.countDocuments({ userId: u._id })} conversations, ${inboxSum.unreadMessageCount} unread, ${inboxSum.pendingCount} waiting for approval, mode ${inboxSum.aiEngagement.automationMode}`);
+      const shoots = await m.PhotoshootJob.find(safety.markerFilter('PhotoshootJob', u._id)).lean();
+      check(shoots.length === 3 && shoots.every((j) => j.status === 'done' && j.photos.every((p) => p.status === 'done' && onDisk(p.url))), `${shoots.length} finished photoshoots with ${shoots.reduce((n, j) => n + j.photos.length, 0)} photos on disk`);
+      const vids = await m.StudioVideo.find(safety.markerFilter('StudioVideo', u._id)).lean();
+      const files = vids.filter((v) => onDisk(v.videoUrl) && onDisk(v.videoUrl.replace(/\.mp4$/, '.jpg')));
+      check(vids.length === videosMod.VIDEOS.length && files.length === vids.length, `${vids.length} finished videos, each a playable file with a poster on disk`);
+      const reelsWithVideo = await m.Draft.countDocuments({ userId: u._id, 'creative.videoUrl': { $regex: /\.mp4$/ } });
+      check(reelsWithVideo > 0, `${reelsWithVideo} reels in the Library point at these videos`);
       if (password) check(await u.comparePassword(password), 'the new password signs in');
       return { ok, lines };
     },
