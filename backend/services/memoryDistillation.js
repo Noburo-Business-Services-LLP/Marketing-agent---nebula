@@ -185,9 +185,13 @@ async function runDistillationOnce({ limit = 50, deps = {} } = {}) {
   // is never distilled. Ascending order means the whole account base cycles
   // through over successive runs as learnedNotesUpdatedAt advances.
   const accounts = await (deps.Memory || AIBrandMemory).find({}).select('userId organizationId').sort({ learnedNotesUpdatedAt: 1 }).limit(limit).lean();
+  // Accounts background work must leave alone, including demo accounts (D101): no model call is made for them.
+  const gate = deps.blockedIds || (deps.Memory ? async () => [] : () => require('./backgroundGate').blockedAccountIdsSafe());
+  const paused = new Set((await gate()).map(String));
   let distilled = 0;
   let skipped = 0;
   for (const acct of accounts) {
+    if (paused.has(String(acct.userId))) continue;
     try {
       const result = await distillMemoryDetailed(acct.userId, acct.organizationId, deps);
       if (result.blocked) {

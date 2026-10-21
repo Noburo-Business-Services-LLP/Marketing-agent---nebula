@@ -46,3 +46,6 @@ backend/tests
 frontend/tests
 frontend/test_log.txt
 sonar-project.properties
+
+# Demo account pictures (development only, never in an image, D101)
+backend/demo-assets

@@ -1049,10 +1049,12 @@ function createPaymentRouter(deps = {}) {
 
       const payments = user.payments || [];
       let needsSave = false;
+      // A demo account's payments are local records (D101): never looked up at Razorpay.
+      const isDemo = require('../services/demoProfile').isDemoProfile(user);
 
       // Lazily enrich payments with Razorpay invoice URLs (fetched once, then cached)
       for (const payment of payments) {
-        if (!payment.invoiceUrl && payment.razorpayPaymentId) {
+        if (!isDemo && !payment.invoiceUrl && payment.razorpayPaymentId) {
           try {
             const rpPayment = await rz().payments.fetch(payment.razorpayPaymentId);
             if (rpPayment.invoice_id) {

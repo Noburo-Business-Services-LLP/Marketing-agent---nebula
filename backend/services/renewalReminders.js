@@ -99,10 +99,11 @@ async function runRenewalRemindersOnce({ now = Date.now(), deps = {} } = {}) {
     'subscription.nextBillingAt': { $gte: new Date(now + FROM_DAYS * DAY), $lte: new Date(now + TO_DAYS * DAY) },
     'plan.tier': { $in: ['starter', 'professional', 'agency'] },
     'agency.ownerId': null // a client workspace never pays or gets email; the agency account is the one reminded
-  }).select('email firstName isActive subscription plan').limit(500).lean();
+  }).select('email firstName isActive subscription plan ayrshare.profileKey').limit(500).lean();
   let sent = 0; let skipped = 0;
   for (const user of candidates) {
-    if (!isDue(user, now)) { skipped += 1; continue; }
+    // A demo account (D101) never gets email.
+    if (!isDue(user, now) || require('./demoProfile').isDemoProfile(user)) { skipped += 1; continue; }
     // Claim this month's reminder first, so two servers (or a restart) cannot both send it.
     const claimed = await User.findOneAndUpdate(
       { _id: user._id, 'subscription.reminderForBillingAt': { $ne: user.subscription.nextBillingAt } },

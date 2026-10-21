@@ -73,6 +73,8 @@ function buildReplyPrompt({ review, business = {} }) {
 }
 
 async function fetchReviews({ profileKey, apiKey = process.env.AYRSHARE_API_KEY, fetchImpl = fetch }) {
+  // A demo account (D101) never reaches the provider.
+  if (require('./demoProfile').isDemoProfileKey(profileKey)) return { success: false, reason: 'not_configured', reviews: [] };
   if (!apiKey || String(process.env.AYRSHARE_KILL_SWITCH || '').toLowerCase() === 'true') return { success: false, reason: 'not_configured', reviews: [] };
   const headers = { Authorization: `Bearer ${apiKey}` };
   if (profileKey && profileKey !== 'primary') headers['Profile-Key'] = profileKey;
