@@ -180,7 +180,7 @@ function posterJpg(product, headline, { width = 1080, height = 1350 } = {}) {
   scatterLeaves(ctx, width, height * 0.36, `${product.slug}-poster`, PALETTE.sage, 6);
   ctx.fillStyle = PALETTE.cream; ctx.textAlign = 'left'; ctx.font = `${Math.round(width * 0.075)}px ${DISPLAY}`;
   const lines = wrap(ctx, headline, width * 0.84).slice(0, 3);
-  lines.forEach((l, i) => ctx.fillText(l, width * 0.08, height * 0.12 + i * width * 0.085));
+  lines.forEach((l, i) => ctx.fillText(l, width * 0.08, height * 0.165 + i * width * 0.085)); // clear of the status badges the Library lays over the top of a tile
   drawContainer(ctx, product, width / 2, height * 0.88, height * 0.42);
   ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(width * 0.03)}px ${SANS}`; ctx.textAlign = 'center';
   ctx.fillText(`${BRAND.name.toUpperCase()}  .  ${product.name}`, width / 2, height * 0.975);

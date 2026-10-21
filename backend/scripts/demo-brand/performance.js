@@ -139,7 +139,7 @@ function snapshotRows({ userId, now, days = WINDOW_DAYS }) {
       const wobble = daysAgo === 0 ? 1 : 1 + (r() - 0.5) * 0.006;
       const f = daysAgo === 0 ? followers : Math.round(followersOn(p, daysAgo) * wobble);
       const m = { followers: f, following: (a.followsCount || a.followingCount || 0), posts: Math.max(0, (a.mediaCount || a.postsCount || 0) - Math.round(daysAgo * 0.32)), reach: 0, impressions: 0, engagementRate: 0, likes: 0 };
-      const bump = daysAgo === 0 ? 1 : 0.94 + r() * 0.14;
+      const bump = daysAgo === 0 ? 1 : 0.985 + r() * 0.03; // small day-to-day noise, so the week-on-week change on Home and Performance reads as growth
       if (p === 'instagram') {
         m.reach = Math.round(f * (a.reachCount / a.followersCount) * bump);
         m.impressions = Math.round(m.reach * 0.8);
@@ -154,6 +154,11 @@ function snapshotRows({ userId, now, days = WINDOW_DAYS }) {
         m.reach = Math.round(a.uniqueImpressionsCount * (f / finalOf('linkedin').followers) * bump);
         m.impressions = Math.round(a.impressionCount * (f / finalOf('linkedin').followers) * bump);
         m.engagementRate = daysAgo === 0 ? Math.round(a.engagement * 10000) / 100 : Math.round((4.6 + 0.6 * t + (r() - 0.5) * 0.2) * 100) / 100;
+      } else if (p === 'youtube') { // channel views and likes, so the YouTube tile is not "not yet"
+        m.reach = Math.round(f * 1.1 * bump);
+        m.impressions = Math.round(m.reach * 1.35);
+        m.engagementRate = daysAgo === 0 ? 4.1 : Math.round((3.4 + 0.7 * t + (r() - 0.5) * 0.2) * 100) / 100;
+        m.likes = Math.round(f * 0.19 * (0.8 + 0.2 * t));
       }
       entry[p] = m;
     }

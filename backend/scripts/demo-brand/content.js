@@ -68,6 +68,15 @@ function productSpecs() {
   return out;
 }
 
+/** A fictional https link per platform (the demo never links to a real account; the pages simply do not exist). */
+const postUrlFor = (platform, id) => {
+  const code = String(id).replace(/[^a-z0-9]/gi, '');
+  if (platform === 'facebook') return `https://www.facebook.com/zayanaturals.demo/posts/${code}`;
+  if (platform === 'youtube') return `https://www.youtube.com/watch?v=${code}`;
+  if (platform === 'linkedin') return `https://www.linkedin.com/feed/update/urn:li:share:${code}`;
+  return `https://www.instagram.com/p/${code}/`;
+};
+
 const cap = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** Everything the seed can post, tagged by when it fits. */
@@ -86,6 +95,7 @@ function assign(now) {
   const reels = shuffle(any.filter((s) => s.fmt === 'reel'), r);
   const others = shuffle(any.filter((s) => s.fmt !== 'reel'), r);
   const T = istParts(now);
+  const istHour = new Date(now.getTime() + IST).getUTCHours();
   const out = [];
   const add = (spec, status, fields) => out.push({ spec, status, ...fields });
 
@@ -103,10 +113,18 @@ function assign(now) {
     }
     return daysAgo;
   }).sort((a, b) => b - a);
+  // the current India week must not look empty: a couple of posts on the days before today (Home counts Monday to Sunday)
+  if (T.wd >= 1 && slots.length >= 6) {
+    const k = Math.min(5, T.wd * 2); // two a day on the days so far, never more than five
+    for (let n = 0; n < k; n += 1) slots[slots.length - 1 - n] = (n % T.wd) + 1;
+  }
+  const postedToday = istHour > 19 && istHour >= 11; // a late run: the evening slot has passed, so one post went out this morning (Home's "Today's plan")
+  if (postedToday) slots[slots.length - 1] = 0;
   const hourFor = (reel) => { const x = r(); return reel ? (x < 0.65 ? [19, 20, 21][Math.floor(r() * 3)] : x < 0.85 ? 13 : 9) : (x < 0.5 ? [19, 20, 21][Math.floor(r() * 3)] : x < 0.75 ? 9 : 14); };
   postedAny.forEach((spec, i) => {
     const day = istParts(new Date(now.getTime() - slots[i] * DAY));
-    add(spec, 'published', { at: stamp(day.y, day.m, day.d, hourFor(spec.fmt === 'reel'), [0, 15, 30, 45][Math.floor(r() * 4)]) });
+    const at = stamp(day.y, day.m, day.d, hourFor(spec.fmt === 'reel'), [0, 15, 30, 45][Math.floor(r() * 4)]);
+    add(spec, 'published', { at: slots[i] === 0 ? stamp(day.y, day.m, day.d, 9, 30) : at });
   });
   past.forEach((spec) => {
     const [mm, dd] = spec.md.split('-').map(Number);
@@ -120,8 +138,12 @@ function assign(now) {
   const sched = soon.filter((s) => s.group === 'scheduled');
   const seq = [sched[0], sched[1], reels.shift(), sched[2], sched[3], sched[4], others.shift(), sched[5], sched[6], sched[7]];
   seq.forEach((spec, i) => {
+    if (i === 0 && istHour <= 19) { // the first one goes out later today, so Home's "Today's plan" has a row (a run late in the evening keeps tomorrow)
+      const d = istParts(now);
+      return add(spec, 'scheduled', { at: stamp(d.y, d.m, d.d, istHour + 3, 0) });
+    }
     const d = istParts(new Date(now.getTime() + offsets[i] * DAY));
-    add(spec, 'scheduled', { at: stamp(d.y, d.m, d.d, hours[i], i % 2 ? 30 : 0) });
+    return add(spec, 'scheduled', { at: stamp(d.y, d.m, d.d, hours[i], i % 2 ? 30 : 0) });
   });
   // needs approval: 5 festive + 3 from the pool (automation)
   const waiting = [...soon.filter((s) => s.group === 'approval'), ...others.splice(0, 3)];
@@ -138,7 +160,7 @@ function assign(now) {
   others.splice(0, 4).forEach((spec) => add(spec, 'draft', { origin: 'manual' }));
   // archived (6) and bin (3)
   const arch = others.splice(0, 6);
-  arch.forEach((spec, i) => add(spec, 'archived', { origin: i % 2 ? 'manual' : 'automation', from: i < 4 ? 'draft' : 'approved', ageDays: 25 + i * 9 }));
+  arch.forEach((spec, i) => add(spec, 'archived', { origin: i % 2 ? 'manual' : 'automation', from: i < 4 ? 'draft' : 'approved', ageDays: 2 + i * 2 })); // recent, so the Archived view is not empty on its first page
   others.splice(0, 3).forEach((spec, i) => add(spec, 'binned', { origin: i === 1 ? 'manual' : 'automation', from: i === 2 ? 'approved' : 'draft', ageDays: [2, 6, 11][i] }));
   return { items: out, left: { reels: reels.length, others: others.length } };
 }
@@ -167,7 +189,7 @@ function build({ userId, now, base, productIds, videoUrls = {} }) {
   const calendarFor = (d) => calendars.find((c) => c.month === monthKey(d)) || null;
 
   const drafts = []; const campaigns = []; const performanceItems = [];
-  let postNo = 0;
+  let postNo = 0; let publishedSeq = 0;
   const ordered = items.slice().sort((a, b) => ((a.at && a.at.getTime()) || 0) - ((b.at && b.at.getTime()) || 0));
   for (const it of ordered) {
     const s = it.spec;
@@ -182,6 +204,10 @@ function build({ userId, now, base, productIds, videoUrls = {} }) {
     const at = it.at || null;
     const onFb = r() < 0.6;
     const platforms = ['instagram', ...(onFb ? ['facebook'] : []), ...(s.fmt === 'reel' && r() < 0.3 ? ['youtube'] : []), ...(s.pillar === 'Founder story' && s.fmt !== 'reel' && r() < 0.6 ? ['linkedin'] : [])];
+    if (status === 'published' && s.fmt !== 'reel' && !platforms.includes('linkedin')) { // a steady few LinkedIn posts, so its numbers are not empty
+      publishedSeq += 1;
+      if (publishedSeq % 6 === 1) platforms.push('linkedin');
+    }
     const id = OID();
     const caption = s.caption;
     const tags = s.tags.slice(0, 6);
@@ -189,7 +215,7 @@ function build({ userId, now, base, productIds, videoUrls = {} }) {
     const cal = origin === 'automation' && at ? calendarFor(at) : null;
     const createdAt = at && (status === 'published') ? new Date(at.getTime() - (1 + Math.floor(r() * 3)) * DAY) :
       status === 'scheduled' || status === 'approved' ? new Date(now.getTime() - (2 + Math.floor(r() * 4)) * DAY) :
-        status === 'archived' || status === 'binned' ? new Date(now.getTime() - (it.ageDays + 12) * DAY) :
+        status === 'archived' ? new Date(now.getTime() - (1 + (it.ageDays - 2) * 0.15) * DAY) : status === 'binned' ? new Date(now.getTime() - (it.ageDays + 12) * DAY) :
           new Date(now.getTime() - (0.4 + r() * 1.6) * DAY);
     const draft = {
       _id: id, userId, title: cap(s.title, 120), caption, hashtags: tags, cta: s.cta === 'shop_now' ? 'Shop now on our website' : s.cta === 'learn_more' ? 'Learn more' : '',
@@ -213,7 +239,7 @@ function build({ userId, now, base, productIds, videoUrls = {} }) {
     } else if (status === 'completed' || (status === 'draft' && origin === 'automation')) {
       draft.plannedDate = at;
     } else if (status === 'archived') {
-      Object.assign(draft, { archivedFrom: it.from, updatedAt: new Date(now.getTime() - it.ageDays * DAY) });
+      Object.assign(draft, { archivedFrom: it.from, updatedAt: new Date(now.getTime() - it.ageDays * 0.1 * DAY) });
     } else if (status === 'binned') {
       Object.assign(draft, { binnedAt: new Date(now.getTime() - it.ageDays * DAY), binnedFrom: it.from, updatedAt: new Date(now.getTime() - it.ageDays * DAY) });
     }
@@ -236,7 +262,7 @@ function build({ userId, now, base, productIds, videoUrls = {} }) {
         performance: totals ? { impressions: totals.impressions, clicks: 0, ctr: 0, engagement: totals.engagement, reach: totals.reach, likes: totals.likes, comments: totals.comments, shares: totals.shares, conversions: 0, spend: 0 } : undefined,
         socialPostId: providerId, socialPostIds: postIds, instagramPostId: providerId,
         scheduledFor: at, publishedAt: posted ? at : null, ayrshareStatus: posted ? 'success' : 'scheduled', ayrshareCheckedAt: posted ? new Date(Math.min(now.getTime(), at.getTime() + 600000)) : null,
-        publishResult: { status: posted ? 'success' : 'scheduled', demo: true, postIds: platforms.map((p) => ({ platform: p, status: 'success', id: postIds[p] })) },
+        publishResult: { status: posted ? 'success' : 'scheduled', demo: true, postIds: platforms.map((p) => ({ platform: p, status: 'success', id: postIds[p], ...(posted ? { postUrl: postUrlFor(p, postIds[p]) } : {}) })) },
         createdAt, updatedAt: posted ? at : createdAt
       });
       draft.campaignId = campaignId;
@@ -265,7 +291,7 @@ function build({ userId, now, base, productIds, videoUrls = {} }) {
     const generatedAt = stamp(c.y, c.m, 1, 8, 0);
     return {
       _id: c.id, userId, businessName: BRAND.name, niche: BRAND.niche, businessVertical: 'Beauty & Wellness', businessType: 'B2C', language: 'English', month: c.month,
-      autoGenerate: true, autoGenerateLimit: 7, autoGeneratedCount: c.items.length, approved: true, weeks, themeTitle: c.theme.split(':')[0], themeSummary: c.theme,
+      autoGenerate: true, autoGenerateLimit: 20, autoGeneratedCount: c.items.length, approved: true, weeks, themeTitle: c.theme.split(':')[0], themeSummary: c.theme,
       coverImageUrl: assetUrl(base, rel), coverImagePrompt: `${c.name}: ${c.theme}`, coverStatus: 'ready', generatedAt, lastAutoRunAt: c.current ? new Date(now.getTime() - DAY) : stamp(c.y, c.m, 28, 6, 0),
       createdAt: generatedAt, updatedAt: c.current ? now : stamp(c.y, c.m, 28, 6, 0)
     };

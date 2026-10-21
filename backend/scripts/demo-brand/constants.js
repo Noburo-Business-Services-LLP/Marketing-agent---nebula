@@ -145,9 +145,9 @@ const PLACES = Object.freeze([
  * `analytics` uses the provider's own field names, so the app's existing readers show the numbers.
  */
 const SOCIALS = Object.freeze([
-  { platform: 'instagram', username: 'zaya.naturals', displayName: 'Zaya Naturals', analytics: { followersCount: 34280, followsCount: 412, mediaCount: 486, reachCount: 61200, likeCount: 1840, commentsCount: 212 } },
+  { platform: 'instagram', username: 'zaya.naturals', displayName: 'Zaya Naturals', analytics: { followersCount: 34280, followsCount: 412, mediaCount: 168, reachCount: 61200, likeCount: 1840, commentsCount: 212 } },
   { platform: 'facebook', username: 'Zaya Naturals', displayName: 'Zaya Naturals', analytics: { followersCount: 12940, fanCount: 12610, pageFollows: 0, mediaCount: 318, pagePostsImpressionsUnique: 22800, pagePostsImpressions: 30400, pagePostEngagements: 980 } },
-  { platform: 'youtube', username: 'Zaya Naturals', displayName: 'Zaya Naturals', analytics: { followersCount: 3870, followingCount: 0, postsCount: 64 } },
+  { platform: 'youtube', username: 'Zaya Naturals', displayName: 'Zaya Naturals', analytics: { followersCount: 3870, followingCount: 0, postsCount: 14 } },
   { platform: 'linkedin', username: 'Zaya Naturals', displayName: 'Zaya Naturals', analytics: { followers: { totalFollowerCount: 1460 }, engagement: 0.052, uniqueImpressionsCount: 5200, impressionCount: 7400 } },
 ]);
 

@@ -113,6 +113,7 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
   const inboxMod = require('./demo-brand/inbox');
   const photoshootMod = require('./demo-brand/photoshoot');
   const videosMod = require('./demo-brand/videos');
+  const extrasMod = require('./demo-brand/extras');
 
   const findUser = async () => {
     const User = mongoose.model('User');
@@ -188,6 +189,9 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
         await m.User.updateOne({ _id: user._id }, { $set: { firstName: BRAND.founder.firstName, lastName: BRAND.founder.lastName, 'businessProfile.brandStory': BRAND.brandStory } });
       }
 
+      // 5b. the social numbers follow the constants (an older run stored other counts)
+      await m.User.updateOne({ _id: user._id }, { $set: { 'ayrshare.displayNames': socials.buildAyrshare({ connectedAt: user.ayrshare.createdAt || socials.connectedAtFor(createdAt), avatarUrl: safety.assetUrl(base, assets.LOGO_REL), now }).displayNames } });
+
       // 6. Stage 2: plan, Blueprint, calendars, posts, campaigns, results, daily numbers, brand memory.
       // These are rebuilt on every run (their own tagged rows only), so dates are always counted back from today.
       const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw), videoUrls: videosMod.videoUrlsOf(base) });
@@ -229,6 +233,13 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
       await m.Campaign.insertMany(built.campaigns);
       await m.Draft.insertMany(built.drafts);
       out.calendars = built.calendars.length; out.campaigns = built.campaigns.length; out.posts = built.drafts.length;
+
+      // Stage 4: saved ideas, the bell's notifications (last 24 hours only) and the business context
+      for (const name of ['ContentIdea', 'Notification', 'OnboardingContext']) await m[name].deleteMany({ userId: uid });
+      await m.ContentIdea.insertMany(extrasMod.ideaRows({ userId: uid, now }));
+      await m.Notification.insertMany(extrasMod.notificationRows({ userId: uid, campaigns: built.campaigns, now }));
+      await m.OnboardingContext.create(extrasMod.onboardingContextRow({ userId: uid }));
+      out['saved ideas'] = 7; out.notifications = 4;
 
       // results and daily numbers
       const rows = perfMod.performanceRows({ userId: uid, items: built.performanceItems, now });
@@ -293,7 +304,7 @@ function realDeps({ demoDir = DEMO_DIR } = {}) {
 
       // Videos (made with ffmpeg; a missing ffmpeg leaves the poster only and the video is not listed)
       let made = 0; const skipped = [];
-      for (const v of videosMod.VIDEOS) {
+      for (const v of [...videosMod.VIDEOS, ...videosMod.REELS]) {
         const r = videosMod.makeVideo({ demoDir, video: v });
         made += r.made; if (r.skipped) skipped.push(`${v.slug}: ${r.skipped}`);
       }

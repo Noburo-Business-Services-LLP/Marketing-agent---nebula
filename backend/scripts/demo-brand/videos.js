@@ -34,8 +34,19 @@ const VIDEOS = Object.freeze([
     idea: 'A wide video for our website, showing the Saffron and Sandal Face Mask ritual.', daysAgo: 5, wide: true }
 ]);
 
-const mp4Rel = (v) => `videos/${v.slug}.mp4`;
-const posterRel = (v) => `videos/${v.slug}.jpg`;
+/**
+ * Extra tall clips used ONLY by the reels in the Library (no Videos page row; flat file names `videos/reel-<product>.mp4`, because the Library finds the poster of a demo video only in that folder): the products without a tall studio video get
+ * one, and the Saffron and Sandal Mask gets a tall one so no reel plays the wide studio video (a wide clip is cropped in a tile).
+ */
+const REELS = Object.freeze([
+  { slug: 'saffron-sandal-face-mask', hook: 'A Sunday glow in ten minutes', ritual: 'Mix, apply, rest, rinse', lines: ['Saffron and sandalwood', 'Gentle clay', 'Twice a week'], wide: false, reel: true },
+  { slug: 'neem-turmeric-cleanser', hook: 'Wash the day away, gently', ritual: 'Wet, lather, rinse', lines: ['Neem and turmeric', 'Soap-free', 'Fresh, never tight'], wide: false, reel: true },
+  { slug: 'bakuchi-night-repair-cream', hook: 'Night repair, while you sleep', ritual: 'Warm, press, rest', lines: ['Bakuchi and shea', 'Rich, not heavy', 'Used at night'], wide: false, reel: true },
+  { slug: 'tinted-mineral-spf-40', hook: 'Sun care that looks like skin', ritual: 'Smooth, tap, go', lines: ['Mineral SPF 40', 'One sheer tint', 'No white cast'], wide: false, reel: true }
+]);
+
+const mp4Rel = (v) => `videos/${v.reel ? 'reel-' : ''}${v.slug}.mp4`;
+const posterRel = (v) => `videos/${v.reel ? 'reel-' : ''}${v.slug}.jpg`;
 const productOf = (v) => PRODUCTS.find((p) => p.slug === v.slug);
 
 /** The three scenes of a video, drawn. */
@@ -95,7 +106,7 @@ function makeVideo({ demoDir, video, run = spawnSync, ffmpeg = ffmpegPath() }) {
 }
 
 /** The video link of each product that has a video, for the reels in the Library: { slug: url }. */
-const videoUrlsOf = (base) => Object.fromEntries(VIDEOS.map((v) => [v.slug, assetUrl(base, mp4Rel(v))]));
+const videoUrlsOf = (base) => Object.fromEntries([...VIDEOS.filter((v) => !v.wide), ...REELS].map((v) => [v.slug, assetUrl(base, mp4Rel(v))]));
 
 /** The StudioVideo rows. `hasFile(video)` says whether the clip file exists (a video without a file is not written). */
 function build({ userId, now, base, hasFile = () => true }) {
@@ -113,4 +124,4 @@ function build({ userId, now, base, hasFile = () => true }) {
   return rows;
 }
 
-module.exports = { VIDEOS, SECONDS, mp4Rel, posterRel, scenesOf, ffmpegArgs, ffmpegPath, makeVideo, videoUrlsOf, build };
+module.exports = { VIDEOS, REELS, SECONDS, mp4Rel, posterRel, scenesOf, ffmpegArgs, ffmpegPath, makeVideo, videoUrlsOf, build };

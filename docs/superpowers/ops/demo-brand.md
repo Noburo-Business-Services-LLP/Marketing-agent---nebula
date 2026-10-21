@@ -55,3 +55,9 @@ Notes for the recording
 - The Quark ledger (Stage 1) shows more past photoshoot and video spending than the 3 photoshoots and 5 videos that are listed.
 - Verified through the real routes and files; not looked at in a browser by the seed's author (see the final report).
 
+
+## Stage 4 (walkthrough fixes and the demo script) (2026-10-21)
+Every screen was walked in the browser; the data fixes are in `demo-brand/extras.js` (saved ideas, bell notifications, business context) and small changes to `content.js`, `performance.js`, `competitors.js`, `videos.js`, `images*.js`, `inbox.js`, `constants.js`. Findings per screen and the UI issues for the ledger: `demo-walkthrough-findings.md`. The recording script and the reset recipe: `demo-script.md`.
+- Four reel-only tall clips (`videos/reel-<product>.mp4`) are made next to the five studio videos so every reel in the Library plays and no reel uses the wide video. They are not rows on the Videos page.
+- Notifications are only listed by the app for 24 hours, so run `create` on the recording day. `create` on an existing account rebuilds all dated rows and refreshes the social counts; the browser may keep old pictures, so hard refresh.
+- The video and poster files are kept between runs; delete `backend/demo-assets/zaya/videos` (or run `remove`) to redraw them.

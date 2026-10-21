@@ -92,7 +92,7 @@ function settingsRow(userId, now) {
     userId, workspaceId: 'default', enabled: true, automationMode: 'approval_required',
     channels: { messages: true, comments: false, mentions: false, replies: false },
     platforms: { instagram: true, facebook: true, linkedin: false, x: false, youtube: false },
-    businessTone: 'warm', replyStyle: 'friendly',
+    businessTone: 'friendly', replyStyle: 'friendly',
     responseRules: [{ name: 'Bulk and wholesale questions', enabled: true, matchType: 'contains', value: 'bulk', action: 'needs_approval', priority: 5 }],
     channelOverrides: [],
     guardrails: { requireApprovalForNegative: true, requireApprovalForHighPriority: true, skipSpam: true, maxAutoRepliesPerConversationPerDay: 3, signature: SIGNATURE },

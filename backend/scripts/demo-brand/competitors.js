@@ -167,9 +167,17 @@ function build({ userId, now, base }) {
 
     const createdAt = new Date(now.getTime() - spec.createdDaysAgo * DAY + idx * 3600000);
     const month = posts.filter((p) => now.getTime() - p.timestamp.getTime() <= 30 * DAY);
+    // The older "Competitor Activity Feed" on the Competitors page reads the posts stored on the competitor itself: the ones of the
+    // last 30 days that have a picture, newest first.
+    const thumbKeys = new Set(postThumbs.map((t) => t.postKey));
+    const feed = month.filter((p) => thumbKeys.has(`p-${p.code}`)).sort((a, b) => b.timestamp - a.timestamp).slice(0, 6).map((p) => ({
+      platform: 'instagram', postUrl: p.url, content: p.caption, imageUrl: assetUrl(base, `competitors/${spec.slug}-${p.code}.jpg`),
+      likes: Math.max(0, p.likesCount), comments: Math.max(0, p.commentsCount), shares: 0, sentiment: 'positive',
+      postedAt: p.timestamp, postedAtTimestamp: p.timestamp.getTime(), fetchedAt: latest.takenAt, isRealData: false
+    }));
     competitors.push({
       _id: id, userId, name: def.name, website: `https://${spec.slug.replace(/-/g, '')}.example`, industry: 'Beauty & Wellness',
-      socialHandles: { instagram: def.handle }, description: spec.description, location: spec.location, posts: [],
+      socialHandles: { instagram: def.handle }, description: spec.description, location: spec.location, posts: feed,
       metrics: {
         avgEngagement: Math.round(spec.er * 1000) / 10, postFrequency: `${spec.perWeek} posts a week`, audienceSize: latest.followers, followers: latest.followers,
         following: 180 + idx * 60, lastFetched: latest.takenAt

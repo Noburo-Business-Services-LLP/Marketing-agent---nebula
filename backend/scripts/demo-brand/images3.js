@@ -197,13 +197,15 @@ function videoSceneJpg({ product, kind, headline = '', lines = [], wide = false,
   if (kind === 'hook') {
     gradient(ctx, w, h, PALETTE.plum, '#241328');
     scatterLeaves(ctx, w, h, key, PALETTE.sage, 8);
-    glow(ctx, wide ? w * 0.7 : w * 0.5, h * (wide ? 0.5 : 0.62), unit * 0.75, 'rgba(201,139,123,A)', 0.4);
-    ctx.fillStyle = PALETTE.cream; ctx.textAlign = 'left'; ctx.font = `${Math.round(unit * (wide ? 0.085 : 0.095))}px ${DISPLAY}`;
-    const maxW = wide ? w * 0.42 : w * 0.84;
-    wrap(ctx, headline, maxW).slice(0, 4).forEach((l, i) => ctx.fillText(l, w * 0.08, h * (wide ? 0.3 : 0.14) + i * unit * (wide ? 0.1 : 0.11)));
+    glow(ctx, w * 0.5, h * (wide ? 0.6 : 0.62), unit * 0.75, 'rgba(201,139,123,A)', 0.4);
+    // The Library and Videos tiles show a 4:5 crop of this picture (the middle of it), so the words and the product sit in the middle.
+    ctx.fillStyle = PALETTE.cream; ctx.textAlign = wide ? 'center' : 'left'; ctx.font = `${Math.round(unit * (wide ? 0.085 : 0.095))}px ${DISPLAY}`;
+    const maxW = wide ? w * 0.4 : w * 0.84;
+    const x0 = wide ? w * 0.5 : w * 0.08;
+    wrap(ctx, headline, maxW).slice(0, 4).forEach((l, i) => ctx.fillText(l, x0, h * (wide ? 0.3 : 0.3) + i * unit * (wide ? 0.1 : 0.11)));
     ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(unit * 0.034)}px ${SANS}`;
-    ctx.fillText(BRAND.name.toUpperCase(), w * 0.08, h * (wide ? 0.88 : 0.07));
-    drawContainer(ctx, product, wide ? w * 0.72 : w / 2, h * (wide ? 0.86 : 0.84), h * (wide ? 0.66 : 0.4));
+    ctx.fillText(BRAND.name.toUpperCase(), x0, h * (wide ? 0.14 : 0.235));
+    drawContainer(ctx, product, wide ? w * 0.5 : w / 2, h * (wide ? 0.97 : 0.82), h * (wide ? 0.5 : 0.33));
     return jpg(c);
   }
   if (kind === 'ritual') {
