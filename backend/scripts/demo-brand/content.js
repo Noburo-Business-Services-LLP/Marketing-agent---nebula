@@ -7,8 +7,8 @@
  *   approved 4        scheduled 10 (next two weeks)        posted 55 (about four months back, never in the future)
  *   archived 6        bin 3 (restorable for 14 days)
  *
- * Every picture is drawn locally (a poster per post: product, headline, brand colours, 4:5) and stored as a link to
- * <asset base>/demo-assets/zaya/posts/... Never base64. Every Campaign carries a fake provider post id
+ * Every picture is composed locally from the real demo photos (D125: postDesigns.js says how, postComposer.js draws it, 4:5)
+ * and stored as a link to <asset base>/demo-assets/zaya/feed/... Never base64. Every Campaign carries a fake provider post id
  * `demo-zaya-post-<n>`; the demo guard (services/demoProfile.js) answers every provider call for this account offline.
  */
 const mongoose = require('mongoose');
@@ -18,7 +18,26 @@ const perf = require('./performance');
 const bank = require('./contentBank');
 const { BRAND, PRODUCTS } = require('./constants');
 const { assetUrl } = require('./safety');
-const { CAROUSEL_EXTRA } = require('./photoPrompts');
+const { CAROUSEL_EXTRA, SLOTS } = require('./photoPrompts');
+const designs = require('./postDesigns');
+const composer = require('./postComposer');
+
+// The post photo slots (posts/...): kept in the picture set so a real photo is copied into the demo folder (it is a source
+// of the composed pictures, never a post picture itself any more).
+const POST_SOURCES = SLOTS.filter((x) => x.rel.startsWith('posts/'));
+
+/** What the post sheet says about how a picture was made, per layout family. */
+const FAMILY_LABEL = Object.freeze({
+  hero: 'full-bleed photo with a bold headline', split: 'photo and colour panel side by side', arch: 'photo in an arch window', minimal: 'product-centred photo with a caption line',
+  testimonial: 'customer quote card over a soft photo', offer: 'offer burst on a photo and colour panel', mythFact: 'myth and fact split', list: 'numbered list under a photo band',
+  tip: 'did-you-know card with a photo sticker', statement: 'big type statement with a photo sticker', festive: 'festive greeting with a gold frame', launch: 'launch card with price',
+  spotlight: 'ingredient spotlight', inside: 'what is inside, ingredient grid', reel: 'reel cover', collage: 'behind-the-scenes photo collage', story: 'story-style poll',
+  guide: 'gift guide grid', countdown: 'order-by date card', slide: 'carousel slide'
+});
+const MOOD_LABEL = Object.freeze({
+  ivory: 'cream and plum', blush: 'blush and plum', sage: 'sage and forest green', saffron: 'saffron and plum', forest: 'deep green and gold', plum: 'plum and gold',
+  festive: 'maroon and gold', terracotta: 'terracotta and cream', night: 'night blue and gold'
+});
 
 const DAY = 86400000;
 const IST = 330 * 60000;
@@ -51,16 +70,16 @@ function productSpecs() {
     const L = bank.PRODUCT_LINES[p.slug];
     const tags = (extra) => ['#ZayaNaturals', `#${L.short.replace(/\s+/g, '')}`, ...extra];
     const ender = (n) => ENDERS[(i + n) % ENDERS.length];
-    out.push({ key: `${p.slug}-ritual`, pillar: 'Ritual and ingredients', fmt: 'image', product: p.slug, head: `${L.when}: ${L.short}`, title: `The ${L.short} ritual`,
+    out.push({ key: `${p.slug}-ritual`, pillar: 'Ritual and ingredients', fmt: 'image', product: p.slug, head: L.ritualHead, title: `The ${L.short} ritual`,
       caption: `${L.when} ritual: ${p.name}.\n${L.how}\n${p.benefits[0]}, made in small batches in Chennai.${i % 2 ? `\n${ender(0)}` : ''}`, tags: tags(['#AyurvedaSkincare', '#SkincareRitual']), cta: 'shop_now', theme: 'Ritual' });
-    out.push({ key: `${p.slug}-inside`, pillar: 'Ritual and ingredients', fmt: 'carousel', product: p.slug, head: `What is inside ${L.short}`, title: `What is inside ${p.name}`,
+    out.push({ key: `${p.slug}-inside`, pillar: 'Ritual and ingredients', fmt: 'carousel', product: p.slug, head: `What is inside our ${L.short}`, title: `What is inside ${p.name}`,
       caption: `Swipe to see what is inside ${p.name}, in plain words:\n${p.ingredients.slice(0, 4).map(ingredientLine).join('\n')}\nEvery ingredient is named on the label, with where it comes from.`, tags: tags(['#IngredientStory', '#CleanBeauty']), cta: 'learn_more', theme: 'Ingredients' });
     out.push({ key: `${p.slug}-howto`, pillar: 'Skin education', fmt: 'reel', product: p.slug, head: `How to use ${L.short}`, title: `How to use ${p.name} in 30 seconds`,
       caption: `How to use ${p.name} in thirty seconds.\n${L.how}\nSave this reel for your next routine.${i % 3 === 0 ? `\n${ender(1)}` : ''}`, tags: tags(['#SkincareHowTo', '#ReelsIndia']), cta: 'shop_now', theme: 'How to' });
     out.push({ key: `${p.slug}-story`, pillar: 'Customer glow stories', fmt: 'image', product: p.slug, head: `"${L.quote.split('.')[0]}."`, title: `${L.person.split(',')[0]} on ${L.short}`,
       caption: `"${L.quote}"\n${L.person}, shared with her permission.\nThank you for the kind words. ${ender(2)}`, tags: tags(['#CustomerLove', '#GlowStories']), cta: '', theme: 'Customer story' });
-    out.push({ key: `${p.slug}-offer`, pillar: 'Offers and festivals', fmt: 'image', product: p.slug, head: L.offer.split('.')[0], title: `Offer: ${L.short}`,
-      caption: `${L.offer}\nNo code needed. Shipping across India.`, tags: tags(['#Offer', '#ShopSmall']), cta: 'shop_now', theme: 'Offer' });
+    out.push({ key: `${p.slug}-offer`, pillar: 'Offers and festivals', fmt: 'image', product: p.slug, head: L.offerHead, title: `Offer: ${L.short}`,
+      caption: `${L.offer}\n${/\bcode\b|ZAYA10/i.test(L.offer) ? '' : 'No code needed. '}Shipping across India.`, tags: tags(['#Offer', '#ShopSmall']), cta: 'shop_now', theme: 'Offer' });
     out.push({ key: `${p.slug}-myth`, pillar: 'Skin education', fmt: 'carousel', product: p.slug, head: `Myth: ${L.myth.replace(/\.$/, '')}`, title: `Myth or fact: ${L.short}`,
       caption: `Myth: ${L.myth}\nFact: ${L.fact}\nSwipe for the full answer and save it for later.`, tags: tags(['#MythVsFact', '#SkinEducation']), cta: 'learn_more', theme: 'Myth or fact' });
     out.push({ key: `${p.slug}-batch`, pillar: 'Founder story', fmt: 'reel', product: p.slug, head: `Batch day: ${L.short}`, title: `Behind the batch: ${L.short}`,
@@ -171,13 +190,21 @@ function assign(now) {
  * of a product that has one point at it, the rest have none). `base`: the asset base. Returns { drafts, campaigns, calendars,
  * posters, performanceItems, summary }. Rows are plain objects ready for validateSync / insertMany.
  */
-function build({ userId, now, base, productIds, videoUrls = {}, hasExtraSlide = () => false }) {
+function build({ userId, now, base, productIds, videoUrls = {}, hasExtraSlide = () => false, photoSource = () => null }) {
   const r = seeded('zaya-stage2-rows');
   const { items, left } = assign(now);
   if (left.reels || left.others) throw new Error(`content pool left over: ${JSON.stringify(left)}`);
   const OID = () => new mongoose.Types.ObjectId();
-  const posterRel = (key) => `posts/${key}.jpg`;
+  const posterRel = (key) => `feed/${key}.jpg`;
   const posters = new Map();
+  // the composed pictures (redrawn on every run: deterministic, so an unchanged design writes the same bytes)
+  const composed = new Map();
+  const fallback = (d) => images.packshotJpg(bySlug[d.product] || PRODUCTS[0], 1, 960);
+  const compose = (d) => () => composer.render(d, { photo: photoSource, fallback }).buffer;
+  for (const src of POST_SOURCES) {
+    if (src.rel === CAROUSEL_EXTRA.rel && !hasExtraSlide(CAROUSEL_EXTRA.rel)) continue;
+    posters.set(src.rel, () => images.posterJpg(PRODUCTS[0], BRAND.name, POSTER_SIZE));
+  }
 
   // calendars for the current month and the four before it
   const T = istParts(now);
@@ -197,14 +224,14 @@ function build({ userId, now, base, productIds, videoUrls = {}, hasExtraSlide = 
     const product = bySlug[s.product] || bySlug[PRODUCTS[0].slug];
     const productId = productIds ? productIds[product.slug] : null;
     const rel = posterRel(s.key);
-    if (!posters.has(rel)) posters.set(rel, () => images.posterJpg(product, s.head, POSTER_SIZE));
-    const imageUrl = assetUrl(base, rel);
-    const slides = s.fmt === 'carousel' ? [imageUrl, assetUrl(base, `products/${product.slug}-2.jpg`), assetUrl(base, `products/${product.slug}-1.jpg`)] : [];
     // One carousel gets a fourth slide, but only when its real photo exists (demo-brand/photoPrompts.js CAROUSEL_EXTRA); otherwise it keeps its three.
-    if (s.fmt === 'carousel' && s.key === CAROUSEL_EXTRA.key && hasExtraSlide(CAROUSEL_EXTRA.rel)) {
-      posters.set(CAROUSEL_EXTRA.rel, () => images.posterJpg(product, s.head, POSTER_SIZE));
-      slides.push(assetUrl(base, CAROUSEL_EXTRA.rel));
-    }
+    const design = designs.designFor(s, { extra: s.key === CAROUSEL_EXTRA.key && hasExtraSlide(CAROUSEL_EXTRA.rel) });
+    if (!composed.has(rel)) composed.set(rel, compose(design.cover));
+    const imageUrl = assetUrl(base, rel);
+    const slideDesigns = s.fmt === 'carousel' ? design.slides : [];
+    for (const sd of slideDesigns) composed.set(posterRel(sd.key), compose(sd));
+    const slides = s.fmt === 'carousel' ? [imageUrl, ...slideDesigns.map((sd) => assetUrl(base, posterRel(sd.key)))] : [];
+    const slideHeads = [s.head, ...slideDesigns.map((sd) => sd.head || sd.person || product.name)];
     const origin = it.origin || (it.status === 'published' || it.status === 'scheduled' ? (r() < 0.55 ? 'automation' : 'manual') : 'manual');
     const status = it.status === 'published' ? 'published' : it.status;
     const at = it.at || null;
@@ -225,14 +252,14 @@ function build({ userId, now, base, productIds, videoUrls = {}, hasExtraSlide = 
           new Date(now.getTime() - (0.4 + r() * 1.6) * DAY);
     const draft = {
       _id: id, userId, title: cap(s.title, 120), caption, hashtags: tags, cta: s.cta === 'shop_now' ? 'Shop now on our website' : s.cta === 'learn_more' ? 'Learn more' : '',
-      imageUrl, imageText: s.head, creativeConcept: `${product.name} on a brand-colour backdrop`, visualTreatment: 'plum, rose gold, cream and sage', platforms,
+      imageUrl, imageText: s.head, creativeConcept: `${product.name}: ${FAMILY_LABEL[design.cover.family] || 'real photo with a headline'}`, visualTreatment: `real photo, ${MOOD_LABEL[design.cover.mood] || 'brand colours'}`, platforms,
       language: 'English', tone: 'Warm and knowledgeable', objective: s.pillar === 'Offers and festivals' ? 'sales' : s.pillar === 'Customer glow stories' ? 'engagement' : 'awareness',
       status, origin, sourceType: origin === 'automation' ? 'calendar' : s.fmt === 'reel' ? 'reel' : s.fmt === 'carousel' ? 'carousel' : 'post',
       contentType: s.fmt === 'reel' ? 'reel' : s.fmt === 'carousel' ? 'carousel' : 'post', theme: cap(s.theme || '', 60),
-      carouselSlides: slides.map((u, n) => ({ order: n + 1, role: (slides.length === 4 ? ['hook', 'build', 'build', 'payoff'] : ['hook', 'build', 'payoff'])[n], headline: n === 0 ? s.head : (slides.length === 4 ? [product.name, 'Poured by hand', 'Shop the ritual'] : [product.name, 'Shop the ritual'])[n - 1], imageText: n === 0 ? s.head : '', imageUrl: u })),
+      carouselSlides: slides.map((u, n) => ({ order: n + 1, role: n === 0 ? 'hook' : n === slides.length - 1 ? 'payoff' : 'build', headline: slideHeads[n], imageText: slideHeads[n], imageUrl: u })),
       createdAt, updatedAt: createdAt
     };
-    const videoUrl = s.fmt === 'reel' ? (videoUrls[product.slug] || '') : '';
+    const videoUrl = s.fmt === 'reel' ? (videoUrls[s.key] || videoUrls[product.slug] || '') : '';
     if (videoUrl) draft.creative = { type: 'reel', videoUrl };
     if (cal && day) { draft.contentCalendarId = cal.id; draft.calendarWeek = Math.min(6, Math.ceil(day.d / 7)); draft.calendarDay = day.d; }
     else if (origin === 'automation' && day) { draft.calendarDay = day.d; }
@@ -277,7 +304,7 @@ function build({ userId, now, base, productIds, videoUrls = {}, hasExtraSlide = 
     // the calendar item for automation posts
     if (cal && day) {
       const calStatus = status === 'published' ? 'published' : status === 'scheduled' ? 'scheduled' : status === 'approved' ? 'approved' : 'generated';
-      cal.items.push({ day: day.d, format: s.fmt === 'carousel' ? 'carousel' : s.fmt === 'reel' ? 'reel' : 'post', contentPillar: s.pillar, headline: s.head, creativeConcept: `${product.name} on a brand-colour backdrop`,
+      cal.items.push({ day: day.d, format: s.fmt === 'carousel' ? 'carousel' : s.fmt === 'reel' ? 'reel' : 'post', contentPillar: s.pillar, headline: s.head, creativeConcept: draft.creativeConcept,
         productNeeded: product.name, shootType: 'product', cta: draft.cta, objective: draft.objective, status: calStatus, generatedCampaignId: draft.campaignId || null, scheduledFor: at });
     }
     drafts.push(draft);
@@ -303,7 +330,7 @@ function build({ userId, now, base, productIds, videoUrls = {}, hasExtraSlide = 
     };
   });
 
-  return { drafts, campaigns, calendars: calendarRows, posters, performanceItems, summary: summaryOf(drafts) };
+  return { drafts, campaigns, calendars: calendarRows, posters, composed, performanceItems, summary: summaryOf(drafts) };
 }
 
 /** Library counts for a built set, worked out with the app's own status helpers (the same rules GET /drafts/counts uses). */

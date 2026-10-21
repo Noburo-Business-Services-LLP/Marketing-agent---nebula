@@ -9,11 +9,19 @@ const fs = require('fs');
 const { PALETTE, FONTS, BRAND } = require('./constants');
 
 const FONT_DIR = path.join(__dirname, '..', '..', 'assets', 'fonts');
+const EXTRA_FONTS = Object.freeze([
+  { family: 'Poppins', file: 'Poppins-Bold.ttf' },
+  { family: 'Noto Sans Tamil', file: 'NotoSansTamil-Bold.ttf' },
+  { family: 'Noto Sans Devanagari', file: 'NotoSansDevanagari-Bold.ttf' },
+  { family: 'Noto Sans Malayalam', file: 'NotoSansMalayalam-Bold.ttf' }
+]);
 let canvasLib = null;
 function lib() {
   if (canvasLib) return canvasLib;
   canvasLib = require('canvas');
-  for (const f of [FONTS.display, FONTS.sans]) {
+  // Every face the demo pictures use is registered here, once, before the first canvas is made (node-canvas ignores fonts
+  // registered after that). The composed posts (postComposer.js) also use Poppins and the Tamil and Hindi Noto faces.
+  for (const f of [FONTS.display, FONTS.sans, ...EXTRA_FONTS]) {
     const file = path.join(FONT_DIR, f.file);
     if (fs.existsSync(file)) canvasLib.registerFont(file, { family: f.family });
   }
@@ -292,5 +300,5 @@ function deckPageJpg(page, index, { width = 794, height = 1123 } = {}) {
 module.exports = {
   logoPng, packshotJpg, posterJpg, portraitJpg, placeJpg, calendarCoverJpg, deckPageJpg, imageSize, seeded,
   // drawing helpers, shared with images3.js (Stage 3 pictures)
-  canvasOf, jpg, png, roundRect, leaf, scatterLeaves, fitText, wrap, drawContainer, crescent, DISPLAY, SANS
+  canvasOf, jpg, png, roundRect, leaf, scatterLeaves, fitText, wrap, drawContainer, crescent, DISPLAY, SANS, lib
 };

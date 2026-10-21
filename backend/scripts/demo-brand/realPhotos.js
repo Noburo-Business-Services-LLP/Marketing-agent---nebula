@@ -50,4 +50,28 @@ function summary(demoDir, dir = PHOTOS_DIR) {
   return { total: RELS.length, real, drawn: RELS.length - real, inDemo };
 }
 
-module.exports = { PHOTOS_DIR, finalDir, RELS, realFile, hasReal, applyReal, summary };
+/**
+ * The photo a composed post is made from (D125), by slot name: the full-size original (`originals/<slot>.png`, 1024 x 1280)
+ * when it is there, else the cropped real copy (`final/<rel>`), else null (the composer then uses a drawn packshot).
+ * Read only; the result is cached per file for the run.
+ */
+function photoSource(dir = PHOTOS_DIR) {
+  const cache = new Map();
+  const bySlot = Object.fromEntries(SLOTS.map((s) => [s.slot, s]));
+  return (slot) => {
+    if (cache.has(slot)) return cache.get(slot);
+    const s = bySlot[slot];
+    let out = null;
+    if (s) {
+      const original = path.join(dir, 'originals', `${s.slot}.png`);
+      const files = [original, realFile(s.rel, dir)].filter(Boolean);
+      for (const f of files) {
+        try { if (fs.statSync(f).size > 0) { out = { key: f, buffer: fs.readFileSync(f) }; break; } } catch (e) { /* not there */ }
+      }
+    }
+    cache.set(slot, out);
+    return out;
+  };
+}
+
+module.exports = { PHOTOS_DIR, finalDir, RELS, realFile, hasReal, applyReal, summary, photoSource };

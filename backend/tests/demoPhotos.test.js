@@ -73,10 +73,12 @@ test('every slot replaces a picture the seed really draws, at the same size (so 
   // the fourth slide appears only with its real photo
   const find = (b) => b.drafts.find((d) => d.imageUrl.endsWith(`/${CAROUSEL_EXTRA.key}.jpg`));
   assert.strictEqual(find(built).carouselSlides.length, 4);
-  assert.ok(find(built).carouselSlides[3].imageUrl.endsWith(CAROUSEL_EXTRA.rel));
+  // the slide is composed from that photo (D125): its own picture under feed/, and the photo itself is still copied in
+  assert.ok(find(built).carouselSlides[3].imageUrl.endsWith(`feed/${CAROUSEL_EXTRA.key}-4.jpg`));
+  assert.ok(built.posters.has(CAROUSEL_EXTRA.rel) && built.composed.has(`feed/${CAROUSEL_EXTRA.key}-4.jpg`));
   const plain = content.build({ userId: id, now: new Date(), base: 'http://localhost:5000', productIds });
   assert.strictEqual(find(plain).carouselSlides.length, 3);
-  assert.ok(!plain.posters.has(CAROUSEL_EXTRA.rel));
+  assert.ok(!plain.posters.has(CAROUSEL_EXTRA.rel) && !plain.composed.has(`feed/${CAROUSEL_EXTRA.key}-4.jpg`));
 });
 
 test('the estimate comes from apiCosts.js, the hard cap is USD 3', () => {

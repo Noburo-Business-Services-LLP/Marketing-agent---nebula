@@ -1,10 +1,10 @@
 'use strict';
 /**
  * Stage 3 pictures of the demo brand, drawn on this computer with node-canvas (no network, no model, deterministic):
- * competitor profile pictures and post pictures, Photoshoot photos, and the scenes of the short videos.
+ * competitor profile pictures and post pictures and Photoshoot photos (the video scenes are composed from the real photos: postComposer.js).
  * (sharp is not loaded here: it and node-canvas bundle their own image libraries and warn when loaded together.)
  */
-const { PALETTE, BRAND } = require('./constants');
+const { PALETTE } = require('./constants');
 const I = require('./images');
 
 const { canvasOf, jpg, roundRect, leaf, scatterLeaves, fitText, wrap, drawContainer, crescent, DISPLAY, SANS, seeded } = I;
@@ -185,67 +185,4 @@ function photoshootJpg({ product, pack, scene, aspect = '4:5', background = '', 
 
 const marketplaceOrWhite = (pack) => pack === 'marketplace' || pack === 'white';
 
-/**
- * One scene of a short video, drawn tall (9:16) or wide (16:9) at 1080 x 1920 / 1920 x 1080 so a slow zoom stays sharp.
- * kind: 'hook' (headline with the pack), 'ritual' (two or three lines on ingredient discs), 'end' (logo, line, address).
- */
-function videoSceneJpg({ product, kind, headline = '', lines = [], wide = false, variant = 0 }) {
-  const [w, h] = wide ? [1920, 1080] : [1080, 1920];
-  const { c, ctx } = canvasOf(w, h);
-  const key = `${product.slug}-${kind}-${variant}`;
-  const unit = wide ? h : w;
-  if (kind === 'hook') {
-    gradient(ctx, w, h, PALETTE.plum, '#241328');
-    scatterLeaves(ctx, w, h, key, PALETTE.sage, 8);
-    glow(ctx, w * 0.5, h * (wide ? 0.6 : 0.62), unit * 0.75, 'rgba(201,139,123,A)', 0.4);
-    // The Library and Videos tiles show a 4:5 crop of this picture (the middle of it), so the words and the product sit in the middle.
-    ctx.fillStyle = PALETTE.cream; ctx.textAlign = wide ? 'center' : 'left'; ctx.font = `${Math.round(unit * (wide ? 0.085 : 0.095))}px ${DISPLAY}`;
-    const maxW = wide ? w * 0.4 : w * 0.84;
-    const x0 = wide ? w * 0.5 : w * 0.08;
-    wrap(ctx, headline, maxW).slice(0, 4).forEach((l, i) => ctx.fillText(l, x0, h * (wide ? 0.3 : 0.3) + i * unit * (wide ? 0.1 : 0.11)));
-    ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(unit * 0.034)}px ${SANS}`;
-    ctx.fillText(BRAND.name.toUpperCase(), x0, h * (wide ? 0.14 : 0.235));
-    drawContainer(ctx, product, wide ? w * 0.5 : w / 2, h * (wide ? 0.97 : 0.82), h * (wide ? 0.5 : 0.33));
-    return jpg(c);
-  }
-  if (kind === 'ritual') {
-    gradient(ctx, w, h, PALETTE.cream, '#EAD3CB');
-    scatterLeaves(ctx, w, h, key, PALETTE.sage, 10);
-    const cx = wide ? w * 0.28 : w / 2;
-    drawContainer(ctx, product, cx, h * (wide ? 0.88 : 0.5), h * (wide ? 0.7 : 0.3));
-    ctx.fillStyle = PALETTE.plum; ctx.textAlign = wide ? 'left' : 'center';
-    const x0 = wide ? w * 0.52 : w / 2;
-    ctx.font = `${Math.round(unit * 0.06)}px ${DISPLAY}`;
-    ctx.fillText(headline, x0, h * (wide ? 0.2 : 0.6));
-    ctx.font = `${Math.round(unit * 0.04)}px ${SANS}`;
-    lines.slice(0, 3).forEach((l, i) => {
-      const y = h * (wide ? 0.34 : 0.67) + i * unit * 0.085;
-      ctx.fillStyle = PALETTE.roseGold; ctx.beginPath(); ctx.arc(x0 + (wide ? unit * 0.02 : -wrapW(ctx, l) / 2 - unit * 0.035), y - unit * 0.012, unit * 0.012, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = PALETTE.plum; ctx.fillText(l, wide ? x0 + unit * 0.055 : x0, y);
-    });
-    product.ingredients.slice(0, 4).forEach((ing, i) => {
-      const x = wide ? w * (0.56 + 0.1 * i) : w * (0.2 + 0.2 * i); const y = h * (wide ? 0.82 : 0.9);
-      ctx.fillStyle = 'rgba(59,31,58,0.9)'; ctx.beginPath(); ctx.arc(x, y, unit * 0.055, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = PALETTE.cream; ctx.textAlign = 'center'; fitText(ctx, ing.split(' ')[0], unit * 0.09, Math.round(unit * 0.022), SANS); ctx.fillText(ing.split(' ')[0], x, y + unit * 0.008);
-    });
-    return jpg(c);
-  }
-  // end card
-  gradient(ctx, w, h, PALETTE.plum, '#2A1530');
-  const rLogo = unit * (wide ? 0.2 : 0.2);
-  const cx = w / 2; const cy = h * (wide ? 0.4 : 0.38);
-  ctx.fillStyle = PALETTE.plum; ctx.beginPath(); ctx.arc(cx, cy, rLogo * 1.4, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = PALETTE.roseGold; ctx.lineWidth = unit * 0.004; ctx.beginPath(); ctx.arc(cx, cy, rLogo * 1.4, 0, Math.PI * 2); ctx.stroke();
-  crescent(ctx, cx, cy - rLogo * 0.25, rLogo * 0.55, PALETTE.roseGold, PALETTE.plum);
-  ctx.fillStyle = PALETTE.cream; ctx.textAlign = 'center'; ctx.font = `${Math.round(rLogo * 0.7)}px ${DISPLAY}`; ctx.fillText('Zaya', cx, cy + rLogo * 0.75);
-  ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(rLogo * 0.2)}px ${SANS}`; ctx.fillText('N A T U R A L S', cx, cy + rLogo * 1.05);
-  ctx.fillStyle = PALETTE.cream; ctx.font = `${Math.round(unit * (wide ? 0.05 : 0.055))}px ${DISPLAY}`;
-  wrap(ctx, headline || BRAND.tagline, w * 0.8).slice(0, 3).forEach((l, i) => ctx.fillText(l, cx, h * (wide ? 0.74 : 0.66) + i * unit * 0.07));
-  ctx.fillStyle = PALETTE.roseGold; ctx.font = `${Math.round(unit * 0.034)}px ${SANS}`;
-  ctx.fillText(BRAND.website.replace('https://', ''), cx, h * (wide ? 0.92 : 0.86));
-  return jpg(c);
-}
-
-function wrapW(ctx, text) { return ctx.measureText(text).width; }
-
-module.exports = { competitorAvatarJpg, competitorPostJpg, photoshootJpg, videoSceneJpg, PHOTO_SIZES };
+module.exports = { competitorAvatarJpg, competitorPostJpg, photoshootJpg, PHOTO_SIZES };

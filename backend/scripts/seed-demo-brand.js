@@ -136,6 +136,27 @@ function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}
     fs.writeFileSync(file, buffer);
     return { buffer, made: true };
   };
+  // the composed post pictures (D125) are drawn on every run and written only when the bytes changed (they are deterministic)
+  const writeFresh = (rel, draw) => {
+    const file = path.join(demoDir, rel);
+    const buffer = draw();
+    if (fs.existsSync(file) && fs.readFileSync(file).equals(buffer)) return { buffer, made: false };
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, buffer);
+    return { buffer, made: true };
+  };
+  // files left in a picture folder by an older run that nothing links to any more (old drawn posters, old reel clips)
+  const pruneFolder = (folder, keep) => {
+    const dir = path.join(demoDir, folder);
+    if (!fs.existsSync(dir)) return 0;
+    let n = 0;
+    for (const f of fs.readdirSync(dir)) {
+      if (keep.has(`${folder}/${f}`) || f.startsWith('.')) continue;
+      fs.rmSync(path.join(dir, f), { force: true }); n += 1;
+    }
+    return n;
+  };
+  const photoSource = realPhotos.photoSource(photosDir);
 
   return {
     async connect(uri) {
@@ -201,7 +222,7 @@ function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}
 
       // 6. Stage 2: plan, Blueprint, calendars, posts, campaigns, results, daily numbers, brand memory.
       // These are rebuilt on every run (their own tagged rows only), so dates are always counted back from today.
-      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw), videoUrls: videosMod.videoUrlsOf(base), hasExtraSlide: (rel) => realPhotos.hasReal(rel, photosDir) });
+      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw), videoUrls: { ...videosMod.videoUrlsOf(base), ...videosMod.reelUrlsOf(base) }, hasExtraSlide: (rel) => realPhotos.hasReal(rel, photosDir) });
       Object.assign(added, rebuilt);
 
       // 7. Stage 3: competitors, Inbox, Photoshoot, Videos (rebuilt on every run, like Stage 2), then the brand memory learns once
@@ -232,9 +253,12 @@ function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}
       const prods = await m.Product.find(safety.markerFilter('Product', uid)).select('name category imageUrl').lean();
       const productIds = {};
       for (const p of PRODUCTS) { const row = prods.find((x) => x.name === p.name); if (row) productIds[p.slug] = row._id; }
-      const built = contentMod.build({ userId: uid, now, base, productIds, videoUrls, hasExtraSlide });
+      const built = contentMod.build({ userId: uid, now, base, productIds, videoUrls, hasExtraSlide, photoSource });
       let files = 0;
       for (const [rel, draw] of built.posters) { if (write(rel, draw).made) files += 1; }
+      for (const [rel, draw] of built.composed) { if (writeFresh(rel, draw).made) files += 1; }
+      pruneFolder('feed', new Set(built.composed.keys()));
+      pruneFolder('posts', new Set(built.posters.keys()));
       out['picture files'] = (out['picture files'] || 0) + files + deck.length;
       await m.ContentCalendar.insertMany(built.calendars);
       await m.Campaign.insertMany(built.campaigns);
@@ -312,9 +336,10 @@ function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}
       // Videos (made with ffmpeg; a missing ffmpeg leaves the poster only and the video is not listed)
       let made = 0; const skipped = [];
       for (const v of [...videosMod.VIDEOS, ...videosMod.REELS]) {
-        const r = videosMod.makeVideo({ demoDir, video: v });
+        const r = videosMod.makeVideo({ demoDir, video: v, photo: photoSource });
         made += r.made; if (r.skipped) skipped.push(`${v.slug}: ${r.skipped}`);
       }
+      pruneFolder('videos', new Set([...videosMod.VIDEOS, ...videosMod.REELS].flatMap((v) => [videosMod.mp4Rel(v), videosMod.posterRel(v)])));
       const rows = videosMod.build({ userId: uid, now, base, hasFile: (v) => fs.existsSync(path.join(demoDir, videosMod.mp4Rel(v))) });
       if (rows.length) await m.StudioVideo.insertMany(rows);
       out.videos = rows.length; files += made;
