@@ -30,3 +30,13 @@ A fictional direct-to-consumer ayurveda-inspired skincare brand with a complete 
 
 ## Rename the brand
 Change `BRAND` in `backend/scripts/demo-brand/constants.js` (and the email and key in `safety.js`), then `remove` and `create`.
+
+## Stage 2 (content): plan, Blueprint, memory, calendar, posts, results (2026-10-21)
+`create` now also builds, in this order (modules in `backend/scripts/demo-brand/`):
+1. `plan.js`: My plan (a completed Blueprint of kind plan, 5 pillars, 30-day calendar, 3 customer segments, 4 online channels with who does what, 3 offline rows (pop-ups, salon partnerships, referrals), 5 numbers to watch, 3 roadmap phases, mix) and a finished free Blueprint with its designed edition (11 page pictures drawn locally, no PDF). Built through the app's own `assembleBlueprint`.
+2. `content.js` and `contentBank.js`: 5 monthly calendars (last four months done, current month in progress, each with a local cover), 90 posts and 65 campaigns (scheduled and posted). Library counts: needs approval 8, drafts 4, approved 4, scheduled 10, posted 55, archived 6, bin 3. A poster per post (product, headline, brand colours, 4:5) under `/demo-assets/zaya/posts/`. Captions in English with Tamil touches, hashtags, platforms, `campaignId` links, fake provider ids `demo-zaya-post-<n>`.
+3. `performance.js`: 97 measured post rows (`ai_content_performance`, figures in the publishing service's shape, `metrics` computed by `metricsFromRaw`) and 181 daily snapshots for Instagram (34,280 followers), Facebook, YouTube and LinkedIn, ending on the stored numbers. Story: followers about +7 percent a month, reels about 2.5 times image posts, Fridays, Sundays and evenings best.
+4. `memory.js`: runs the app's own brand memory runner (no model call). Six sources: plan, Blueprint, customers, products and results learn; competitors honestly says "not enough yet" until Stage 3 seeds competitors.
+
+Every run of `create` deletes and rebuilds these Stage 2 rows (D115) so dates are counted back from today; the account, password, payments, products and pictures are kept. `status` prints a count for each collection; `remove` deletes all of it plus the picture folder. Check the screens' data with `node scripts/demo-brand-login-check.js --password-file <file>` (Library counts and every view, Performance for week, month and 90 days, My plan, Blueprint, calendar, What Nebulaa learned, Home).
+
