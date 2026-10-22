@@ -106,7 +106,7 @@ function ffmpegPath() {
  * { made: number of files made, skipped: reason or '' }. When ffmpeg is missing the poster is still made and the
  * video is reported as skipped, so the caller can say so.
  */
-function makeVideo({ demoDir, video, run = spawnSync, ffmpeg = ffmpegPath(), photo }) {
+function makeVideo({ demoDir, video, run = spawnSync, ffmpeg = ffmpegPath(), photo, clip: wantClip = true }) {
   const poster = path.join(demoDir, posterRel(video)); const clip = path.join(demoDir, mp4Rel(video));
   fs.mkdirSync(path.dirname(poster), { recursive: true });
   const scenes = photo ? scenesOf(video, photo) : scenesOf(video);
@@ -115,6 +115,8 @@ function makeVideo({ demoDir, video, run = spawnSync, ffmpeg = ffmpegPath(), pho
   // so an unchanged video is never remade)
   const same = fs.existsSync(poster) && fs.readFileSync(poster).equals(scenes[0]);
   if (!same) { fs.writeFileSync(poster, scenes[0]); made += 1; fs.rmSync(clip, { force: true }); }
+  // a slot a kept real video fills (D127) keeps its poster only (the Library tile); a leftover drawn clip is removed
+  if (!wantClip) { fs.rmSync(clip, { force: true }); return { made, skipped: '' }; }
   if (fs.existsSync(clip)) return { made, skipped: '' };
   if (!ffmpeg) return { made, skipped: 'ffmpeg is not available' };
   const work = fs.mkdtempSync(path.join(path.dirname(clip), '.work-'));

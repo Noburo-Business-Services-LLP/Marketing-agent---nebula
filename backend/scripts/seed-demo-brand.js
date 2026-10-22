@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const safety = require('./demo-brand/safety');
 const realPhotos = require('./demo-brand/realPhotos');
+const realVideos = require('./demo-brand/realVideos');
 const { BRAND, PRODUCTS, SOCIALS } = require('./demo-brand/constants');
 
 const DEMO_DIR = path.join(__dirname, '..', 'demo-assets', 'zaya');
@@ -222,12 +223,14 @@ function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}
 
       // 6. Stage 2: plan, Blueprint, calendars, posts, campaigns, results, daily numbers, brand memory.
       // These are rebuilt on every run (their own tagged rows only), so dates are always counted back from today.
-      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw), videoUrls: { ...videosMod.videoUrlsOf(base), ...videosMod.reelUrlsOf(base) }, hasExtraSlide: (rel) => realPhotos.hasReal(rel, photosDir) });
+      // real videos the owner made in the app and adopted (scripts/demo-real-videos.js) are kept: the reels they play for are linked to them
+      const kept = await this.keptVideos(user._id);
+      const rebuilt = await this.createContent({ user, base, createdAt, now, writeAsset: (rel, draw) => writeAsset(rel, draw), videoUrls: { ...videosMod.videoUrlsOf(base), ...videosMod.reelUrlsOf(base), ...kept.reelUrls }, hasExtraSlide: (rel) => realPhotos.hasReal(rel, photosDir) });
       Object.assign(added, rebuilt);
 
       // 7. Stage 3: competitors, Inbox, Photoshoot, Videos (rebuilt on every run, like Stage 2), then the brand memory learns once
       // from everything (it reads the competitors too).
-      const stage3 = await this.createStage3({ user, base, now, writeAsset: (rel, draw) => writeAsset(rel, draw) });
+      const stage3 = await this.createStage3({ user, base, now, writeAsset: (rel, draw) => writeAsset(rel, draw), kept });
       added['picture files'] = (added['picture files'] || 0) + (stage3['picture files'] || 0);
       Object.assign(added, { ...stage3, 'picture files': added['picture files'] });
       added['brand memory items'] = await this.learnMemory(user._id);
@@ -298,13 +301,20 @@ function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}
      * Stage 3. Deletes the demo user's own rows of these collections (the demo account owns them all), then builds them fresh:
      * 5 competitors with 12 weekly readings each, 25 Inbox conversations with their settings, 3 photoshoots and 5 videos.
      */
-    async createStage3({ user, base, now, writeAsset: write }) {
+    /** The kept real videos of the demo user (see demo-brand/realVideos.js): { reelUrls, products, reels }. */
+    async keptVideos(uid) {
+      const rows = await models().StudioVideo.find({ user: uid, demoKeep: { $nin: ['', null] } }).select('status videoUrl demoKeep').lean();
+      return realVideos.keepState(rows);
+    },
+
+    async createStage3({ user, base, now, writeAsset: write, kept = { reelUrls: {}, products: new Set(), reels: new Set() } }) {
       const m = models();
       const uid = user._id;
       const out = {};
       for (const name of ['Competitor', 'CompetitorSnapshot', 'SocialInboxConversation', 'SocialInboxMessage', 'AutoReplySettings']) await m[name].deleteMany({ userId: uid });
       for (const name of ['PhotoshootJob']) await m[name].deleteMany({ user: uid });
-      await m.StudioVideo.deleteMany({ user: uid });
+      // the drawn rows only: a kept real video (demoKeep) is never wiped
+      await m.StudioVideo.deleteMany({ user: uid, demoKeep: { $in: ['', null] } });
       // pictures that depend on today's date are redrawn (the video files are kept: they never change)
       for (const dir of ['competitors', 'photoshoot']) fs.rmSync(path.join(demoDir, dir), { recursive: true, force: true });
       let files = 0;
@@ -335,12 +345,15 @@ function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}
 
       // Videos (made with ffmpeg; a missing ffmpeg leaves the poster only and the video is not listed)
       let made = 0; const skipped = [];
-      for (const v of [...videosMod.VIDEOS, ...videosMod.REELS]) {
-        const r = videosMod.makeVideo({ demoDir, video: v, photo: photoSource });
+      // a slot a kept real video fills is not redrawn: its Videos-page clip is skipped, a reel keeps only its poster (the Library tile)
+      const drawnStudio = videosMod.VIDEOS.filter((v) => !kept.products.has(v.slug));
+      const drawnClips = videosMod.REELS.filter((r) => !kept.reels.has(r.slug));
+      for (const v of [...drawnStudio, ...videosMod.REELS]) {
+        const r = videosMod.makeVideo({ demoDir, video: v, photo: photoSource, clip: !kept.reels.has(v.slug) || !v.reel });
         made += r.made; if (r.skipped) skipped.push(`${v.slug}: ${r.skipped}`);
       }
-      pruneFolder('videos', new Set([...videosMod.VIDEOS, ...videosMod.REELS].flatMap((v) => [videosMod.mp4Rel(v), videosMod.posterRel(v)])));
-      const rows = videosMod.build({ userId: uid, now, base, hasFile: (v) => fs.existsSync(path.join(demoDir, videosMod.mp4Rel(v))) });
+      pruneFolder('videos', new Set([...drawnStudio.flatMap((v) => [videosMod.mp4Rel(v), videosMod.posterRel(v)]), ...drawnClips.flatMap((v) => [videosMod.mp4Rel(v), videosMod.posterRel(v)]), ...videosMod.REELS.filter((r) => kept.reels.has(r.slug)).map((r) => videosMod.posterRel(r))]));
+      const rows = videosMod.build({ userId: uid, now, base, hasFile: (v) => !kept.products.has(v.slug) && fs.existsSync(path.join(demoDir, videosMod.mp4Rel(v))) });
       if (rows.length) await m.StudioVideo.insertMany(rows);
       out.videos = rows.length; files += made;
       if (skipped.length) out['videos skipped'] = skipped.join('; ');
@@ -413,7 +426,9 @@ function realDeps({ demoDir = DEMO_DIR, photosDir = realPhotos.PHOTOS_DIR } = {}
       check(shoots.length === 3 && shoots.every((j) => j.status === 'done' && j.photos.every((p) => p.status === 'done' && onDisk(p.url))), `${shoots.length} finished photoshoots with ${shoots.reduce((n, j) => n + j.photos.length, 0)} photos on disk`);
       const vids = await m.StudioVideo.find(safety.markerFilter('StudioVideo', u._id)).lean();
       const files = vids.filter((v) => onDisk(v.videoUrl) && onDisk(v.videoUrl.replace(/\.mp4$/, '.jpg')));
-      check(vids.length === videosMod.VIDEOS.length && files.length === vids.length, `${vids.length} finished videos, each a playable file with a poster on disk`);
+      const kept = await this.keptVideos(u._id);
+      const drawnExpected = videosMod.VIDEOS.filter((v) => !kept.products.has(v.slug)).length;
+      check(vids.length === drawnExpected && files.length === vids.length, `${vids.length} finished drawn videos, each a playable file with a poster on disk${kept.products.size || kept.reels.size ? `, plus ${await m.StudioVideo.countDocuments({ user: u._id, demoKeep: { $nin: ['', null] } })} kept real video(s)` : ''}`);
       const reelsWithVideo = await m.Draft.countDocuments({ userId: u._id, 'creative.videoUrl': { $regex: /\.mp4$/ } });
       check(reelsWithVideo > 0, `${reelsWithVideo} reels in the Library point at these videos`);
       if (password) check(await u.comparePassword(password), 'the new password signs in');

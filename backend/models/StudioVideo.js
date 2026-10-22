@@ -56,7 +56,10 @@ const studioVideoSchema = new mongoose.Schema({
   clipUrls: { type: [String], default: [] },
   work: { type: mongoose.Schema.Types.Mixed, default: null },
   startedAt: { type: Date, default: Date.now },
-  completedAt: { type: Date, default: null }
+  completedAt: { type: Date, default: null },
+  // Demo account only (D127): set by scripts/demo-real-videos.js on a real video the demo keeps, '<product slug>|<reel post key>'.
+  // Nothing in the app reads or sets it.
+  demoKeep: { type: String, default: '' }
 }, { collection: 'studio_videos', timestamps: true });
 
 studioVideoSchema.index({ user: 1, createdAt: -1 });
