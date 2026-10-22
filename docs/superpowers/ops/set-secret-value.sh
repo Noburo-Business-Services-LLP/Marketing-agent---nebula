@@ -10,6 +10,8 @@ aws() { docker run --rm -i -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
 SECRET_ID="${SECRET_ID:-nebulaa-gravity/prod/backend}"
 export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh" >/dev/null 2>&1 || true
+command -v node >/dev/null 2>&1 || nvm use 20 >/dev/null 2>&1 || nvm use default >/dev/null 2>&1 || true
+command -v node >/dev/null 2>&1 || { echo "Node is not available in this terminal. Run: nvm use 20   (then run this script again). Nothing was changed."; exit 1; }
 
 echo "Settings you can set here: $ALLOWED"
 read -r -p "Name of the setting: " NAME
