@@ -138,8 +138,8 @@ router.post('/concept', protect, async (req, res) => {
     const clips = sv.clipsOf(b.clips);
     const prompt = sv.buildConceptPrompt({
       idea: b.idea, style: b.style, language, brand, clips, aspectRatio: sv.aspectOf(b.aspectRatio),
-      who: [sv.clip(b.who, 200), names('person') && `the person in the saved photo "${names('person')}"`].filter(Boolean).join('; '),
-      where: [sv.clip(b.where, 200), names('place') && `the place in the saved photo "${names('place')}"`].filter(Boolean).join('; '),
+      who: [sv.clip(b.who, 300), names('person') && `the person in the saved photo "${names('person')}"`].filter(Boolean).join('; '),
+      where: [sv.clip(b.where, 300), names('place') && `the place in the saved photo "${names('place')}"`].filter(Boolean).join('; '),
       products: names('product')
     });
     const raw = await callTextLLM(prompt, { jsonMode: true, maxTokens: 900 + 350 * (clips - 1), language: language === 'none' ? 'english' : language, purpose: 'plan' });

@@ -73,7 +73,9 @@ const PickRow: React.FC<{
       {onCreate && <GravityButton variant="ghost" onClick={onCreate} className="!py-2"><Sparkles className="h-4 w-4 text-[var(--gv-accent)]" /> {createLabel || 'Create with AI'}</GravityButton>}
       {picked.length > 0 && <button type="button" onClick={onClear} className="text-[12.5px] text-[var(--gv-text-tertiary)] underline underline-offset-2">Remove</button>}
     </div>
-    <input value={text} onChange={(e) => onText(e.target.value)} className={`${field} mt-3`} placeholder={placeholder} maxLength={200} />
+    {onCreate !== undefined || placeholder ? (
+      <textarea value={text} onChange={(e) => onText(e.target.value)} className={`${field} mt-3 resize-y`} rows={3} placeholder={placeholder} maxLength={300} aria-label={title} />
+    ) : null}
   </div>
 );
 
