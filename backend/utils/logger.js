@@ -20,7 +20,15 @@ const REDACT_PATHS = [
   'res.headers["set-cookie"]',
   'headers.authorization',
   'headers.cookie',
-  'query.token'
+  'query.token',
+  'headers["X-Twitter-OAuth1-Api-Key"]',
+  'headers["X-Twitter-OAuth1-Api-Secret"]',
+  'headers["x-twitter-oauth1-api-key"]',
+  'headers["x-twitter-oauth1-api-secret"]',
+  'AYRSHARE_X_API_KEY',
+  'AYRSHARE_X_API_SECRET',
+  'twitterApiKey',
+  'twitterApiSecret'
 ];
 
 /** Remove secrets from a text: ?token=... / &token=... / "token": "..." values and Bearer tokens. */

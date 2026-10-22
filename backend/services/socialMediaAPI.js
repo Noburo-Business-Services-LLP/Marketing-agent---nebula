@@ -234,7 +234,12 @@ function _trackAyrshareCall(url, method, statusBucket) {
   } catch (err) { logger.debug('ayrshare call counter: not recorded: %s', err && err.message); }
 }
 
+const xBye = require('./xByoKeys');
+
 async function makeRequest(url, options = {}) {
+  // X keys (BYO): both headers when keys exist and the call targets X or cannot be told; nothing otherwise.
+  const _xh = xBye.xHeadersFor(url, options);
+  if (Object.keys(_xh).length) options = { ...options, headers: { ..._xh, ...options.headers } };
   // DEMO ACCOUNT GUARD (D112): a fake profile key is answered here, offline. Checked first, so no call and no counter.
   if (demoProfile.requestUsesDemoKey(options)) {
     console.log('[demo account] no provider call made');
@@ -301,6 +306,11 @@ async function makeRequest(url, options = {}) {
           if (usedPct >= 70) {
             console.warn(`[Ayrshare rate-limit] ${rlCount}/${rlMax} used (${usedPct}%) on ${url}`);
           }
+        }
+
+        if (res.statusCode >= 400 && xBye.hasXKeys()) {
+          let _d = data; try { _d = JSON.parse(data); } catch (_) { /* text */ }
+          xBye.logXFailure(parsedUrl.pathname, xBye.mapXError(res.statusCode, _d));
         }
 
         try {
@@ -776,15 +786,15 @@ async function getAyrshareProfile() {
  * Generate Ayrshare connect URL for a specific platform
  * This opens Ayrshare's OAuth flow for the platform
  */
-function getAyrshareConnectUrl(platform, redirectUrl, user) {
+async function getAyrshareConnectUrl(platform, redirectUrl, user) {
   try {
-    const jwtResult = generateAyrshareJWT(user, {
+    const jwtResult = await generateAyrshareJWT(user, {
       redirect: redirectUrl,
       allowedSocial: [platform.toLowerCase()]
     });
 
     if (!jwtResult.success) {
-      return { success: false, error: jwtResult.error || 'Failed to generate JWT for connect URL' };
+      return { success: false, error: jwtResult.error || 'Failed to generate JWT for connect URL', ...(jwtResult.xFailure ? { xFailure: jwtResult.xFailure } : {}) };
     }
 
     const connectUrl = jwtResult.url;
@@ -978,6 +988,7 @@ async function generateAyrshareJWT(user, options = {}) {
     if (options.allowedSocial && Array.isArray(options.allowedSocial)) {
       body.allowedSocial = options.allowedSocial;
     }
+    Object.assign(body, xBye.xLinkFields(options.allowedSocial));
 
     const response = await makeRequest('https://api.ayrshare.com/api/profiles/generateJWT', {
       method: 'POST',
@@ -992,9 +1003,12 @@ async function generateAyrshareJWT(user, options = {}) {
       console.log("Generated Ayrshare JWT URL from API:", response.data.url);
       return { success: true, url: response.data.url };
     } else {
+      const mapped = xBye.mapXError(response.status, response.data);
+      xBye.logXFailure('generateJWT', mapped);
       return {
         success: false,
-        error: response.data?.message || response.data?.error || 'Failed to generate JWT URL via API'
+        error: response.data?.message || response.data?.error || 'Failed to generate JWT URL via API',
+        ...(mapped ? { xFailure: { staff: mapped.staff, customer: mapped.customer } } : {})
       };
     }
   } catch (error) {

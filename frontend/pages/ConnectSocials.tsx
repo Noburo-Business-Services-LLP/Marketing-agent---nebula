@@ -14,7 +14,7 @@ import { inboxConnectedCount } from '../utils/inbox';
 import AutoReplySettingsPage from './AutoReplySettingsPage';
 import UpgradePrompt from '../components/UpgradePrompt';
 import { UpgradeInfo, upgradeInfoOf } from '../utils/plans';
-import { customerMessage } from '../utils/errors';
+import { customerMessage, gateMessage } from '../utils/errors';
 import { safeHref } from '../utils/safeHref';
 
 // X (Twitter) logo SVG component
@@ -431,10 +431,16 @@ const ConnectSocials: React.FC = () => {
       }
       console.error('OAuth connect error:', error);
       const needsUpgrade = upgradeInfoOf(error);
-      if (needsUpgrade) { setUpgrade(needsUpgrade); setLoadingPlatform(null); setConnectingPlatform(null); return; }
+      if (needsUpgrade) {
+        setUpgrade(needsUpgrade);
+        let staff = false;
+        try { const me: any = (await apiService.getCurrentUser()).user; staff = !!(me && (me.staffRole || me.isCsm || me.actingCsm)); } catch (_) { /* customer view */ }
+        setNotification({ type: 'error', message: gateMessage(needsUpgrade.message, staff) });
+        setLoadingPlatform(null); setConnectingPlatform(null); return;
+      }
       setNotification({
         type: 'error',
-        message: customerMessage(error.message || `Nebulaa could not connect to ${platform}.`)
+        message: customerMessage(error?.data?.error || error.message || `Nebulaa could not connect to ${platform}.`)
       });
       setLoadingPlatform(null);
       setConnectingPlatform(null);

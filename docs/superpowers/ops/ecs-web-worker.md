@@ -269,3 +269,15 @@ Never turn it on in the web service while NO task runs the consumer (worker at 0
 
 ## Real-database check
 `cd backend && node scripts/scaling-check.js` (nebulaa_dev only, throwaway rows, cleanup, non-zero on any FAIL or leftover): two limiter instances share one count, 50 counts at once are exact, a window ends, the TTL indexes exist, OAuth state single use / wrong purpose / expired, two image runners claim each job exactly once, the 6th waiting job is refused, a lost job is failed and not re-run. Last run: 9 PASS, 0 FAIL.
+
+## X (Twitter) keys for Ayrshare
+
+Since 31 March 2026 X requires our own X developer keys for every social-service operation. Without them the connect popup shows "X/Twitter: Not available" for every client.
+
+1. Create or open the X developer app. It needs Read and write and Direct message permissions, and the callback URL from Ayrshare's guide (Dashboard, Connect social accounts, X BYO keys).
+2. Fund X credits (without them X calls fail with "credits used up").
+3. Set the two secret names with `bash docs/superpowers/ops/set-secret-value.sh`: `AYRSHARE_X_API_KEY` (X Consumer Key) and `AYRSHARE_X_API_SECRET` (X Consumer Secret). Check with `bash docs/superpowers/ops/check-secret-keys.sh`.
+4. Restart or redeploy the web and worker tasks.
+5. Every client who linked X before the switch must RE-LINK X from the Connect screen.
+
+Both names must be set; one alone is ignored. When both are unset, behaviour is exactly as before (no extra headers, nothing added to the linking request). Customers see "Connecting X is not available right now. Our team has been notified." on a failure; staff and CSM sessions see the short real reason, and the server log has a line starting `[X keys]` (reason only, never the keys).

@@ -17,3 +17,12 @@ export function customerMessage(text: unknown, fallback: string = GENERIC_ERROR_
   const value = text && typeof text === 'object' && 'message' in (text as object) ? (text as { message: unknown }).message : text;
   return isSafeCustomerMessage(value) ? (value as string).trim() : fallback;
 }
+
+export const SOCIAL_ADDON_MESSAGE = 'This account needs the Publish add-on to connect social accounts.';
+
+// The add-on gate: staff and CSM sessions see the server's real reason (it may say "plan"); customers get one plain sentence.
+export function gateMessage(serverMessage: unknown, isStaff: boolean, plain: string = SOCIAL_ADDON_MESSAGE): string {
+  if (!isStaff || typeof serverMessage !== 'string') return plain;
+  const t = serverMessage.trim();
+  return t && t.length <= 200 ? t : plain;
+}

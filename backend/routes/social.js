@@ -481,11 +481,13 @@ router.get('/:platform/auth', protect, requireFeature('social_connect'), async (
     });
     
     if (!jwtResult.success) {
-      console.error('Failed to generate Ayrshare JWT:', jwtResult.error);
+      console.error('Failed to generate Ayrshare JWT:', jwtResult.xFailure ? 'X setup problem (see [X keys] log)' : jwtResult.error);
       return res.status(500).json({
         success: false,
         message: 'Failed to generate social linking URL',
-        error: friendlyMessage(jwtResult, 'social')
+        error: jwtResult.xFailure
+          ? ((req.user && req.user.staffRole) || req.actingCsm ? jwtResult.xFailure.staff : jwtResult.xFailure.customer)
+          : friendlyMessage(jwtResult, 'social')
       });
     }
     
@@ -1870,7 +1872,9 @@ router.get('/ayrshare/connect-url/:platform', protect, requireFeature('social_co
     } else {
       res.json({
         success: false,
-        message: result.error || 'Failed to get connect URL',
+        message: result.xFailure
+          ? ((req.user && req.user.staffRole) || req.actingCsm ? result.xFailure.staff : result.xFailure.customer)
+          : (result.error || 'Failed to get connect URL'),
         connectUrl: null
       });
     }

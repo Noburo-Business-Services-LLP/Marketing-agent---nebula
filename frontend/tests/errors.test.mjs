@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isSafeCustomerMessage, customerMessage, GENERIC_ERROR_MESSAGE } from '../utils/errors.ts';
+import { isSafeCustomerMessage, customerMessage, gateMessage, SOCIAL_ADDON_MESSAGE, GENERIC_ERROR_MESSAGE } from '../utils/errors.ts';
 
 test('plain messages are safe', () => {
   assert.equal(isSafeCustomerMessage('Failed to create social linking profile.'), true);
@@ -43,4 +43,13 @@ test('an Error object is read through its message', () => {
   assert.equal(customerMessage(new Error('Ayrshare rejected the request')), GENERIC_ERROR_MESSAGE);
   assert.equal(customerMessage({ message: 'Your role cannot do this.' }), 'Your role cannot do this.');
   assert.equal(customerMessage(new Error(''), 'Could not add.'), 'Could not add.');
+});
+
+test('gateMessage: staff see the real reason, customers one plain sentence', () => {
+  assert.equal(gateMessage('This needs an add-on. Please add it to your plan or upgrade.', true), 'This needs an add-on. Please add it to your plan or upgrade.');
+  assert.equal(gateMessage('This needs an add-on. Please add it to your plan or upgrade.', false), SOCIAL_ADDON_MESSAGE);
+  assert.equal(gateMessage(undefined, true), SOCIAL_ADDON_MESSAGE);
+  assert.equal(isSafeCustomerMessage(SOCIAL_ADDON_MESSAGE), true);
+  assert.equal(isSafeCustomerMessage('Connecting X is not available right now. Our team has been notified.'), true);
+  assert.equal(isSafeCustomerMessage('X is not set up on our social service yet.'), true);
 });
