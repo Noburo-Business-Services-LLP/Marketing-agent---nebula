@@ -20,6 +20,54 @@ Can the demo account run Create video? Yes, with one fix (done) and the dev setu
 | Database disk | The Atlas cluster once hit its write-blocking disk limit (see memory). If Create video says it could not start, check the Atlas disk first. |
 | Failed videos | Quarks are returned automatically; no money is lost besides what Google already billed. |
 
+## The six entries (paste as written)
+
+Common settings: shape Vertical (9:16), length 1 clip (10 seconds), platforms Instagram and YouTube, Logo off, Subtitles on if offered. The style names below are the tiles in the Videos page (keys from `backend/services/studioVideo.js` in brackets). The spoken line is said once (say-it-once rule): paste it into the spoken line box after planning, replacing what the plan suggests, and keep it to about 15 to 20 words so it fits 10 seconds. Voice is chosen per entry. Reference photos are in `backend/demo-assets/zaya/`.
+
+### 1. Kumkumadi serum, the product reveal
+- Style tile: Product Showcase (`product-showcase`). Language: English. Voice: Female.
+- Reference photo: `products/kumkumadi-glow-serum-1.jpg` (and `products/kumkumadi-glow-serum-2.jpg`).
+- Idea to paste: `A slow, calm reveal of the Kumkumadi Glow Serum, 30 ml, Rs 1,299. The amber bottle sits on a warm, softly lit shelf with a few saffron strands and sandalwood. The camera moves in slowly, a hand lifts the bottle and a single golden drop falls from the dropper. Warm, honest, a little poetic.`
+- Spoken line: "Saffron, manjistha and sandalwood. Three drops every night. Kumkumadi Glow Serum, from Zaya Naturals."
+- Expect: the bottle matching the photo, warm golden light, a drop from the dropper, a calm female voice. Check: the bottle shape and label colour look like the photo, no extra text or wrong brand name, the line is said once, the end is not cut mid-word.
+
+### 2. Saffron and Sandal clay mask, the ritual
+- Style tile: Get Ready With Me (`get-ready-with-me`). Language: English. Voice: Female.
+- Reference photo: `products/saffron-sandal-face-mask-1.jpg` and the person `people/model-aarthi.jpg`.
+- Idea to paste: `A Sunday glow ritual: Aarthi, relaxed at her bathroom mirror, mixes the Saffron and Sandal Face Mask (100 g, Rs 749) with rose water, spreads it on her face, smiles while it rests, then rinses and touches her glowing cheek. First person, natural morning light, calm and unhurried.`
+- Spoken line: "Mix with rose water, ten minutes of rest, then rinse. My Sunday glow, with the Saffron and Sandal mask."
+- Expect: a relaxed routine in steps, the pot matching the photo. Check: the face and hands look natural, the mask colour is a warm sand tone (not green), the product name is not misspelled on screen, one clean line of speech.
+
+### 3. Diwali Glow Gift Box, the festive offer
+- Style tile: Festive Campaign (`festive-campaign`). Language: English. Voice: Female.
+- Reference photo: `products/lip-balm-trio-1.jpg` and `products/kumkumadi-glow-serum-2.jpg`.
+- Idea to paste: `Warm Diwali atmosphere with diyas and fairy lights. A hand ties a sage-green ribbon around a hand-wrapped cotton gift box holding the Kumkumadi serum, the Saffron and Sandal mask, the Rose Petal Toner and a lip balm. The box is Rs 1,999 with free shipping across India. Cosy, family warmth, golden light.`
+- Spoken line: "The Diwali Glow Gift Box. Four of our favourites, wrapped by hand, one thousand nine hundred ninety-nine rupees, free shipping across India."
+- Expect: diyas, golden light, a wrapped box. Check: the price is spoken correctly, the box contents are plausible (the exact four products will not match exactly, that is acceptable for the demo), no festival symbol is misused.
+
+### 4. Neem and turmeric, the ingredient story
+- Style tile: Behind the Scenes (`behind-the-scenes`). Language: English. Voice: Female.
+- Reference photo: `products/neem-turmeric-cleanser-1.jpg` (and `products/neem-turmeric-cleanser-2.jpg`).
+- Idea to paste: `The story of the Neem and Turmeric Cleanser (120 ml, Rs 449): close shots of fresh neem leaves, a stone bowl of turmeric powder and tulsi leaves, hands mixing, then the cleanser bottle on a wooden tray. Natural daylight, authentic, quietly proud of where it comes from.`
+- Spoken line: "Neem, turmeric and tulsi, the way paati used them. Now in a gentle daily cleanser. Skin care that remembers where it came from."
+- Expect: macro shots of leaves and powder, then the bottle. Check: ingredients are the three named, the bottle matches the photo, the tagline is said once at the end.
+
+### 5. Bakuchi Night Repair Cream, testimonial style
+- Style tile: Testimonial (`testimonial`). Language: English. Voice: Female.
+- Reference photo: person `people/model-aarthi.jpg` and product `products/bakuchi-night-repair-cream-1.jpg`.
+- Idea to paste: `Aarthi, a customer in her kitchen at Chennai in soft evening light, holds the Bakuchi Night Repair Cream (50 g, Rs 1,099) and speaks to the camera in one relaxed shot, honest and warm, no hard selling.`
+- Spoken line: "I was unsure about night creams. After three weeks of Bakuchi, my skin feels calm and soft in the morning."
+- Expect: a single steady shot of a woman speaking naturally, jar visible. Check: lips match the line, the line is said once, no claim beyond "feels calm and soft" appears, the jar matches the photo.
+
+### 6. Gift hamper, the unboxing
+- Style tile: UGC Unboxing (`unboxing`). Language: English. Voice: Female.
+- Reference photo: `products/lip-balm-trio-1.jpg`, `products/rose-petal-toner-1.jpg` and `places/product-shelf.jpg`.
+- Idea to paste: `A phone-filmed unboxing of the Zaya Diwali Glow Gift Box: hands open a cotton-wrapped box tied with a sage ribbon, lift out the serum, the Rose Petal Toner and the Lip Balm Trio, and smile at the packaging. Natural window light, casual, authentic.`
+- Spoken line: "Okay, the packaging is beautiful. Serum, toner, and the lip balm trio. This is such a thoughtful gift."
+- Expect: hands opening a box, handheld feel. Check: products resemble the photos, the box is not branded with a wrong name, the line is said once.
+
+Not every attempt will be perfect: the plan step is free to retry, and a failed video returns its Quarks. If a result is wrong in one detail, use the video's own change request ("make it evening", "slower") rather than a new create.
+
 ## Start the dev app
 
 1. Backend: `cd backend && nvm use 20 && RUN_BACKGROUND=0 PORT=5000 npm run dev` (do not set `ENABLE_STUDIO_VIDEO_CONSUMER`).
