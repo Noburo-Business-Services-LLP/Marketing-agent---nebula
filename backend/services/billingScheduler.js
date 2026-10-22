@@ -58,8 +58,8 @@ function startBillingScheduler({ intervalMs = 60 * 60 * 1000, logger = require('
   const tick = require('./leaseLock').leased('scheduler:billing', 30 * 60 * 1000, () => runBillingOnce(), { cooldownMs: intervalMs / 2 });
   const run = () => tick().catch((err) => logger.error('[billing] Scheduler error:', err.message));
   const timer = setInterval(run, intervalMs);
-  setTimeout(run, 60 * 1000);
-  return () => clearInterval(timer);
+  const first = setTimeout(run, 60 * 1000);
+  return () => { clearInterval(timer); clearTimeout(first); };
 }
 
 module.exports = { runBillingOnce, startBillingScheduler };

@@ -295,8 +295,8 @@ function startAccountPurge({ intervalMs = 6 * 60 * 60 * 1000, logger = require('
     .then((r) => { if (r.completed || r.failed) logger.log(`[account delete] completed ${r.completed}, failed ${r.failed}`); }), { cooldownMs: intervalMs / 2 });
   const run = () => leasedPurge().catch((e) => logger.error('[account delete] run failed:', e.message));
   const timer = setInterval(run, intervalMs);
-  setTimeout(run, 3 * 60 * 1000);
-  return () => clearInterval(timer);
+  const first = setTimeout(run, 3 * 60 * 1000);
+  return () => { clearInterval(timer); clearTimeout(first); };
 }
 
 module.exports = { RUNNING_STALE_MS, passwordOk, ownsClients, realClientCount, purgeWorkspace, GRACE_DAYS, MAX_ATTEMPTS, accountHash, emailHash, emailHashes, emailLookupHashes, eligibility, cancelBilling, requestDeletion, restoreDeletion, purgeOne, runPurgeOnce, stepsFor, defaultModels, defaultDeps, startAccountPurge };

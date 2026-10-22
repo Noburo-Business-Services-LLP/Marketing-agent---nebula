@@ -2967,7 +2967,7 @@ setCharacterAge(nextDraft?.characterAge || '');
                               </span>
                               {isRecommended && (
                                 <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#F5A623]">
-                                  ★ Pick
+                                  Pick
                                 </span>
                               )}
                             </div>

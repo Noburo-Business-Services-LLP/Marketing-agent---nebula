@@ -93,7 +93,7 @@ function createLogger({ level = levelFromEnv(), destination } = {}) {
 const log = createLogger();
 
 module.exports = log;
-module.exports.log = log;
+// `log.log` is already the console-shaped alias set inside createLogger(); do not reassign it here
 module.exports.createLogger = createLogger;
 module.exports.scrub = scrub;
 module.exports.redactUrl = redactUrl;

@@ -136,8 +136,8 @@ function startRenewalReminders({ intervalMs = 6 * 60 * 60 * 1000, logger = requi
   const leasedRun = require('./leaseLock').leased('scheduler:renewal-reminders', 30 * 60 * 1000, () => runRenewalRemindersOnce().then((r) => { if (r.sent) logger.log(`[reminders] sent ${r.sent}`); }), { cooldownMs: intervalMs / 2 });
   const run = () => leasedRun().catch((e) => logger.error('[reminders] run failed:', e.message));
   const timer = setInterval(run, intervalMs);
-  setTimeout(run, 2 * 60 * 1000);
-  return () => clearInterval(timer);
+  const first = setTimeout(run, 2 * 60 * 1000);
+  return () => { clearInterval(timer); clearTimeout(first); };
 }
 
 module.exports = { isDue, nextChargePaise, buildReminderEmail, runRenewalRemindersOnce, startRenewalReminders, FROM_DAYS, TO_DAYS };
