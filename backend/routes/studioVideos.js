@@ -73,6 +73,9 @@ async function logoUrlOf(userId) {
 
 async function toRef(url) {
   try {
+    // The demo brand's own photos, from this computer's demo folder (development only, D126).
+    const demo = require('../services/demoProfile').readDemoReference(url);
+    if (demo) return demo;
     if (!/^https:\/\//i.test(String(url))) return null;
     // SSRF-safe download (services/safeFetch.js): public https only, pinned address, size, time and type caps.
     const { buffer: buf, contentType } = await require('../services/safeFetch').safeFetchBuffer(url, { types: ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'], maxBytes: MAX_IMAGE_BYTES });

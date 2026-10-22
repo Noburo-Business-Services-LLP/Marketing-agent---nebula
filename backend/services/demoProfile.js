@@ -79,7 +79,24 @@ const DEMO_COMPETITOR_PICTURE = /^http:\/\/(localhost|127\.0\.0\.1):\d{2,5}\/dem
 const isDemoCompetitorPicture = (url, env = process.env) => typeof url === 'string' && url.length <= 320
   && String((env && env.NODE_ENV) || '') !== 'production' && DEMO_COMPETITOR_PICTURE.test(url);
 
+// A reference photo for a video (decision D126): the demo brand's product, people and place photos are served from this
+// computer, and the Videos flow downloads references over public https only. Outside production, a reference that is one of
+// those demo pictures is read straight from the git-ignored demo folder instead (never any other path, never a network call).
+const DEMO_REFERENCE_PICTURE = /^http:\/\/(?:localhost|127\.0\.0\.1):\d{2,5}\/demo-assets\/zaya\/((?:products|people|places|brand)\/[A-Za-z0-9_-]{1,140}\.(?:jpg|png))$/;
+function readDemoReference(url, { env = process.env, dir = require('path').join(__dirname, '..', 'demo-assets', 'zaya'), fsm = require('fs') } = {}) {
+  if (typeof url !== 'string' || url.length > 320 || String((env && env.NODE_ENV) || '').toLowerCase() === 'production') return null;
+  const m = DEMO_REFERENCE_PICTURE.exec(url);
+  if (!m) return null;
+  const file = require('path').join(dir, m[1]);
+  try {
+    const st = fsm.statSync(file);
+    if (!st.isFile() || st.size > 6 * 1024 * 1024) return null;
+    return { mimeType: m[1].endsWith('.png') ? 'image/png' : 'image/jpeg', data: fsm.readFileSync(file).toString('base64') };
+  } catch (_) { return null; }
+}
+
 module.exports = {
+  readDemoReference, DEMO_REFERENCE_PICTURE,
   isDemoCompetitorPicture, DEMO_COMPETITOR_PICTURE,
   DEMO_PROFILE_PREFIX, DEMO_MESSAGE, DEMO_PROFILE_QUERY,
   isDemoProfileKey, isDemoProfile, requestUsesDemoKey, blockedReply,
