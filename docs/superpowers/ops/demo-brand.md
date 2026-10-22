@@ -72,3 +72,7 @@ The Library's 90 posts and their carousel slides (141 pictures) are composed on 
 
 ## Real pictures (optional, USD 1.10 once)
 `docs/superpowers/ops/demo-photos.md`: 24 real photos made with your own OpenAI key replace the drawn ones (same file names). `create` keeps them and `status` shows how many slots are real.
+
+## Real videos (2026-10-22)
+
+The five drawn Videos-page clips and the drawn reel clips can be replaced by real Gemini Omni videos made in the dev app as the demo user. How to make the six and what each should look like: `demo-real-videos.md`. Then `node scripts/demo-real-videos.js status` shows the counts and `adopt` (dry run; `CONFIRM_ADOPT=yes` to act, `nebulaa_dev` and the demo user only) tags them as kept, points Library reels at them and removes the drawn clips they replace. After that `seed-demo-brand.js create` keeps the kept videos (never wipes them, does not redraw their slots) and `remove` deletes everything, kept videos included. Without adopt, `create` still wipes real videos.
