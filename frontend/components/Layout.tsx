@@ -329,7 +329,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, needsPlan = f
         .hide-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
 
-      <div className="relative z-[1] flex h-[100dvh] overflow-hidden font-sans text-[var(--gv-text-primary)]">
+      <div className="fixed inset-0 z-[1] flex overflow-hidden font-sans text-[var(--gv-text-primary)]">
         {/* Mobile overlay */}
         {isSidebarOpen && (
           <div

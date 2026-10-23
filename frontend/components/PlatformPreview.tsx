@@ -32,6 +32,9 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
   inline = false,
 }) => {
   const [activeTab, setActiveTab] = useState(platform.toLowerCase());
+  // Show the picture in its own shape (9:16, 4:5, 1:1 ...), kept between 9:16 and 1.91:1, instead of cropping to a square.
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const frameRatio = natural && natural.w > 0 && natural.h > 0 ? Math.min(1.91, Math.max(9 / 16, natural.w / natural.h)) : 1;
 
   const hashtagStr = Array.isArray(hashtags)
     ? hashtags.map(h => (h.startsWith('#') ? h : `#${h}`)).join(' ')
@@ -93,8 +96,8 @@ const PlatformPreview: React.FC<PlatformPreviewProps> = ({
 
       {/* Image */}
       {imageUrl ? (
-        <div className="aspect-square bg-gray-100">
-          <img src={imageUrl} alt="Post" className="w-full h-full object-cover" />
+        <div className="bg-gray-100" style={{ aspectRatio: frameRatio }}>
+          <img src={imageUrl} alt="Post" className="w-full h-full object-cover" onLoad={(e) => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} />
         </div>
       ) : (
         <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">

@@ -10,6 +10,13 @@ import { orderForViewing } from '../utils/postOrder';
 export type CreateCategory = 'single' | 'carousel' | 'campaign' | 'linkedin';
 
 const TYPE: Record<CreateCategory, string> = { single: 'post', linkedin: 'post', carousel: 'carousel', campaign: 'campaign' };
+/** "4:5" -> 0.8; anything unreadable shows square. Kept between 9:16 and 1.91:1 so a card never gets absurdly tall or flat. */
+function ratioOf(raw: unknown): number {
+  const m = String(raw || '').match(/^(\d+(?:\.\d+)?)\s*[:x/]\s*(\d+(?:\.\d+)?)$/);
+  if (!m || !Number(m[2])) return 1;
+  return Math.min(1.91, Math.max(9 / 16, Number(m[1]) / Number(m[2])));
+}
+
 const TITLE: Record<CreateCategory, string> = { single: 'Your single posts', linkedin: 'Your LinkedIn posts', carousel: 'Your carousels', campaign: 'Your campaigns' };
 const SHOWN = 24;
 
@@ -63,7 +70,7 @@ const CreateGenerations: React.FC<{ category: CreateCategory; refreshKey: number
         <h2 className="text-[16px] font-semibold text-[var(--gv-text-primary)]">{TITLE[category]}</h2>
         {anyMaking && <span className="text-[12.5px] text-[var(--gv-text-tertiary)]">Some are still being made. This list updates by itself.</span>}
       </div>
-      <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 items-start">
         {drafts.map((d) => {
           const item = fromPostDraft(d);
           if (!item) return null;
@@ -71,7 +78,7 @@ const CreateGenerations: React.FC<{ category: CreateCategory; refreshKey: number
           return (
             <li key={item.id} className="rounded-xl border border-[var(--gv-border-subtle)] bg-[var(--gv-panel)] overflow-hidden">
               <button type="button" disabled={making} onClick={() => setOpen(d)} className="block w-full text-left disabled:cursor-default" aria-label={`Open ${item.title}`}>
-                <div className="relative aspect-square bg-black overflow-hidden">
+                <div className="relative bg-black overflow-hidden" style={{ aspectRatio: ratioOf(d.aspectRatio) }}>
                   {making
                     ? <GeneratingFill prompt={item.title} resolution={String(d.aspectRatio || '')} startedAt={item.createdAt || undefined} />
                     : item.thumbnailUrl
