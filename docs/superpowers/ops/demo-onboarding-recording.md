@@ -19,7 +19,7 @@ Backend on port 5100 (all keys dummy, schedulers off, outside requests blocked):
       GOOGLE_ADS_API_KEY=x GROK_API_KEY=x GROQ_API_KEY=x OPENAI_API_KEY=x RAZORPAY_KEY_ID=x RAZORPAY_KEY_SECRET=x RESEND_API_KEY=x \
       SCRAPINGDOG_API_KEY=x SERPER_API_KEY=x SES_AWS_ACCESS_KEY_ID=x SES_AWS_SECRET_ACCESS_KEY=x VERTEX_PRIVATE_KEY=x \
       CLOUDINARY_API_KEY=x CLOUDINARY_API_SECRET=x \
-      NODE_OPTIONS="--require $PWD/scripts/demo-brand/block-egress.js" node server.js
+      NODE_OPTIONS="--require \"$PWD/scripts/demo-brand/block-egress.js\"" node server.js
 
 Frontend on port 3300 (must be opened as 127.0.0.1, not localhost, so it uses the proxy to port 5100):
 
