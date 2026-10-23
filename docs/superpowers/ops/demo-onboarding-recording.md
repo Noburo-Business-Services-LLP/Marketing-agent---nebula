@@ -28,6 +28,8 @@ Frontend on port 3300 (must be opened as 127.0.0.1, not localhost, so it uses th
 
 ## Record
 
+For the agency (Brightwave Media) make its throwaway account first (`node scripts/seed-onboarding-recording.js create --agency --password-file "$HOME/nebulaa-demo-secrets/onboarding-recording-agency.txt"`) and add `--brand agency` to the commands below.
+
     python3 -I backend/scripts/demo-brand/record-onboarding.py            # English
     python3 -I backend/scripts/demo-brand/record-onboarding.py --lang ta  # Tamil
     python3 -I backend/scripts/demo-brand/record-onboarding.py --lang hi  # Hindi

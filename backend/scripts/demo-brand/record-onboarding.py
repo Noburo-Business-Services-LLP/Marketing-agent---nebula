@@ -1,12 +1,12 @@
 """
-Records the onboarding questionnaire as a screen video, filled in as the demo brand Zaya Naturals.
+Records the onboarding questionnaire as a screen video, filled in as the demo brand Zaya Naturals (default) or the demo agency Brightwave Media (--brand agency).
 
 Use it ONLY against the safe recording pair (see docs/superpowers/ops/demo-onboarding-recording.md):
   - a backend started with dummy provider keys and the outbound-request block, on port 5100
   - the frontend started with VITE_BACKEND_URL pointing at it, on port 3300, opened as 127.0.0.1 (not localhost)
-  - the throwaway account made by backend/scripts/seed-onboarding-recording.js (password in ~/nebulaa-demo-secrets)
+  - the throwaway account made by backend/scripts/seed-onboarding-recording.js (add --agency for the agency one; password in ~/nebulaa-demo-secrets)
 
-  python3 -I backend/scripts/demo-brand/record-onboarding.py [--lang en|ta|hi] [--out DIR]
+  python3 -I backend/scripts/demo-brand/record-onboarding.py [--brand zaya|agency] [--lang en|ta|hi] [--out DIR]
 
 Nothing is sent anywhere except to that local pair. The password is read from the file and never printed.
 The values mirror backend/scripts/demo-brand/constants.js (BRAND, COMPETITORS).
@@ -19,9 +19,9 @@ import time
 from playwright.sync_api import sync_playwright
 
 BASE = 'http://127.0.0.1:3300'
-SECRETS = os.path.expanduser('~/nebulaa-demo-secrets/onboarding-recording.txt')
+SECRETS = {'zaya': os.path.expanduser('~/nebulaa-demo-secrets/onboarding-recording.txt'), 'agency': os.path.expanduser('~/nebulaa-demo-secrets/onboarding-recording-agency.txt')}
 
-ANSWERS = {
+ZAYA = {
     'name': 'Zaya Naturals',
     'mobile': '+91 90000 12345',
     'type': 'Beauty and wellness',
@@ -35,6 +35,27 @@ ANSWERS = {
     'rules': 'No medical claims. No before and after photos. Never name other brands.',
     'upcoming': 'Diwali gift boxes and a new rose and saffron range',
 }
+ZAYA.update({'kind': 'One business', 'customers': 'People', 'reach': ['All of India']})
+
+# Mirrors scripts/demo-agency/constants.js (AGENCY). The competitors are made-up agencies.
+AGENCY = {
+    'name': 'Brightwave Media',
+    'mobile': '+91 90000 54321',
+    'type': 'Marketing or design agency',
+    'city': 'Chennai, Tamil Nadu',
+    'kind': 'Several brands for clients',
+    'hero': 'Monthly social media management',
+    'who': 'Owners of cafes, clinics, shops, gyms and builders in Tamil Nadu, Karnataka and Kerala who have no time to post',
+    'customers': 'Businesses',
+    'reach': ['My state', 'All of India'],
+    'goals': ['More enquiries and calls', 'More people know about my business'],
+    'tones': ['Professional', 'Friendly'],
+    'competitors': ['Pixel Pioneers', 'Social Spark Studio', 'Loop Creative'],
+    'different': 'A plan, posts and a weekly results report for every client, approved by the owner',
+    'rules': 'No political posts. Never name a client without their approval.',
+    'upcoming': 'Diwali campaigns for six clients and two new client launches',
+}
+ANSWER_SETS = {'zaya': ZAYA, 'agency': AGENCY}
 
 CURSOR_JS = """
 (() => {
@@ -52,11 +73,13 @@ CURSOR_JS = """
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--brand', default='zaya', choices=['zaya', 'agency'])
     ap.add_argument('--lang', default='en', choices=['en', 'ta', 'hi'])
     ap.add_argument('--out', default=os.path.expanduser('~/nebulaa-demo-recordings'))
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    email, pw = open(SECRETS).read().split()[:2]
+    A = ANSWER_SETS[args.brand]
+    email, pw = open(SECRETS[args.brand]).read().split()[:2]
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -107,36 +130,37 @@ def main():
         pause(2.2)  # the opening shot: the empty form beside the sample posts
 
         # Step 1: identity
-        type_into('input[placeholder*="Nebulaa Corp"]', ANSWERS['name'])
-        type_into('input[placeholder*="98765"]', ANSWERS['mobile'])
+        type_into('input[placeholder*="Nebulaa Corp"]', A['name'])
+        type_into('input[placeholder*="98765"]', A['mobile'])
         sel = pg.locator('select').first
         glide(sel.element_handle())
-        sel.select_option(label=ANSWERS['type'])
+        sel.select_option(label=A['type'])
         pause(0.8)
-        type_into('input[placeholder*="Cuddalore"]', ANSWERS['city'])
-        click('button:has-text("One business")')
+        type_into('input[placeholder*="Cuddalore"]', A['city'])
+        click('button:has-text("%s")' % A['kind'])
         pause(0.8)
         click('button:has-text("Continue")', 1.6)
 
         # Step 2: audience
-        type_into('input[placeholder*="Masala"]', ANSWERS['hero'])
-        type_into('textarea[placeholder*="Families"]', ANSWERS['who'], 0.8)
-        click('button:has-text("People")')
-        click('button:has-text("All of India")')
+        type_into('input[placeholder*="Masala"]', A['hero'])
+        type_into('textarea[placeholder*="Families"]', A['who'], 0.8)
+        click('button:has-text("%s")' % A['customers'])
+        for r in A['reach']:
+            click('button:has-text("%s")' % r, 0.4)
         pause(0.8)
         click('button:has-text("Continue")', 1.6)
 
         # Step 3: strategy
-        for g in ANSWERS['goals']:
+        for g in A['goals']:
             click(f'button:has-text("{g}")', 0.4)
-        for t in ANSWERS['tones']:
+        for t in A['tones']:
             click(f'button:has-text("{t}")', 0.4)
-        for c in ANSWERS['competitors']:
+        for c in A['competitors']:
             type_into('input[placeholder*="Nike"]', c, 0.3)
             click('button:has-text("Add")', 0.5)
-        type_into('input[placeholder*="25 years"]', ANSWERS['different'])
-        type_into('textarea[placeholder*="political"]', ANSWERS['rules'])
-        type_into('textarea[placeholder*="Diwali"]', ANSWERS['upcoming'], 0.9)
+        type_into('input[placeholder*="25 years"]', A['different'])
+        type_into('textarea[placeholder*="political"]', A['rules'])
+        type_into('textarea[placeholder*="Diwali"]', A['upcoming'], 0.9)
         click('button:has-text("Continue")', 1.8)
 
         # Step 4: connect (skipped, as most new customers do) and finish
@@ -149,7 +173,7 @@ def main():
         ctx.close()
         path = video.path()
         browser.close()
-    final = os.path.join(args.out, f'zaya-onboarding-{args.lang}-{time.strftime("%Y%m%d-%H%M%S")}.webm')
+    final = os.path.join(args.out, f'{args.brand}-onboarding-{args.lang}-{time.strftime("%Y%m%d-%H%M%S")}.webm')
     os.replace(path, final)
     print('Recorded:', final)
 

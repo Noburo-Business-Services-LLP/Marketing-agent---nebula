@@ -156,3 +156,5 @@ The owner said: "continue building the whole thing and finish it off yourself ..
 - **D137 (2026-10-23)** Onboarding recording tooling (seed-onboarding-recording.js, demo-brand/record-onboarding.py, block-egress.js): records the questionnaire as Zaya Naturals against a backend with dummy keys and an outbound-request block, so finishing onboarding cannot spend. Reverse: remove the files.
 
 - **D138 (2026-10-23)** Agency Home "Client usage" panel restyled to match the Home tiles (components/AgencyUsage.tsx): warm gradient panel, four coloured summary tiles (posts, videos, clients, pool), client rows with initials badges and usage bars. Same data and CSV; table kept for screen readers. Reverse: git revert.
+
+- **D139 (2026-10-23)** Onboarding recorder now handles the agency (record-onboarding.py --brand agency; seed-onboarding-recording.js --agency makes demo-agency-rec@example.test). Two throwaway recording accounts remain in nebulaa_dev; remove with seed-onboarding-recording.js remove [--agency]. Reverse: remove the accounts.
